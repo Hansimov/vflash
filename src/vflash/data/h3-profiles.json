@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "catalog_id": "h3-ref2va-preview-v1",
+  "targets": [
+    {
+      "id": "sm86-20g-block-ring",
+      "compute_capability": "8.6",
+      "minimum_memory_gib": 19.0,
+      "weight_residency": "block-ring",
+      "block_prefetch_slots": 2
+    },
+    {
+      "id": "sm89-48g-resident",
+      "compute_capability": "8.9",
+      "minimum_memory_gib": 45.0,
+      "weight_residency": "resident",
+      "block_prefetch_slots": 2
+    }
+  ],
+  "profiles": [
+    {
+      "id": "ref2va-turbo8-exact-sm89",
+      "mode": "ref2va",
+      "availability": "preview",
+      "model": "MiniMaxAI/MiniMax-H3",
+      "model_revision": "42ed227ee7df40d41602854ae760620d6eb651fe",
+      "adapter": "lightx2v/Minimax-h3-Turbo",
+      "adapter_revision": "0eebcc7e79f9cb200927c80b8e7595265b770e34",
+      "nfe": 8,
+      "scheduler": "h3-training-euler",
+      "video_flow_shift": 12.0,
+      "audio_flow_shift": 3.0,
+      "precision": "bf16-runtime-residual",
+      "attention": {
+        "backend": "torch-flash",
+        "exact": true,
+        "backend_by_evaluation": [
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash"
+        ]
+      },
+      "target_ids": [
+        "sm89-48g-resident"
+      ],
+      "quality_statement": "8-step distilled adapter with exact attention. Matched the pinned reference on tested inputs; this does not establish equivalence to the full-step model or quality on every input."
+    },
+    {
+      "id": "ref2va-turbo4-exact-sm86",
+      "mode": "ref2va",
+      "availability": "preview",
+      "model": "MiniMaxAI/MiniMax-H3",
+      "model_revision": "42ed227ee7df40d41602854ae760620d6eb651fe",
+      "adapter": "lightx2v/Minimax-h3-Turbo",
+      "adapter_revision": "83b617309219e859c1c264520eba07492d22e958",
+      "nfe": 4,
+      "scheduler": "h3-training-euler",
+      "video_flow_shift": 12.0,
+      "audio_flow_shift": 3.0,
+      "precision": "bf16-runtime-residual",
+      "attention": {
+        "backend": "torch-flash",
+        "exact": true,
+        "backend_by_evaluation": [
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash"
+        ]
+      },
+      "target_ids": [
+        "sm86-20g-block-ring"
+      ],
+      "quality_statement": "Four-step distilled adapter with exact attention. Same-GPU serial/streamed outputs match; independent SM86 model validation and cross-GPU equivalence are not established."
+    },
+    {
+      "id": "ref2va-turbo4-exact-sm89",
+      "mode": "ref2va",
+      "availability": "preview",
+      "model": "MiniMaxAI/MiniMax-H3",
+      "model_revision": "42ed227ee7df40d41602854ae760620d6eb651fe",
+      "adapter": "lightx2v/Minimax-h3-Turbo",
+      "adapter_revision": "83b617309219e859c1c264520eba07492d22e958",
+      "nfe": 4,
+      "scheduler": "h3-training-euler",
+      "video_flow_shift": 12.0,
+      "audio_flow_shift": 3.0,
+      "precision": "bf16-runtime-residual",
+      "attention": {
+        "backend": "torch-flash",
+        "exact": true,
+        "backend_by_evaluation": [
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash"
+        ]
+      },
+      "target_ids": [
+        "sm89-48g-resident"
+      ],
+      "quality_statement": "4-step distilled adapter with exact attention. Matched the pinned reference on tested inputs; this does not establish equivalence to the full-step model or quality on every input."
+    }
+  ]
+}

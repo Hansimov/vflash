@@ -1,0 +1,60 @@
+name: vflash
+
+services:
+  native-core:
+    image: "${VFLASH_IMAGE:-vflash:0.1.0a1}"
+    build:
+      context: ..
+      target: runtime
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:${VFLASH_API_PORT:-8000}:8000"
+    environment:
+      VFLASH_PROFILE_ID: "${VFLASH_PROFILE_ID:-ref2va-turbo4-exact-sm89}"
+      VFLASH_GPU_INDEX: "0"
+      VFLASH_JOB_TIMEOUT_SECONDS: "${VFLASH_JOB_TIMEOUT_SECONDS:-1800}"
+      VFLASH_MAX_PENDING_JOBS: "${VFLASH_MAX_PENDING_JOBS:-8}"
+      VFLASH_JOB_HISTORY_LIMIT: "${VFLASH_JOB_HISTORY_LIMIT:-128}"
+    volumes:
+      - type: bind
+        source: "${VFLASH_HOST_ARTIFACT:?set VFLASH_HOST_ARTIFACT}"
+        target: /runtime/artifact
+        read_only: true
+      - type: bind
+        source: "${VFLASH_HOST_SCHEDULE:?set VFLASH_HOST_SCHEDULE}"
+        target: /runtime/schedule
+        read_only: true
+      - type: bind
+        source: "${VFLASH_HOST_AUXILIARY:?set VFLASH_HOST_AUXILIARY}"
+        target: /runtime/auxiliary.safetensors
+        read_only: true
+      - type: bind
+        source: "${VFLASH_HOST_BUNDLES:?set VFLASH_HOST_BUNDLES}"
+        target: /runtime/bundles
+        read_only: true
+      - type: bind
+        source: "${VFLASH_HOST_OUTPUTS:?set VFLASH_HOST_OUTPUTS}"
+        target: /outputs
+      - type: volume
+        source: kernel-cache
+        target: /cache
+    tmpfs:
+      - /tmp:size=1g,mode=1777
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids:
+                - "${VFLASH_GPU_DEVICE:?set VFLASH_GPU_DEVICE to one host GPU index or UUID}"
+              capabilities:
+                - gpu
+    stop_grace_period: 30m
+
+volumes:
+  kernel-cache:

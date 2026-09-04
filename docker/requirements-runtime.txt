@@ -1,0 +1,6 @@
+--index-url https://pypi.org/simple
+-r requirements-api.txt
+
+numpy==2.3.5
+safetensors==0.8.0rc0
+triton==3.6.0

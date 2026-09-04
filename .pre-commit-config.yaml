@@ -1,0 +1,18 @@
+repos:
+  - repo: local
+    hooks:
+      - id: public-tree
+        name: reject secrets and private machine identifiers
+        entry: python scripts/check_public_tree.py
+        language: system
+        pass_filenames: false
+      - id: ruff-check
+        name: ruff check
+        entry: ruff check
+        language: system
+        types: [python]
+      - id: ruff-format
+        name: ruff format check
+        entry: ruff format --check
+        language: system
+        types: [python]
