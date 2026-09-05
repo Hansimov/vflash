@@ -2,7 +2,7 @@
 
 [中文](README.zh-CN.md) · [Full Docker and API guide](https://hansimov.github.io/vflash/guide/docker)
 
-The service accepts compiled conditioning bundles and returns video and audio latents (tensors ready for decoding). It uses one GPU and reuses a loaded model across serial requests.
+The service accepts compiled conditioning bundles and returns video and audio latents (tensors ready for decoding). It uses one GPU or a cooperating pair and reuses a loaded model across serial requests.
 
 You need Linux AMD64, Docker Compose v2, NVIDIA Container Toolkit, a CUDA 13.0-compatible driver, a supported GPU, and matching compiled runtime assets. The asset pack is not yet publicly available; the image does not contain model weights or provide prompt-to-MP4 generation.
 
@@ -14,7 +14,7 @@ From the repository root:
 cp docker/.env.example docker/.env
 ```
 
-Edit `docker/.env` with your absolute asset paths and selected GPU. Keep `VFLASH_IMAGE=vflash:0.1.0a1` to build the current checkout. Choose one of:
+Edit `docker/.env` with your absolute asset paths and selected GPU. Keep `VFLASH_IMAGE=vflash:0.1.0a2` to build the current checkout. Choose one of:
 
 | GPU | `VFLASH_PROFILE_ID` |
 | --- | --- |
@@ -55,3 +55,5 @@ curl -fLo result.safetensors \
 The queue is bounded; overload returns `429` with `Retry-After`. Job records are temporary and disappear on restart or history eviction. Output files remain on disk. Download results promptly and let your application manage durable jobs and output retention.
 
 See the [full guide](https://hansimov.github.io/vflash/guide/docker) for readiness, settings, timeout recovery, and all API endpoints. Interactive OpenAPI documentation is available at `http://127.0.0.1:8000/docs` on the running service.
+
+For two RTX 3080 20 GB GPUs, add `docker/compose.parallel.yaml` and select `VFLASH_PEER_GPU_DEVICE`. See the [dual-GPU setup](https://hansimov.github.io/vflash/guide/docker#parallel) for `tensor` and `sequence-head` execution.

@@ -146,6 +146,7 @@ def test_native_executor_reuses_one_worker_and_closes_it(tmp_path: Path, monkeyp
             self.calls += 1
             return {
                 "profile_id": self.plan.profile.id,
+                "parallel": {"strategy": self.plan.parallel_strategy, "device_count": 1},
                 "runtime": {"backend": "native"},
                 "session": {"request_index": self.calls},
                 "generation": {"output_path": str(output), "nfe": 4},
@@ -206,3 +207,39 @@ def test_capacity_fifo_and_history_do_not_discard_output_files(tmp_path: Path) -
         assert client.get(f"/v1/denoise/jobs/{first['id']}").status_code == 404
         assert (settings.output_root / first["output_file"]).read_bytes() == b"latents"
         assert client.post("/v1/denoise/jobs", json={"bundle": "example"}).status_code == 202
+
+
+def test_parallel_service_readiness_requires_both_devices(tmp_path):
+    first = NvidiaDevice(0, "first-device", "RTX 3080", 20.0, "8.6", 320.0)
+    second = NvidiaDevice(1, "second-device", "RTX 3080", 20.0, "8.6", 320.0)
+    settings = replace(
+        _settings(tmp_path),
+        profile_id="ref2va-turbo4-exact-sm86",
+        peer_gpu_index=1,
+        parallel_strategy="tensor",
+    )
+    visible = [first, second]
+    app = create_app(settings, device_provider=lambda: tuple(visible))
+    with TestClient(app) as client:
+        ready = client.get("/readyz")
+        assert ready.status_code == 200
+        assert ready.json()["parallel"] == {
+            "strategy": "tensor",
+            "device_count": 2,
+            "peer_gpu_index": 1,
+        }
+        visible.pop()
+        assert client.get("/readyz").status_code == 503
+
+
+def test_parallel_environment_selects_one_device_group():
+    settings = ServerSettings.from_env(
+        {
+            "VFLASH_PROFILE_ID": "ref2va-turbo4-exact-sm86",
+            "VFLASH_GPU_INDEX": "0",
+            "VFLASH_PEER_GPU_INDEX": "1",
+            "VFLASH_PARALLEL_STRATEGY": "sequence-head",
+        }
+    )
+    assert settings.peer_gpu_index == 1
+    assert settings.parallel_strategy == "sequence-head"

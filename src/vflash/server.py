@@ -45,7 +45,7 @@ CAPABILITIES = {
 
 @dataclass(frozen=True, slots=True)
 class ServerSettings:
-    """Operator-owned paths and the one container-visible GPU."""
+    """Operator-owned paths and the selected container-visible GPU group."""
 
     profile_id: str = DEFAULT_PROFILE_ID
     gpu_index: int = 0
@@ -57,10 +57,22 @@ class ServerSettings:
     job_timeout_seconds: float = 1800.0
     max_pending_jobs: int = 8
     job_history_limit: int = 128
+    peer_gpu_index: int | None = None
+    parallel_strategy: str | None = None
 
     def __post_init__(self) -> None:
         if self.gpu_index < 0:
             raise ContractError("GPU index must be non-negative")
+        if self.peer_gpu_index is not None and (
+            self.peer_gpu_index < 0 or self.peer_gpu_index == self.gpu_index
+        ):
+            raise ContractError("the peer GPU must have a distinct non-negative index")
+        if self.parallel_strategy not in {None, "single", "tensor", "sequence-head"}:
+            raise ContractError("unknown parallel execution strategy")
+        if self.parallel_strategy is not None and (
+            (self.parallel_strategy == "single") != (self.peer_gpu_index is None)
+        ):
+            raise ContractError("a parallel strategy requires exactly two selected GPUs")
         if not isfinite(self.job_timeout_seconds) or self.job_timeout_seconds <= 0:
             raise ContractError("job timeout must be finite and positive")
         if self.max_pending_jobs < 1 or self.job_history_limit < 1:
@@ -84,6 +96,12 @@ class ServerSettings:
             job_timeout_seconds=_positive_number(values, "VFLASH_JOB_TIMEOUT_SECONDS", 1800.0),
             max_pending_jobs=_integer(values, "VFLASH_MAX_PENDING_JOBS", 8),
             job_history_limit=_integer(values, "VFLASH_JOB_HISTORY_LIMIT", 128),
+            peer_gpu_index=(
+                _integer(values, "VFLASH_PEER_GPU_INDEX", 0)
+                if "VFLASH_PEER_GPU_INDEX" in values
+                else None
+            ),
+            parallel_strategy=values.get("VFLASH_PARALLEL_STRATEGY"),
         )
 
 
@@ -119,10 +137,19 @@ class NativeDenoiseExecutor:
     def __call__(self, bundle: Path, output: Path) -> dict[str, Any]:
         if self.worker is None:
             devices = {device.index: device for device in self.device_provider()}
+            selected = (self.settings.gpu_index,) + (
+                (self.settings.peer_gpu_index,)
+                if self.settings.peer_gpu_index is not None
+                else ()
+            )
+            if any(index not in devices for index in selected):
+                raise ContractError("a selected GPU is not visible to the Vflash service")
             plan = resolve_plan(
                 ProfileCatalog.bundled(),
                 profile_id=self.settings.profile_id,
                 device=devices[self.settings.gpu_index],
+                peer_device=devices.get(self.settings.peer_gpu_index),
+                strategy=self.settings.parallel_strategy,
             )
             self.worker = ResidentDenoiseWorker(
                 plan,
@@ -137,6 +164,7 @@ class NativeDenoiseExecutor:
         generation["output_file"] = output.name
         return {
             "profile_id": payload["profile_id"],
+            "parallel": payload["parallel"],
             "runtime": payload["runtime"],
             "session": payload["session"],
             "generation": generation,
@@ -375,11 +403,19 @@ def _readiness(
         "gpu": False,
     }
     gpu: dict[str, Any] | None = None
+    parallel: dict[str, Any] | None = None
     error: str | None = None
     try:
         devices = {device.index: device for device in device_provider()}
         device = devices[settings.gpu_index]
-        plan = resolve_plan(catalog, profile_id=settings.profile_id, device=device)
+        peer = devices[settings.peer_gpu_index] if settings.peer_gpu_index is not None else None
+        plan = resolve_plan(
+            catalog,
+            profile_id=settings.profile_id,
+            device=device,
+            peer_device=peer,
+            strategy=settings.parallel_strategy,
+        )
         checks["gpu"] = True
         gpu = {
             "index": device.index,
@@ -387,6 +423,11 @@ def _readiness(
             "memory_gib": device.memory_gib,
             "compute_capability": device.compute_capability,
             "target_id": plan.target.id,
+        }
+        parallel = {
+            "strategy": plan.parallel_strategy,
+            "device_count": len(plan.gpu_uuids),
+            "peer_gpu_index": peer.index if peer is not None else None,
         }
     except (ContractError, KeyError) as exc:
         error = str(exc) or f"GPU index {settings.gpu_index} was not found"
@@ -396,6 +437,7 @@ def _readiness(
         "capabilities": CAPABILITIES,
         "checks": checks,
         "gpu": gpu,
+        "parallel": parallel,
         "error": error,
     }
 

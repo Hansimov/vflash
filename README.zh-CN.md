@@ -29,11 +29,13 @@ vflash plan ref2va-turbo4-exact-sm89 --gpu 0
 | 显卡 | 配置 | 内存策略 |
 | --- | --- | --- |
 | RTX 4090 48 GB | Ref2VA Turbo4 / Turbo8 | 权重常驻显存 |
-| RTX 3080 20 GB | Ref2VA Turbo4 | 从系统内存分块加载 |
+| RTX 3080 20 GB，单卡或双卡 | Ref2VA Turbo4 | 从系统内存分块加载 |
 
 已测 3080 负载的进程占用约 60 GiB 系统内存；建议为**每个 worker 至少预留 64 GiB 可用系统内存**，并为其他进程保留额外余量。更大输入需要重新检查容量。目前已检查容量，以及同卡串行加载与传输计算重叠时的结果一致性；更广泛的质量评测和独立参考对照仍待完成。这些配置仅覆盖表中所列显存容量。
 
 Turbo4 和 Turbo8 使用蒸馏 LoRA。精确注意力不代表效果与基础模型等价，也不保证跨 GPU 的结果完全一致。完整范围见[配置与硬件](https://hansimov.github.io/vflash/zh/guide/profiles)。
+
+两张 3080 可以通过权重张量并行（`tensor`）或序列/注意力头分片（`sequence-head`）协作处理一个请求。使用 `--peer-gpu` 选择第二张卡，见[双卡指南](https://hansimov.github.io/vflash/zh/guide/getting-started#parallel)。双卡结果与单卡不保证逐位一致，更广泛的质量评测仍待完成。
 
 ## 接入应用
 

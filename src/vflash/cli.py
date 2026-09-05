@@ -23,15 +23,25 @@ def build_parser() -> argparse.ArgumentParser:
 
     commands.add_parser("profiles", help="list the available GPU and model configurations")
 
-    plan = commands.add_parser("plan", help="resolve one profile onto one physical GPU")
+    plan = commands.add_parser(
+        "plan", help="resolve a profile onto one physical GPU or a cooperating pair"
+    )
     plan.add_argument("profile_id")
     plan.add_argument("--gpu", type=int, required=True, help="physical nvidia-smi index")
+    plan.add_argument(
+        "--peer-gpu", type=int, help="second physical GPU for cooperative execution"
+    )
+    plan.add_argument("--strategy", choices=("single", "tensor", "sequence-head"))
     denoise = commands.add_parser(
         "denoise",
         help="run a native Ref2VA distilled profile from a conditioning bundle",
     )
     denoise.add_argument("profile_id")
     denoise.add_argument("--gpu", type=int, required=True, help="physical nvidia-smi index")
+    denoise.add_argument(
+        "--peer-gpu", type=int, help="second physical GPU for cooperative execution"
+    )
+    denoise.add_argument("--strategy", choices=("single", "tensor", "sequence-head"))
     denoise.add_argument("--bundle", type=Path, required=True)
     denoise.add_argument("--artifact", type=Path, required=True)
     denoise.add_argument("--schedule-overlay", type=Path, required=True)
@@ -67,10 +77,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         devices = {device.index: device for device in discover_nvidia_devices()}
         if args.gpu not in devices:
             raise ContractError(f"GPU index {args.gpu} was not found")
+        if args.peer_gpu is not None and args.peer_gpu not in devices:
+            raise ContractError(f"GPU index {args.peer_gpu} was not found")
         plan = resolve_plan(
             catalog,
             profile_id=args.profile_id,
             device=devices[args.gpu],
+            peer_device=devices.get(args.peer_gpu),
+            strategy=args.strategy,
         )
         if args.command == "denoise":
             from vflash.native.runner import denoise_conditioning_bundle

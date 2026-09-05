@@ -102,6 +102,7 @@ class H3NativeConditioningRuntimeResult:
     peak_allocated_bytes: int
     attention_policy: dict[str, Any]
     stage_durations: dict[str, float]
+    peak_allocated_bytes_by_device: tuple[int, ...]
 
 
 class H3NativeConditioningRuntime:
@@ -126,6 +127,7 @@ class H3NativeConditioningRuntime:
         expected_scheduler: str | None = None,
         expected_video_flow_shift: float | None = None,
         expected_audio_flow_shift: float | None = None,
+        parallel_strategy: str = "single",
     ) -> None:
         import torch
 
@@ -144,6 +146,25 @@ class H3NativeConditioningRuntime:
             raise H3NativeConditioningRuntimeError(
                 "the live native runtime currently supports only SM86 and SM89"
             )
+        if parallel_strategy not in {"single", "tensor", "sequence-head"}:
+            raise H3NativeConditioningRuntimeError("unknown parallel execution strategy")
+        devices = (resolved_device,)
+        if parallel_strategy != "single":
+            if (
+                resolved_device.index != 0
+                or torch.cuda.device_count() != 2
+                or capability != (8, 6)
+                or torch.cuda.get_device_capability(1) != (8, 6)
+            ):
+                raise H3NativeConditioningRuntimeError(
+                    "parallel execution requires exactly two visible SM86 GPUs"
+                )
+            devices = (resolved_device, torch.device("cuda:1"))
+            # Establish the complete device group before loading its weights.
+            for selected in devices:
+                with torch.cuda.device(selected):
+                    torch.zeros((), device=selected).item()
+            torch.cuda.set_device(resolved_device)
         torch.set_float32_matmul_precision("high")
 
         contract_started = time.monotonic()
@@ -221,23 +242,38 @@ class H3NativeConditioningRuntime:
         final_seconds = time.monotonic() - final_started
 
         denoiser_started = time.monotonic()
-        denoiser_type = (
-            H3NativeDenoiserBF16Ring if capability == (8, 6) else H3NativeDenoiserBF16Resident
-        )
-        denoiser = denoiser_type.load(
-            artifact,
-            device=resolved_device,
-            adaln_table_load=(overlay.load_block_table if overlay.blocks else None),
-            attention_backend=attention_backend,
-            elementwise_backend="auto",
-            adapter_fusion_backend="auto",
-            rotary_backend="auto",
-        )
-        torch.cuda.synchronize(resolved_device)
+        if parallel_strategy == "single":
+            denoiser_type = (
+                H3NativeDenoiserBF16Ring
+                if capability == (8, 6)
+                else H3NativeDenoiserBF16Resident
+            )
+            denoiser = denoiser_type.load(
+                artifact,
+                device=resolved_device,
+                adaln_table_load=(overlay.load_block_table if overlay.blocks else None),
+                attention_backend=attention_backend,
+                elementwise_backend="auto",
+                adapter_fusion_backend="auto",
+                rotary_backend="auto",
+            )
+        else:
+            from vflash.native.h3_parallel import H3NativeDenoiserParallel
+
+            denoiser = H3NativeDenoiserParallel.load(
+                artifact,
+                devices=devices,
+                strategy=parallel_strategy,
+                adaln_table_load=(overlay.load_block_table if overlay.blocks else None),
+            )
+        for selected in devices:
+            torch.cuda.synchronize(selected)
         denoiser_seconds = time.monotonic() - denoiser_started
 
         self._torch = torch
         self.device = resolved_device
+        self.devices = devices
+        self.parallel_strategy = parallel_strategy
         self.compute_capability = capability
         self.artifact = artifact
         self.overlay = overlay
@@ -266,6 +302,8 @@ class H3NativeConditioningRuntime:
             "nfe": self.overlay.schedule.nfe,
             "gpu": torch.cuda.get_device_name(self.device),
             "compute_capability": list(self.compute_capability),
+            "parallel_strategy": self.parallel_strategy,
+            "device_count": len(self.devices),
             "initialization_seconds": self.initialization_seconds,
             "initialization_stages": dict(self.initialization_stages),
             "float32_matmul_precision": torch.get_float32_matmul_precision(),
@@ -282,6 +320,14 @@ class H3NativeConditioningRuntime:
                 "pinned_host_reserved_bytes": host_memory.get("allocated_bytes.current", 0),
                 "device_allocated_bytes": torch.cuda.memory_allocated(self.device),
                 "device_reserved_bytes": torch.cuda.memory_reserved(self.device),
+                "devices": [
+                    {
+                        "index": device.index,
+                        "allocated_bytes": torch.cuda.memory_allocated(device),
+                        "reserved_bytes": torch.cuda.memory_reserved(device),
+                    }
+                    for device in self.devices
+                ],
             },
             "attention_policy": _attention_policy(),
         }
@@ -369,14 +415,16 @@ class H3NativeConditioningRuntime:
         torch.cuda.synchronize(device)
         prepare_seconds = time.monotonic() - prepare_started
 
-        torch.cuda.reset_peak_memory_stats(device)
+        for selected in self.devices:
+            torch.cuda.reset_peak_memory_stats(selected)
         denoise_started = time.monotonic()
         with torch.inference_mode():
             while not engine.complete:
                 engine.step()
                 if progress_callback is not None:
                     progress_callback(engine.evaluation_index, self.overlay.schedule.nfe)
-        torch.cuda.synchronize(device)
+        for selected in self.devices:
+            torch.cuda.synchronize(selected)
         denoise_seconds = time.monotonic() - denoise_started
         if not bool(
             torch.isfinite(engine.latent_state.video_latents).all()
@@ -385,7 +433,10 @@ class H3NativeConditioningRuntime:
             raise H3NativeConditioningRuntimeError(
                 "the native trajectory produced non-finite latents"
             )
-        peak = int(torch.cuda.max_memory_allocated(device))
+        device_peaks = tuple(
+            int(torch.cuda.max_memory_allocated(selected)) for selected in self.devices
+        )
+        peak = max(device_peaks)
 
         export_started = time.monotonic()
         packed_video = engine.latent_state.video_latents.detach().to("cpu")
@@ -413,6 +464,7 @@ class H3NativeConditioningRuntime:
                 "height": str(bundle.profile.height),
                 "schedule_nfe": str(self.overlay.schedule.nfe),
                 "width": str(bundle.profile.width),
+                "parallel_strategy": self.parallel_strategy,
             },
         )
         export_seconds = time.monotonic() - export_started
@@ -433,4 +485,10 @@ class H3NativeConditioningRuntime:
                 "denoise": denoise_seconds,
                 "latent_export": export_seconds,
             },
+            peak_allocated_bytes_by_device=device_peaks,
         )
+
+    def close(self) -> None:
+        close = getattr(self.denoiser, "close", None)
+        if close is not None:
+            close()

@@ -18,6 +18,7 @@ from vflash.contracts import ExecutionPlan
 def _serve_session(connection: Connection, plan: ExecutionPlan, paths: dict[str, Path]) -> None:
     from vflash.native.runner import NativeEngineSession
 
+    session = None
     try:
         session = NativeEngineSession(plan, **paths)
         while (request := connection.recv()) is not None:
@@ -29,7 +30,11 @@ def _serve_session(connection: Connection, plan: ExecutionPlan, paths: dict[str,
         # A failed trajectory may leave mutated buffers or a poisoned CUDA context.
         connection.send({"error": f"{type(exc).__name__}: {exc}"})
     finally:
-        connection.close()
+        try:
+            if session is not None:
+                session.close()
+        finally:
+            connection.close()
 
 
 class ResidentDenoiseWorker:

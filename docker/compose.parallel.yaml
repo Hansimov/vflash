@@ -1,0 +1,18 @@
+# Compose 2.24.4+; combine with compose.yaml for one cooperating SM86 pair.
+services:
+  native-core:
+    shm_size: 1g
+    environment:
+      VFLASH_PROFILE_ID: ref2va-turbo4-exact-sm86
+      VFLASH_PEER_GPU_INDEX: "1"
+      VFLASH_PARALLEL_STRATEGY: "${VFLASH_PARALLEL_STRATEGY:-sequence-head}"
+    deploy:
+      resources:
+        reservations:
+          devices: !override
+            - driver: nvidia
+              device_ids:
+                - "${VFLASH_GPU_DEVICE:?set the first host GPU}"
+                - "${VFLASH_PEER_GPU_DEVICE:?set the second host GPU}"
+              capabilities:
+                - gpu

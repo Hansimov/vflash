@@ -67,6 +67,25 @@ For a 3080, select `ref2va-turbo4-exact-sm86` and use assets compiled for that p
 
 The command writes the video and audio latent tensors to `result.safetensors` and prints a JSON summary. The tensors are inputs for a compatible decoder; the file is not a playable video.
 
+## Use two 3080s for one request {#parallel}
+
+Select two RTX 3080 20 GB devices with the same SM86 Turbo4 assets:
+
+```bash
+vflash plan ref2va-turbo4-exact-sm86 --gpu 0 --peer-gpu 1 --strategy tensor
+```
+
+Add the same `--gpu`, `--peer-gpu`, and `--strategy` options to `vflash denoise`. Both GPUs belong to one request; this does not start two independent workers.
+
+| Strategy | What is divided | Default when a peer is selected |
+| --- | --- | --- |
+| `tensor` | QKV, attention output, FFN, and LoRA projection weights | No |
+| `sequence-head` | Token rows for GEMMs, then attention heads for complete-sequence attention | Yes |
+
+`sequence-head` streams full weights to each GPU from one shared host copy. Four groups of heads overlap NCCL communication with attention. `tensor` streams half-sized weight shards and reduces projection results, including the native LoRA branches. Both execute the complete four-step schedule with BF16 weights and exact attention. No distributed launcher or LightX2V runtime is required.
+
+Parallel execution changes GEMM shapes or reduction order. Results are **not bitwise identical to single-GPU execution**. Full latent and decoded-media smoke checks passed on one workload; cross-case instruction-quality qualification remains pending. See [performance measurement](../reference/performance#parallel) for scope and memory accounting.
+
 ## Reuse a loaded model {#reuse}
 
 Each `denoise` command starts a fresh session. For repeated requests, use the [HTTP service](./docker): it loads a fixed profile on the first job and reuses that model for later jobs.

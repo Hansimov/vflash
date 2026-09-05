@@ -19,7 +19,7 @@ WEIGHT_PROFILES = {
 
 
 class NativeEngineSession:
-    """Own one GPU/profile and its weights; request tensors never outlive a call.
+    """Own one GPU group/profile and its weights; request tensors live for one call.
 
     Construct before CUDA initialization, then call serially. The service gives this
     session a dedicated spawned process, whose exit releases its CUDA context.
@@ -50,7 +50,19 @@ class NativeEngineSession:
             )
         if "torch" in sys.modules and sys.modules["torch"].cuda.is_initialized():
             raise ContractError("select the Vflash GPU before initializing CUDA")
-        os.environ["CUDA_VISIBLE_DEVICES"] = plan.gpu_uuid
+        if (
+            plan.parallel_strategy not in {"single", "tensor", "sequence-head"}
+            or (plan.parallel_strategy == "single") != (plan.peer_device is None)
+            or (
+                plan.peer_device is not None
+                and (
+                    plan.peer_device.uuid == plan.gpu_uuid
+                    or plan.target.compute_capability != "8.6"
+                )
+            )
+        ):
+            raise ContractError("invalid physical GPU group for native parallel execution")
+        os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(plan.gpu_uuids)
 
         from vflash.native.h3_native_conditioning_runtime import H3NativeConditioningRuntime
 
@@ -70,11 +82,15 @@ class NativeEngineSession:
             expected_scheduler=profile.scheduler,
             expected_video_flow_shift=profile.video_flow_shift,
             expected_audio_flow_shift=profile.audio_flow_shift,
+            parallel_strategy=plan.parallel_strategy,
         )
         self.initialization_seconds = time.perf_counter() - started
         self.request_count = 0
+        self.closed = False
 
     def generate(self, bundle: Path, output_latents: Path) -> dict[str, Any]:
+        if self.closed:
+            raise ContractError("the native engine session is closed")
         started = time.perf_counter()
         result = self.runtime.generate_latents(bundle, output_latents)
         self.request_count += 1
@@ -87,6 +103,19 @@ class NativeEngineSession:
                 "name": self.plan.gpu_name,
                 "memory_gib": self.plan.gpu_memory_gib,
             },
+            "parallel": {
+                "strategy": self.plan.parallel_strategy,
+                "device_count": len(self.plan.gpu_uuids),
+                "peer_device": (
+                    {
+                        key: value
+                        for key, value in asdict(self.plan.peer_device).items()
+                        if key != "uuid"
+                    }
+                    if self.plan.peer_device is not None
+                    else None
+                ),
+            },
             "runtime": self.runtime.metadata(),
             "session": {
                 "request_index": self.request_count,
@@ -98,6 +127,13 @@ class NativeEngineSession:
             },
             "generation": {**asdict(result), "output_path": str(result.output_path)},
         }
+
+    def close(self) -> None:
+        if not self.closed:
+            self.closed = True
+            close = getattr(self.runtime, "close", None)
+            if close is not None:
+                close()
 
 
 def denoise_conditioning_bundle(
@@ -116,4 +152,7 @@ def denoise_conditioning_bundle(
         schedule_overlay=schedule_overlay,
         auxiliary_tensor=auxiliary_tensor,
     )
-    return session.generate(bundle, output_latents)
+    try:
+        return session.generate(bundle, output_latents)
+    finally:
+        session.close()

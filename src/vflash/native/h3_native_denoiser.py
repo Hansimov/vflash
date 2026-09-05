@@ -1074,6 +1074,7 @@ class H3NativeDenoiserBF16Ring:
 
     backend_id = "cuda-bf16-pinned-host-two-slot-event-ring-torch-flash-v1"
     timing_eligible = True
+    block_type = H3NativeBlockBF16Resident
 
     def __init__(
         self,
@@ -1118,7 +1119,7 @@ class H3NativeDenoiserBF16Ring:
                 _empty_bf16_block_like(host_blocks[index], runtime_device) for index in range(2)
             )
             self.slots = tuple(
-                H3NativeBlockBF16Resident(
+                self.block_type(
                     artifact,
                     weights,
                     device=runtime_device,

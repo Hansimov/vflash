@@ -130,6 +130,14 @@ class Profile:
 
 
 @dataclass(frozen=True, slots=True)
+class PeerDevice:
+    index: int
+    uuid: str
+    name: str
+    memory_gib: float
+
+
+@dataclass(frozen=True, slots=True)
 class ExecutionPlan:
     profile: Profile
     target: HardwareTarget
@@ -137,6 +145,14 @@ class ExecutionPlan:
     gpu_uuid: str
     gpu_name: str
     gpu_memory_gib: float
+    parallel_strategy: str = "single"
+    peer_device: PeerDevice | None = None
+
+    @property
+    def gpu_uuids(self) -> tuple[str, ...]:
+        return (self.gpu_uuid,) + (
+            (self.peer_device.uuid,) if self.peer_device is not None else ()
+        )
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)

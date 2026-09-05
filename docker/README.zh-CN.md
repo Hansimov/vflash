@@ -2,7 +2,7 @@
 
 [English](README.md) · [完整 Docker 与 API 指南](https://hansimov.github.io/vflash/zh/guide/docker)
 
-服务接收预编译条件包，返回视频和音频潜变量（latents，即解码前的张量）。它使用一张 GPU，并在多个串行请求之间复用已加载的模型。
+服务接收预编译条件包，返回视频和音频潜变量（latents，即解码前的张量）。它使用一张 GPU 或一组协作双卡，并在多个串行请求之间复用已加载的模型。
 
 需要 Linux AMD64、Docker Compose v2、NVIDIA Container Toolkit、兼容 CUDA 13.0 的驱动、受支持的显卡和匹配的编译资源。资源包尚未公开；镜像不包含模型权重，也不提供从提示词到 MP4 的完整生成。
 
@@ -14,7 +14,7 @@
 cp docker/.env.example docker/.env
 ```
 
-编辑 `docker/.env`，填写资源的绝对路径并选择显卡。保留 `VFLASH_IMAGE=vflash:0.1.0a1` 以构建当前源码。配置可选：
+编辑 `docker/.env`，填写资源的绝对路径并选择显卡。保留 `VFLASH_IMAGE=vflash:0.1.0a2` 以构建当前源码。配置可选：
 
 | 显卡 | `VFLASH_PROFILE_ID` |
 | --- | --- |
@@ -55,3 +55,5 @@ curl -fLo result.safetensors \
 队列有容量上限，超载时返回 `429` 和 `Retry-After`。任务记录是临时的，重启或历史记录淘汰后会消失，但输出文件仍留在磁盘。调用方应及时下载结果，并自行管理持久任务记录和输出保留策略。
 
 就绪检查、配置项、超时恢复和全部 API 见[完整指南](https://hansimov.github.io/vflash/zh/guide/docker)。服务运行时，可在 `http://127.0.0.1:8000/docs` 查看交互式 OpenAPI 文档。
+
+使用两张 RTX 3080 20 GB 时，加入 `docker/compose.parallel.yaml` 并设置 `VFLASH_PEER_GPU_DEVICE`。`tensor` 与 `sequence-head` 的配置方式见[双卡部署](https://hansimov.github.io/vflash/zh/guide/docker#parallel)。

@@ -22,6 +22,14 @@ On a **3080 with 20 GB**, weights stay in pinned host memory and move through a 
 
 The hardware strategies share the same session interface. They do not imply identical performance or bitwise equality across GPU architectures.
 
+## Cooperative execution on two GPUs {#parallel}
+
+A two-device session owns one process, two CUDA contexts, two event-protected device rings, and a local NCCL group. Two CPU threads issue CUDA work without creating global `torch.distributed` state or a framework model graph.
+
+Weight tensor parallelism divides column projections and their LoRA up matrices, then divides row projections and their LoRA down matrices. Row-parallel low-rank partials are reduced before the replicated up projection. Sequence/head execution instead divides token rows, exchanges Q/K/V into complete sequences with a subset of heads, and returns attention outputs to their original token owners. An odd sequence length is padded for transport; padded keys and values never enter the softmax.
+
+A sequence/head session shares one pinned host weight store. A weight-TP session holds compact shards rather than two complete host copies. Both maintain two device slots per GPU and reuse the existing transfer events. The sequence/head exchange overlaps communication and compute in four groups of attention heads. Session closure releases the NCCL resources; a failed rank aborts its peer and makes the session unusable.
+
 ## LoRA execution {#lora-execution}
 
 The compiled resources include the selected adapter and schedule. The released profiles preserve the low-rank residual computations alongside the base weights and use exact attention. Changing the adapter changes the resources; it is not a per-request switch.

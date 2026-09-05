@@ -18,6 +18,8 @@ def test_host_allocation_and_retained_cache_are_reported_separately():
     runtime = H3NativeConditioningRuntime.__new__(H3NativeConditioningRuntime)
     runtime._torch = SimpleNamespace(cuda=cuda, get_float32_matmul_precision=lambda: "high")
     runtime.device = "cuda:0"
+    runtime.devices = (SimpleNamespace(index=0),)
+    runtime.parallel_strategy = "single"
     runtime.compute_capability = (8, 6)
     runtime.artifact = SimpleNamespace(
         artifact_id="test", weight_profile="test", adapter_execution="runtime-residual"
@@ -37,4 +39,5 @@ def test_host_allocation_and_retained_cache_are_reported_separately():
         "pinned_host_reserved_bytes": 64,
         "device_allocated_bytes": 128,
         "device_reserved_bytes": 256,
+        "devices": [{"index": 0, "allocated_bytes": 128, "reserved_bytes": 256}],
     }

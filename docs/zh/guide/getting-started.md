@@ -67,6 +67,25 @@ vflash denoise ref2va-turbo4-exact-sm89 \
 
 命令会把视频和音频 latent 张量写入 `result.safetensors`，并打印 JSON 摘要。这些张量需要交给兼容的解码器；该文件还不是可播放的视频。
 
+## 用两张 3080 执行一个请求 {#parallel}
+
+选择两张 RTX 3080 20 GB，继续使用相同的 SM86 Turbo4 资源：
+
+```bash
+vflash plan ref2va-turbo4-exact-sm86 --gpu 0 --peer-gpu 1 --strategy tensor
+```
+
+在 `vflash denoise` 中使用相同的 `--gpu`、`--peer-gpu` 和 `--strategy` 参数即可。两张卡共同执行一个请求；这不会创建两个独立 worker。
+
+| 策略 | 分片对象 | 选中第二张卡时的默认值 |
+| --- | --- | --- |
+| `tensor` | QKV、注意力输出、FFN 和 LoRA 投影权重 | 否 |
+| `sequence-head` | GEMM 按 token 行分片，注意力按头分片并处理完整序列 | 是 |
+
+`sequence-head` 从同一份主机权重向两张卡传输完整权重，用四组注意力头重叠 NCCL 通信和计算。`tensor` 传输各自的一半权重，并归约投影结果，包含原生 LoRA 分支。两种方式都使用 BF16 权重和精确注意力，执行完整四步调度，无需分布式启动器或 LightX2V 运行时。
+
+并行计算改变 GEMM 形状或归约顺序，**不保证与单卡逐位一致**。一个负载已通过完整 latent 和解码媒体烟测，跨案例指令遵循质量仍待评测。测量边界与内存口径见[性能测量](../reference/performance#parallel)。
+
 ## 复用已加载的模型 {#reuse}
 
 每次执行 `denoise` 都会新建会话。要连续处理多个请求，请使用 [HTTP 服务](./docker)：首个任务加载指定模型，后续任务复用已加载的权重。
