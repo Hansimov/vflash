@@ -5,9 +5,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from traceback import clear_frames
 from typing import Any
 
 from vflash.native.h3_distilled_lora import LIGHTX_H3_REF_TURBO8_CONTRACT
+from vflash.native.h3_pinned_arena import PinnedHostArena
 from vflash.native.h3_runtime_artifact import H3RuntimeArtifact, load_h3_runtime_artifact
 from vflash.native.h3_tensor_file import H3MappedSafetensor, load_safetensor_tensor
 
@@ -542,11 +544,13 @@ def _pin_tensor(tensor: Any) -> Any:
     return tensor if tensor.is_pinned() else tensor.pin_memory()
 
 
-def _pin_bf16_weight(weight: H3BF16Weight) -> H3BF16Weight:
+def _pin_bf16_weight(
+    weight: H3BF16Weight, *, pin: Callable[[Any], Any] = _pin_tensor
+) -> H3BF16Weight:
     if weight.bits != 16 or weight.group_size is not None:
         raise H3NativeDenoiserError("the BF16 block ring accepts only unquantized weights")
     return H3BF16Weight(
-        values=_pin_tensor(weight.values),
+        values=pin(weight.values),
         # Keep the tiny identity metadata pageable, but detach it from the
         # mapped file whose lifetime ends after the pinned copy is complete.
         scales=weight.scales.clone(),
@@ -559,33 +563,37 @@ def _pin_bf16_weight(weight: H3BF16Weight) -> H3BF16Weight:
 
 def _pin_low_rank(
     residual: H3LowRankResidualWeights | None,
+    *,
+    pin: Callable[[Any], Any] = _pin_tensor,
 ) -> H3LowRankResidualWeights | None:
     if residual is None:
         return None
     return H3LowRankResidualWeights(
-        down=_pin_tensor(residual.down),
-        up=_pin_tensor(residual.up),
+        down=pin(residual.down),
+        up=pin(residual.up),
         scaling=residual.scaling,
     )
 
 
-def _pin_bf16_block(weights: H3NativeBlockWeights) -> H3NativeBlockWeights:
+def _pin_bf16_block(
+    weights: H3NativeBlockWeights, *, pin: Callable[[Any], Any] = _pin_tensor
+) -> H3NativeBlockWeights:
     """Create the immutable host half of the SM86 two-slot weight ring."""
 
     return H3NativeBlockWeights(
-        adaln_table=_pin_tensor(weights.adaln_table),
-        qkv=_pin_bf16_weight(weights.qkv),
-        attention_out=_pin_bf16_weight(weights.attention_out),
-        ffn_in=_pin_bf16_weight(weights.ffn_in),
-        ffn_out=_pin_bf16_weight(weights.ffn_out),
-        attention_norm=_pin_tensor(weights.attention_norm),
-        ffn_norm=_pin_tensor(weights.ffn_norm),
-        query_norm=_pin_tensor(weights.query_norm),
-        key_norm=_pin_tensor(weights.key_norm),
-        qkv_residuals=tuple(_pin_low_rank(row) for row in weights.qkv_residuals),
-        attention_out_residual=_pin_low_rank(weights.attention_out_residual),
-        ffn_in_residual=_pin_low_rank(weights.ffn_in_residual),
-        ffn_out_residual=_pin_low_rank(weights.ffn_out_residual),
+        adaln_table=pin(weights.adaln_table),
+        qkv=_pin_bf16_weight(weights.qkv, pin=pin),
+        attention_out=_pin_bf16_weight(weights.attention_out, pin=pin),
+        ffn_in=_pin_bf16_weight(weights.ffn_in, pin=pin),
+        ffn_out=_pin_bf16_weight(weights.ffn_out, pin=pin),
+        attention_norm=pin(weights.attention_norm),
+        ffn_norm=pin(weights.ffn_norm),
+        query_norm=pin(weights.query_norm),
+        key_norm=pin(weights.key_norm),
+        qkv_residuals=tuple(_pin_low_rank(row, pin=pin) for row in weights.qkv_residuals),
+        attention_out_residual=_pin_low_rank(weights.attention_out_residual, pin=pin),
+        ffn_in_residual=_pin_low_rank(weights.ffn_in_residual, pin=pin),
+        ffn_out_residual=_pin_low_rank(weights.ffn_out_residual, pin=pin),
     )
 
 
@@ -1179,32 +1187,52 @@ class H3NativeDenoiserBF16Ring:
         if not artifact.is_complete_block_stack:
             raise H3NativeDenoiserError("H3 RuntimeArtifact has no complete block stack")
         host_blocks: list[H3NativeBlockWeights] = []
-        for block in artifact.blocks:
-            with H3MappedSafetensor(artifact.directory / block.path) as mapped:
-                loaded_artifact, weights = load_h3_native_block(
+        with PinnedHostArena() as arena:
+            for block in artifact.blocks:
+                with H3MappedSafetensor(artifact.directory / block.path) as mapped:
+                    weights = None
+                    try:
+                        loaded_artifact, weights = load_h3_native_block(
+                            artifact,
+                            block.index,
+                            adaln_table=(
+                                adaln_table_load(block.index)
+                                if adaln_table_load is not None
+                                else None
+                            ),
+                            tensor_load=mapped.load,
+                        )
+                        if loaded_artifact != artifact:
+                            raise H3NativeDenoiserError(
+                                "BF16 ring block artifact changed while loading"
+                            )
+                        host_blocks.append(_pin_bf16_block(weights, pin=arena.copy))
+                    except BaseException as exc:
+                        # Release mmap views retained by unwound loader frames
+                        # before __exit__ closes the mapping. Keep the traceback
+                        # locations and original allocation/validation error.
+                        host_blocks.clear()
+                        clear_frames(exc.__traceback__)
+                        raise
+                    finally:
+                        weights = None
+            try:
+                return cls(
                     artifact,
-                    block.index,
-                    adaln_table=(
-                        adaln_table_load(block.index) if adaln_table_load is not None else None
-                    ),
-                    tensor_load=mapped.load,
+                    tuple(host_blocks),
+                    device=device,
+                    attention_backend=attention_backend,
+                    elementwise_backend=elementwise_backend,
+                    elementwise_block_size=elementwise_block_size,
+                    adapter_fusion_backend=adapter_fusion_backend,
+                    rotary_backend=rotary_backend,
                 )
-                if loaded_artifact != artifact:
-                    raise H3NativeDenoiserError(
-                        "BF16 ring block artifact changed while loading"
-                    )
-                host_blocks.append(_pin_bf16_block(weights))
-                del weights
-        return cls(
-            artifact,
-            tuple(host_blocks),
-            device=device,
-            attention_backend=attention_backend,
-            elementwise_backend=elementwise_backend,
-            elementwise_block_size=elementwise_block_size,
-            adapter_fusion_backend=adapter_fusion_backend,
-            rotary_backend=rotary_backend,
-        )
+            except BaseException as exc:
+                # A caller may keep the exception for diagnostics. Do not let
+                # its constructor traceback retain the entire pinned model.
+                host_blocks.clear()
+                clear_frames(exc.__traceback__)
+                raise
 
     def prepare_invocation(
         self,

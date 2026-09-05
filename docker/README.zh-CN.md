@@ -14,7 +14,7 @@
 cp docker/.env.example docker/.env
 ```
 
-编辑 `docker/.env`，填写资源的绝对路径并选择显卡。保留 `VFLASH_IMAGE=vflash:0.1.0a3` 以构建当前源码。配置可选：
+编辑 `docker/.env`，填写资源的绝对路径并选择显卡。保留 `VFLASH_IMAGE=vflash:0.1.0a4` 以构建当前源码。配置可选：
 
 | 显卡 | `VFLASH_PROFILE_ID` |
 | --- | --- |

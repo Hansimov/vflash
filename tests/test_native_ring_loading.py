@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from vflash.native import h3_native_denoiser as denoiser
+from vflash.native.h3_pinned_arena import PinnedHostArena
 from vflash.native.h3_tensor_file import save_safetensors_atomic
 
 
@@ -41,7 +42,9 @@ def test_loaded_host_weights_outlive_the_mapped_file(monkeypatch, tmp_path):
     monkeypatch.setattr(denoiser, "load_h3_runtime_artifact", lambda _: artifact)
     # The copying/lifetime contract runs in CPU CI; actual pinning is covered by
     # the target-hardware loader and complete-trajectory checks.
-    monkeypatch.setattr(denoiser, "_pin_tensor", lambda tensor: tensor.clone())
+    monkeypatch.setattr(
+        denoiser, "PinnedHostArena", lambda: PinnedHostArena(4096, pin_memory=False)
+    )
 
     class HostWeights(denoiser.H3NativeDenoiserBF16Ring):
         def __init__(self, _artifact, host_blocks, **_options):

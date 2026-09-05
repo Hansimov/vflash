@@ -14,7 +14,7 @@ From the repository root:
 cp docker/.env.example docker/.env
 ```
 
-Edit `docker/.env` with your absolute asset paths and selected GPU. Keep `VFLASH_IMAGE=vflash:0.1.0a3` to build the current checkout. Choose one of:
+Edit `docker/.env` with your absolute asset paths and selected GPU. Keep `VFLASH_IMAGE=vflash:0.1.0a4` to build the current checkout. Choose one of:
 
 | GPU | `VFLASH_PROFILE_ID` |
 | --- | --- |

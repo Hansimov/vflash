@@ -12,6 +12,7 @@ from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
 from contextlib import suppress
 from dataclasses import replace
 from datetime import timedelta
+from traceback import clear_frames
 from typing import Any
 
 from vflash.native.h3_native_denoiser import (
@@ -23,6 +24,7 @@ from vflash.native.h3_native_denoiser import (
     _torch,
     load_h3_native_block,
 )
+from vflash.native.h3_pinned_arena import PinnedHostArena
 from vflash.native.h3_runtime_artifact import H3RuntimeArtifact
 from vflash.native.h3_tensor_file import H3MappedSafetensor
 
@@ -321,24 +323,40 @@ class H3NativeDenoiserParallel:
         ):
             raise H3NativeDenoiserError("parallel execution requires two distinct SM86 devices")
         host_blocks: list[list[H3NativeBlockWeights]] = [[], []]
-        for row in artifact.blocks:
-            with H3MappedSafetensor(artifact.directory / row.path) as mapped:
-                _, weights = load_h3_native_block(
-                    artifact,
-                    row.index,
-                    adaln_table=(adaln_table_load(row.index) if adaln_table_load else None),
-                    tensor_load=mapped.load,
-                )
-                if strategy == "tensor":
-                    for rank in (0, 1):
-                        host_blocks[rank].append(
-                            _pin_bf16_block(shard_h3_block(weights, rank, pin_memory=True))
+        with PinnedHostArena() as arena:
+            for row in artifact.blocks:
+                with H3MappedSafetensor(artifact.directory / row.path) as mapped:
+                    weights = None
+                    try:
+                        _, weights = load_h3_native_block(
+                            artifact,
+                            row.index,
+                            adaln_table=(
+                                adaln_table_load(row.index) if adaln_table_load else None
+                            ),
+                            tensor_load=mapped.load,
                         )
-                else:
-                    pinned = _pin_bf16_block(weights)
-                    host_blocks[0].append(pinned)
-                    host_blocks[1].append(pinned)
-                del weights
+                        if strategy == "tensor":
+                            for rank in (0, 1):
+                                # Pre-pinning individual shards would reintroduce
+                                # the allocator's per-tensor power-of-two waste.
+                                host_blocks[rank].append(
+                                    _pin_bf16_block(
+                                        shard_h3_block(weights, rank), pin=arena.copy
+                                    )
+                                )
+                        else:
+                            pinned = _pin_bf16_block(weights, pin=arena.copy)
+                            host_blocks[0].append(pinned)
+                            host_blocks[1].append(pinned)
+                    except BaseException as exc:
+                        host_blocks[0].clear()
+                        host_blocks[1].clear()
+                        pinned = None
+                        clear_frames(exc.__traceback__)
+                        raise
+                    finally:
+                        weights = None
         ring_artifact = artifact
         if strategy == "tensor":
             ring_artifact = replace(
@@ -349,32 +367,43 @@ class H3NativeDenoiserParallel:
                     ffn_dim=artifact.spec.ffn_dim // 2,
                 ),
             )
-        pair = _DevicePair(devices)
+        pair = None
+        self = None
         ring_type = _TensorRing if strategy == "tensor" else _SequenceRing
+        rings = []
         try:
-            rings = tuple(
-                ring_type(ring_artifact, tuple(host_blocks[rank]), device=device)
-                for rank, device in enumerate(devices)
-            )
+            pair = _DevicePair(devices)
+            # A failed generator expression can keep its call arguments alive
+            # through the traceback even after clear_frames(). Use the same
+            # ordered construction with explicit owners that can be released.
+            for rank, device in enumerate(devices):
+                rings.append(ring_type(ring_artifact, tuple(host_blocks[rank]), device=device))
             for rank, ring in enumerate(rings):
                 for slot in ring.slots:
                     slot.group = pair.groups[rank]
-        except BaseException:
-            pair.close()
+            self = cls()
+            self.artifact = artifact
+            self.strategy = strategy
+            self.devices = devices
+            self.device = devices[0]
+            self.rings = tuple(rings)
+            self.pair = pair
+            self.host_weight_bytes = (
+                sum(ring.host_weight_bytes for ring in rings)
+                if strategy == "tensor"
+                else rings[0].host_weight_bytes
+            )
+            return self
+        except BaseException as exc:
+            try:
+                if pair is not None:
+                    pair.close()
+            finally:
+                rings.clear()
+                host_blocks.clear()
+                self = pinned = ring = slot = None
+                clear_frames(exc.__traceback__)
             raise
-        self = cls()
-        self.artifact = artifact
-        self.strategy = strategy
-        self.devices = devices
-        self.device = devices[0]
-        self.rings = rings
-        self.pair = pair
-        self.host_weight_bytes = (
-            sum(ring.host_weight_bytes for ring in rings)
-            if strategy == "tensor"
-            else rings[0].host_weight_bytes
-        )
-        return self
 
     def prepare_invocation(self, states: Any, **kwargs: Any) -> Any:
         return self.rings[0].prepare_invocation(states, **kwargs)
