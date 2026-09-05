@@ -14,16 +14,17 @@ from vflash.planner import resolve_plan
 
 
 @pytest.mark.parametrize(
-    "profile_id,capability,memory,strategy",
+    "profile_id,capability,memory,strategy,residency",
     [
-        ("ref2va-turbo4-exact-sm89", "8.9", 48.0, "single"),
-        ("ref2va-turbo4-exact-sm86", "8.6", 20.0, "single"),
-        ("ref2va-turbo4-exact-sm86", "8.6", 20.0, "tensor"),
-        ("ref2va-turbo4-exact-sm86", "8.6", 20.0, "sequence-head"),
+        ("ref2va-turbo4-exact-sm89", "8.9", 48.0, "single", "default"),
+        ("ref2va-turbo8-exact-sm89", "8.9", 48.0, "single", "block-ring"),
+        ("ref2va-turbo4-exact-sm86", "8.6", 20.0, "single", "default"),
+        ("ref2va-turbo4-exact-sm86", "8.6", 20.0, "tensor", "default"),
+        ("ref2va-turbo4-exact-sm86", "8.6", 20.0, "sequence-head", "block-ring"),
     ],
 )
 def test_session_loads_once_and_keeps_request_accounting_separate(
-    monkeypatch, tmp_path, profile_id, capability, memory, strategy
+    monkeypatch, tmp_path, profile_id, capability, memory, strategy, residency
 ):
     loads = []
     calls = []
@@ -38,8 +39,11 @@ def test_session_loads_once_and_keeps_request_accounting_separate(
         def __init__(self, **options):
             loads.append(options)
 
-        def generate_latents(self, bundle, output):
+        def generate_latents(self, bundle, output, *, progress_callback=None):
             calls.append((bundle, output))
+            if progress_callback is not None:
+                for completed in range(1, 5):
+                    progress_callback(completed, 4)
             return Result(output)
 
         def metadata(self):
@@ -73,9 +77,16 @@ def test_session_loads_once_and_keeps_request_accounting_separate(
         artifact=tmp_path / "artifact",
         schedule_overlay=tmp_path / "schedule",
         auxiliary_tensor=tmp_path / "auxiliary",
+        weight_residency=residency,
     )
     first = session.generate(tmp_path / "bundle-a", tmp_path / "first")
-    second = session.generate(tmp_path / "bundle-b", tmp_path / "second")
+    progress = []
+    second = session.generate(
+        tmp_path / "bundle-b",
+        tmp_path / "second",
+        progress_callback=lambda completed, total: progress.append((completed, total)),
+    )
+    assert progress == [(completed, 4) for completed in range(1, 5)]
 
     assert len(loads) == 1
     assert calls == [
@@ -90,6 +101,7 @@ def test_session_loads_once_and_keeps_request_accounting_separate(
         "test-uuid" if strategy == "single" else "test-uuid,peer-uuid"
     )
     assert loads[0]["parallel_strategy"] == strategy
+    assert loads[0]["weight_residency"] == residency
     assert second["parallel"]["strategy"] == strategy
     session.close()
     session.close()

@@ -90,6 +90,8 @@ vflash plan ref2va-turbo4-exact-sm86 --gpu 0 --peer-gpu 1 --strategy tensor
 
 每次执行 `denoise` 都会新建会话。要连续处理多个请求，请使用 [HTTP 服务](./docker)：首个任务加载指定模型，后续任务复用已加载的权重。
 
+Python 接入可保留 `vflash.native.runner.NativeEngineSession`，调用 `session.generate(bundle, output_latents, progress_callback=on_step)`。可选回调接收 `(已完成步数, 总步数)`，在所选 GPU 都完成本次评估后触发。不需要步数通知时可省略回调；启用后每步会增加一次设备同步。会话所有者停止时应关闭会话。4090 会话构造时还可选择 `weight_residency="block-ring"`，为激活张量保留更多显存。
+
 ## 检查失败时 {#troubleshooting}
 
 | 现象 | 检查方法 |

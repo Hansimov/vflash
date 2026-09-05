@@ -47,6 +47,12 @@ def build_parser() -> argparse.ArgumentParser:
     denoise.add_argument("--schedule-overlay", type=Path, required=True)
     denoise.add_argument("--auxiliary-tensor", type=Path, required=True)
     denoise.add_argument("--output-latents", type=Path, required=True)
+    denoise.add_argument(
+        "--weight-residency",
+        choices=("default", "resident", "block-ring"),
+        default="default",
+        help="stream BF16 blocks from host RAM to leave more GPU space for activations",
+    )
     return parser
 
 
@@ -95,6 +101,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 artifact=args.artifact,
                 schedule_overlay=args.schedule_overlay,
                 auxiliary_tensor=args.auxiliary_tensor,
+                weight_residency=args.weight_residency,
                 output_latents=args.output_latents,
             )
             print(json.dumps(result, indent=2))

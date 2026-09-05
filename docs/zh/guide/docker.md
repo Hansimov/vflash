@@ -19,7 +19,7 @@ cp docker/.env.example docker/.env
 编辑 `docker/.env`，把所有示例路径换成 Docker 主机上的绝对路径：
 
 ```dotenv
-VFLASH_IMAGE=vflash:0.1.0a2
+VFLASH_IMAGE=vflash:0.1.0a3
 VFLASH_PROFILE_ID=ref2va-turbo4-exact-sm89
 VFLASH_GPU_DEVICE=0
 
@@ -39,7 +39,7 @@ sudo install -d -o 10001 -g 10001 /path/to/outputs
 docker compose --env-file docker/.env -f docker/compose.yaml up -d --build --pull never
 ```
 
-上述命令会从当前源码在本地构建 `vflash:0.1.0a2`。首次构建需要下载固定版本的运行依赖。模型资源以只读方式挂载，输出和内核缓存使用独立的可写存储。
+上述命令会从当前源码在本地构建 `vflash:0.1.0a3`。首次构建需要下载固定版本的运行依赖。模型资源以只读方式挂载，输出和内核缓存使用独立的可写存储。
 
 Compose 默认只将接口绑定到 **127.0.0.1:8000**。引擎没有内置身份验证；本地使用时保留这个绑定，需要远程访问时则先接入应用的鉴权层。
 

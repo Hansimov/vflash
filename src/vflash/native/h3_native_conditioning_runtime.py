@@ -91,6 +91,29 @@ def validate_declared_schedule(
         )
 
 
+def validate_conditioning_source(source: dict, artifact_source: dict) -> None:
+    """Bind model and encoding math while retaining capture hardware as provenance."""
+    identity = (
+        "model_repository",
+        "model_revision",
+        "transformer_sha256",
+        "oracle",
+        "oracle_revision",
+    )
+    expected_profile = artifact_source.get("oracle_profile", "")
+    profile = source.get("oracle_profile", "")
+    for suffix in ("-sm86", "-sm89"):
+        expected_profile = expected_profile.removesuffix(suffix)
+        profile = profile.removesuffix(suffix)
+    if (
+        any(source.get(key) != artifact_source.get(key) for key in identity)
+        or profile != expected_profile
+    ):
+        raise H3NativeConditioningRuntimeError(
+            "the conditioning bundle and native Transformer are not the same H3 model"
+        )
+
+
 @dataclass(frozen=True)
 class H3NativeConditioningRuntimeResult:
     bundle_id: str
@@ -128,6 +151,7 @@ class H3NativeConditioningRuntime:
         expected_video_flow_shift: float | None = None,
         expected_audio_flow_shift: float | None = None,
         parallel_strategy: str = "single",
+        weight_residency: str = "default",
     ) -> None:
         import torch
 
@@ -148,6 +172,13 @@ class H3NativeConditioningRuntime:
             )
         if parallel_strategy not in {"single", "tensor", "sequence-head"}:
             raise H3NativeConditioningRuntimeError("unknown parallel execution strategy")
+        if weight_residency == "default":
+            weight_residency = "block-ring" if capability == (8, 6) else "resident"
+        if weight_residency not in {"resident", "block-ring"} or (
+            (capability == (8, 6) or parallel_strategy != "single")
+            and weight_residency != "block-ring"
+        ):
+            raise H3NativeConditioningRuntimeError("unsupported native weight residency")
         devices = (resolved_device,)
         if parallel_strategy != "single":
             if (
@@ -245,7 +276,7 @@ class H3NativeConditioningRuntime:
         if parallel_strategy == "single":
             denoiser_type = (
                 H3NativeDenoiserBF16Ring
-                if capability == (8, 6)
+                if weight_residency == "block-ring"
                 else H3NativeDenoiserBF16Resident
             )
             denoiser = denoiser_type.load(
@@ -274,6 +305,7 @@ class H3NativeConditioningRuntime:
         self.device = resolved_device
         self.devices = devices
         self.parallel_strategy = parallel_strategy
+        self.weight_residency = weight_residency
         self.compute_capability = capability
         self.artifact = artifact
         self.overlay = overlay
@@ -308,9 +340,7 @@ class H3NativeConditioningRuntime:
             "initialization_stages": dict(self.initialization_stages),
             "float32_matmul_precision": torch.get_float32_matmul_precision(),
             "memory": {
-                "weight_residency": (
-                    "block-ring" if self.compute_capability == (8, 6) else "resident"
-                ),
+                "weight_residency": self.weight_residency,
                 "pinned_host_weight_payload_bytes": getattr(
                     self.denoiser, "host_weight_bytes", 0
                 ),
@@ -335,23 +365,11 @@ class H3NativeConditioningRuntime:
     def _load_request_tensors(self, bundle_directory: Path) -> tuple[Any, dict[str, Any]]:
         torch = self._torch
         bundle = load_h3_conditioning_bundle(bundle_directory)
-        if (
-            bundle.profile.task != "ref2va"
-            or bundle.source.get("model_repository")
-            != self.artifact.source.get("model_repository")
-            or bundle.source.get("model_revision") != self.artifact.source.get("model_revision")
-            or bundle.source.get("transformer_sha256")
-            != self.artifact.source.get("transformer_sha256")
-            or bundle.source.get("oracle") != self.artifact.source.get("oracle")
-            or bundle.source.get("oracle_revision")
-            != self.artifact.source.get("oracle_revision")
-            or bundle.source.get("oracle_profile") != self.artifact.source.get("oracle_profile")
-            or bundle.source.get("oracle_hardware")
-            != self.artifact.source.get("oracle_hardware")
-        ):
+        if bundle.profile.task != "ref2va":
             raise H3NativeConditioningRuntimeError(
-                "the conditioning bundle and native Transformer are not the same H3 model"
+                "the native runtime requires Ref2VA conditioning"
             )
+        validate_conditioning_source(bundle.source, self.artifact.source)
         tensor_path = bundle.directory / "conditioning.safetensors"
         video_indices = load_safetensor_tensor(tensor_path, "video_indices")
         audio_indices = load_safetensor_tensor(tensor_path, "audio_indices")
@@ -376,7 +394,7 @@ class H3NativeConditioningRuntime:
         bundle_directory: Path,
         output_path: Path,
         *,
-        progress_callback: Callable[[float, float], None] | None = None,
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> H3NativeConditioningRuntimeResult:
         """Run one live request and export target-only VAE-ready latents."""
 
@@ -422,6 +440,9 @@ class H3NativeConditioningRuntime:
             while not engine.complete:
                 engine.step()
                 if progress_callback is not None:
+                    # A reported evaluation is complete on every cooperating GPU.
+                    for selected in self.devices:
+                        torch.cuda.synchronize(selected)
                     progress_callback(engine.evaluation_index, self.overlay.schedule.nfe)
         for selected in self.devices:
             torch.cuda.synchronize(selected)

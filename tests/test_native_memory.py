@@ -20,6 +20,7 @@ def test_host_allocation_and_retained_cache_are_reported_separately():
     runtime.device = "cuda:0"
     runtime.devices = (SimpleNamespace(index=0),)
     runtime.parallel_strategy = "single"
+    runtime.weight_residency = "block-ring"
     runtime.compute_capability = (8, 6)
     runtime.artifact = SimpleNamespace(
         artifact_id="test", weight_profile="test", adapter_execution="runtime-residual"

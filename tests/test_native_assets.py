@@ -11,10 +11,36 @@ from vflash.native.h3_conditioning_bundle import (
 from vflash.native.h3_native_conditioning_runtime import (
     H3NativeConditioningRuntime,
     H3NativeConditioningRuntimeError,
+    validate_conditioning_source,
     validate_declared_schedule,
 )
 from vflash.native.h3_native_scheduler import H3NativeSchedule
 from vflash.native.h3_tensor_file import H3TensorFileError, inspect_safetensors_header
+
+
+def test_conditioning_hardware_is_provenance_but_model_identity_is_bound():
+    artifact = {
+        "model_repository": "example/model",
+        "model_revision": "revision",
+        "transformer_sha256": "a" * 64,
+        "oracle": "diffusers",
+        "oracle_revision": "encoder",
+        "oracle_profile": "ref2va-adapter-bf16-torch-sdpa-sm89",
+        "oracle_hardware": "sm89",
+    }
+    capture = {
+        **artifact,
+        "oracle_profile": "ref2va-adapter-bf16-torch-sdpa-sm86",
+        "oracle_hardware": "sm86",
+    }
+    validate_conditioning_source(capture, artifact)
+    for field, value in (
+        ("transformer_sha256", "b" * 64),
+        ("oracle_revision", "different-encoder"),
+        ("oracle_profile", "ref2va-int8-torch-sdpa-sm86"),
+    ):
+        with pytest.raises(H3NativeConditioningRuntimeError, match="same H3 model"):
+            validate_conditioning_source({**capture, field: value}, artifact)
 
 
 def conditioning_profile():

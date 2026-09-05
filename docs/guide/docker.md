@@ -19,7 +19,7 @@ cp docker/.env.example docker/.env
 Edit `docker/.env`. Replace every example path with an absolute path on the Docker host:
 
 ```dotenv
-VFLASH_IMAGE=vflash:0.1.0a2
+VFLASH_IMAGE=vflash:0.1.0a3
 VFLASH_PROFILE_ID=ref2va-turbo4-exact-sm89
 VFLASH_GPU_DEVICE=0
 
@@ -39,7 +39,7 @@ sudo install -d -o 10001 -g 10001 /path/to/outputs
 docker compose --env-file docker/.env -f docker/compose.yaml up -d --build --pull never
 ```
 
-These instructions build `vflash:0.1.0a2` locally from your checkout. The first build downloads the pinned runtime dependencies. Model resources stay mounted read-only; outputs and kernel caches use separate writable storage.
+These instructions build `vflash:0.1.0a3` locally from your checkout. The first build downloads the pinned runtime dependencies. Model resources stay mounted read-only; outputs and kernel caches use separate writable storage.
 
 The Compose configuration binds the API to **127.0.0.1:8000**. The engine has no built-in authentication. Keep this binding for local use, or put the API behind your application's authentication before allowing remote access.
 

@@ -29,6 +29,8 @@ The released profiles pin these sources:
 | [LightX2V Turbo4](https://huggingface.co/lightx2v/Minimax-h3-Turbo/tree/83b617309219e859c1c264520eba07492d22e958) | `83b617309219e859c1c264520eba07492d22e958` |
 | [LightX2V Turbo8](https://huggingface.co/lightx2v/Minimax-h3-Turbo/tree/0eebcc7e79f9cb200927c80b8e7595265b770e34) | `0eebcc7e79f9cb200927c80b8e7595265b770e34` |
 
+Conditioning capture hardware is recorded as provenance: an SM86 and an SM89 encoder capture can use the same model artifacts when their model identity, encoder revision, arithmetic profile, and tensor layout match. This does not promise identical conditioning tensors across GPUs. The denoiser artifact must still match its execution target.
+
 Vflash validates the declared resource metadata. A file with the expected name is not enough: renaming a folder or changing a manifest cannot make mismatched weights compatible.
 
 ## Store inputs and outputs {#storage}

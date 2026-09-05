@@ -1062,7 +1062,7 @@ class H3NativeDenoiserBF16Resident(_H3BlockStack):
 
 
 class H3NativeDenoiserBF16Ring:
-    """Exact BF16 50-block executor for a 20 GiB SM86 target.
+    """Exact BF16 50-block executor with bounded SM86/SM89 device storage.
 
     The complete block stack remains in page-locked host memory.  Two fixed
     device slots alternate between compute and asynchronous H2D on a dedicated
@@ -1094,15 +1094,11 @@ class H3NativeDenoiserBF16Ring:
             raise H3NativeDenoiserError("the BF16 block ring requires a CUDA device")
         if not artifact.is_complete_block_stack or len(host_blocks) != artifact.spec.num_layers:
             raise H3NativeDenoiserError("the BF16 block ring requires a complete block stack")
-        if artifact.target.compute_capability != "sm86":
-            raise H3NativeDenoiserError(
-                "the BF16 block ring is specialized for an SM86 artifact"
-            )
+        if artifact.target.compute_capability not in {"sm86", "sm89"}:
+            raise H3NativeDenoiserError("the BF16 block ring requires an SM86 or SM89 artifact")
         capability = torch.cuda.get_device_capability(runtime_device)
-        if capability != (8, 6):
-            raise H3NativeDenoiserError(
-                f"the BF16 block ring requires SM86, received sm{capability[0]}{capability[1]}"
-            )
+        if artifact.target.compute_capability != f"sm{capability[0]}{capability[1]}":
+            raise H3NativeDenoiserError("the BF16 block ring device differs from its artifact")
         if artifact.target.attention_weight_bits != 16 or artifact.target.ffn_weight_bits != 16:
             raise H3NativeDenoiserError("the BF16 block ring requires exact BF16 weights")
         if len(host_blocks) < 2:

@@ -90,6 +90,8 @@ Parallel execution changes GEMM shapes or reduction order. Results are **not bit
 
 Each `denoise` command starts a fresh session. For repeated requests, use the [HTTP service](./docker): it loads a fixed profile on the first job and reuses that model for later jobs.
 
+Python integrations can retain a `vflash.native.runner.NativeEngineSession` and call `session.generate(bundle, output_latents, progress_callback=on_step)`. The optional callback receives `(completed_steps, total_steps)` after each evaluation has completed on all selected GPUs. Omit it when step notifications are unnecessary; enabling it adds a device synchronization at each step. Close the session when its owner stops. A 4090 session can select `weight_residency="block-ring"` during construction to reserve more device memory for activations.
+
 ## If a check fails {#troubleshooting}
 
 | Symptom | What to check |

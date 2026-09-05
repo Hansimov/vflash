@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -32,9 +33,14 @@ class NativeEngineSession:
         artifact: Path,
         schedule_overlay: Path,
         auxiliary_tensor: Path,
+        weight_residency: str = "default",
     ) -> None:
         started = time.perf_counter()
         profile = plan.profile
+        if weight_residency not in {"default", "resident", "block-ring"} or (
+            plan.target.compute_capability == "8.6" and weight_residency == "resident"
+        ):
+            raise ContractError("unsupported native weight residency")
         if (
             profile.mode is not GenerationMode.REF2VA
             or profile.id not in WEIGHT_PROFILES
@@ -83,16 +89,26 @@ class NativeEngineSession:
             expected_video_flow_shift=profile.video_flow_shift,
             expected_audio_flow_shift=profile.audio_flow_shift,
             parallel_strategy=plan.parallel_strategy,
+            weight_residency=weight_residency,
         )
         self.initialization_seconds = time.perf_counter() - started
         self.request_count = 0
         self.closed = False
 
-    def generate(self, bundle: Path, output_latents: Path) -> dict[str, Any]:
+    def generate(
+        self,
+        bundle: Path,
+        output_latents: Path,
+        *,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> dict[str, Any]:
         if self.closed:
             raise ContractError("the native engine session is closed")
         started = time.perf_counter()
-        result = self.runtime.generate_latents(bundle, output_latents)
+        options = (
+            {"progress_callback": progress_callback} if progress_callback is not None else {}
+        )
+        result = self.runtime.generate_latents(bundle, output_latents, **options)
         self.request_count += 1
         return {
             "schema_version": 1,
@@ -144,6 +160,7 @@ def denoise_conditioning_bundle(
     schedule_overlay: Path,
     auxiliary_tensor: Path,
     output_latents: Path,
+    weight_residency: str = "default",
 ) -> dict[str, Any]:
     """One-shot CLI path; services retain a NativeEngineSession instead."""
     session = NativeEngineSession(
@@ -151,6 +168,7 @@ def denoise_conditioning_bundle(
         artifact=artifact,
         schedule_overlay=schedule_overlay,
         auxiliary_tensor=auxiliary_tensor,
+        weight_residency=weight_residency,
     )
     try:
         return session.generate(bundle, output_latents)

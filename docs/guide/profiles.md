@@ -1,6 +1,6 @@
 # Profiles and hardware
 
-A profile chooses the model, LoRA revision, step count, arithmetic, and GPU memory strategy together. Choose one that matches both your hardware and compiled assets.
+A profile chooses the model, LoRA revision, step count, and arithmetic. Its default memory strategy follows the selected hardware. Choose one that matches both your hardware and compiled assets.
 
 ## Available profiles {#available}
 
@@ -21,7 +21,7 @@ vflash plan ref2va-turbo8-exact-sm89 --gpu 0
 
 ## Memory and deployment {#memory}
 
-The **4090 profile** keeps weights in GPU memory. A resident service can reuse them across requests.
+The **4090 profile** keeps weights in GPU memory by default. A resident service can reuse them across requests. For larger conditioning bundles, the CLI and Python session also accept `weight_residency="block-ring"` (`--weight-residency block-ring` in the CLI). This streams weights from host RAM to leave more device memory for activations. It is a capacity option: one same-GPU four-step check produced bitwise-equal latents, but took longer than keeping the weights resident. The HTTP service currently uses the default residency.
 
 The **3080 profile** streams blocks from pinned system memory while the GPU computes. The tested 928 × 512, 124-frame, four-step workload uses about **60 GiB of process RAM**. We recommend **at least 64 GiB of available host RAM per worker** for that workload, with additional room for the operating system and other applications. Larger inputs and concurrent workers need separate capacity measurements; 64 GiB is not a universal capacity guarantee. Faster host-to-device transfers and sufficient RAM matter as well as GPU compute.
 
