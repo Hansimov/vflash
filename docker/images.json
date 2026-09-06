@@ -1,27 +1,27 @@
 {
   "schema_version": 1,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "platform": "linux/amd64",
-  "implementation_revision": "bee10c01b9f55278fa91ec62e7ec768676a45cdb",
-  "gpu_qualified_revision": "87154ad780467df52657db12b704389e7462cd83",
-  "wheel_sha256": "eaee0312f9ecce76d2182f59649c1e0450d16e6c94ff364ef1ebfc3d653d5685",
-  "qualification_delta": "The final package only removes the unqualified complete SM86 profile from the admission allowlist; numerical implementation files are identical to the GPU-qualified package. Final images add the explicit Inductor cache and pass installed-package, CLI, UID and prepared-asset CPU checks.",
-  "build_recipe": "https://github.com/Hansimov/vflash/releases/download/v0.2.0/Dockerfile.release",
+  "implementation_revision": "d2a8d6d3f025469746c1a3750c262c1638ac74b3",
+  "gpu_qualified_revision": "703860d25700fad4bd27427c5a483584d1827fe4",
+  "wheel_sha256": "7b01b954376126910675ed4c09e16eaf415ff4f83f54f5a35e335866e9f8555b",
+  "qualification_delta": "Final package differs from the SM86 GPU-qualified package only in version metadata and CLI help/strategy discovery. All 54 remaining package files, including all 22 native implementation files, are identical. SM89 qualification is retained from 0.2.0. Final images pass installed-package, CLI, UID, prepared-asset and early-rejection CPU checks.",
+  "build_recipe": "https://github.com/Hansimov/vflash/releases/download/v0.2.1/Dockerfile.release",
   "images": {
     "pipeline": {
-      "name": "hansimov/vflash:0.2.0-pipeline",
-      "digest": "sha256:44f65093103d6461db77cd03f757e8889c5b4b0ece2500f27a3b0582e31b9901",
-      "interface": "text-only T2VA or prompt and one to three ordered references to five-second MP4 on SM89 48 GB",
-      "qualification": "T2VA: all 50 compiled blocks exact; two complete requests with exact conditioning and final AV latents, repeated video frames, complete media decoding and cancellation. Ref4: retained 0.1.0 multi-reference qualification. No broad semantic or bitwise audio guarantee.",
-      "dependency_image": "hansimov/vflash@sha256:15f27fa27a3ec28fe7aa43e58e12b2975def961c21c254660267552ceb495e69",
+      "name": "hansimov/vflash:0.2.1-pipeline",
+      "digest": "sha256:da97b6f31552a956d7d79d98e0aed787c8834d43f16f9649f163454fff001a2c",
+      "interface": "five-second MP4: T2VA or Ref4 with one to three ordered images on one SM89 48 GB; Ref4 on two SM86 20 GB GPUs with sequence-head",
+      "qualification": "Dual SM86: same-primary official conditioning (14 exact tensors), same-pair standalone native final FP32 AV latents exact, one three-reference 928x512 complete MP4, all-frame/audio decoding and NFE1 cancellation/cleanup. Same-SM86 compiler arithmetic: 52 exact comparisons. Thermal throttling precludes isolated speed claims. SM89: retained 0.2.0 T2VA and 0.1.0 multi-reference validation. No broad semantic or bitwise audio guarantee.",
+      "dependency_image": "hansimov/vflash@sha256:44f65093103d6461db77cd03f757e8889c5b4b0ece2500f27a3b0582e31b9901",
       "anonymous_pull": true
     },
     "native": {
-      "name": "hansimov/vflash:0.2.0",
-      "digest": "sha256:43ec96a8271855b730ec6b993a8d2a02a1e6b46edd7e3d4fa4a2bf3305f15de7",
-      "interface": "compiled conditioning bundles to video and audio latents, including native SM86 profiles",
-      "qualification": "installed package and CPU service checks; native arithmetic unchanged",
-      "dependency_image": "hansimov/vflash@sha256:7f1cb4a952b28ed39fa0ab80dd250283304f9eb4b0b89b936585846a79ed739b",
+      "name": "hansimov/vflash:0.2.1",
+      "digest": "sha256:11035e55c50e46c3a7e71bcdcfbdafad051de69f59687054f0fd25e516d715ad",
+      "interface": "compiled conditioning bundles to video and audio latents, including native single and dual SM86 profiles",
+      "qualification": "installed package and CPU service checks; all native arithmetic unchanged from 0.2.0",
+      "dependency_image": "hansimov/vflash@sha256:43ec96a8271855b730ec6b993a8d2a02a1e6b46edd7e3d4fa4a2bf3305f15de7",
       "anonymous_pull": true
     }
   }
