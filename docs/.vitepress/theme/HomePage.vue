@@ -11,7 +11,7 @@ const copyFailed = ref(false)
 let copyTimer: ReturnType<typeof setTimeout> | undefined
 const link = (path: string) => withBase(`${zh.value ? '/zh' : ''}${path}`)
 const text = computed(() => zh.value ? {
-  eyebrow: '开发者预览版',
+  eyebrow: '正式版',
   title: '原生 H3 推理。',
   accent: '充分发挥你的显卡。',
   intro: '为 RTX 3080 与 4090 构建的 MiniMax H3 引擎。支持 Turbo LoRA，用 Python 或 HTTP 接入你的应用。',
@@ -29,19 +29,19 @@ const text = computed(() => zh.value ? {
     { execution: '双卡协作 · 分块加载', profiles: 'Turbo4', note: '两张卡共同处理一个请求；需要显式选择第二张卡，并预留系统内存。' },
   ],
   boundary: '当前公开版的输入与输出',
-  boundaryText: '单 4090 的 Ref4 Python 链路支持提示词与一张参考图生成五秒 MP4，并提供官方权重编译器。其他配置和 HTTP 接口继续接收条件包、输出 latent。',
+  boundaryText: '单 4090 的 Ref4 链路支持提示词与一至三张参考图生成五秒 MP4，提供 Python、容器命令和官方权重编译器。其他配置和 HTTP 接口继续接收条件包、输出 latent。',
   inputs: '了解运行前提',
   next: '按你的任务开始',
   guides: [
     { number: '01', title: '检查环境与配置', text: '先安装轻量 CLI，确认显卡、内存和模型配置。无需下载权重。', path: '/guide/getting-started' },
-    { number: '02', title: '生成一个视频', text: '准备官方模型资源，通过 Python 将提示词和图片生成 MP4。', path: '/guide/complete-pipeline' },
+    { number: '02', title: '生成一个视频', text: '准备官方模型资源，通过 Python 或容器命令，将提示词和多张图片生成 MP4。', path: '/guide/complete-pipeline' },
     { number: '03', title: '评估速度与质量', text: '区分冷启动、重复请求和成片耗时，按真实任务检查结果。', path: '/reference/performance' },
   ],
   source: '理解实现，按需扩展。',
   sourceText: 'PyTorch 与 Triton 原生执行，独立实现 LoRA 计算与显存调度。',
   architecture: '阅读架构',
 } : {
-  eyebrow: 'Developer preview',
+  eyebrow: 'Stable release',
   title: 'Native H3 inference.',
   accent: 'Built for your GPU.',
   intro: 'A MiniMax H3 engine for RTX 3080 and 4090, with Turbo LoRA support. Bring it into your application through Python or HTTP.',
@@ -59,12 +59,12 @@ const text = computed(() => zh.value ? {
     { execution: 'Two GPUs · streamed', profiles: 'Turbo4', note: 'Both GPUs cooperate on one request. Select the peer explicitly and allow sufficient host RAM.' },
   ],
   boundary: 'The current public interface',
-  boundaryText: 'The Ref4 Python pipeline turns a prompt and one image into a five-second MP4 on one 4090, with an official-weight compiler. Other profiles and the HTTP API accept conditioning bundles and return latents.',
+  boundaryText: 'The Ref4 pipeline turns a prompt and one to three images into a five-second MP4 on one 4090, through Python or a container command. Other profiles and the HTTP API accept conditioning bundles and return latents.',
   inputs: 'Check the prerequisites',
   next: 'Start with what you need',
   guides: [
     { number: '01', title: 'Check your setup', text: 'Install the lightweight CLI and inspect your GPU, memory and profiles. No weights required.', path: '/guide/getting-started' },
-    { number: '02', title: 'Generate a video', text: 'Prepare official model assets and turn a prompt and image into an MP4 with Python.', path: '/guide/complete-pipeline' },
+    { number: '02', title: 'Generate a video', text: 'Prepare official model assets and turn a prompt and images into an MP4 with Python or Docker.', path: '/guide/complete-pipeline' },
     { number: '03', title: 'Evaluate the results', text: 'Separate loading, repeated requests and video delivery. Check quality against your task.', path: '/reference/performance' },
   ],
   source: 'Understand it. Build on it.',

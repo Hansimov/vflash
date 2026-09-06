@@ -19,7 +19,7 @@ cp docker/.env.example docker/.env
 编辑 `docker/.env`，把所有示例路径换成 Docker 主机上的绝对路径：
 
 ```dotenv
-VFLASH_IMAGE=vflash:0.1.0a7
+VFLASH_IMAGE=hansimov/vflash:0.1.0
 VFLASH_PROFILE_ID=ref2va-turbo4-exact-sm89
 VFLASH_GPU_DEVICE=0
 
@@ -36,26 +36,59 @@ VFLASH_HOST_OUTPUTS=/path/to/outputs
 
 ```bash
 sudo install -d -o 10001 -g 10001 /path/to/outputs
-docker compose --env-file docker/.env -f docker/compose.yaml up -d --build --pull never
+docker compose --env-file docker/.env -f docker/compose.yaml pull
+docker compose --env-file docker/.env -f docker/compose.yaml up -d --no-build
 ```
 
-上述命令会从当前源码在本地构建 `vflash:0.1.0a7`。首次构建需要下载固定版本的运行依赖。模型资源以只读方式挂载，输出和内核缓存使用独立的可写存储。
+带版本号的镜像已发布到 [Docker Hub](https://hub.docker.com/r/hansimov/vflash/tags)，不可变摘要见[镜像清单](https://github.com/Hansimov/vflash/blob/v0.1.0/docker/images.json)。模型只读挂载，输出和内核缓存使用独立的可写存储。需要本地构建时，执行 `docker build --target runtime -t vflash:0.1.0 .`，然后在环境文件中选择该镜像。
 
 Compose 默认只将接口绑定到 **127.0.0.1:8000**。引擎没有内置身份验证；本地使用时保留这个绑定，需要远程访问时则先接入应用的鉴权层。
 
-## 完整 Python 链路镜像 {#pipeline}
+## 在容器中生成 MP4 {#pipeline}
 
-可选的 `pipeline` 构建目标额外安装固定的编码与解码依赖、与 CUDA 匹配的 Torchvision、FFmpeg 和 FFprobe：
+`pipeline` 镜像预装官方编码器与 VAE 适配器、CUDA 对应的 Torchvision、FFmpeg 和 FFprobe，入口是 `vflash`，用 `generate` 生成完整视频。独立的原生镜像运行 HTTP latent 服务。
+
+拉取已发布的完整链路镜像：
 
 ```bash
-docker build --target pipeline -t vflash:0.1.0a7-pipeline .
+docker pull hansimov/vflash:0.1.0-pipeline
+mkdir -p inputs outputs cache
 ```
 
-用此镜像执行[完整链路指南](./complete-pipeline)中的 Python 示例，将脚本与准备好的模型资源只读挂载，输出使用单独的可写目录。镜像以 UID/GID `10001` 运行，输出和内核缓存目录应允许该用户写入。模型文件不在镜像内。只读容器还需挂载可写的 `/tmp` 与 `/cache`，其中 `/cache` 必须允许加载编译后的共享库。
+将包含六个资产路径的 `pipeline-assets.json`、提示词与参考图放入 `inputs`。JSON 中的模型路径使用容器内最终的 `/models/...` 路径，并将对应的主机模型目录只读挂载。在最终挂载布局内准备记录；此步骤仅核验一次资产字节，不需要显卡：
 
-模型在容器内的挂载路径应与 `prepared-assets.json` 记录的路径一致；路径改变时，在最终挂载完成后重新生成资源校验记录。脚本应写入 `/outputs/video.mp4` 这样的可写输出路径；执行 Python 脚本而非 HTTP 服务时，添加 `--no-healthcheck`。完整链路需要单独安排[主机内存预算](./complete-pipeline)。
+```bash
+docker run --rm --runtime=runc -e NVIDIA_VISIBLE_DEVICES=void \
+  --network none --read-only --user "$(id -u):$(id -g)" \
+  --tmpfs /tmp:rw,noexec,mode=1777 \
+  -v /absolute/model-directory:/models:ro \
+  -v "$PWD/inputs:/inputs:ro" -v "$PWD/outputs:/outputs:rw" \
+  -v "$PWD/cache:/cache:rw" \
+  hansimov/vflash:0.1.0-pipeline prepare-pipeline \
+  --assets /inputs/pipeline-assets.json --receipt /outputs/prepared-assets.json
+```
 
-该镜像补齐 Python 链路的依赖。默认 HTTP 服务仍接收条件包、返回潜变量；完整视频使用 Python 的 `H3Pipeline` 接口。构建时的依赖检查不使用 GPU，不构成端到端 GPU 性能验证。
+在一张 RTX 4090 48 GB 上生成。参考图的传入顺序对应提示词中的 `<Picture N>`：
+
+```bash
+docker run --rm --gpus device=0 --shm-size 4g \
+  --network none --read-only --user "$(id -u):$(id -g)" \
+  --tmpfs /tmp:rw,noexec,mode=1777 \
+  -v /absolute/model-directory:/models:ro \
+  -v "$PWD/inputs:/inputs:ro" -v "$PWD/outputs:/outputs:rw" \
+  -v "$PWD/cache:/cache:rw" \
+  hansimov/vflash:0.1.0-pipeline generate \
+  --prepared-assets /outputs/prepared-assets.json \
+  --prompt-file /inputs/prompt.txt \
+  --reference /inputs/subject.png --reference /inputs/setting.png \
+  --output /outputs/video.mp4 --gpu 0 --seed 1234 --trust-local-code
+```
+
+`--reference` 可以出现一至三次，使用 Ref4 生成五秒、24 fps 视频。进度 JSON 写入 stderr，最终结果写入 stdout。镜像不包含模型权重；请核对[完整链路能力和内存预算](./complete-pipeline)及[模型许可证](../reference/license)。
+
+如需从标签源码构建完整镜像，可执行 `docker build --target pipeline -t vflash:0.1.0-pipeline .`，并将命令中的镜像名替换为本地名称。
+
+镜像默认使用 UID/GID `10001`；示例改用当前用户，方便写入输出。`/cache` 必须允许加载编译后的共享库，不要放在 `noexec` 挂载点。准备记录中的资产路径和文件身份必须保持一致。连续生成时，建议在独立容器进程中复用 Python `H3Pipeline`，避免每次执行命令都重新加载模型。
 
 ## 双卡协作 {#parallel}
 
@@ -71,7 +104,7 @@ VFLASH_PARALLEL_STRATEGY=sequence-head
 
 ```bash
 docker compose --env-file docker/.env \
-  -f docker/compose.yaml -f docker/compose.parallel.yaml up -d --build --pull never
+  -f docker/compose.yaml -f docker/compose.parallel.yaml up -d --no-build
 ```
 
 覆盖配置选择 SM86 Turbo4，向容器提供选中的两张主机显卡，并为 NCCL 设置 1 GiB 共享内存。一个 worker 持有两张卡，串行处理请求。增加 worker 时需分配互不重叠的显卡组。此模式已在没有 peer access 的 PCIe 3.0 x16 主机桥接拓扑上测量，无需 NVLink。

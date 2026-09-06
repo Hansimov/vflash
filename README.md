@@ -4,14 +4,14 @@ Native **MiniMax H3 inference** for RTX 3080 20 GB and RTX 4090 48 GB. Vflash us
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
-**0.1.0a7 · Developer preview.** Generate a five-second MP4 from a prompt and one reference image with the [Ref4 Python pipeline](https://hansimov.github.io/vflash/guide/complete-pipeline) on one RTX 4090 48 GB. [Compile its runtime assets](https://hansimov.github.io/vflash/guide/compile-weights) directly from fixed official weights. The lower-level Python, CLI and HTTP interfaces continue to accept conditioning bundles and return video/audio latents on the supported GPUs below.
+**0.1.0.** Generate a five-second MP4 from a prompt and one to three ordered reference images with the [Ref4 pipeline](https://hansimov.github.io/vflash/guide/complete-pipeline) through Python or the container CLI on one RTX 4090 48 GB. [Compile its runtime assets](https://hansimov.github.io/vflash/guide/compile-weights) directly from fixed official weights. The lower-level Python, CLI and HTTP interfaces continue to accept conditioning bundles and return video/audio latents on the supported GPUs below.
 
 ## Check your setup
 
 Python 3.11 or newer is required. The base install does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.1.0a7 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.1.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
@@ -34,7 +34,7 @@ For the native denoiser, allow **64 GiB or more of available system memory per w
 
 ## Build with Vflash
 
-- [Generate an MP4](https://hansimov.github.io/vflash/guide/complete-pipeline) with the complete Ref4 Python pipeline and its pinned official encoder/VAE adapters.
+- [Generate an MP4](https://hansimov.github.io/vflash/guide/complete-pipeline) with the complete Ref4 pipeline and its pinned official encoder/VAE adapters.
 - [Prepare official weights](https://hansimov.github.io/vflash/guide/compile-weights), or [run a bundle](https://hansimov.github.io/vflash/guide/getting-started#run-a-bundle) with existing compatible assets.
 - [Integrate through Python](https://hansimov.github.io/vflash/guide/python) and reuse a loaded model across requests.
 - [Start Docker and HTTP](https://hansimov.github.io/vflash/guide/docker) for an isolated worker and bounded job queue.

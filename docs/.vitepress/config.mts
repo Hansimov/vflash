@@ -21,7 +21,7 @@ const sidebar = (zh = false) => {
       items: [
         { text: zh ? 'Docker 与 HTTP API' : 'Docker and HTTP API', link: `${prefix}/guide/docker` },
         { text: zh ? 'Python 集成' : 'Python integration', link: `${prefix}/guide/python` },
-        { text: zh ? '用 Python 生成视频' : 'Generate a video', link: `${prefix}/guide/complete-pipeline` },
+        { text: zh ? '生成视频' : 'Generate a video', link: `${prefix}/guide/complete-pipeline` },
         { text: zh ? '编译官方权重' : 'Compile official weights', link: `${prefix}/guide/compile-weights` },
         { text: zh ? '测量性能与质量' : 'Measure speed and quality', link: `${prefix}/reference/performance` },
       ],

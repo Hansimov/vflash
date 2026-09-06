@@ -1,6 +1,6 @@
 # Docker and API
 
-Run Vflash as a local HTTP service. The service accepts a compiled conditioning bundle and returns video and audio latents (tensors ready for decoding). It loads one profile and reuses it across serial requests.
+Generate a complete video with the [pipeline image](#pipeline), or run the native denoiser as a local HTTP service. The service accepts a compiled conditioning bundle and returns video and audio latents (tensors ready for decoding). It loads one profile and reuses it across serial requests.
 
 ## Requirements {#requirements}
 
@@ -19,7 +19,7 @@ cp docker/.env.example docker/.env
 Edit `docker/.env`. Replace every example path with an absolute path on the Docker host:
 
 ```dotenv
-VFLASH_IMAGE=vflash:0.1.0a7
+VFLASH_IMAGE=hansimov/vflash:0.1.0
 VFLASH_PROFILE_ID=ref2va-turbo4-exact-sm89
 VFLASH_GPU_DEVICE=0
 
@@ -32,30 +32,63 @@ VFLASH_HOST_OUTPUTS=/path/to/outputs
 
 `VFLASH_GPU_DEVICE` selects one host GPU by index or UUID. The container sees the selected GPU as device `0`. For a 3080, use `ref2va-turbo4-exact-sm86` and matching SM86 resources. For 4090 Turbo8, use `ref2va-turbo8-exact-sm89` and its corresponding resources.
 
-The container runs as UID/GID `10001`. Create the output directory with write access for that user, then build the current source and start the service:
+The container runs as UID/GID `10001`. Create the output directory with write access for that user, then pull and start the released service:
 
 ```bash
 sudo install -d -o 10001 -g 10001 /path/to/outputs
-docker compose --env-file docker/.env -f docker/compose.yaml up -d --build --pull never
+docker compose --env-file docker/.env -f docker/compose.yaml pull
+docker compose --env-file docker/.env -f docker/compose.yaml up -d --no-build
 ```
 
-These instructions build `vflash:0.1.0a7` locally from your checkout. The first build downloads the pinned runtime dependencies. Model resources stay mounted read-only; outputs and kernel caches use separate writable storage.
+Versioned images are published on [Docker Hub](https://hub.docker.com/r/hansimov/vflash/tags). Their immutable digests are recorded in [the image inventory](https://github.com/Hansimov/vflash/blob/v0.1.0/docker/images.json). Models stay mounted read-only; outputs and kernel caches use separate writable storage. To build locally, use `docker build --target runtime -t vflash:0.1.0 .` and select that image in your environment file.
 
 The Compose configuration binds the API to **127.0.0.1:8000**. The engine has no built-in authentication. Keep this binding for local use, or put the API behind your application's authentication before allowing remote access.
 
-## Complete Python pipeline image {#pipeline}
+## Generate an MP4 in a container {#pipeline}
 
-The optional `pipeline` target also installs the fixed encoder and decoder dependencies, CUDA-matched Torchvision, FFmpeg and FFprobe:
+The `pipeline` image includes the official encoder/VAE adapters, CUDA-matched Torchvision, FFmpeg and FFprobe. Its entry point is `vflash`; `generate` writes a complete video. The separate native image runs the HTTP latent service.
+
+Pull the released complete-pipeline image:
 
 ```bash
-docker build --target pipeline -t vflash:0.1.0a7-pipeline .
+docker pull hansimov/vflash:0.1.0-pipeline
+mkdir -p inputs outputs cache
 ```
 
-Use this image to run the Python example in the [complete pipeline guide](./complete-pipeline), with your script and prepared model assets mounted read-only and a separate writable output directory. It runs as UID/GID `10001`; give that user write access to the output and kernel cache mounts. The model files are not included. In a read-only container, mount writable `/tmp` and `/cache`; `/cache` must allow loading compiled shared libraries.
+Put your six-path `pipeline-assets.json`, prompt and reference images in `inputs`. In that JSON, use final container paths under `/models` for all model assets. Mount the containing model directory read-only. Prepare the receipt inside this final mount layout; this step hashes the assets once and needs no GPU:
 
-Keep asset mount paths identical to the paths recorded in `prepared-assets.json`. If paths change inside the container, prepare the receipt again after mounting the final assets. Give your script a writable output path such as `/outputs/video.mp4`; use `--no-healthcheck` when running a Python script instead of the HTTP service. The complete pipeline needs its own [host-memory budget](./complete-pipeline#one-owned-pipeline).
+```bash
+docker run --rm --runtime=runc -e NVIDIA_VISIBLE_DEVICES=void \
+  --network none --read-only --user "$(id -u):$(id -g)" \
+  --tmpfs /tmp:rw,noexec,mode=1777 \
+  -v /absolute/model-directory:/models:ro \
+  -v "$PWD/inputs:/inputs:ro" -v "$PWD/outputs:/outputs:rw" \
+  -v "$PWD/cache:/cache:rw" \
+  hansimov/vflash:0.1.0-pipeline prepare-pipeline \
+  --assets /inputs/pipeline-assets.json --receipt /outputs/prepared-assets.json
+```
 
-The image adds Python pipeline dependencies. Its default HTTP service still accepts conditioning bundles and returns latents; complete videos use the Python `H3Pipeline` interface. Build-time dependency checks run without a GPU and do not constitute an end-to-end GPU benchmark.
+Generate on one RTX 4090 48 GB. Reference order determines the `<Picture N>` labels in your prompt:
+
+```bash
+docker run --rm --gpus device=0 --shm-size 4g \
+  --network none --read-only --user "$(id -u):$(id -g)" \
+  --tmpfs /tmp:rw,noexec,mode=1777 \
+  -v /absolute/model-directory:/models:ro \
+  -v "$PWD/inputs:/inputs:ro" -v "$PWD/outputs:/outputs:rw" \
+  -v "$PWD/cache:/cache:rw" \
+  hansimov/vflash:0.1.0-pipeline generate \
+  --prepared-assets /outputs/prepared-assets.json \
+  --prompt-file /inputs/prompt.txt \
+  --reference /inputs/subject.png --reference /inputs/setting.png \
+  --output /outputs/video.mp4 --gpu 0 --seed 1234 --trust-local-code
+```
+
+Use one to three `--reference` arguments. The model produces five seconds at 24 fps with Ref4. Progress JSON goes to stderr, the final result to stdout. No model weights are included in the image. Review the [complete pipeline contract and memory budget](./complete-pipeline) and [model licenses](../reference/license).
+
+To build the complete image from the tagged source, run `docker build --target pipeline -t vflash:0.1.0-pipeline .` and substitute that local image name in the commands.
+
+The image defaults to UID/GID `10001`; these examples instead use your current user so outputs remain writable. `/cache` must permit loading compiled shared libraries: do not put it on a `noexec` mount. Asset paths and filesystem identities must remain the same as during preparation. Repeated work should use a persistent Python `H3Pipeline` in a dedicated container process, avoiding a new model load per command.
 
 ## Cooperating GPU pair {#parallel}
 
@@ -71,7 +104,7 @@ Use `tensor` for standard weight tensor parallelism. With Docker Compose **2.24.
 
 ```bash
 docker compose --env-file docker/.env \
-  -f docker/compose.yaml -f docker/compose.parallel.yaml up -d --build --pull never
+  -f docker/compose.yaml -f docker/compose.parallel.yaml up -d --no-build
 ```
 
 The override selects the SM86 Turbo4 profile, exposes exactly the two selected host devices, and reserves 1 GiB of container shared memory for NCCL. One worker owns the pair and processes requests serially. Use distinct GPU groups for additional workers. This mode has been measured on PCIe 3.0 x16 host-bridge links without peer access; it does not require NVLink.

@@ -4,7 +4,7 @@ A profile chooses the model, LoRA revision, step count, and arithmetic. Its defa
 
 ## Available profiles {#available}
 
-Ref2VA generates video and audio from reference conditioning. T2VA uses text conditioning without reference images. The native interfaces use compiled conditioning bundles; Base and Ref weights are separate. The [complete Ref4 Python pipeline](./complete-pipeline) additionally accepts a prompt and one image on an RTX 4090 48 GB.
+Ref2VA generates video and audio from reference conditioning. T2VA uses text conditioning without reference images. The native interfaces use compiled conditioning bundles; Base and Ref weights are separate. The [complete Ref4 pipeline](./complete-pipeline) additionally accepts a prompt and one to three ordered images on an RTX 4090 48 GB.
 
 | GPU | Profile | Steps | Weight loading |
 | --- | --- | ---: | --- |
@@ -26,7 +26,7 @@ Release **0.1.0a6** adds `t2va-turbo4-exact-sm89`. Use the [source tag](https://
 
 Use a Base4 v1.0 artifact, Base auxiliary tensors, a 6/3 video/audio schedule, and a T2VA bundle with no references. A Ref2VA artifact cannot process this task. Switching mode requires a separate session and matching assets.
 
-The preview completed one SM89 decoded-output smoke case. Native input and sampled denoising tensors matched the pinned official path; repeated calls through one session preserved the final tensors. This checks implementation, not broad instruction or audio quality. T2VA Turbo8, newer Base4 adapters and other GPU targets remain outside this preview.
+The T2VA profile completed one SM89 decoded-output smoke case. Native input and sampled denoising tensors matched the pinned official path; repeated calls through one session preserved the final tensors. This checks implementation, not broad instruction or audio quality. T2VA Turbo8, newer Base4 adapters and other GPU targets remain outside this profile.
 
 ## Memory and deployment {#memory}
 
@@ -61,7 +61,7 @@ Turbo4 and Turbo8 are distilled configurations. Fewer steps reduce compute, but 
 
 The two-device modes have completed full trajectories and one paired decoded-video/audio smoke. They retain exact attention but introduce different floating-point rounding; they are not a same-output or same-quality guarantee.
 
-The single-device 3080 preview has been checked for capacity and repeatable results between serial and overlapped loading on the same GPU. Independent reference comparison and broader quality evaluation are still pending.
+The single-device 3080 profile has been checked for capacity and repeatable results between serial and overlapped loading on the same GPU. Independent reference comparison and broader quality evaluation are still pending.
 
 ## What is outside this release {#scope}
 

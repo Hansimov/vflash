@@ -1,6 +1,20 @@
-# 版本更新
+# 发布说明
 
-当前版本为 **0.1.0a7**，开发者预览版，新增完整 Ref4 Python 链路和官方权重编译器。选择接口前，请先查看[支持列表](../guide/profiles)。
+当前版本为 **0.1.0 正式版**。完整 Ref4 链路支持一至三张有序参考图、Python 接口与容器命令。完整成片和原生 latent 接口的支持范围不同，详见[支持列表](../guide/profiles)。
+
+## 0.1.0 · 多参考图生成视频 {#v0-1-0}
+
+[源码标签](https://github.com/Hansimov/vflash/tree/v0.1.0)
+
+在单张 RTX 4090 48 GB 上，通过 `vflash generate` 或 `H3Pipeline`，将提示词和一至三张图片生成五秒、24 fps MP4。图片按传入顺序对应 `<Picture N>`，原有单图 Python 参数保持兼容。`vflash prepare-pipeline` 在使用前一次性核验模型资产。[容器指南](../guide/docker#pipeline)提供完整的准备与生成命令。
+
+实际安装包镜像在 928 × 512 下连续完成单图、双图、三图请求。三例的 14 个条件张量和最终 FP32 音视频 latent 均与固定对照逐位一致；第一例的全部原始 FP32 视频帧、第二例的 120 帧交付 RGB 也一致。三份 MP4 均完成全部视频帧与音轨解码，包含 120 帧及五秒双声道音频。三图请求在完成第一次去噪后取消，正确关闭实例、移除临时输出并释放资源。
+
+这些是实现与生命周期验证，不代表广泛的指令质量或速度保证。原生去噪、LoRA 数学及官方媒体解码沿用 a7。官方音频 VAE 的重复调用可能出现微小浮点差异，不承诺音频逐位复现。参考图也不构成严格的关键帧时序约束。
+
+完整镜像面向 SM89 Ref4；Ref8、T2VA Turbo4、单卡与双卡 SM86 保留原生条件包到 latent 的接口。W8、动态 LoRA 和 FL2VA 不在此次发布范围。模型权重按各自许可证单独下载。
+
+已发布 Linux AMD64 镜像：[`hansimov/vflash:0.1.0-pipeline`](https://hub.docker.com/r/hansimov/vflash/tags) 用于完整生成，`hansimov/vflash:0.1.0` 用于原生 HTTP 服务。两者均可匿名拉取，具体镜像见[不可变摘要清单](https://github.com/Hansimov/vflash/blob/v0.1.0/docker/images.json)。
 
 ## 0.1.0a7 · 提示词与图片生成 MP4 {#a7}
 
@@ -22,7 +36,7 @@ SM89 新增 T2VA Turbo4，使用 Base4 v1.0 资源。执行前核查任务、适
 
 一个解码输出案例与会话重复调用已通过实现核查。[验证范围](../guide/profiles#t2va)说明具体负载和尚未完成的质量检查。Ref 配置沿用已有权重和计算方式。更新的 Base4 适配器、T2VA Turbo8 和 SM86 T2VA 不包含在本次发布中。
 
-按[快速开始](../guide/getting-started)安装此源码标签。[Docker 指南](../guide/docker)从源码在本地构建 `vflash:0.1.0a6`；目前没有公开容器仓库中的预构建镜像。
+按[快速开始](../guide/getting-started)安装此源码标签。[Docker 指南](../guide/docker)从源码在本地构建 `vflash:0.1.0a6`；该历史版本未发布公开的预构建镜像。
 
 ## 0.1.0a5 · 权重读取与资源管理 {#a5}
 
@@ -42,7 +56,7 @@ cd vflash
 python -m pip install -e .
 ```
 
-[Docker 指南](../guide/docker)使用源码在本地构建镜像，目前没有公开容器仓库中的预构建镜像。继续使用与配置匹配的运行资源；本次更新不会转换权重或条件包。
+[Docker 指南](../guide/docker)使用源码在本地构建镜像，该历史版本未发布公开的预构建镜像。继续使用与配置匹配的运行资源；本次更新不会转换权重或条件包。
 
 ## 0.1.0a4 · 降低主机内存占用 {#a4}
 
@@ -58,6 +72,6 @@ python -m pip install -e .
 
 ## 能力状态 {#availability}
 
-公开包包含列表中的 **BF16 Ref2VA Turbo4 / Turbo8 和 SM89 T2VA Turbo4 去噪器**，以及**单 SM89 Ref4 Python 完整链路与官方权重编译器**。编译器创建 Ref4 资源，其他配置仍需已有的匹配资源。本源码版本不附带模型权重，也未在公开容器仓库发布预构建镜像。
+公开包包含列表中的 **BF16 Ref2VA Turbo4 / Turbo8 和 SM89 T2VA Turbo4 去噪器**，以及**单 SM89 Ref4 Python / 容器完整链路与官方权重编译器**。编译器创建 Ref4 资源，其他配置仍需已有的匹配资源。容器镜像单独发布，不包含模型权重。
 
 新增模式、适配器和硬件分别完成安装、数值与解码检查后，才会进入支持列表。

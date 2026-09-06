@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "version": "0.1.0",
+  "platform": "linux/amd64",
+  "implementation_revision": "9e312046be1ab8199364e5f641e91d5124fdf6ce",
+  "images": {
+    "pipeline": {
+      "name": "hansimov/vflash:0.1.0-pipeline",
+      "digest": "sha256:15f27fa27a3ec28fe7aa43e58e12b2975def961c21c254660267552ceb495e69",
+      "interface": "prompt and one to three references to Ref4 MP4 on SM89 48 GB",
+      "qualification": "actual installed container; three sequential complete requests and cancellation"
+    },
+    "native": {
+      "name": "hansimov/vflash:0.1.0",
+      "digest": "sha256:7f1cb4a952b28ed39fa0ab80dd250283304f9eb4b0b89b936585846a79ed739b",
+      "interface": "compiled conditioning bundles to video and audio latents",
+      "qualification": "canonical Docker build and CPU package checks; unchanged a7 native arithmetic"
+    }
+  }
+}

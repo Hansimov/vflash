@@ -3,7 +3,7 @@
 Install Vflash to inspect your GPU and choose a supported profile. For prompt-and-image video generation on one RTX 4090 48 GB, continue with the [complete Ref4 pipeline](./complete-pipeline) and [official-weight preparation](./compile-weights). The lower-level bundle workflow is described below.
 
 ::: info Before you begin
-The complete Python pipeline supports **one reference image → a five-second Ref4 MP4**. The CLI and HTTP service accept **compiled conditioning → video/audio latents**. T2VA remains in that lower-level interface. Model downloads and compilation are explicit steps; no weights are bundled with the package.
+The Python pipeline and `vflash generate` support **one to three reference images → a five-second Ref4 MP4**. The `denoise` command and HTTP service accept **compiled conditioning → video/audio latents**. T2VA remains in that lower-level interface. Model downloads and compilation are explicit steps; no weights are bundled with the package.
 :::
 
 ## Install the CLI {#install}
@@ -11,7 +11,7 @@ The complete Python pipeline supports **one reference image → a five-second Re
 Use Python 3.11 or newer. The base installation is lightweight and does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.1.0a7 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.1.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate

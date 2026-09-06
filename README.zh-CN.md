@@ -4,14 +4,14 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
-**0.1.0a7 · 开发者预览版。** 单张 RTX 4090 48 GB 可通过 [Ref4 Python 完整链路](https://hansimov.github.io/vflash/zh/guide/complete-pipeline)，将提示词和一张参考图生成五秒 MP4；所需运行资产可以[从固定官方权重直接编译](https://hansimov.github.io/vflash/zh/guide/compile-weights)。下层 Python、CLI 和 HTTP 接口继续在下列显卡上接收条件包、输出音视频 latent。
+**0.1.0 正式版。** 单张 RTX 4090 48 GB 可通过 [Ref4 完整链路](https://hansimov.github.io/vflash/zh/guide/complete-pipeline)，通过 Python 或容器命令行，将提示词和一至三张有序参考图生成五秒 MP4；所需运行资产可以[从固定官方权重直接编译](https://hansimov.github.io/vflash/zh/guide/compile-weights)。下层 Python、CLI 和 HTTP 接口继续在下列显卡上接收条件包、输出音视频 latent。
 
 ## 检查运行环境
 
 需要 Python 3.11 或更新版本。基础安装不会下载模型权重或 PyTorch。
 
 ```bash
-git clone --branch v0.1.0a7 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.1.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
@@ -34,14 +34,14 @@ vflash plan ref2va-turbo4-exact-sm89 --gpu 0
 
 ## 接入应用
 
-- [生成 MP4](https://hansimov.github.io/vflash/zh/guide/complete-pipeline)，用提示词和一张参考图复用完整 Python 链路。
+- [生成 MP4](https://hansimov.github.io/vflash/zh/guide/complete-pipeline)，用提示词和一至三张参考图生成视频，并在连续请求间复用模型。
 - [编译官方权重](https://hansimov.github.io/vflash/zh/guide/compile-weights)，从固定版本的模型与 LoRA 创建 Ref4 运行资源。
 - [运行条件包](https://hansimov.github.io/vflash/zh/guide/getting-started#run-a-bundle)，使用匹配的编译资源执行推理。
 - [通过 Python 接入](https://hansimov.github.io/vflash/zh/guide/python)，在多个请求之间复用模型。
 - [启动 Docker 与 HTTP 服务](https://hansimov.github.io/vflash/zh/guide/docker)，使用独立 worker 和有容量限制的任务队列。
 - [测量性能与质量](https://hansimov.github.io/vflash/zh/reference/performance)，区分加载、推理和端到端成本。
 
-Turbo4 和 Turbo8 使用蒸馏 LoRA。精确注意力不保证基础模型的质量；不同显卡或并行策略也不保证逐位一致的结果。完整 Python 链路目前限于单 4090 的 Ref4、单参考图、五秒输出。T2VA、Turbo8 和 SM86 继续使用条件包接口；W8、动态 LoRA 和首尾帧生成尚未发布。SM89 已支持 T2VA Turbo4，需要独立的 Base4 v1.0 资源；请查看[验证范围](https://hansimov.github.io/vflash/zh/guide/profiles#t2va)。
+Turbo4 和 Turbo8 使用蒸馏 LoRA。精确注意力不保证基础模型的质量；不同显卡或并行策略也不保证逐位一致的结果。完整 Python 与容器链路目前支持单 4090 的 Ref4、一至三张参考图、五秒输出。T2VA、Turbo8 和 SM86 继续使用条件包接口；W8、动态 LoRA 和首尾帧生成尚未发布。SM89 已支持 T2VA Turbo4，需要独立的 Base4 v1.0 资源；请查看[验证范围](https://hansimov.github.io/vflash/zh/guide/profiles#t2va)。
 
 ## 参与开发
 

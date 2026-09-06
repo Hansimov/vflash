@@ -2,11 +2,13 @@
 
 [English](README.md) · [完整 Docker 与 API 指南](https://hansimov.github.io/vflash/zh/guide/docker)
 
+使用 [pipeline 镜像](https://hansimov.github.io/vflash/zh/guide/docker#pipeline)，可以从提示词与一至三张参考图生成完整 MP4。下文介绍独立的原生 HTTP 服务。
+
 服务接收预编译条件包，返回视频和音频潜变量（latents，即解码前的张量）。它使用一张 GPU 或一组协作双卡，并在多个串行请求之间复用已加载的模型。
 
-需要 Linux AMD64、Docker Compose v2、NVIDIA Container Toolkit、兼容 CUDA 13.0 的驱动、受支持的显卡和匹配的编译资源。镜像不含模型权重，提供条件包到 latent 的接口。独立的 [Ref4 编译器](../docs/zh/guide/compile-weights.md)可以从官方权重准备运行资产；[完整 MP4 生成](../docs/zh/guide/complete-pipeline.md)使用 Python pipeline 扩展。
+需要 Linux AMD64、Docker Compose v2、NVIDIA Container Toolkit、兼容 CUDA 13.0 的驱动、受支持的显卡和匹配的编译资源。镜像不含模型权重，提供条件包到 latent 的接口。独立的 [Ref4 编译器](../docs/zh/guide/compile-weights.md)可以从官方权重准备运行资产；[完整 MP4 生成](../docs/zh/guide/complete-pipeline.md)使用 pipeline 镜像或 Python 扩展。
 
-## 从源码启动
+## 启动发布版
 
 在仓库根目录执行：
 
@@ -14,7 +16,7 @@
 cp docker/.env.example docker/.env
 ```
 
-编辑 `docker/.env`，填写资源的绝对路径并选择显卡。保留 `VFLASH_IMAGE=vflash:0.1.0a7` 以构建当前源码。配置可选：
+编辑 `docker/.env`，填写资源的绝对路径并选择显卡。使用 `VFLASH_IMAGE=hansimov/vflash:0.1.0` 拉取已发布镜像。配置可选：
 
 | 显卡 | `VFLASH_PROFILE_ID` |
 | --- | --- |
@@ -27,7 +29,8 @@ cp docker/.env.example docker/.env
 
 ```bash
 sudo install -d -o 10001 -g 10001 /path/to/outputs
-docker compose --env-file docker/.env -f docker/compose.yaml up -d --build --pull never
+docker compose --env-file docker/.env -f docker/compose.yaml pull
+docker compose --env-file docker/.env -f docker/compose.yaml up -d --no-build
 curl -fsS http://127.0.0.1:8000/readyz
 ```
 

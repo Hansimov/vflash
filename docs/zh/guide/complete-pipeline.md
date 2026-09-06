@@ -1,12 +1,12 @@
-# 用 Python 生成视频
+# 生成视频
 
-Vflash 0.1.0a7 提供从提示词和一张参考图生成 MP4 的 Python 接口。首个目标是单张 48 GiB SM89 显卡上的 Ref2VA Turbo4，已在 928 × 512 下完成连续两次生成及取消请求的完整 GPU 集成验证。[官方权重编译流程](./compile-weights)可以创建所需原生资产，不需要捕获请求或依赖其他项目。
+Vflash 0.1.0 可以用提示词和一至三张有序参考图生成五秒 MP4。连续请求使用 Python 接口，单次生成也可以使用容器命令行。完整链路支持单张 RTX 4090 48 GB 上的 Ref2VA Turbo4。
 
 ## 各阶段的职责
 
 Vflash 负责原生四步去噪、模型生命周期、本地参考图读取和 MP4 输出。文本编码和参考图编码采用固定版本的 Diffusers、Transformers、PEFT 适配器；音视频解码采用 H3 官方 VAE。它们是明确列出的依赖，不会被描述成新实现的原生内核。运行时不依赖 LightX2V 或业务服务。
 
-首个接口支持一张参考图、四次去噪计算、五秒视频和原生 24 fps。宽高必须是 32 的整数倍，总像素不超过 `928 × 512`，宽高比在 1:4 至 4:1 之间。模型生成 124 帧，交付前 120 帧。提示词原样传入，图片标签为 `<Picture 1>`。
+每个请求支持一至三张参考图、四次去噪计算、五秒视频和原生 24 fps。宽高必须是 32 的整数倍，总像素不超过 `928 × 512`，宽高比在 1:4 至 4:1 之间。模型生成 124 帧，交付前 120 帧。提示词原样传入。图片按照传入顺序编号为 `<Picture 1>`、`<Picture 2>`、`<Picture 3>`，请在提示词中说明每张图的主体和用途。这些是视觉参考，不代表视频中的帧位置，也不是严格的关键帧约束。
 
 ## 安装和模型资产
 
@@ -33,13 +33,25 @@ python -m pip install '.[pipeline]'
 
 先把资产放入最终的只读快照，再执行准备步骤。该步骤会按照内置的官方文件清单或原生资产清单，逐一核验实际字节，并检查来源、LoRA 和调度。这是一次性的磁盘操作。准备记录绑定到当前文件系统；后续启动和请求仅检查文件身份、大小及时间戳，不会反复计算模型权重哈希。移动或修改资产后需要重新准备。
 
-```python
-from pathlib import Path
-from vflash.pipeline import PipelineAssets, prepare_pipeline_assets
-
-assets = PipelineAssets.from_json(Path("pipeline-assets.json"))
-prepare_pipeline_assets(assets, Path("prepared-assets.json"))
+```bash
+vflash prepare-pipeline \
+  --assets pipeline-assets.json --receipt prepared-assets.json
 ```
+
+## 使用命令行生成
+
+将 H3 提示词写入 `prompt.txt`，然后按期望的顺序传入参考图片：
+
+```bash
+vflash generate \
+  --prepared-assets prepared-assets.json \
+  --prompt-file prompt.txt \
+  --reference subject.png --reference setting.png \
+  --width 928 --height 512 --seed 1234 --gpu 0 \
+  --output video.mp4 --trust-local-code
+```
+
+`--reference` 可以出现一至三次。进度以 JSON 行写入 stderr，stdout 输出最终结果。每次命令独立加载并释放模型。预装环境及完整挂载示例见 [Docker 生成](./docker#pipeline)。
 
 ## 一个明确拥有资源的实例
 
@@ -58,7 +70,7 @@ with H3Pipeline(prepared, device=devices[0], trust_local_code=True) as pipeline:
     result = pipeline.generate(
         VideoRequest(
             prompt=Path("prompt.txt").read_text(encoding="utf-8"),
-            reference=Path("reference.png"),
+            references=(Path("subject.png"), Path("setting.png")),
             seed=1234,
         ),
         Path("video.mp4"),
@@ -66,6 +78,8 @@ with H3Pipeline(prepared, device=devices[0], trust_local_code=True) as pipeline:
     )
     print(result.output_path, result.elapsed_seconds)
 ```
+
+原有的单图参数 `reference=Path(...)` 仍可使用；它与 `references=(...)` 二选一。
 
 `trust_local_code=True` 允许加载已核验本地快照中的官方解码器 Python 文件。请先阅读[模型与代码许可证](../reference/license)。
 
@@ -85,6 +99,4 @@ with H3Pipeline(prepared, device=devices[0], trust_local_code=True) as pipeline:
 
 媒体验证分别检查编码前的画面与音频、五秒交付时长、帧数和声道。H.264 和 AAC 均为有损编码，整段 MP4 的哈希不能用于判断去噪器或音频解码器的数值等价性。
 
-固定集成案例的 14 个条件张量与最终音视频 latent 均精确复现，连续两次生成的解码画面也一致。但官方音频 VAE 在两次请求间产生了微小的浮点差异，早于 PCM 量化和 AAC 编码。因此此预览版不承诺音频逐位可复现。两次请求使用相同的五秒时钟且未调整音频速度；音频差异的具体来源仍在排查。
-
-另一次发布验收使用新编译的官方权重资产与最终 a7 安装包，完整请求和一步后取消均通过条件与 latent 核查。首个请求在原始画面、原始音频、PCM 和解码交付边界也与此前首个请求一致。此前暖请求的音频变化仍未解决；新增首请求检查不构成重复调用逐位复现的保证。
+发布检查分别覆盖 14 个条件张量、最终 FP32 音视频 latent、解码画面及可播放成片。官方音频 VAE 在重复请求间可能产生微小浮点差异，早于 PCM 或 AAC 编码；因此不承诺音频逐位复现。音频有限值、声道、帧数、时钟及完整解码仍须通过检查。具体案例与适用范围见[发布验收](../reference/releases)。

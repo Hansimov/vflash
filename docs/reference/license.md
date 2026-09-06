@@ -20,3 +20,9 @@ The runtime uses [PyTorch](https://github.com/pytorch/pytorch) and [Triton](http
 Acknowledgement does not imply that every referenced implementation or adapter is included in this release. The supported runtime configurations are listed under [profiles and hardware](../guide/profiles).
 
 The complete-pipeline development adapter uses [Diffusers](https://github.com/huggingface/diffusers), [Transformers](https://github.com/huggingface/transformers), [Accelerate](https://github.com/huggingface/accelerate), [PEFT](https://github.com/huggingface/peft), and the official decoder code distributed with the pinned MiniMax H3 model. Local MP4 delivery uses [FFmpeg](https://ffmpeg.org/legal.html). Each dependency retains its own license; the Vflash repository does not redistribute their model payloads.
+
+## Complete pipeline dependencies
+
+The complete image includes the pinned [Diffusers](https://github.com/huggingface/diffusers), [Transformers](https://github.com/huggingface/transformers), [Accelerate](https://github.com/huggingface/accelerate) and [PEFT](https://github.com/huggingface/peft) adapters. Their licenses and package notices remain in the installed distributions.
+
+MP4 encoding uses the Debian [FFmpeg package](https://packages.debian.org/trixie/ffmpeg). Its copyright and license notice is included at `/usr/share/doc/ffmpeg/copyright` in the image; corresponding source packages are available from [Debian Sources](https://sources.debian.org/src/ffmpeg/). These dependencies retain their own terms. Official H3 decoder code is loaded from the separately verified model snapshot.

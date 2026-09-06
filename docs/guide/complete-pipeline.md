@@ -1,12 +1,12 @@
-# Generate a video with Python
+# Generate a video
 
-Vflash 0.1.0a7 provides a Python pipeline from a written prompt and one reference image to an MP4. Its first target is Ref2VA Turbo4 on one SM89 GPU with 48 GiB of memory. Two sequential requests and cancellation passed complete GPU integration checks at 928 × 512. The [official-weight compiler](./compile-weights) creates all required native assets without a captured request or another project.
+Vflash 0.1.0 generates a five-second MP4 from a prompt and one to three ordered reference images. Use the Python API for repeated requests or the container CLI for a single generation. The complete pipeline supports Ref2VA Turbo4 on one RTX 4090 with 48 GB of memory.
 
 ## What runs where
 
 Vflash owns the native four-step denoiser, stage lifetimes, local reference loading and MP4 delivery. The text encoder and reference encoder use pinned Diffusers, Transformers and PEFT adapters. Video and audio decoding use the official H3 VAE code. These adapters are explicit dependencies; they are not described as new native kernels. No LightX2V runtime or application server is needed.
 
-The initial request has one image, four denoising evaluations, a five-second result and the native 24 fps clock. Width and height must be multiples of 32, with at most `928 × 512` pixels and an aspect ratio between 1:4 and 4:1. The model generates 124 frames and delivery takes the first 120. The prompt is used verbatim; refer to the image as `<Picture 1>`.
+Each request has one to three images, four denoising evaluations, a five-second result and the native 24 fps clock. Width and height must be multiples of 32, with at most `928 × 512` pixels and an aspect ratio between 1:4 and 4:1. The model generates 124 frames and delivery takes the first 120. The prompt is used verbatim. Images are numbered in the order supplied: `<Picture 1>`, `<Picture 2>` and `<Picture 3>`. Describe each image’s subject and role in your prompt. These are visual references, not frame positions or guaranteed keyframes.
 
 ## Installation and assets
 
@@ -33,13 +33,25 @@ The last three are prepared native assets, not arbitrary upstream checkpoint fil
 
 Place assets in their final read-only snapshot before preparation. The ingestion step hashes all consumed files against the bundled upstream inventory or native artifact manifest. It also verifies source, LoRA and schedule identities. This is intentionally a one-time disk operation. The resulting local receipt is bound to this filesystem: model startup and requests check file identity and timestamps without rehashing model weights. Moving or changing an asset requires a new receipt.
 
-```python
-from pathlib import Path
-from vflash.pipeline import PipelineAssets, prepare_pipeline_assets
-
-assets = PipelineAssets.from_json(Path("pipeline-assets.json"))
-prepare_pipeline_assets(assets, Path("prepared-assets.json"))
+```bash
+vflash prepare-pipeline \
+  --assets pipeline-assets.json --receipt prepared-assets.json
 ```
+
+## Generate from the command line
+
+Write the H3 prompt in `prompt.txt`, then list reference images in the intended order:
+
+```bash
+vflash generate \
+  --prepared-assets prepared-assets.json \
+  --prompt-file prompt.txt \
+  --reference subject.png --reference setting.png \
+  --width 928 --height 512 --seed 1234 --gpu 0 \
+  --output video.mp4 --trust-local-code
+```
+
+Supply one, two or three `--reference` arguments. Progress is emitted as JSON lines on stderr; stdout contains the final result. Each command starts and closes its own models. For a ready-made environment and complete mounting example, see [Docker generation](./docker#pipeline).
 
 ## One owned pipeline
 
@@ -58,7 +70,7 @@ with H3Pipeline(prepared, device=devices[0], trust_local_code=True) as pipeline:
     result = pipeline.generate(
         VideoRequest(
             prompt=Path("prompt.txt").read_text(encoding="utf-8"),
-            reference=Path("reference.png"),
+            references=(Path("subject.png"), Path("setting.png")),
             seed=1234,
         ),
         Path("video.mp4"),
@@ -66,6 +78,8 @@ with H3Pipeline(prepared, device=devices[0], trust_local_code=True) as pipeline:
     )
     print(result.output_path, result.elapsed_seconds)
 ```
+
+The original single-image `reference=Path(...)` argument remains supported. Use it or `references=(...)`, never both.
 
 `trust_local_code=True` permits loading the official decoder Python files from the verified local snapshot. Review the [model and code licenses](../reference/license) first.
 
@@ -85,6 +99,4 @@ Compare conditioning and final latents to the fixed reference implementation sep
 
 Media checks cover decoded video and audio before encoding, the five-second delivery clock, frame count and channel layout. H.264 and AAC are lossy formats. An MP4 hash is not a numerical equivalence test for the denoiser or audio decoder.
 
-The fixed integration check reproduced all 14 conditioning tensors and final audio/video latents exactly. Decoded video was also identical across the two requests. The official audio VAE produced small floating-point differences between the first and second request, before PCM quantization or AAC encoding. This preview therefore does not promise bitwise audio reproducibility. Both requests used the same five-second clock without audio retiming; the source of that audio variation remains under investigation.
-
-A separate release bootstrap used newly compiled official-weight assets with the final a7 package. Its complete request and step-one cancellation passed the same conditioning and latent checks. The first request also matched the earlier first request at raw video, raw audio, PCM and decoded delivery boundaries. The earlier warm-request audio variation remains unresolved; this additional first-request check does not turn it into a reproducibility guarantee.
+Release checks separate all 14 conditioning tensors, final FP32 audio/video latents, decoded video and playable delivery. The official audio VAE can produce small floating-point differences between repeated requests before PCM or AAC encoding. Audio bitwise reproducibility is not promised; finite output, channel layout, frame count, clock and complete decoding are checked. See [release validation](../reference/releases) for the tested cases and scope.
