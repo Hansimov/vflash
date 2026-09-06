@@ -130,7 +130,7 @@ class H3NativeConditioningRuntimeResult:
 
 
 class H3NativeConditioningRuntime:
-    """Own one hardware-specialized H3 trunk and execute live Ref2VA bundles."""
+    """Own one hardware-specialized H3 trunk and execute matching live bundles."""
 
     backend_id = "vflash-native-live-conditioning-v1"
 
@@ -142,6 +142,7 @@ class H3NativeConditioningRuntime:
         auxiliary_tensor_path: Path,
         device: str = "cuda:0",
         attention_backend: str = "torch-flash",
+        expected_task: str | None = None,
         expected_weight_profile: str | None = None,
         expected_model_repository: str | None = None,
         expected_model_revision: str | None = None,
@@ -158,8 +159,10 @@ class H3NativeConditioningRuntime:
 
         if attention_backend != "torch-flash":
             raise H3NativeConditioningRuntimeError(
-                "the Ref2VA runtime requires Torch Flash attention"
+                "the native runtime requires Torch Flash attention"
             )
+        if expected_task not in {None, "ref2va", "t2va"}:
+            raise H3NativeConditioningRuntimeError("unsupported native generation task")
         started = time.monotonic()
         resolved_device = torch.device(device)
         if resolved_device.type != "cuda" or not torch.cuda.is_available():
@@ -216,6 +219,7 @@ class H3NativeConditioningRuntime:
         )
         expected_capability = f"sm{capability[0]}{capability[1]}"
         supported_weights = (artifact.weight_profile, artifact.adapter_execution) in {
+            ("lightx-turbo4-v1.0", "runtime-residual"),
             ("lightx-turbo8-v1.0", "runtime-residual"),
             ("lightx-ref-turbo4-v0.1", "runtime-residual"),
         }
@@ -225,9 +229,13 @@ class H3NativeConditioningRuntime:
             "adapter_repository": expected_adapter_repository,
             "adapter_revision": expected_adapter_revision,
         }
+        task = artifact.source.get("oracle_profile", "").partition("-adapter-")[0]
         if (
             not artifact.is_complete_block_stack
             or not supported_weights
+            or task not in {"ref2va", "t2va"}
+            or (expected_task is not None and task != expected_task)
+            or (task == "t2va" and capability != (8, 9))
             or (
                 expected_weight_profile is not None
                 and artifact.weight_profile != expected_weight_profile
@@ -252,6 +260,7 @@ class H3NativeConditioningRuntime:
         self.weight_residency = weight_residency
         self.compute_capability = capability
         self.artifact = artifact
+        self.task = task
         self.overlay = overlay
         self.auxiliary_tensor_path = auxiliary_store.path
         self.attention_backend = attention_backend
@@ -397,9 +406,10 @@ class H3NativeConditioningRuntime:
     def _load_request_tensors(self, bundle_directory: Path) -> tuple[Any, dict[str, Any]]:
         torch = self._torch
         bundle = load_h3_conditioning_bundle(bundle_directory)
-        if bundle.profile.task != "ref2va":
+        artifact_task = self.artifact.source.get("oracle_profile", "").partition("-adapter-")[0]
+        if bundle.profile.task != artifact_task:
             raise H3NativeConditioningRuntimeError(
-                "the native runtime requires Ref2VA conditioning"
+                "the conditioning task differs from the loaded Base or Ref model"
             )
         validate_conditioning_source(bundle.source, self.artifact.source)
         tensor_path = bundle.directory / "conditioning.safetensors"

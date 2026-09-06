@@ -58,10 +58,52 @@ def conditioning_profile():
     }
 
 
+def test_t2va_requires_an_empty_reference_prefix():
+    profile = {
+        **conditioning_profile(),
+        "task": "t2va",
+        "video_flow_shift": 6.0,
+        "reference_token_budget": 0,
+        "num_condition_video_rows": 0,
+    }
+    assert H3ConditioningProfile.from_mapping(profile).task == "t2va"
+    with pytest.raises(H3ConditioningBundleError, match="reference prefixes"):
+        H3ConditioningProfile.from_mapping({**profile, "num_condition_audio_rows": 1})
+    with pytest.raises(H3ConditioningBundleError, match="condition-video"):
+        H3ConditioningProfile.from_mapping({**profile, "task": "ref2va"})
+
+
+def test_t2va_lora_identity_has_its_own_scale():
+    from vflash.native.h3_distilled_lora import (
+        H3DistilledLoraError,
+        h3_distilled_lora_contract_for_profile,
+    )
+
+    contract = h3_distilled_lora_contract_for_profile("lightx-turbo4-v1.0", workflow="t2va")
+    assert contract.scaling == 1.0
+    assert contract.nfe == 4
+    with pytest.raises(H3DistilledLoraError):
+        h3_distilled_lora_contract_for_profile("lightx-turbo4-v1.0", workflow="ref2va")
+
+
+def test_loaded_ref_model_rejects_t2va_before_loading_request_tensors(monkeypatch, tmp_path):
+    runtime = H3NativeConditioningRuntime.__new__(H3NativeConditioningRuntime)
+    runtime._torch = object()
+    runtime.artifact = SimpleNamespace(
+        source={"oracle_profile": "ref2va-adapter-bf16-torch-sdpa-sm89"}
+    )
+    monkeypatch.setattr(
+        "vflash.native.h3_native_conditioning_runtime.load_h3_conditioning_bundle",
+        lambda _: SimpleNamespace(profile=SimpleNamespace(task="t2va")),
+    )
+    with pytest.raises(H3NativeConditioningRuntimeError, match="Base or Ref model"):
+        runtime._load_request_tensors(tmp_path)
+
+
 @pytest.mark.parametrize(
     "change,reason",
     [
-        ({"task": "t2va"}, "Ref2VA"),
+        ({"task": "t2va"}, "reference prefixes"),
         ({"width": 930}, "divisible by 32"),
         ({"nfe": True}, "integer fields"),
         ({"num_condition_video_rows": 0}, "reference budget"),
@@ -133,11 +175,15 @@ def test_conditioning_capture_schedule_can_differ_from_execution(monkeypatch, tm
     runtime = H3NativeConditioningRuntime.__new__(H3NativeConditioningRuntime)
     runtime._torch = torch
     runtime.overlay = SimpleNamespace(schedule=H3NativeSchedule.shifted_linear(4))
-    runtime.artifact = SimpleNamespace(source={})
+    runtime.artifact = SimpleNamespace(
+        source={"oracle_profile": "ref2va-adapter-bf16-torch-sdpa-sm89"}
+    )
     capture = H3ConditioningProfile.from_mapping(
         {**conditioning_profile(), "nfe": 8, "video_flow_shift": 6.0}
     )
-    bundle = SimpleNamespace(directory=tmp_path, source={}, profile=capture)
+    bundle = SimpleNamespace(
+        directory=tmp_path, source=runtime.artifact.source, profile=capture
+    )
     packed = torch.arange(6, dtype=torch.float32).reshape(1, 3, 2).to(torch.bfloat16)
     tensors = {
         "video_indices": torch.tensor([0]),

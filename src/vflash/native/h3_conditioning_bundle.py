@@ -73,8 +73,8 @@ class H3ConditioningProfile:
                 "H3 conditioning profile fields do not match schema v1"
             )
         task = value.get("task")
-        if task != "ref2va":
-            raise H3ConditioningBundleError("H3 conditioning task must be Ref2VA")
+        if not isinstance(task, str) or task not in {"ref2va", "t2va"}:
+            raise H3ConditioningBundleError("H3 conditioning task must be Ref2VA or T2VA")
         integers = ("width", "height", "frames", "nfe", "reference_token_budget")
         if any(
             not isinstance(value.get(name), int) or isinstance(value.get(name), bool)
@@ -98,7 +98,7 @@ class H3ConditioningProfile:
             )
         if nfe <= 0 or reference_token_budget < 0:
             raise H3ConditioningBundleError("H3 conditioning NFE/token budget is invalid")
-        if reference_token_budget == 0:
+        if task == "ref2va" and reference_token_budget == 0:
             raise H3ConditioningBundleError(
                 "H3 Ref2VA conditioning requires condition-video rows"
             )
@@ -119,6 +119,10 @@ class H3ConditioningProfile:
         if counts[0] != reference_token_budget:
             raise H3ConditioningBundleError(
                 "H3 conditioning video prefix differs from the reference budget"
+            )
+        if task == "t2va" and (reference_token_budget or any(counts)):
+            raise H3ConditioningBundleError(
+                "H3 T2VA conditioning cannot have reference prefixes"
             )
         return cls(
             task=str(task),
@@ -214,7 +218,7 @@ def _validate_source(value: Any) -> dict[str, str]:
     return {name: str(value[name]) for name in sorted(required)}
 
 
-def _validate_request(value: Any) -> dict[str, Any]:
+def _validate_request(value: Any, *, task: str) -> dict[str, Any]:
     required = {
         "source_case_id",
         "prompt",
@@ -282,9 +286,11 @@ def _validate_request(value: Any) -> dict[str, Any]:
             }
         )
     references = value.get("references")
-    if not isinstance(references, list) or not 1 <= len(references) <= 3:
+    if not isinstance(references, list) or (
+        len(references) != 0 if task == "t2va" else not 1 <= len(references) <= 3
+    ):
         raise H3ConditioningBundleError(
-            "H3 Ref2VA conditioning requires one to three references"
+            "H3 T2VA conditioning requires no references; Ref2VA requires one to three"
         )
     validated_references = []
     seen = set()
@@ -439,7 +445,7 @@ def load_h3_conditioning_bundle(directory: Path) -> H3ConditioningBundle:
     ):
         raise H3ConditioningBundleError("H3 conditioning manifest fields are invalid")
     profile = H3ConditioningProfile.from_mapping(value["profile"])
-    request = _validate_request(value.get("request"))
+    request = _validate_request(value.get("request"), task=profile.task)
     source = _validate_source(value.get("source"))
     manifest_files = value.get("files")
     if not isinstance(manifest_files, list) or len(manifest_files) != len(_FILES):

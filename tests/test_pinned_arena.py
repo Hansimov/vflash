@@ -103,8 +103,8 @@ def fixture(directory: Path, count: int = 3):
         resolve_h3_artifact_target("rtx3080-20g-sm86-bf16-block-ring"),
         spec,
         4,
-        "test-fixture",
-        {},
+        "lightx-ref-turbo4-v0.1",
+        {"oracle_profile": "ref2va-adapter-bf16-torch-sdpa-sm89"},
         tuple(rows),
         adapter_execution="runtime-residual",
     )

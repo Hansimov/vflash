@@ -8,7 +8,7 @@ from pathlib import Path
 from traceback import clear_frames
 from typing import Any
 
-from vflash.native.h3_distilled_lora import LIGHTX_H3_REF_TURBO8_CONTRACT
+from vflash.native.h3_distilled_lora import h3_distilled_lora_contract_for_profile
 from vflash.native.h3_pinned_arena import PinnedHostArena
 from vflash.native.h3_runtime_artifact import H3RuntimeArtifact, load_h3_runtime_artifact
 from vflash.native.h3_tensor_file import H3MappedSafetensor, load_safetensor_tensor
@@ -132,7 +132,10 @@ def load_h3_native_block(
     load_residual = None
     qkv_residuals: tuple[H3LowRankResidualWeights, ...] = ()
     if artifact.adapter_execution == "runtime-residual":
-        scaling = LIGHTX_H3_REF_TURBO8_CONTRACT.scaling
+        scaling = h3_distilled_lora_contract_for_profile(
+            artifact.weight_profile,
+            workflow=artifact.source["oracle_profile"].partition("-adapter-")[0],
+        ).scaling
 
         def _load_residual(stem: str) -> H3LowRankResidualWeights:
             return H3LowRankResidualWeights(

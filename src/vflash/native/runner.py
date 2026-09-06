@@ -13,6 +13,7 @@ from typing import Any
 from vflash.contracts import ContractError, ExecutionPlan, GenerationMode
 
 WEIGHT_PROFILES = {
+    "t2va-turbo4-exact-sm89": "lightx-turbo4-v1.0",
     "ref2va-turbo4-exact-sm86": "lightx-ref-turbo4-v0.1",
     "ref2va-turbo4-exact-sm89": "lightx-ref-turbo4-v0.1",
     "ref2va-turbo8-exact-sm89": "lightx-turbo8-v1.0",
@@ -42,7 +43,7 @@ class NativeEngineSession:
         ):
             raise ContractError("unsupported native weight residency")
         if (
-            profile.mode is not GenerationMode.REF2VA
+            profile.mode not in {GenerationMode.REF2VA, GenerationMode.T2VA}
             or profile.id not in WEIGHT_PROFILES
             or profile.nfe not in {4, 8}
             or not profile.attention.exact
@@ -52,7 +53,7 @@ class NativeEngineSession:
         ):
             raise ContractError(
                 "the public denoiser supports exact Ref2VA Turbo4 on SM86 "
-                "and Turbo4/Turbo8 on SM89"
+                "and Ref2VA Turbo4/Turbo8 or T2VA Turbo4 on SM89"
             )
         if "torch" in sys.modules and sys.modules["torch"].cuda.is_initialized():
             raise ContractError("select the Vflash GPU before initializing CUDA")
@@ -79,6 +80,7 @@ class NativeEngineSession:
             auxiliary_tensor_path=auxiliary_tensor,
             device="cuda:0",
             attention_backend=profile.attention.backend,
+            expected_task=profile.mode.value,
             expected_weight_profile=WEIGHT_PROFILES[profile.id],
             expected_model_repository=profile.model,
             expected_model_revision=profile.model_revision,

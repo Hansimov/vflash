@@ -17,6 +17,7 @@ from vflash.planner import resolve_plan
     "profile_id,capability,memory,strategy,residency",
     [
         ("ref2va-turbo4-exact-sm89", "8.9", 48.0, "single", "default"),
+        ("t2va-turbo4-exact-sm89", "8.9", 48.0, "single", "default"),
         ("ref2va-turbo8-exact-sm89", "8.9", 48.0, "single", "block-ring"),
         ("ref2va-turbo4-exact-sm86", "8.6", 20.0, "single", "default"),
         ("ref2va-turbo4-exact-sm86", "8.6", 20.0, "tensor", "default"),
@@ -100,6 +101,7 @@ def test_session_loads_once_and_keeps_request_accounting_separate(
     assert os.environ["CUDA_VISIBLE_DEVICES"] == (
         "test-uuid" if strategy == "single" else "test-uuid,peer-uuid"
     )
+    assert loads[0]["expected_task"] == plan.profile.mode.value
     assert loads[0]["parallel_strategy"] == strategy
     assert loads[0]["weight_residency"] == residency
     assert second["parallel"]["strategy"] == strategy

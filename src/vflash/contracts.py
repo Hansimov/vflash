@@ -14,6 +14,7 @@ class ContractError(ValueError):
 
 class GenerationMode(StrEnum):
     REF2VA = "ref2va"
+    T2VA = "t2va"
 
 
 class Availability(StrEnum):

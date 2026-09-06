@@ -39,7 +39,7 @@ vflash plan ref2va-turbo4-exact-sm89 --gpu 0
 - [启动 Docker 与 HTTP 服务](https://hansimov.github.io/vflash/zh/guide/docker)，使用独立 worker 和有容量限制的任务队列。
 - [测量性能与质量](https://hansimov.github.io/vflash/zh/reference/performance)，区分加载、推理和端到端成本。
 
-Turbo4 和 Turbo8 使用蒸馏 LoRA。精确注意力不保证基础模型的质量；不同显卡或并行策略也不保证逐位一致的结果。W8 与 T2VA 尚不是已发布配置。
+Turbo4 和 Turbo8 使用蒸馏 LoRA。精确注意力不保证基础模型的质量；不同显卡或并行策略也不保证逐位一致的结果。W8 尚不是已发布配置。当前源码另含 SM89 T2VA Turbo4 预览，见[范围与源码修订](https://hansimov.github.io/vflash/zh/guide/profiles#t2va)；上面的 `0.1.0a5` 标签仍只支持 Ref2VA。
 
 ## 参与开发
 
