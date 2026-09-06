@@ -576,16 +576,19 @@ def _pin_low_rank(
 
 
 def _pin_bf16_block(
-    weights: H3NativeBlockWeights, *, pin: Callable[[Any], Any] = _pin_tensor
+    weights: H3NativeBlockWeights,
+    *,
+    pin: Callable[[Any], Any] = _pin_tensor,
+    weight_pin: Callable[..., Any] = _pin_bf16_weight,
 ) -> H3NativeBlockWeights:
     """Create the immutable host half of the SM86 two-slot weight ring."""
 
     return H3NativeBlockWeights(
         adaln_table=pin(weights.adaln_table),
-        qkv=_pin_bf16_weight(weights.qkv, pin=pin),
-        attention_out=_pin_bf16_weight(weights.attention_out, pin=pin),
-        ffn_in=_pin_bf16_weight(weights.ffn_in, pin=pin),
-        ffn_out=_pin_bf16_weight(weights.ffn_out, pin=pin),
+        qkv=weight_pin(weights.qkv, pin=pin),
+        attention_out=weight_pin(weights.attention_out, pin=pin),
+        ffn_in=weight_pin(weights.ffn_in, pin=pin),
+        ffn_out=weight_pin(weights.ffn_out, pin=pin),
         attention_norm=pin(weights.attention_norm),
         ffn_norm=pin(weights.ffn_norm),
         query_norm=pin(weights.query_norm),
@@ -626,14 +629,16 @@ def _empty_low_rank_like(
 def _empty_bf16_block_like(
     weights: H3NativeBlockWeights,
     device: Any,
+    *,
+    weight_empty: Callable[..., Any] = _empty_bf16_weight_like,
 ) -> H3NativeBlockWeights:
     torch = _torch()
     return H3NativeBlockWeights(
         adaln_table=torch.empty_like(weights.adaln_table, device=device),
-        qkv=_empty_bf16_weight_like(weights.qkv, device),
-        attention_out=_empty_bf16_weight_like(weights.attention_out, device),
-        ffn_in=_empty_bf16_weight_like(weights.ffn_in, device),
-        ffn_out=_empty_bf16_weight_like(weights.ffn_out, device),
+        qkv=weight_empty(weights.qkv, device),
+        attention_out=weight_empty(weights.attention_out, device),
+        ffn_in=weight_empty(weights.ffn_in, device),
+        ffn_out=weight_empty(weights.ffn_out, device),
         attention_norm=torch.empty_like(weights.attention_norm, device=device),
         ffn_norm=torch.empty_like(weights.ffn_norm, device=device),
         query_norm=torch.empty_like(weights.query_norm, device=device),
@@ -717,6 +722,8 @@ class H3NativeBlockBF16Resident(_H3BlockOperations):
 
     backend_id = "cuda-bf16-resident-exact-sdpa-block-v1"
     timing_eligible = True
+    main_weight_bits = 16
+    _move_main_weight = staticmethod(_resident_bf16_weight)
 
     def __init__(
         self,
@@ -745,8 +752,13 @@ class H3NativeBlockBF16Resident(_H3BlockOperations):
             raise H3NativeDenoiserError("unsupported fused H3 block size")
         if runtime_device.type != "cuda":
             raise H3NativeDenoiserError("the resident BF16 backend requires a CUDA device")
-        if artifact.target.attention_weight_bits != 16 or artifact.target.ffn_weight_bits != 16:
-            raise H3NativeDenoiserError("the resident BF16 backend requires BF16 weights")
+        if (artifact.target.attention_weight_bits, artifact.target.ffn_weight_bits) != (
+            self.main_weight_bits,
+            self.main_weight_bits,
+        ):
+            raise H3NativeDenoiserError(
+                "the native block precision differs from its weight backend"
+            )
         capability = torch.cuda.get_device_capability(runtime_device)
         actual_target = f"sm{capability[0]}{capability[1]}"
         if actual_target != artifact.target.compute_capability:
@@ -770,10 +782,10 @@ class H3NativeBlockBF16Resident(_H3BlockOperations):
                 rotary_backend = kernel_plan.rotary_backend
         resident = H3NativeBlockWeights(
             adaln_table=weights.adaln_table.to(runtime_device),
-            qkv=_resident_bf16_weight(weights.qkv, runtime_device),
-            attention_out=_resident_bf16_weight(weights.attention_out, runtime_device),
-            ffn_in=_resident_bf16_weight(weights.ffn_in, runtime_device),
-            ffn_out=_resident_bf16_weight(weights.ffn_out, runtime_device),
+            qkv=self._move_main_weight(weights.qkv, runtime_device),
+            attention_out=self._move_main_weight(weights.attention_out, runtime_device),
+            ffn_in=self._move_main_weight(weights.ffn_in, runtime_device),
+            ffn_out=self._move_main_weight(weights.ffn_out, runtime_device),
             attention_norm=weights.attention_norm.to(runtime_device),
             ffn_norm=weights.ffn_norm.to(runtime_device),
             query_norm=weights.query_norm.to(runtime_device),
@@ -1083,6 +1095,10 @@ class H3NativeDenoiserBF16Ring:
     backend_id = "cuda-bf16-pinned-host-two-slot-event-ring-torch-flash-v1"
     timing_eligible = True
     block_type = H3NativeBlockBF16Resident
+    main_weight_bits = 16
+    _empty_block = staticmethod(_empty_bf16_block_like)
+    _copy_block = staticmethod(_copy_bf16_block_)
+    _weight_bytes = staticmethod(_block_tensor_bytes)
 
     def __init__(
         self,
@@ -1107,8 +1123,13 @@ class H3NativeDenoiserBF16Ring:
         capability = torch.cuda.get_device_capability(runtime_device)
         if artifact.target.compute_capability != f"sm{capability[0]}{capability[1]}":
             raise H3NativeDenoiserError("the BF16 block ring device differs from its artifact")
-        if artifact.target.attention_weight_bits != 16 or artifact.target.ffn_weight_bits != 16:
-            raise H3NativeDenoiserError("the BF16 block ring requires exact BF16 weights")
+        if (artifact.target.attention_weight_bits, artifact.target.ffn_weight_bits) != (
+            self.main_weight_bits,
+            self.main_weight_bits,
+        ):
+            raise H3NativeDenoiserError(
+                "the native ring precision differs from its weight backend"
+            )
         if len(host_blocks) < 2:
             raise H3NativeDenoiserError("the BF16 block ring requires at least two blocks")
 
@@ -1116,11 +1137,11 @@ class H3NativeDenoiserBF16Ring:
         self.host_blocks = host_blocks
         self.device = runtime_device
         self.attention_backend = attention_backend
-        self.host_weight_bytes = sum(_block_tensor_bytes(row) for row in host_blocks)
+        self.host_weight_bytes = sum(self._weight_bytes(row) for row in host_blocks)
 
         with torch.cuda.device(runtime_device):
             slot_weights = tuple(
-                _empty_bf16_block_like(host_blocks[index], runtime_device) for index in range(2)
+                self._empty_block(host_blocks[index], runtime_device) for index in range(2)
             )
             self.slots = tuple(
                 self.block_type(
@@ -1161,7 +1182,7 @@ class H3NativeDenoiserBF16Ring:
             )
         self.rotary_backend = resolved_rotary_backends.pop()
         self.device_slot_weight_bytes = sum(
-            _block_tensor_bytes(slot.weights) for slot in self.slots
+            self._weight_bytes(slot.weights) for slot in self.slots
         )
 
     @classmethod
@@ -1258,7 +1279,7 @@ class H3NativeDenoiserBF16Ring:
                 # The prior invocation may still be consuming the last two
                 # blocks. An unrecorded event on the first invocation is a no-op.
                 self.copy_stream.wait_event(self.compute_done_events[index])
-                _copy_bf16_block_(self.slots[index].weights, self.host_blocks[index])
+                self._copy_block(self.slots[index].weights, self.host_blocks[index])
                 self.ready_events[index].record(self.copy_stream)
 
     def forward_prevalidated(
@@ -1296,7 +1317,7 @@ class H3NativeDenoiserBF16Ring:
             if next_index < len(self.host_blocks):
                 with torch.cuda.stream(self.copy_stream):
                     self.copy_stream.wait_event(self.compute_done_events[slot_index])
-                    _copy_bf16_block_(
+                    self._copy_block(
                         slot.weights,
                         self.host_blocks[next_index],
                     )
@@ -1321,7 +1342,7 @@ class H3NativeDenoiserBF16Ring:
         for index, host_block in enumerate(self.host_blocks):
             with torch.cuda.stream(self.copy_stream):
                 self.copy_stream.wait_event(self.compute_done_events[0])
-                _copy_bf16_block_(slot.weights, host_block)
+                self._copy_block(slot.weights, host_block)
                 self.ready_events[0].record(self.copy_stream)
             compute_stream.wait_event(self.ready_events[0])
             hidden_states = slot.forward_prevalidated(hidden_states, invocation)

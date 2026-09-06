@@ -29,9 +29,7 @@ def test_back_to_back_invocations_preserve_inflight_weights(monkeypatch, order):
     ring.copy_stream = torch.cuda.Stream()
     ring.ready_events = tuple(torch.cuda.Event() for _ in range(2))
     ring.compute_done_events = tuple(torch.cuda.Event() for _ in range(2))
-    monkeypatch.setattr(
-        denoiser, "_copy_bf16_block_", lambda dst, src: dst.copy_(src, non_blocking=True)
-    )
+    monkeypatch.setattr(ring, "_copy_block", lambda dst, src: dst.copy_(src, non_blocking=True))
     methods = {
         "ring": ring.forward_prevalidated,
         "serial": ring.forward_prevalidated_serial,

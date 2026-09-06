@@ -204,13 +204,8 @@ class H3NativeConditioningRuntime:
         # roughly 40 GB on every worker start burns minutes while the GPU is
         # idle; runtime loading still checks manifest schema, file sizes, and
         # every safetensors header/shape.
-        artifact = load_h3_runtime_artifact(
-            artifact_path.resolve(strict=True),
-            verify_content_hashes=False,
-        )
-        overlay = load_h3_schedule_overlay(
-            schedule_overlay_path.resolve(strict=True),
-            artifact=artifact,
+        artifact, overlay, auxiliary_store = self._load_model_assets(
+            artifact_path, schedule_overlay_path, auxiliary_tensor_path
         )
         validate_declared_schedule(
             overlay.schedule,
@@ -219,7 +214,6 @@ class H3NativeConditioningRuntime:
             expected_video_flow_shift=expected_video_flow_shift,
             expected_audio_flow_shift=expected_audio_flow_shift,
         )
-        auxiliary_store = load_h3_runtime_auxiliary(auxiliary_tensor_path)
         expected_capability = f"sm{capability[0]}{capability[1]}"
         supported_weights = (artifact.weight_profile, artifact.adapter_execution) in {
             ("lightx-turbo8-v1.0", "runtime-residual"),
@@ -280,13 +274,22 @@ class H3NativeConditioningRuntime:
             raise
         self.initialization_seconds = time.monotonic() - started
 
+    def _load_model_assets(self, artifact_path, schedule_overlay_path, auxiliary_tensor_path):
+        """Strict BF16 asset path; other explicit precision runtimes own their parsers."""
+        artifact = load_h3_runtime_artifact(
+            artifact_path.resolve(strict=True), verify_content_hashes=False
+        )
+        overlay = load_h3_schedule_overlay(
+            schedule_overlay_path.resolve(strict=True), artifact=artifact
+        )
+        auxiliary_store = load_h3_runtime_auxiliary(auxiliary_tensor_path)
+        return artifact, overlay, auxiliary_store
+
     def _load_components(self, auxiliary_store: Any) -> dict[str, float]:
         """Acquire the input/head/trunk resources under one runtime owner."""
         torch = self._torch
-        artifact, overlay, store = self.artifact, self.overlay, auxiliary_store
+        overlay, store = self.overlay, auxiliary_store
         resolved_device, devices = self.device, self.devices
-        parallel_strategy, weight_residency = self.parallel_strategy, self.weight_residency
-        attention_backend = self.attention_backend
         input_started = time.monotonic()
         projection_weights = load_h3_native_input_projection_weights(
             base_load=store.load,
@@ -309,13 +312,29 @@ class H3NativeConditioningRuntime:
         final_seconds = time.monotonic() - final_started
 
         denoiser_started = time.monotonic()
+        self.denoiser = self._load_denoiser()
+        for selected in devices:
+            torch.cuda.synchronize(selected)
+        denoiser_seconds = time.monotonic() - denoiser_started
+
+        return {
+            "input_projection": input_seconds,
+            "final_layer": final_seconds,
+            "denoiser": denoiser_seconds,
+        }
+
+    def _load_denoiser(self):
+        artifact, overlay = self.artifact, self.overlay
+        resolved_device, devices = self.device, self.devices
+        parallel_strategy, weight_residency = self.parallel_strategy, self.weight_residency
+        attention_backend = self.attention_backend
         if parallel_strategy == "single":
             denoiser_type = (
                 H3NativeDenoiserBF16Ring
                 if weight_residency == "block-ring"
                 else H3NativeDenoiserBF16Resident
             )
-            self.denoiser = denoiser_type.load(
+            return denoiser_type.load(
                 artifact,
                 device=resolved_device,
                 adaln_table_load=(overlay.load_block_table if overlay.blocks else None),
@@ -327,21 +346,12 @@ class H3NativeConditioningRuntime:
         else:
             from vflash.native.h3_parallel import H3NativeDenoiserParallel
 
-            self.denoiser = H3NativeDenoiserParallel.load(
+            return H3NativeDenoiserParallel.load(
                 artifact,
                 devices=devices,
                 strategy=parallel_strategy,
                 adaln_table_load=(overlay.load_block_table if overlay.blocks else None),
             )
-        for selected in devices:
-            torch.cuda.synchronize(selected)
-        denoiser_seconds = time.monotonic() - denoiser_started
-
-        return {
-            "input_projection": input_seconds,
-            "final_layer": final_seconds,
-            "denoiser": denoiser_seconds,
-        }
 
     def metadata(self) -> dict[str, Any]:
         self._require_open()
