@@ -1,4 +1,4 @@
-"""Pinned Ref2VA adapter provenance and runtime low-rank scaling."""
+"""Pinned adapter provenance and task-specific runtime low-rank scaling."""
 
 from __future__ import annotations
 
@@ -43,12 +43,23 @@ LIGHTX_H3_REF_TURBO4_CONTRACT = H3DistilledLoraContract(
     sha256="9e642fc8749c74f8da5e2382877ab5c7aa37b9a73b7fd0d6d457bd1b3cb1ae99",
     nfe=4,
 )
+LIGHTX_H3_TURBO4_CONTRACT = H3DistilledLoraContract(
+    profile_id="lightx-turbo4-v1.0",
+    revision="ec01fa4c86263832faa0bd1d6d8f36a281eaabb2",
+    filename="minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors",
+    size_bytes=1_383_677_808,
+    sha256="1bdabc2e9fce20b1db563b96bcf6e46adcad4c1964f423676436bf266cc7416c",
+    nfe=4,
+    alpha=128.0,
+)
 
 
 def h3_distilled_lora_contract_for_profile(
     profile_id: str, *, workflow: str
 ) -> H3DistilledLoraContract:
-    """Resolve the immutable Ref2VA release recorded by a runtime artifact."""
+    """Resolve the immutable task and release recorded by a runtime artifact."""
+    if workflow == "t2va" and profile_id == LIGHTX_H3_TURBO4_CONTRACT.profile_id:
+        return LIGHTX_H3_TURBO4_CONTRACT
     if workflow == "ref2va":
         for contract in (LIGHTX_H3_REF_TURBO4_CONTRACT, LIGHTX_H3_REF_TURBO8_CONTRACT):
             if profile_id == contract.profile_id:

@@ -175,7 +175,7 @@ def test_failed_constructor_preserves_error_and_releases_only_after_completion(
         is_complete_block_stack=True,
         weight_profile="lightx-ref-turbo4-v0.1",
         adapter_execution="runtime-residual",
-        source={},
+        source={"oracle_profile": "ref2va-adapter-bf16-torch-sdpa-sm89"},
         artifact_id="h3-test",
         target=SimpleNamespace(compute_capability="sm89", target_id="test"),
     )

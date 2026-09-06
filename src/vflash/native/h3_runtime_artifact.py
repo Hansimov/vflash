@@ -184,6 +184,7 @@ def _validate_source(
             )
     adapter_fields = {"adapter_repository", "adapter_revision", "adapter_sha256"}
     has_adapter = weight_profile in {
+        "lightx-turbo4-v1.0",
         "lightx-turbo8-v1.0",
         "lightx-ref-turbo4-v0.1",
     }
@@ -205,7 +206,7 @@ def _validate_source(
             or (name in digests and not _SHA256.fullmatch(item))
         ):
             raise H3RuntimeArtifactError(f"H3 RuntimeArtifact source field is invalid: {name}")
-    if weight_profile in {"lightx-turbo8-v1.0", "lightx-ref-turbo4-v0.1"}:
+    if weight_profile in {"lightx-turbo8-v1.0", "lightx-ref-turbo4-v0.1", "lightx-turbo4-v1.0"}:
         oracle_profile = value.get("oracle_profile", "")
         workflow, separator, _suffix = oracle_profile.partition("-adapter-")
         if not separator:
@@ -415,7 +416,8 @@ def load_h3_runtime_artifact(
         or not isinstance(nfe, int)
         or isinstance(nfe, bool)
         or nfe not in {4, 8}
-        or weight_profile not in {"lightx-turbo8-v1.0", "lightx-ref-turbo4-v0.1"}
+        or weight_profile
+        not in {"lightx-turbo8-v1.0", "lightx-ref-turbo4-v0.1", "lightx-turbo4-v1.0"}
         or adapter_execution != "runtime-residual"
     ):
         raise H3RuntimeArtifactError("H3 RuntimeArtifact top-level contract is invalid")
@@ -442,8 +444,13 @@ def load_h3_runtime_artifact(
         weight_profile=weight_profile,
         schema_version=schema_version,
     )
-    if weight_profile in {"lightx-turbo8-v1.0", "lightx-ref-turbo4-v0.1"} and (
-        source.get("oracle_profile") != "ref2va-adapter-bf16-torch-sdpa-sm89"
+    if weight_profile in {
+        "lightx-turbo8-v1.0",
+        "lightx-ref-turbo4-v0.1",
+        "lightx-turbo4-v1.0",
+    } and (
+        source.get("oracle_profile")
+        not in {"ref2va-adapter-bf16-torch-sdpa-sm89", "t2va-adapter-bf16-torch-sdpa-sm89"}
         or nfe
         != h3_distilled_lora_contract_for_profile(
             weight_profile,

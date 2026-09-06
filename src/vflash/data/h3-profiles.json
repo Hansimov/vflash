@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "catalog_id": "h3-ref2va-preview-v1",
+  "catalog_id": "h3-native-preview-v1",
   "targets": [
     {
       "id": "sm86-20g-block-ring",
@@ -105,6 +105,34 @@
         "sm89-48g-resident"
       ],
       "quality_statement": "4-step distilled adapter with exact attention. Matched the pinned reference on tested inputs; this does not establish equivalence to the full-step model or quality on every input."
+    },
+    {
+      "id": "t2va-turbo4-exact-sm89",
+      "mode": "t2va",
+      "availability": "preview",
+      "model": "MiniMaxAI/MiniMax-H3",
+      "model_revision": "42ed227ee7df40d41602854ae760620d6eb651fe",
+      "adapter": "lightx2v/Minimax-h3-Turbo",
+      "adapter_revision": "ec01fa4c86263832faa0bd1d6d8f36a281eaabb2",
+      "nfe": 4,
+      "scheduler": "h3-training-euler",
+      "video_flow_shift": 6.0,
+      "audio_flow_shift": 3.0,
+      "precision": "bf16-runtime-residual",
+      "attention": {
+        "backend": "torch-flash",
+        "exact": true,
+        "backend_by_evaluation": [
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash"
+        ]
+      },
+      "target_ids": [
+        "sm89-48g-resident"
+      ],
+      "quality_statement": "Text-to-video with the pinned Base4 v1.0 adapter and exact attention. Native input and sampled denoising stages matched the pinned reference on one SM89 smoke case; broader instruction and audio quality are not established."
     }
   ]
 }
