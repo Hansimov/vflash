@@ -28,6 +28,7 @@ The released profiles pin these sources:
 | [MiniMax H3](https://huggingface.co/MiniMaxAI/MiniMax-H3/tree/42ed227ee7df40d41602854ae760620d6eb651fe) | `42ed227ee7df40d41602854ae760620d6eb651fe` |
 | [LightX2V Turbo4](https://huggingface.co/lightx2v/Minimax-h3-Turbo/tree/83b617309219e859c1c264520eba07492d22e958) | `83b617309219e859c1c264520eba07492d22e958` |
 | [LightX2V Turbo8](https://huggingface.co/lightx2v/Minimax-h3-Turbo/tree/0eebcc7e79f9cb200927c80b8e7595265b770e34) | `0eebcc7e79f9cb200927c80b8e7595265b770e34` |
+| [LightX2V Base4 v1.0](https://huggingface.co/lightx2v/Minimax-h3-Turbo/tree/ec01fa4c86263832faa0bd1d6d8f36a281eaabb2) | `ec01fa4c86263832faa0bd1d6d8f36a281eaabb2` |
 
 Conditioning capture hardware is recorded as provenance: an SM86 and an SM89 encoder capture can use the same model artifacts when their model identity, encoder revision, arithmetic profile, and tensor layout match. This does not promise identical conditioning tensors across GPUs. The denoiser artifact must still match its execution target.
 
@@ -44,3 +45,5 @@ Model and adapter files retain their own [licenses and terms](./license), indepe
 ## Adapter file verification {#adapter-files}
 
 Turbo4 uses `minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors`; Turbo8 uses `minimax_h3_ref2v_turbo_8step_v1.0_768p_bf16.safetensors`. Their digests match the upstream repository checked on 2026-09-05 at revision `2f015e66b37c585cea9dc4ae6f1850ea8788e742`. This records a fixed-source check, not automatic compatibility with later revisions.
+
+The T2VA source preview uses the separate Base4 v1.0 file at the revision above. Its SHA-256 is `1bdabc2e9fce20b1db563b96bcf6e46adcad4c1964f423676436bf266cc7416c`, with alpha 128 / rank 128. It is not interchangeable with Ref4 or newer Base4 releases.

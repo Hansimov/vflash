@@ -39,7 +39,7 @@ Allow **64 GiB or more of available system memory per worker** for the tested wo
 - [Start Docker and HTTP](https://hansimov.github.io/vflash/guide/docker) for an isolated worker and bounded job queue.
 - [Measure speed and quality](https://hansimov.github.io/vflash/reference/performance), with loading and end-to-end costs kept separate.
 
-Turbo4 and Turbo8 are distilled adapters. Exact attention is not a base-model quality guarantee, and different GPU or parallel configurations need not produce bitwise-identical results. W8 and T2VA are not released profiles.
+Turbo4 and Turbo8 are distilled adapters. Exact attention is not a base-model quality guarantee, and different GPU or parallel configurations need not produce bitwise-identical results. W8 is not a released profile. The source tree also includes an SM89 T2VA Turbo4 preview; see [its scope and source revision](https://hansimov.github.io/vflash/guide/profiles#t2va). The `0.1.0a5` tag above remains Ref2VA-only.
 
 ## Contribute
 

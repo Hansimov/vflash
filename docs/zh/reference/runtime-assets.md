@@ -28,6 +28,7 @@ Vflash 当前从已编译的输入开始执行。安装 Python 包不会自动�
 | [MiniMax H3](https://huggingface.co/MiniMaxAI/MiniMax-H3/tree/42ed227ee7df40d41602854ae760620d6eb651fe) | `42ed227ee7df40d41602854ae760620d6eb651fe` |
 | [LightX2V Turbo4](https://huggingface.co/lightx2v/Minimax-h3-Turbo/tree/83b617309219e859c1c264520eba07492d22e958) | `83b617309219e859c1c264520eba07492d22e958` |
 | [LightX2V Turbo8](https://huggingface.co/lightx2v/Minimax-h3-Turbo/tree/0eebcc7e79f9cb200927c80b8e7595265b770e34) | `0eebcc7e79f9cb200927c80b8e7595265b770e34` |
+| [LightX2V Base4 v1.0](https://huggingface.co/lightx2v/Minimax-h3-Turbo/tree/ec01fa4c86263832faa0bd1d6d8f36a281eaabb2) | `ec01fa4c86263832faa0bd1d6d8f36a281eaabb2` |
 
 Vflash 会检查资源声明的元数据。文件名正确并不代表兼容；重命名目录或修改清单不能转换不匹配的权重。
 
@@ -44,3 +45,5 @@ Vflash 会检查资源声明的元数据。文件名正确并不代表兼容；�
 ## LoRA 文件核对 {#adapter-files}
 
 Turbo4 使用 `minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors`，Turbo8 使用 `minimax_h3_ref2v_turbo_8step_v1.0_768p_bf16.safetensors`。这两个文件的摘要与 2026-09-05 核对的上游修订 `2f015e66b37c585cea9dc4ae6f1850ea8788e742` 一致。这是一次固定来源核对，不保证未来修订自动兼容。
+
+T2VA 源码预览使用独立的 Base4 v1.0 文件及上表对应修订。SHA-256 为 `1bdabc2e9fce20b1db563b96bcf6e46adcad4c1964f423676436bf266cc7416c`，alpha 128 / rank 128。不能与 Ref4 或更新的 Base4 版本互换。
