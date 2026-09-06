@@ -2,6 +2,8 @@
 
 The BF16 Ref2VA Turbo4 compiler reads fixed official H3 weights and the Ref4 v0.1 LoRA. It does not need a captured request, reference image or assets from another project. Its first target is SM89. All 1,250 block tensors, four schedule tensors and nine auxiliary tensors matched the verified BF16 runtime controls exactly.
 
+The release bootstrap used freshly compiled assets with the fixed official encoders and VAEs to generate a complete 928 × 512, five-second, 24 fps MP4, then cancel a second request after one denoising step. All 14 conditioning tensors and both final latents matched the qualified control exactly; all 120 decoded video frames also matched. This closes the official-weights-to-video installation path for this workload, not a broad quality or hardware qualification.
+
 ## Get the source files
 
 Install the release checkout with `python -m pip install '.[pipeline]'`. Use PyTorch 2.11.0 with CUDA 13.0, Linux, and an explicitly assigned SM89 GPU for compilation. Downloads and file verification use the CPU. The source files occupy about 146 GiB including the adapter; leave at least 48 GiB more free for the compiled pack. Model files keep their [upstream licenses](../reference/license).
