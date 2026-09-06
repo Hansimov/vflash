@@ -39,7 +39,7 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--strategy", choices=("single", "tensor", "sequence-head"))
     denoise = commands.add_parser(
         "denoise",
-        help="run a native Ref2VA distilled profile from a conditioning bundle",
+        help="run a native H3 profile from a conditioning bundle",
     )
     denoise.add_argument("profile_id")
     denoise.add_argument("--gpu", type=int, required=True, help="physical nvidia-smi index")

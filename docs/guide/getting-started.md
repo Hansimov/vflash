@@ -1,9 +1,9 @@
 # Get started
 
-Install Vflash to inspect your GPU and choose a supported profile. For text-only or reference-image video generation on one RTX 4090 48 GB, continue with the [complete pipeline](./complete-pipeline) and [official-weight preparation](./compile-weights). The native bundle workflow is described below.
+Install Vflash to inspect your GPU and choose a supported profile. For complete video generation on one RTX 4090 48 GB or reference-image generation on two RTX 3080 20 GB GPUs, continue with the [complete pipeline](./complete-pipeline) and [official-weight preparation](./compile-weights). The native bundle workflow is described below.
 
 ::: info Before you begin
-The Python pipeline and `vflash generate` support **text alone or one to three reference images → a five-second MP4** on SM89. The `denoise` command and HTTP service accept **compiled conditioning → video/audio latents**, including the supported SM86 profiles. Model downloads and compilation are explicit steps; no weights are bundled with the package.
+The Python pipeline and `vflash generate` support **text alone or one to three reference images → a five-second MP4** on SM89, plus reference-image generation on a cooperating SM86 pair. The `denoise` command and HTTP service accept **compiled conditioning → video/audio latents**, including the supported SM86 profiles. Model downloads and compilation are explicit steps; no weights are bundled with the package.
 :::
 
 ## Install the CLI {#install}
@@ -11,7 +11,7 @@ The Python pipeline and `vflash generate` support **text alone or one to three r
 Use Python 3.11 or newer. The base installation is lightweight and does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.2.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.2.1 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate

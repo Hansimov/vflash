@@ -1,6 +1,6 @@
 # 生成视频
 
-Vflash 0.2.0 支持纯文字生成，也支持提示词加一至三张有序参考图，输出五秒 MP4。连续请求使用 Python 接口，单次生成也可以使用容器命令行。完整链路支持单张 RTX 4090 48 GB 上的 T2VA Base4 和 Ref2VA Turbo4。
+Vflash 0.2.1 支持纯文字生成，也支持提示词加一至三张有序参考图，输出五秒 MP4。连续请求使用 Python 接口，单次生成也可以使用容器命令行。完整链路支持单张 RTX 4090 48 GB 上的 T2VA Base4 和 Ref2VA Turbo4；Ref4 也支持双张 RTX 3080 20 GB。
 
 ## 各阶段的职责
 
@@ -82,6 +82,8 @@ with H3Pipeline(prepared, device=devices[0], trust_local_code=True) as pipeline:
 ```
 
 原有的单图参数 `reference=Path(...)` 仍可使用；它与 `references=(...)` 二选一。
+
+使用双张 RTX 3080 20 GB 时，先准备 [SM86 资产](../reference/pipeline-profiles#sm86)，让进程仅看到这两张卡，并向 `H3Pipeline` 传入 `peer_device=devices[1], strategy="sequence-head"`。编码和解码使用 `devices[0]`，原生去噪使用双卡。单 SM86 或 `tensor` 完整链路会在模型加载前拒绝。命令行对应选项为 `--gpu 0 --peer-gpu 1 --strategy sequence-head`。
 
 `trust_local_code=True` 允许加载已核验本地快照中的官方解码器 Python 文件。请先阅读[模型与代码许可证](../reference/license)。
 

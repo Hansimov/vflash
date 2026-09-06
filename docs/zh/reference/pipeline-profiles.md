@@ -1,13 +1,38 @@
 # 完整模型配置
 
-每份准备记录固定模型、LoRA 与调度方式。Vflash 0.2.0 在单张 RTX 4090 48 GB 上支持以下完整链路：
+每份准备记录固定模型、LoRA 与调度方式。Vflash 0.2.1 支持以下完整链路：
 
-| 配置 | 输入 | Transformer | LoRA | 视频/音频 shift |
-| --- | --- | --- | --- | --- |
-| `ref2va-turbo4-exact-sm89` | 提示词加 1–3 张有序图片 | `transformer_ref` | Ref Turbo4 v0.1，alpha 8 / rank 128 | 12 / 3 |
-| `t2va-turbo4-exact-sm89` | 纯文字提示词 | `transformer` | Base Turbo4 v1.0，alpha 128 / rank 128 | 6 / 3 |
+| 配置 | 硬件 | 输入 | Transformer | LoRA | 视频/音频 shift |
+| --- | --- | --- | --- | --- | --- |
+| `ref2va-turbo4-exact-sm89` | 单张 RTX 4090 48 GB | 提示词加 1–3 张有序图片 | `transformer_ref` | Ref Turbo4 v0.1，alpha 8 / rank 128 | 12 / 3 |
+| `ref2va-turbo4-exact-sm86` | 双张 RTX 3080 20 GB，`sequence-head` | 提示词加 1–3 张有序图片 | `transformer_ref` | Ref Turbo4 v0.1，alpha 8 / rank 128 | 12 / 3 |
+| `t2va-turbo4-exact-sm89` | 单张 RTX 4090 48 GB | 纯文字提示词 | `transformer` | Base Turbo4 v1.0，alpha 128 / rank 128 | 6 / 3 |
 
-两者都使用四次计算、BF16 权重和独立的 LoRA 残差。默认配置为 Ref4。实例运行中不会切换 Base 与 Ref 权重；应用需要两种模式时，应分别准备资产和常驻实例。原生接口的支持范围见[配置与硬件](../guide/profiles)；本版尚不支持 SM86 的完整生成链路。
+所有配置都使用四次计算、BF16 权重和独立的 LoRA 残差，输出五秒、24 fps 视频。默认为 SM89 Ref4。实例运行中不会切换 Base 与 Ref 权重；应用需要两种模式时，应分别准备资产和常驻实例。原生单 SM86 与 Turbo8 接口具有不同的[验证范围](../guide/profiles)。
+
+## 准备双 3080 生成 {#sm86}
+
+使用[编译流程](../guide/compile-weights)中的官方 Ref4 文件，但创建两份准备记录时都指定 `ref2va-turbo4-exact-sm86`。编译只需一张 SM86 显卡；生成的时间和调制张量绑定该架构，不能复用已编译的 SM89 资产。
+
+```bash
+python -m vflash.compiler prepare \
+  --profile ref2va-turbo4-exact-sm86 \
+  --transformer models/minimax-h3/transformer_ref \
+  --adapter models/adapters/minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors \
+  --receipt ref4-sm86-weights.json
+python -m vflash.compiler compile \
+  --receipt ref4-sm86-weights.json --output models/ref4-sm86-native --gpu 0
+vflash prepare-pipeline \
+  --profile ref2va-turbo4-exact-sm86 \
+  --assets ref4-sm86-assets.json --receipt ref4-sm86-pipeline.json
+vflash generate \
+  --prepared-assets ref4-sm86-pipeline.json --prompt-file prompt.txt \
+  --reference subject.png --reference setting.png --reference style.png \
+  --gpu 0 --peer-gpu 1 --strategy sequence-head \
+  --output video.mp4 --seed 1234 --trust-local-code
+```
+
+`ref4-sm86-assets.json` 的六个字段应填写新生成的 SM86 权重、调度和辅助张量路径。编码器、解码器和原始 LoRA 可以与 SM89 共享同一份只读文件。编码和解码使用主卡，两卡共同执行原生去噪。完整链路会在加载模型前拒绝单 SM86 或 `tensor` 策略；原生 latent 接口继续保留两种并行策略。
 
 ## 准备文生视频
 
@@ -37,4 +62,4 @@ Base LoRA 的上游文件名包含 `fl2v`，本版验证的是其 T2VA 用法，
 
 ## 资源生命周期
 
-文件放到最终位置后，进行一次准备和哈希校验；启动读取本地记录，不再完整重读模型。常驻实例在接收请求之前初始化，编码、去噪和解码依次使用同一张显卡，CPU 模型副本留待复用。准备、初始化、首次请求和热请求应分别计时。取消正在执行的请求会关闭实例；继续生成前需要新建实例。
+文件放到最终位置后，进行一次准备和哈希校验；启动读取本地记录，不再完整重读模型。常驻实例在接收请求之前初始化，并保留 CPU 模型副本以便复用；各阶段使用的显卡由上述配置决定。准备、初始化、首次请求和热请求应分别计时。取消正在执行的请求会关闭实例；继续生成前需要新建实例。

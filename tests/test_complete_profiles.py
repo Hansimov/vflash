@@ -38,7 +38,7 @@ def test_released_model_identities_and_adapter_scaling_remain_distinct():
     )
 
 
-def test_unqualified_complete_hardware_fails_before_asset_ingestion(tmp_path):
+def test_unqualified_complete_profile_fails_before_asset_ingestion(tmp_path):
     adapter = tmp_path / "unread-adapter"
     adapter.write_bytes(b"not a model payload")
     with pytest.raises(ContractError, match="unsupported complete"):
@@ -46,7 +46,7 @@ def test_unqualified_complete_hardware_fails_before_asset_ingestion(tmp_path):
             tmp_path,
             adapter,
             tmp_path / "receipt.json",
-            profile_id="ref2va-turbo4-exact-sm86",
+            profile_id="ref2va-turbo8-exact-sm89",
         )
     assert not (tmp_path / "receipt.json").exists()
 
@@ -184,11 +184,18 @@ def test_complete_constructor_owns_one_explicit_device_group(monkeypatch, tmp_pa
     device = NvidiaDevice(
         0, "primary-test-device", "test", 48, profile.hardware.compute_capability, 300
     )
+    peer = (
+        NvidiaDevice(1, "peer-test-device", "test", 20, "8.6", 300)
+        if profile.hardware.compute_capability == "8.6"
+        else None
+    )
     plans = []
     monkeypatch.setattr("vflash.pipeline.runtime.media_executables", lambda: None)
     monkeypatch.setattr("vflash.pipeline.runtime.validate_adapter_dependencies", lambda: None)
     monkeypatch.setattr(H3Pipeline, "_load_stages", lambda self, plan: plans.append(plan))
-    with H3Pipeline(prepared, device=device, trust_local_code=True) as pipeline:
+    with H3Pipeline(
+        prepared, device=device, peer_device=peer, trust_local_code=True
+    ) as pipeline:
         bad = (
             VideoRequest("A scene.", Path("missing"))
             if profile.definition.mode.value == "t2va"
@@ -198,8 +205,8 @@ def test_complete_constructor_owns_one_explicit_device_group(monkeypatch, tmp_pa
             pipeline.generate(bad, tmp_path / "bad.mp4")
         assert not pipeline._closed
     assert plans[0].profile.id == profile_id
-    assert plans[0].parallel_strategy == "single"
-    assert plans[0].gpu_uuids == (device.uuid,)
+    assert plans[0].parallel_strategy == ("sequence-head" if peer else "single")
+    assert plans[0].gpu_uuids == ((device.uuid, peer.uuid) if peer else (device.uuid,))
 
 
 def test_pipeline_assets_reject_wrong_mode_adapter_and_gpu_target(monkeypatch, tmp_path):

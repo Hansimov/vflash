@@ -43,8 +43,8 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
     )
     generate.add_argument(
         "--strategy",
-        choices=("tensor", "sequence-head"),
-        help="dual-SM86 strategy; default sequence-head",
+        choices=("sequence-head",),
+        help="qualified complete dual-SM86 strategy; default sequence-head",
     )
     generate.add_argument(
         "--trust-local-code",

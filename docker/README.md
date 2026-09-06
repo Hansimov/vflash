@@ -2,11 +2,11 @@
 
 [中文](README.zh-CN.md) · [Full Docker and API guide](https://hansimov.github.io/vflash/guide/docker)
 
-Use the [pipeline image](https://hansimov.github.io/vflash/guide/docker#pipeline) to generate a complete MP4 from text alone or a prompt and one to three references on SM89. The separate native HTTP service is described below.
+Use the [pipeline image](https://hansimov.github.io/vflash/guide/docker#pipeline) to generate a complete MP4 from text alone or a prompt and one to three references on SM89, or from references on two SM86 GPUs. The separate native HTTP service is described below.
 
 The service accepts compiled conditioning bundles and returns video and audio latents (tensors ready for decoding). It uses one GPU or a cooperating pair and reuses a loaded model across serial requests.
 
-You need Linux AMD64, Docker Compose v2, NVIDIA Container Toolkit, a CUDA 13.0-compatible driver, a supported GPU, and matching compiled runtime assets. The image does not contain model weights and serves the bundle-to-latent API. The separate [weights compiler](../docs/guide/compile-weights.md) prepares Ref4 and Base4 assets for SM89; [complete MP4 generation](../docs/guide/complete-pipeline.md) uses the pipeline image or Python extra.
+You need Linux AMD64, Docker Compose v2, NVIDIA Container Toolkit, a CUDA 13.0-compatible driver, a supported GPU, and matching compiled runtime assets. The image does not contain model weights and serves the bundle-to-latent API. The separate [weights compiler](../docs/guide/compile-weights.md) prepares Ref4 assets for SM86/SM89 and Base4 assets for SM89; [complete MP4 generation](../docs/guide/complete-pipeline.md) uses the pipeline image or Python extra.
 
 ## Start the released image
 
@@ -16,7 +16,7 @@ From the repository root:
 cp docker/.env.example docker/.env
 ```
 
-Edit `docker/.env` with your absolute asset paths and selected GPU. Use `VFLASH_IMAGE=hansimov/vflash:0.2.0` for the published image. Choose one of:
+Edit `docker/.env` with your absolute asset paths and selected GPU. Use `VFLASH_IMAGE=hansimov/vflash:0.2.1` for the published image. Choose one of:
 
 | GPU | `VFLASH_PROFILE_ID` |
 | --- | --- |

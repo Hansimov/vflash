@@ -1,6 +1,18 @@
 # Release notes
 
-The current release is **0.2.0**. Generate a video from text alone or from one to three ordered reference images on an RTX 4090 48 GB. See [the support table](../guide/profiles) for the separate complete-video and native-latent interfaces.
+The current release is **0.2.1**. Generate a video from text alone or up to three ordered references on one RTX 4090 48 GB, or from references on two RTX 3080 20 GB GPUs. See [the complete profile table](./pipeline-profiles) for hardware and mode selection.
+
+## 0.2.1 · complete video on two 3080s {#v0-2-1}
+
+[Source tag](https://github.com/Hansimov/vflash/tree/v0.2.1)
+
+The complete Python/container pipeline now supports Ref4 on two RTX 3080 20 GB GPUs. Compile `ref2va-turbo4-exact-sm86` assets on an SM86 GPU, then select both devices and `sequence-head` for generation. One to three ordered images produce a five-second, 24 fps MP4. Encoding and decoding use the primary; native denoising uses both. The [profile recipe](./pipeline-profiles#sm86) gives the commands. Single-SM86 and `tensor` complete pipelines are rejected before model loading; their native latent interfaces are unchanged.
+
+An actual installed container completed a representative three-reference request at 928 × 512. All 14 conditioning tensors matched an independent official capture on the same primary SM86 GPU. Final FP32 audio/video latents matched a standalone native session on the same pair. All 124 raw video frames and raw audio were finite, and the delivered MP4 decoded fully with 120 frames and five-second stereo audio. Cancelling a second request after one denoising evaluation retired the pipeline and removed temporary output; both devices released owned resources.
+
+The native implementation is byte-identical to 0.2.0. This release changes profile admission and the complete-pipeline strategy guard; the SM86 compiler arithmetic also passed 52 comparisons against same-architecture official modules. Together these checks qualify the wrapper, numerical binding and resource lifetime for the measured workload. They are not a new official full-DiT comparison or a broad instruction-quality or speed claim. The run included thermal throttling; its timings are not an isolated performance result. Host RSS peaked at 114.67 GiB under a 240 GiB budget, with device-wide peaks of 11.05/6.85 GiB. Leave deployment headroom beyond this measured case.
+
+SM89 Ref4 and T2VA retain their existing qualification and strict original audio delivery. The release also corrects older documentation that described the public package as latent-only. Model weights remain separate licensed downloads. Published image digests and package identity are recorded in [the versioned inventory](https://github.com/Hansimov/vflash/blob/v0.2.1/docker/images.json).
 
 ## 0.2.0 · complete text-to-video {#v0-2-0}
 
@@ -86,6 +98,6 @@ Added explicit block streaming on a 4090 and completed-step callbacks for integr
 
 ## Availability {#availability}
 
-The package provides the listed **BF16 Ref2VA Turbo4/Turbo8 and SM89 T2VA Turbo4 denoisers**, plus the **single-SM89 Ref4 and T2VA Python/container pipelines and official-weight compiler**. The compiler creates Ref4 and Base4 assets for SM89; assets for other native profiles must already be prepared. Published container images are available separately; model weights are not bundled.
+The package provides the listed **BF16 Ref2VA Turbo4/Turbo8 and SM89 T2VA Turbo4 denoisers**, plus the **Ref4 Python/container pipeline on SM89 or dual SM86, and T2VA on SM89**. The official-weight compiler creates Ref4 assets for SM86/SM89 and Base4 assets for SM89. Other native profiles require matching prepared assets. Published container images are available separately; model weights are not bundled.
 
 New modes, adapters and hardware require their own installation, numerical and decoded-output checks before entering the support table.

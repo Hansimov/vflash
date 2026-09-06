@@ -19,7 +19,7 @@ cp docker/.env.example docker/.env
 Edit `docker/.env`. Replace every example path with an absolute path on the Docker host:
 
 ```dotenv
-VFLASH_IMAGE=hansimov/vflash:0.2.0
+VFLASH_IMAGE=hansimov/vflash:0.2.1
 VFLASH_PROFILE_ID=ref2va-turbo4-exact-sm89
 VFLASH_GPU_DEVICE=0
 
@@ -40,7 +40,7 @@ docker compose --env-file docker/.env -f docker/compose.yaml pull
 docker compose --env-file docker/.env -f docker/compose.yaml up -d --no-build
 ```
 
-Versioned images are published on [Docker Hub](https://hub.docker.com/r/hansimov/vflash/tags). Their immutable digests are recorded in [the image inventory](https://github.com/Hansimov/vflash/blob/v0.2.0/docker/images.json). Models stay mounted read-only; outputs and kernel caches use separate writable storage. To build locally, use `docker build --target runtime -t vflash:0.2.0 .` and select that image in your environment file.
+Versioned images are published on [Docker Hub](https://hub.docker.com/r/hansimov/vflash/tags). Their immutable digests are recorded in [the image inventory](https://github.com/Hansimov/vflash/blob/v0.2.1/docker/images.json). Models stay mounted read-only; outputs and kernel caches use separate writable storage. To build locally, use `docker build --target runtime -t vflash:0.2.1 .` and select that image in your environment file.
 
 The Compose configuration binds the API to **127.0.0.1:8000**. The engine has no built-in authentication. Keep this binding for local use, or put the API behind your application's authentication before allowing remote access.
 
@@ -51,7 +51,7 @@ The `pipeline` image includes the official encoder/VAE adapters, CUDA-matched To
 Pull the released complete-pipeline image:
 
 ```bash
-docker pull hansimov/vflash:0.2.0-pipeline
+docker pull hansimov/vflash:0.2.1-pipeline
 mkdir -p inputs outputs cache
 ```
 
@@ -65,7 +65,7 @@ docker run --rm --runtime=runc -e NVIDIA_VISIBLE_DEVICES=void \
   -v /absolute/model-directory:/models:ro \
   -v "$PWD/inputs:/inputs:ro" -v "$PWD/outputs:/outputs:rw" \
   -v "$PWD/cache:/cache:rw" \
-  hansimov/vflash:0.2.0-pipeline prepare-pipeline \
+  hansimov/vflash:0.2.1-pipeline prepare-pipeline \
   --assets /inputs/pipeline-assets.json --receipt /outputs/prepared-assets.json
 ```
 
@@ -79,7 +79,7 @@ docker run --rm --gpus device=0 --shm-size 4g \
   -v /absolute/model-directory:/models:ro \
   -v "$PWD/inputs:/inputs:ro" -v "$PWD/outputs:/outputs:rw" \
   -v "$PWD/cache:/cache:rw" \
-  hansimov/vflash:0.2.0-pipeline generate \
+  hansimov/vflash:0.2.1-pipeline generate \
   --prepared-assets /outputs/prepared-assets.json \
   --prompt-file /inputs/prompt.txt \
   --reference /inputs/subject.png --reference /inputs/setting.png \
@@ -88,9 +88,11 @@ docker run --rm --gpus device=0 --shm-size 4g \
 
 Use one to three `--reference` arguments for Ref4. For T2VA, prepare Base4 assets with `--profile t2va-turbo4-exact-sm89` and omit references during generation. Both produce five seconds at 24 fps. Progress JSON goes to stderr, the final result to stdout. No model weights are included in the image. Review the [complete pipeline contract and memory budget](./complete-pipeline) and [model licenses](../reference/license).
 
-To build the complete image from the tagged source, run `docker build --target pipeline -t vflash:0.2.0-pipeline .` and substitute that local image name in the commands.
+For two RTX 3080 20 GB GPUs, use [SM86-compiled assets](../reference/pipeline-profiles#sm86) and add `--profile ref2va-turbo4-exact-sm86` to `prepare-pipeline`. In the generation command, replace `--gpus device=0` with `--gpus '"device=0,1"'` and add `--peer-gpu 1 --strategy sequence-head` after `--gpu 0`. Keep both cards assigned to this process until it exits. The primary owns encoding and decoding; the pair cooperates in denoising. These are complete-pipeline options, separate from the native HTTP Compose setup below.
 
-The published images reuse the immutable 0.1.0 dependency layers and install the 0.2.0 wheel. The [release assets](https://github.com/Hansimov/vflash/releases/tag/v0.2.0) include that wheel and `Dockerfile.release`; [the inventory](https://github.com/Hansimov/vflash/blob/v0.2.0/docker/images.json) records its hash, dependency images and qualification. This avoids redownloading unchanged dependencies; the source Dockerfile above remains the full build recipe.
+To build the complete image from the tagged source, run `docker build --target pipeline -t vflash:0.2.1-pipeline .` and substitute that local image name in the commands.
+
+The published images reuse the immutable 0.2.0 image layers and install the 0.2.1 wheel. The [release assets](https://github.com/Hansimov/vflash/releases/tag/v0.2.1) include that wheel and `Dockerfile.release`; [the inventory](https://github.com/Hansimov/vflash/blob/v0.2.1/docker/images.json) records its hash, dependency images and qualification. This avoids redownloading unchanged dependencies; the source Dockerfile above remains the full build recipe.
 
 The image defaults to UID/GID `10001`; these examples instead use your current user so outputs remain writable. The explicit Inductor cache also works when that user has no account entry inside the image, including with the 0.1.0 image. `/cache` must permit loading compiled shared libraries: do not put it on a `noexec` mount. Asset paths and filesystem identities must remain the same as during preparation. Repeated work should use a persistent Python `H3Pipeline` in a dedicated container process, avoiding a new model load per command.
 

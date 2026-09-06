@@ -4,14 +4,14 @@ Native **MiniMax H3 inference** for RTX 3080 20 GB and RTX 4090 48 GB. Vflash us
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
-**0.2.0.** Generate a five-second MP4 from text alone or from a prompt and one to three ordered reference images. The [complete pipeline](https://hansimov.github.io/vflash/guide/complete-pipeline) runs through Python or the container CLI on one RTX 4090 48 GB. [Compile its runtime assets](https://hansimov.github.io/vflash/guide/compile-weights) directly from fixed official weights. The native Python, CLI and HTTP interfaces also accept conditioning bundles and return video/audio latents on the GPUs below.
+**0.2.1.** Generate a five-second MP4 from text alone or from a prompt and one to three ordered reference images. The [complete pipeline](https://hansimov.github.io/vflash/guide/complete-pipeline) runs through Python or the container CLI: Ref4 supports one RTX 4090 48 GB or two RTX 3080 20 GB GPUs; text-only T2VA uses one 4090. [Compile its runtime assets](https://hansimov.github.io/vflash/guide/compile-weights) directly from fixed official weights. The native Python, CLI and HTTP interfaces also accept conditioning bundles and return video/audio latents on the GPUs below.
 
 ## Check your setup
 
 Python 3.11 or newer is required. The base install does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.2.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.2.1 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
@@ -40,7 +40,7 @@ For the native denoiser, allow **64 GiB or more of available system memory per w
 - [Start Docker and HTTP](https://hansimov.github.io/vflash/guide/docker) for an isolated worker and bounded job queue.
 - [Measure speed and quality](https://hansimov.github.io/vflash/reference/performance), with loading and end-to-end costs kept separate.
 
-Turbo4 and Turbo8 are distilled adapters. Exact attention is not a base-model quality guarantee, and different GPU or parallel configurations need not produce bitwise-identical results. Complete generation supports Ref4 and T2VA Base4 v1.0 on SM89; each uses its own fixed model assets and session. SM86 and Turbo8 retain their native latent interfaces. W8, dynamic LoRA loading and first/last-frame generation are not released features. Read [the validation scope](https://hansimov.github.io/vflash/guide/profiles).
+Turbo4 and Turbo8 are distilled adapters. Exact attention is not a base-model quality guarantee, and different GPU or parallel configurations need not produce bitwise-identical results. Complete generation uses fixed Ref4 or T2VA Base4 v1.0 assets and sessions. Dual-SM86 Ref4 requires `sequence-head`; single-SM86 and Turbo8 use the native latent interface. W8 and arbitrary adapter or mode switching are outside the supported profiles. Read [the validation scope](https://hansimov.github.io/vflash/guide/profiles).
 
 ## Contribute
 

@@ -4,7 +4,7 @@
 
 ## 可用配置 {#available}
 
-Ref2VA 基于参考素材生成视频和音频；T2VA 使用文本条件，不需要参考图片。Base 与 Ref 权重相互独立。单 4090 的[完整链路](./complete-pipeline)接受纯文字，或提示词加一至三张有序参考图；下层原生接口接收预编译条件包。
+Ref2VA 基于参考素材生成视频和音频；T2VA 使用文本条件，不需要参考图片。Base 与 Ref 权重相互独立。单 4090 的[完整链路](./complete-pipeline)接受纯文字，或提示词加一至三张有序参考图；双张 RTX 3080 20 GB 也支持完整 Ref4 生成。下列原生接口接收预编译条件包，其默认驻留策略与完整链路不同。
 
 | 显卡 | 配置 | 步数 | 权重加载方式 |
 | --- | --- | ---: | --- |
@@ -22,7 +22,7 @@ vflash plan ref2va-turbo8-exact-sm89 --gpu 0
 
 ## 文生视频 {#t2va}
 
-**0.2.0** 支持 `t2va-turbo4-exact-sm89` 的完整文生视频链路。[准备 Base4 资产](../reference/pipeline-profiles)后，生成请求不再需要参考图。
+自 **0.2.0** 起支持 `t2va-turbo4-exact-sm89` 的完整文生视频链路。[准备 Base4 资产](../reference/pipeline-profiles)后，生成请求不再需要参考图。
 
 需要 Base4 v1.0 权重工件、Base 辅助张量、video/audio shift 6/3 调度，以及没有参考图的 T2VA 条件包。Ref2VA 工件不能执行这个任务；切换模式需要建立独立会话并加载对应资源。
 
@@ -40,9 +40,9 @@ CLI 使用 `--weight-residency block-ring`，Python 使用同名的[会话选项
 
 已测的 928 × 512、124 模型帧、4 步负载，建议**每个 worker 至少预留 64 GiB 可用系统内存**，并为操作系统和其他进程留出余量。使用分块加载时，显存占用不包括系统内存中的完整权重。更大输入和并发 worker 都需要重新检查容量。
 
-完整 Ref4 和 T2VA 链路还需保存编码器和 VAE 的 CPU 权重，采用原生分块加载，为这些阶段留出显存。完整链路验证使用 240 GiB 主机内存上限；这是已测预算，不是最低要求，不能套用去噪器的 64 GiB 建议。
+完整 Ref4 和 T2VA 链路还需保存编码器和 VAE 的 CPU 权重，采用原生分块加载，为这些阶段留出显存。完整链路验证使用 240 GiB 主机内存上限；这是已测预算，不是最低要求，不能套用去噪器的 64 GiB 建议。SM89 的各阶段轮流使用同一卡；双 SM86 由主卡执行编码和解码、两卡共同去噪。一个三参考图请求的主机 RSS 峰值为 114.67 GiB，整卡占用为 11.05/6.85 GiB；部署时仍须为其他开销留出余量。
 
-双 3080 可选择 `sequence-head` 或 `tensor`，由调用方显式指定第二张卡。已测拓扑为无 peer access 的 PCIe 3.0 x16 主机桥连接，不需要 NVLink。设置方法见[双卡执行](./getting-started#parallel)，对照范围见[实测数据](../reference/benchmarks#sm86-parallel)。
+原生 latent 接口的双 3080 可选择 `sequence-head` 或 `tensor`；完整生成必须使用 `sequence-head`。第二张卡由调用方显式指定。已测拓扑为无 peer access 的 PCIe 3.0 x16 主机桥连接，不需要 NVLink。设置方法见[双卡执行](./getting-started#parallel)，对照范围见[实测数据](../reference/benchmarks#sm86-parallel)。
 
 上述支持范围只覆盖 20 GB 版 3080 和 48 GB 版 4090。其他显存容量、型号、更大的 GPU 组，以及任意分辨率或帧数组合尚未获得相同验证。
 
@@ -65,4 +65,4 @@ Turbo4 和 Turbo8 都是蒸馏配置。减少步数可以降低计算量，但�
 
 ## 当前版本的边界 {#scope}
 
-完整链路与官方权重编译器支持 SM89 上的 Ref4 和 T2VA Base4。Turbo8、SM86 保留条件包到 latent 的接口；SM86 的完整链路会在独立验证之前明确拒绝。首尾帧生成、动态 LoRA 和 W8 不在本版范围内。HTTP 接口一次串行执行一个任务；账号、计费和分布式 GPU 调度由接入 Vflash 的应用负责。
+[完整配置表](../reference/pipeline-profiles)涵盖单 SM89 或双 SM86 的 Ref4，以及单 SM89 的 T2VA Base4。单 SM86 和 Turbo8 保留条件包到 latent 的接口。未列出的模式、LoRA、量化和时长帧率组合不在这些已验证配置中。HTTP 接口一次串行执行一个任务；账号、计费和分布式 GPU 调度由接入 Vflash 的应用负责。

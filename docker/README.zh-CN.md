@@ -2,11 +2,11 @@
 
 [English](README.md) · [完整 Docker 与 API 指南](https://hansimov.github.io/vflash/zh/guide/docker)
 
-使用 [pipeline 镜像](https://hansimov.github.io/vflash/zh/guide/docker#pipeline)，可以在 SM89 上用纯文字或提示词与一至三张参考图生成完整 MP4。下文介绍独立的原生 HTTP 服务。
+使用 [pipeline 镜像](https://hansimov.github.io/vflash/zh/guide/docker#pipeline)，可以在 SM89 上用纯文字或提示词与一至三张参考图生成完整 MP4，也支持双 SM86 的参考图生成。下文介绍独立的原生 HTTP 服务。
 
 服务接收预编译条件包，返回视频和音频潜变量（latents，即解码前的张量）。它使用一张 GPU 或一组协作双卡，并在多个串行请求之间复用已加载的模型。
 
-需要 Linux AMD64、Docker Compose v2、NVIDIA Container Toolkit、兼容 CUDA 13.0 的驱动、受支持的显卡和匹配的编译资源。镜像不含模型权重，提供条件包到 latent 的接口。独立的[权重编译器](../docs/zh/guide/compile-weights.md)可以准备 SM89 的 Ref4 和 Base4 资产；[完整 MP4 生成](../docs/zh/guide/complete-pipeline.md)使用 pipeline 镜像或 Python 扩展。
+需要 Linux AMD64、Docker Compose v2、NVIDIA Container Toolkit、兼容 CUDA 13.0 的驱动、受支持的显卡和匹配的编译资源。镜像不含模型权重，提供条件包到 latent 的接口。独立的[权重编译器](../docs/zh/guide/compile-weights.md)可以准备 SM86/SM89 的 Ref4 资产，以及 SM89 的 Base4 资产；[完整 MP4 生成](../docs/zh/guide/complete-pipeline.md)使用 pipeline 镜像或 Python 扩展。
 
 ## 启动发布版
 
@@ -16,7 +16,7 @@
 cp docker/.env.example docker/.env
 ```
 
-编辑 `docker/.env`，填写资源的绝对路径并选择显卡。使用 `VFLASH_IMAGE=hansimov/vflash:0.2.0` 拉取已发布镜像。配置可选：
+编辑 `docker/.env`，填写资源的绝对路径并选择显卡。使用 `VFLASH_IMAGE=hansimov/vflash:0.2.1` 拉取已发布镜像。配置可选：
 
 | 显卡 | `VFLASH_PROFILE_ID` |
 | --- | --- |

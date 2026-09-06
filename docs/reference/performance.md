@@ -1,12 +1,14 @@
 # Measuring performance
 
-Measure the path that matters to your application, and keep its scope visible. Vflash's current public output is a latent tensor file, so its inference timing is not a prompt-to-video latency measurement.
+Measure the path that matters to your application, and keep its scope visible. The complete pipeline produces an MP4; the native denoiser produces latent tensors. Their timing boundaries differ.
 
 ## Separate loading from repeated requests {#timing}
 
-The CLI creates a new session for every invocation. The HTTP service reuses one loaded model, so the first job and later jobs have different costs.
+Each CLI invocation initializes its own models. A persistent `H3Pipeline` or native HTTP worker reuses its models across requests, so startup, first use and later requests have different costs.
 
-Successful results expose these values in `session`:
+For complete generation, report `H3Pipeline.initialization_seconds` separately from `VideoResult.elapsed_seconds`. The latter covers input preparation, encoding, denoising, media delivery and request cleanup. Its `stages` contain both outer durations and nested details; do not add nested costs twice. See the [pipeline timing contract](../guide/complete-pipeline#one-owned-pipeline).
+
+Native denoiser results expose these values in `session`:
 
 | Field | Meaning |
 | --- | --- |
@@ -41,4 +43,4 @@ Inspect multiple decoded frames over time, watch at normal speed, and listen to 
 
 Exact attention does not make a distilled adapter equivalent to the base model, or guarantee identical floating-point results across GPU architectures. The current [support notes](../guide/profiles#lora) describe the narrower checks completed for each profile.
 
-This page does not publish a general prompt-to-MP4 speed claim. The public package does not yet include that complete path.
+The complete pipeline is available for the [qualified profiles](./pipeline-profiles). Its integration checks establish that measured requests complete correctly; they do not establish a general prompt-to-MP4 speed or quality guarantee.

@@ -4,14 +4,14 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
-**0.2.0 正式版。** 支持纯文字生成，也支持提示词加一至三张有序参考图。单张 RTX 4090 48 GB 可通过 Python 或容器命令行的[完整链路](https://hansimov.github.io/vflash/zh/guide/complete-pipeline)生成五秒 MP4；运行资产可以[从固定官方权重直接编译](https://hansimov.github.io/vflash/zh/guide/compile-weights)。原生 Python、CLI 和 HTTP 接口也支持在下列显卡上接收条件包、输出音视频 latent。
+**0.2.1 正式版。** 支持纯文字生成，也支持提示词加一至三张有序参考图。通过 Python 或容器命令行的[完整链路](https://hansimov.github.io/vflash/zh/guide/complete-pipeline)生成五秒 MP4：Ref4 支持单张 RTX 4090 48 GB 或双张 RTX 3080 20 GB，纯文字 T2VA 使用单张 4090；运行资产可以[从固定官方权重直接编译](https://hansimov.github.io/vflash/zh/guide/compile-weights)。原生 Python、CLI 和 HTTP 接口也支持在下列显卡上接收条件包、输出音视频 latent。
 
 ## 检查运行环境
 
 需要 Python 3.11 或更新版本。基础安装不会下载模型权重或 PyTorch。
 
 ```bash
-git clone --branch v0.2.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.2.1 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
@@ -41,7 +41,7 @@ vflash plan ref2va-turbo4-exact-sm89 --gpu 0
 - [启动 Docker 与 HTTP 服务](https://hansimov.github.io/vflash/zh/guide/docker)，使用独立 worker 和有容量限制的任务队列。
 - [测量性能与质量](https://hansimov.github.io/vflash/zh/reference/performance)，区分加载、推理和端到端成本。
 
-Turbo4 和 Turbo8 使用蒸馏 LoRA。精确注意力不保证基础模型的质量；不同显卡或并行策略也不保证逐位一致的结果。完整生成支持单 4090 的 Ref4 与 T2VA Base4 v1.0，分别使用固定的模型资产和会话。SM86 与 Turbo8 保留原生条件包接口；W8、动态 LoRA 和首尾帧生成尚未发布。请查看[验证范围](https://hansimov.github.io/vflash/zh/guide/profiles)。
+Turbo4 和 Turbo8 使用蒸馏 LoRA。精确注意力不保证基础模型的质量；不同显卡或并行策略也不保证逐位一致的结果。完整生成使用固定的 Ref4 或 T2VA Base4 v1.0 资产和会话。双 SM86 的 Ref4 必须使用 `sequence-head`；单 SM86 与 Turbo8 使用原生条件包接口。W8 以及任意适配器或模式切换不在支持范围内。请查看[验证范围](https://hansimov.github.io/vflash/zh/guide/profiles)。
 
 ## 参与开发
 

@@ -4,7 +4,7 @@ A profile chooses the model, LoRA revision, step count, and arithmetic. Its defa
 
 ## Available profiles {#available}
 
-Ref2VA generates video and audio from reference conditioning. T2VA uses text conditioning without reference images. Base and Ref weights are separate. The [complete pipeline](./complete-pipeline) accepts text alone or a prompt with one to three images on an RTX 4090 48 GB. The native interfaces use compiled conditioning bundles.
+Ref2VA generates video and audio from reference conditioning. T2VA uses text conditioning without reference images. Base and Ref weights are separate. The [complete pipeline](./complete-pipeline) accepts text alone or a prompt with one to three images on an RTX 4090 48 GB. Two RTX 3080 20 GB GPUs also support complete Ref4 generation. The native interfaces below use compiled conditioning bundles; their default residency differs from the complete pipeline.
 
 | GPU | Profile | Steps | Weight loading |
 | --- | --- | ---: | --- |
@@ -22,7 +22,7 @@ vflash plan ref2va-turbo8-exact-sm89 --gpu 0
 
 ## Text-to-video {#t2va}
 
-Release **0.2.0** supports complete T2VA generation with `t2va-turbo4-exact-sm89`. [Prepare the Base4 assets](../reference/pipeline-profiles), then omit reference images from the request.
+Since **0.2.0**, Vflash supports complete T2VA generation with `t2va-turbo4-exact-sm89`. [Prepare the Base4 assets](../reference/pipeline-profiles), then omit reference images from the request.
 
 Use a Base4 v1.0 artifact, Base auxiliary tensors, a 6/3 video/audio schedule, and a T2VA bundle with no references. A Ref2VA artifact cannot process this task. Switching mode requires a separate session and matching assets.
 
@@ -40,9 +40,9 @@ Use `--weight-residency block-ring` in the CLI or the matching [Python session o
 
 For the measured 928 × 512, 124-model-frame, four-step workload, allow **at least 64 GiB of available system memory per worker**, plus headroom for the OS and other processes. With block streaming, VRAM usage excludes the complete weights stored in host RAM. Larger inputs and concurrent workers require their own capacity checks.
 
-That budget covers the native denoiser. Complete Ref4 and T2VA pipelines also own encoders and official VAEs; their integration checks used a 240 GiB host-memory limit. Their stages take turns on one SM89 GPU and the native core uses block streaming.
+That budget covers the native denoiser. Complete Ref4 and T2VA pipelines also own encoders and official VAEs; their integration checks used a 240 GiB host-memory limit. The native core uses block streaming. SM89 stages take turns on one GPU; dual-SM86 encoding and decoding use the primary while both GPUs denoise. The representative three-reference SM86 check reached 114.67 GiB host RSS and 11.05/6.85 GiB device-wide use; leave headroom beyond this one-request measurement.
 
-A 3080 pair supports `sequence-head` or `tensor`; the caller selects the peer explicitly. The measured topology uses PCIe 3.0 x16 host-bridge links without peer access and does not require NVLink. See [dual-GPU setup](./getting-started#parallel) and the [measurement scope](../reference/benchmarks#sm86-parallel).
+The native latent interface supports `sequence-head` or `tensor` on a 3080 pair; complete generation requires `sequence-head`. The caller selects the peer explicitly. The measured topology uses PCIe 3.0 x16 host-bridge links without peer access and does not require NVLink. See [dual-GPU setup](./getting-started#parallel) and the [measurement scope](../reference/benchmarks#sm86-parallel).
 
 This support scope covers the 20 GB 3080 and 48 GB 4090 variants. Other capacities, models, larger GPU groups and arbitrary resolutions or frame counts have not received the same validation.
 
@@ -65,4 +65,4 @@ The single-device 3080 profile has been checked for capacity and repeatable resu
 
 ## What is outside this release {#scope}
 
-The complete pipeline and official-weight compiler cover Ref4 and T2VA Base4 on SM89. Turbo8 and SM86 retain bundle-to-latents interfaces; the complete pipeline rejects SM86 profiles until independently qualified. First/last-frame generation, dynamic LoRA loading and W8 are not released features. The HTTP API provides one serial denoising lane; account management, billing and distributed GPU scheduling belong to the application.
+The [complete profile table](../reference/pipeline-profiles) covers Ref4 on SM89 or two SM86 GPUs, and T2VA Base4 on SM89. Single-SM86 and Turbo8 remain native bundle-to-latents interfaces. Unlisted modes, adapters, quantization and temporal settings are outside these qualified profiles. The HTTP API provides one serial denoising lane; account management, billing and distributed GPU scheduling belong to the application.
