@@ -203,6 +203,7 @@ def test_complete_constructor_owns_one_explicit_device_group(monkeypatch, tmp_pa
 
 
 def test_pipeline_assets_reject_wrong_mode_adapter_and_gpu_target(monkeypatch, tmp_path):
+    pytest.importorskip("torch")
     from vflash.pipeline import assets as pipeline_assets
     from vflash.pipeline.contracts import PipelineAssets
 
