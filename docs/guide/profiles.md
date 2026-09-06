@@ -11,7 +11,7 @@ Ref2VA generates video and audio from reference conditioning. T2VA uses text con
 | RTX 4090 48 GB | `ref2va-turbo4-exact-sm89` | 4 | Resident in GPU memory |
 | RTX 4090 48 GB | `ref2va-turbo8-exact-sm89` | 8 | Resident in GPU memory |
 | RTX 3080 20 GB | `ref2va-turbo4-exact-sm86` | 4 | Streamed from host memory |
-| RTX 4090 48 GB | `t2va-turbo4-exact-sm89` | 4 | Resident; source preview below |
+| RTX 4090 48 GB | `t2va-turbo4-exact-sm89` | 4 | Resident; validation scope below |
 
 The HTTP service defaults to Turbo4 on a 4090. To change profiles, restart the service with the selected profile and its matching assets.
 
@@ -20,9 +20,9 @@ vflash profiles
 vflash plan ref2va-turbo8-exact-sm89 --gpu 0
 ```
 
-## Text-to-video source preview {#t2va}
+## Text-to-video {#t2va}
 
-The `main` source tree adds `t2va-turbo4-exact-sm89`; this profile is **not in the 0.1.0a5 tag**. Its initial implementation is pinned at [74d9996](https://github.com/Hansimov/vflash/commit/74d99968387e3c94fd68ffc3f52ba56afe98cf15).
+Release **0.1.0a6** adds `t2va-turbo4-exact-sm89`. Use the [source tag](https://github.com/Hansimov/vflash/tree/v0.1.0a6) with the matching assets below.
 
 Use a Base4 v1.0 artifact, Base auxiliary tensors, a 6/3 video/audio schedule, and a T2VA bundle with no references. A Ref2VA artifact cannot process this task. Switching mode requires a separate session and matching assets.
 
@@ -53,7 +53,7 @@ Vflash runs the pinned [LightX2V H3 Turbo](https://huggingface.co/lightx2v/Minim
 | Ref Turbo4 v0.1 | One/two 3080s, one 4090 | `minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors` |
 | Ref Turbo8 v1.0 768p | One 4090 | `minimax_h3_ref2v_turbo_8step_v1.0_768p_bf16.safetensors` |
 
-Pinned revisions and sources are listed under [runtime assets](../reference/runtime-assets#versions). The source preview also supports `minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors` for T2VA on SM89, with alpha 128 / rank 128. Only the named files and revisions are supported. ComfyUI, FL2VA, custom LoRAs and future upstream revisions need separate integration.
+Pinned revisions and sources are listed under [runtime assets](../reference/runtime-assets#versions). T2VA also supports `minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors` for T2VA on SM89, with alpha 128 / rank 128. Only the named files and revisions are supported. ComfyUI, FL2VA, custom LoRAs and future upstream revisions need separate integration.
 
 Turbo4 and Turbo8 are distilled configurations. Fewer steps reduce compute, but they are not a promise of the same output quality as the 50-step base model. The `exact` name refers to the attention path and the selected adapter's execution; it does not promise identical tensors across different GPUs.
 

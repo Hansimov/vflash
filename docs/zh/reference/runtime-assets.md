@@ -46,4 +46,4 @@ Vflash 会检查资源声明的元数据。文件名正确并不代表兼容；�
 
 Turbo4 使用 `minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors`，Turbo8 使用 `minimax_h3_ref2v_turbo_8step_v1.0_768p_bf16.safetensors`。这两个文件的摘要与 2026-09-05 核对的上游修订 `2f015e66b37c585cea9dc4ae6f1850ea8788e742` 一致。这是一次固定来源核对，不保证未来修订自动兼容。
 
-T2VA 源码预览使用独立的 Base4 v1.0 文件及上表对应修订。SHA-256 为 `1bdabc2e9fce20b1db563b96bcf6e46adcad4c1964f423676436bf266cc7416c`，alpha 128 / rank 128。不能与 Ref4 或更新的 Base4 版本互换。
+T2VA 配置使用独立的 Base4 v1.0 文件及上表对应修订。SHA-256 为 `1bdabc2e9fce20b1db563b96bcf6e46adcad4c1964f423676436bf266cc7416c`，alpha 128 / rank 128。不能与 Ref4 或更新的 Base4 版本互换。

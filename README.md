@@ -4,14 +4,14 @@ Native **MiniMax H3 inference** for RTX 3080 20 GB and RTX 4090 48 GB. Vflash us
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
-**0.1.0a5 · Developer preview.** The public interface accepts compiled conditioning bundles and returns video/audio latent tensors for decoding. Compatible runtime assets are required and are not yet published. Prompt processing, reference uploads and MP4 output are outside this release.
+**0.1.0a6 · Developer preview.** The public interface accepts compiled conditioning bundles and returns video/audio latent tensors for decoding. Compatible runtime assets are required and are not yet published. Prompt processing, reference uploads and MP4 output are outside this release.
 
 ## Check your setup
 
 Python 3.11 or newer is required. The base install does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.1.0a5 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.1.0a6 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
@@ -24,7 +24,7 @@ vflash plan ref2va-turbo4-exact-sm89 --gpu 0
 
 | GPU configuration | Released profiles | Weight placement |
 | --- | --- | --- |
-| One RTX 4090 48 GB | Ref2VA Turbo4 / Turbo8 | Resident by default; optional block streaming |
+| One RTX 4090 48 GB | Ref2VA Turbo4 / Turbo8; T2VA Turbo4 | Resident by default; optional block streaming |
 | One RTX 3080 20 GB | Ref2VA Turbo4 | Streamed from host RAM |
 | Two RTX 3080 20 GB GPUs | Ref2VA Turbo4 | Shared host weights; cooperative execution |
 
@@ -39,7 +39,7 @@ Allow **64 GiB or more of available system memory per worker** for the tested wo
 - [Start Docker and HTTP](https://hansimov.github.io/vflash/guide/docker) for an isolated worker and bounded job queue.
 - [Measure speed and quality](https://hansimov.github.io/vflash/reference/performance), with loading and end-to-end costs kept separate.
 
-Turbo4 and Turbo8 are distilled adapters. Exact attention is not a base-model quality guarantee, and different GPU or parallel configurations need not produce bitwise-identical results. W8 is not a released profile. The source tree also includes an SM89 T2VA Turbo4 preview; see [its scope and source revision](https://hansimov.github.io/vflash/guide/profiles#t2va). The `0.1.0a5` tag above remains Ref2VA-only.
+Turbo4 and Turbo8 are distilled adapters. Exact attention is not a base-model quality guarantee, and different GPU or parallel configurations need not produce bitwise-identical results. W8 is not a released profile. T2VA Turbo4 is available on SM89 with separate Base4 v1.0 assets; read [its validation scope](https://hansimov.github.io/vflash/guide/profiles#t2va).
 
 ## Contribute
 

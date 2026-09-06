@@ -60,7 +60,7 @@ ENV NVIDIA_VISIBLE_DEVICES=all \
     VFLASH_OUTPUT_ROOT=/outputs
 
 LABEL org.opencontainers.image.title="Vflash" \
-    org.opencontainers.image.description="H3 Ref2VA inference on RTX 3080 and RTX 4090" \
+    org.opencontainers.image.description="H3 video and audio inference with explicit GPU profiles" \
     org.opencontainers.image.source="https://github.com/Hansimov/vflash"
 
 USER 10001:10001
