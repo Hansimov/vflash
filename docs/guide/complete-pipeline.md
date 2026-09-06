@@ -1,6 +1,6 @@
 # Complete video pipeline preview
 
-This development branch adds a Python pipeline from a written prompt and one reference image to an MP4. Its first target is Ref2VA Turbo4 on one SM89 GPU with 48 GiB of memory. It is not part of the published latent-only release yet. GPU qualification and a standalone recipe for compiling the native assets are required before release.
+This development branch adds a Python pipeline from a written prompt and one reference image to an MP4. Its first target is Ref2VA Turbo4 on one SM89 GPU with 48 GiB of memory. Two sequential requests and cancellation have passed a complete GPU integration check at 928 × 512. It is not part of the published latent-only release yet, and still requires prepared native assets; a standalone compilation recipe is being completed.
 
 ## What runs where
 
@@ -71,10 +71,14 @@ with H3Pipeline(prepared, device=devices[0], trust_local_code=True) as pipeline:
 
 Reuse the same pipeline for sequential requests. Its native block ring leaves device memory available while the encoder and VAE take turns. CPU model masters remain owned for reuse, so sufficient host memory is also required. A progress callback runs synchronously and may raise to cancel; it must not call `close` from inside that callback. Application queues, accounts, storage and parallel worker scheduling stay outside this API.
 
-The output path must not already exist. A video is published only after encoding, media probing and GPU stage cleanup have succeeded. A failed execution retires the pipeline and removes temporary files. `close()` releases owned models and hooks after a CUDA completion fence; it never resets another owner's CUDA context.
+The output path must not already exist. A video is published only after encoding, media probing and GPU stage cleanup have succeeded. A failed execution retires the pipeline and removes temporary files. `close()` releases owned models and hooks after a CUDA completion fence; it never resets another owner's CUDA context. CUDA libraries may retain process-level workspaces after a model closes. Exit the dedicated process when the application needs to relinquish its entire CUDA context.
+
+When running in a read-only container, give Triton a writable cache directory that permits loading compiled shared libraries. A temporary filesystem mounted with `noexec` cannot serve as that cache.
 
 ## What a correctness result means
 
 Compare conditioning and final latents to the fixed reference implementation separately from visual quality. Assess generated motion, appearance, instructions and sound against the original request. A matching latent tensor does not qualify a poor result.
 
 Media checks cover decoded video and audio before encoding, the five-second delivery clock, frame count and channel layout. H.264 and AAC are lossy formats. An MP4 hash is not a numerical equivalence test for the denoiser or audio decoder.
+
+The fixed integration check reproduced all 14 conditioning tensors and final audio/video latents exactly. Decoded video was also identical across the two requests. The official audio VAE produced small floating-point differences between the first and second request, before PCM quantization or AAC encoding. This preview therefore does not promise bitwise audio reproducibility. Both requests used the same five-second clock without audio retiming; the source of that audio variation remains under investigation.
