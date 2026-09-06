@@ -50,7 +50,6 @@ def file_identity(path: Path) -> dict[str, int]:
 DEFAULT_MODEL_PROFILE = "ref2va-turbo4-exact-sm89"
 COMPLETE_MODEL_PROFILES = (
     DEFAULT_MODEL_PROFILE,
-    "ref2va-turbo4-exact-sm86",
     "t2va-turbo4-exact-sm89",
 )
 

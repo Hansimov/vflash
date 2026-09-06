@@ -1,6 +1,6 @@
 # Runtime assets
 
-The latent CLI starts from compiled inputs. Ref4 on SM89 also has a [complete Python pipeline](../guide/complete-pipeline) and an [official-weight compiler](../guide/compile-weights). Installing the package does not automatically download model weights or example bundles.
+The latent CLI starts from compiled inputs. Ref4 and T2VA Base4 on SM89 also have a [complete Python pipeline](../guide/complete-pipeline) and an [official-weight compiler](../guide/compile-weights). Installing the package does not automatically download model weights or example bundles.
 
 The CLI contract below applies to developers supplying compatible compiled assets.
 
@@ -38,7 +38,7 @@ Vflash validates the declared resource metadata. A file with the expected name i
 
 Keep model assets and bundles outside the source checkout. In Docker, mount them read-only and give the service a separate writable output directory. The [Docker guide](../guide/docker) shows the relevant settings.
 
-The latent CLI returns a safetensors file with video and audio tensors. The complete Ref4 Python pipeline handles encoding and official VAE decoding internally, then publishes an MP4.
+The latent CLI returns a safetensors file with video and audio tensors. The complete Python pipelines handle encoding and official VAE decoding internally, then publish an MP4.
 
 Model and adapter files retain their own [licenses and terms](./license), independently of the Vflash source code.
 

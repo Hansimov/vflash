@@ -1,6 +1,6 @@
 # How Vflash works
 
-Vflash owns the native H3 transformer, LoRA residuals, schedule updates and output heads in PyTorch and Triton. The complete Ref4 Python pipeline also coordinates explicit official encoder/VAE adapters and MP4 delivery. It does not import the LightX2V inference framework.
+Vflash owns the native H3 transformer, LoRA residuals, schedule updates and output heads in PyTorch and Triton. The complete Ref4/T2VA Python pipeline also coordinates explicit official encoder/VAE adapters and MP4 delivery. It does not import the LightX2V inference framework.
 
 ## The data path {#data-path}
 
@@ -10,13 +10,13 @@ Compiled weights + adapter + schedule
 Conditioning bundle → Native session → Video and audio latents
 ```
 
-The conditioning bundle contains encoded text and references, token layout and initial noise. The native session remains usable on its own. For Ref4 on SM89, the optional complete pipeline surrounds it with pinned Diffusers/Transformers encoding, official video/audio VAE decoding and FFmpeg delivery:
+The conditioning bundle contains encoded text and references, token layout and initial noise. The native session remains usable on its own. For Ref4 and T2VA on SM89, the optional complete pipeline surrounds it with pinned Diffusers/Transformers encoding, official video/audio VAE decoding and FFmpeg delivery:
 
 ```text
-Prompt + image → Official encoder adapters → Native core → Official VAEs → MP4
+Prompt + optional images → Official encoder adapters → Native core → Official VAEs → MP4
 ```
 
-The weights compiler starts separately from official raw Ref weights and the fixed Ref4 LoRA. It packs unchanged BF16 matrices and precomputes the exact fixed-schedule AdaLN tables. Model preparation contains no reference image or request capture. Base and LoRA identities remain explicit and separately bound.
+The weights compiler starts separately from the selected official raw weights and fixed LoRA. It packs unchanged BF16 matrices and precomputes the exact fixed-schedule AdaLN tables. Model preparation contains no reference image or request capture. Base and LoRA identities remain explicit and separately bound.
 
 Model, adapter, schedule and hardware identities must agree. Changing a profile name does not convert its assets or change the mathematics of its compiled request.
 
@@ -25,7 +25,7 @@ Model, adapter, schedule and hardware identities must agree. Changing a profile 
 | Layer | Owns | Lifetime |
 | --- | --- | --- |
 | CLI or HTTP service | Validation, job status and output paths | Command or server process |
-| Complete Ref4 pipeline | Encoder/VAE stages, native session and temporary media | Reused across serial video requests |
+| Complete Ref4/T2VA pipeline | Encoder/VAE stages, native session and temporary media | Reused across serial video requests |
 | Native session | One fixed profile, GPU group and loaded runtime | Reused across serial requests |
 | Request execution | Conditioning tensors, working latents and progress | One call to `generate` |
 
@@ -45,7 +45,7 @@ Block streaming uses a different, scoped path: a temporary memory map supplies t
 
 On a **4090 with 48 GB**, the default is resident weights. Python integrations can select `weight_residency="block-ring"` to leave more VRAM for activations. Extra resident memory is useful only when it improves your workload; measure the first request and repeated requests separately.
 
-The complete Ref4 pipeline explicitly uses block streaming so encoders, the core and VAEs can take turns on that GPU. This is a pipeline memory choice; it does not change the standalone native session's default.
+The complete Ref4/T2VA pipeline explicitly uses block streaming so encoders, the core and VAEs can take turns on that GPU. This is a pipeline memory choice; it does not change the standalone native session's default.
 
 On a **3080 with 20 GB**, weights remain in pinned system memory and stream through two device buffers. Copy events mark a buffer ready; compute events prevent its reuse until the previous operation finishes. The session reuses these resources across requests.
 

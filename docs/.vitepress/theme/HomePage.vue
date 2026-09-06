@@ -29,7 +29,7 @@ const text = computed(() => zh.value ? {
     { execution: '双卡协作 · 分块加载', profiles: 'Turbo4', note: '两张卡共同处理一个请求；需要显式选择第二张卡，并预留系统内存。' },
   ],
   boundary: '当前公开版的输入与输出',
-  boundaryText: '单 4090 的 Ref4 链路支持提示词与一至三张参考图生成五秒 MP4，提供 Python、容器命令和官方权重编译器。其他配置和 HTTP 接口继续接收条件包、输出 latent。',
+  boundaryText: '单 4090 支持纯文字或一至三张参考图生成五秒 MP4，提供 Python、容器命令和官方权重编译器。SM86、Turbo8 和 HTTP 接口继续接收条件包、输出 latent。',
   inputs: '了解运行前提',
   next: '按你的任务开始',
   guides: [
@@ -59,7 +59,7 @@ const text = computed(() => zh.value ? {
     { execution: 'Two GPUs · streamed', profiles: 'Turbo4', note: 'Both GPUs cooperate on one request. Select the peer explicitly and allow sufficient host RAM.' },
   ],
   boundary: 'The current public interface',
-  boundaryText: 'The Ref4 pipeline turns a prompt and one to three images into a five-second MP4 on one 4090, through Python or a container command. Other profiles and the HTTP API accept conditioning bundles and return latents.',
+  boundaryText: 'Generate a five-second MP4 from text alone or one to three reference images on one 4090, through Python or a container command. SM86, Turbo8 and the HTTP API accept conditioning bundles and return latents.',
   inputs: 'Check the prerequisites',
   next: 'Start with what you need',
   guides: [

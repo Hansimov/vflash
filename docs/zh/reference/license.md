@@ -19,7 +19,7 @@ Vflash 基于 MiniMax 公开的 H3 架构和模型权重开发。LightX2V 的开
 
 致谢不表示当前版本包含所有被提及的实现或 LoRA。实际可用范围见[配置与硬件](../guide/profiles)。
 
-完整链路的开发版适配器使用 [Diffusers](https://github.com/huggingface/diffusers)、[Transformers](https://github.com/huggingface/transformers)、[Accelerate](https://github.com/huggingface/accelerate)、[PEFT](https://github.com/huggingface/peft)，以及固定版本 MiniMax H3 模型附带的官方解码器代码。本地 MP4 输出使用 [FFmpeg](https://ffmpeg.org/legal.html)。这些依赖保留各自的许可证；Vflash 仓库不重新分发它们的模型权重。
+完整链路使用 [Diffusers](https://github.com/huggingface/diffusers)、[Transformers](https://github.com/huggingface/transformers)、[Accelerate](https://github.com/huggingface/accelerate)、[PEFT](https://github.com/huggingface/peft)，以及固定版本 MiniMax H3 模型附带的官方解码器代码。本地 MP4 输出使用 [FFmpeg](https://ffmpeg.org/legal.html)。这些依赖保留各自的许可证；Vflash 仓库不重新分发它们的模型权重。
 
 ## 完整链路依赖
 

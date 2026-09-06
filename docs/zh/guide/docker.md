@@ -19,7 +19,7 @@ cp docker/.env.example docker/.env
 编辑 `docker/.env`，把所有示例路径换成 Docker 主机上的绝对路径：
 
 ```dotenv
-VFLASH_IMAGE=hansimov/vflash:0.1.0
+VFLASH_IMAGE=hansimov/vflash:0.2.0
 VFLASH_PROFILE_ID=ref2va-turbo4-exact-sm89
 VFLASH_GPU_DEVICE=0
 
@@ -40,7 +40,7 @@ docker compose --env-file docker/.env -f docker/compose.yaml pull
 docker compose --env-file docker/.env -f docker/compose.yaml up -d --no-build
 ```
 
-带版本号的镜像已发布到 [Docker Hub](https://hub.docker.com/r/hansimov/vflash/tags)，不可变摘要见[镜像清单](https://github.com/Hansimov/vflash/blob/v0.1.0/docker/images.json)。模型只读挂载，输出和内核缓存使用独立的可写存储。需要本地构建时，执行 `docker build --target runtime -t vflash:0.1.0 .`，然后在环境文件中选择该镜像。
+带版本号的镜像已发布到 [Docker Hub](https://hub.docker.com/r/hansimov/vflash/tags)，不可变摘要见[镜像清单](https://github.com/Hansimov/vflash/blob/v0.2.0/docker/images.json)。模型只读挂载，输出和内核缓存使用独立的可写存储。需要本地构建时，执行 `docker build --target runtime -t vflash:0.2.0 .`，然后在环境文件中选择该镜像。
 
 Compose 默认只将接口绑定到 **127.0.0.1:8000**。引擎没有内置身份验证；本地使用时保留这个绑定，需要远程访问时则先接入应用的鉴权层。
 
@@ -51,7 +51,7 @@ Compose 默认只将接口绑定到 **127.0.0.1:8000**。引擎没有内置身�
 拉取已发布的完整链路镜像：
 
 ```bash
-docker pull hansimov/vflash:0.1.0-pipeline
+docker pull hansimov/vflash:0.2.0-pipeline
 mkdir -p inputs outputs cache
 ```
 
@@ -65,7 +65,7 @@ docker run --rm --runtime=runc -e NVIDIA_VISIBLE_DEVICES=void \
   -v /absolute/model-directory:/models:ro \
   -v "$PWD/inputs:/inputs:ro" -v "$PWD/outputs:/outputs:rw" \
   -v "$PWD/cache:/cache:rw" \
-  hansimov/vflash:0.1.0-pipeline prepare-pipeline \
+  hansimov/vflash:0.2.0-pipeline prepare-pipeline \
   --assets /inputs/pipeline-assets.json --receipt /outputs/prepared-assets.json
 ```
 
@@ -79,16 +79,16 @@ docker run --rm --gpus device=0 --shm-size 4g \
   -v /absolute/model-directory:/models:ro \
   -v "$PWD/inputs:/inputs:ro" -v "$PWD/outputs:/outputs:rw" \
   -v "$PWD/cache:/cache:rw" \
-  hansimov/vflash:0.1.0-pipeline generate \
+  hansimov/vflash:0.2.0-pipeline generate \
   --prepared-assets /outputs/prepared-assets.json \
   --prompt-file /inputs/prompt.txt \
   --reference /inputs/subject.png --reference /inputs/setting.png \
   --output /outputs/video.mp4 --gpu 0 --seed 1234 --trust-local-code
 ```
 
-`--reference` 可以出现一至三次，使用 Ref4 生成五秒、24 fps 视频。进度 JSON 写入 stderr，最终结果写入 stdout。镜像不包含模型权重；请核对[完整链路能力和内存预算](./complete-pipeline)及[模型许可证](../reference/license)。
+使用 Ref4 时，`--reference` 可以出现一至三次。使用 T2VA 时，以 `--profile t2va-turbo4-exact-sm89` 准备 Base4 资产，并省略参考图。两者均生成五秒、24 fps 视频。进度 JSON 写入 stderr，最终结果写入 stdout。镜像不包含模型权重；请核对[完整链路能力和内存预算](./complete-pipeline)及[模型许可证](../reference/license)。
 
-如需从标签源码构建完整镜像，可执行 `docker build --target pipeline -t vflash:0.1.0-pipeline .`，并将命令中的镜像名替换为本地名称。
+如需从标签源码构建完整镜像，可执行 `docker build --target pipeline -t vflash:0.2.0-pipeline .`，并将命令中的镜像名替换为本地名称。
 
 镜像默认使用 UID/GID `10001`；示例改用当前用户，方便写入输出。显式设置 Inductor 缓存后，即使这个用户未登记在容器中也能运行；此设置也适用于 0.1.0 镜像。`/cache` 必须允许加载编译后的共享库，不要放在 `noexec` 挂载点。准备记录中的资产路径和文件身份必须保持一致。连续生成时，建议在独立容器进程中复用 Python `H3Pipeline`，避免每次执行命令都重新加载模型。
 

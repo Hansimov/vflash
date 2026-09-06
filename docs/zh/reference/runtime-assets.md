@@ -1,6 +1,6 @@
 # 运行资源
 
-latent 命令行从编译后的输入开始执行。SM89 的 Ref4 还提供[完整 Python 视频链路](../guide/complete-pipeline)和[官方权重编译器](../guide/compile-weights)。安装 Python 包不会自动下载权重或示例条件包。
+latent 命令行从编译后的输入开始执行。SM89 的 Ref4 和 T2VA Base4 还提供[完整 Python 视频链路](../guide/complete-pipeline)和[官方权重编译器](../guide/compile-weights)。安装 Python 包不会自动下载权重或示例条件包。
 
 下列命令行合同面向已经提供兼容编译资源的开发者。
 
@@ -38,7 +38,7 @@ Vflash 会检查资源声明的元数据。文件名正确并不代表兼容；�
 
 把模型资源和条件包保存在源码目录之外。使用 Docker 时，将它们以只读方式挂载，并为服务准备单独的可写输出目录。具体设置见 [Docker 部署](../guide/docker)。
 
-latent 命令行输出包含音视频张量的 safetensors 文件；Ref4 完整 Python 链路在内部处理编码、官方 VAE 解码，再发布 MP4。
+latent 命令行输出包含音视频张量的 safetensors 文件；完整 Python 链路在内部处理编码、官方 VAE 解码，再发布 MP4。
 
 模型和 LoRA 文件各自遵循相应的[许可证及使用条款](./license)，与 Vflash 源码许可证分开。
 

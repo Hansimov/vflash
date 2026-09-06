@@ -1,12 +1,14 @@
 # Generate a video
 
-Vflash 0.1.0 generates a five-second MP4 from a prompt and one to three ordered reference images. Use the Python API for repeated requests or the container CLI for a single generation. The complete pipeline supports Ref2VA Turbo4 on one RTX 4090 with 48 GB of memory.
+Vflash 0.2.0 generates a five-second MP4 from text alone, or from a prompt and one to three ordered reference images. Use the Python API for repeated requests or the container CLI for a single generation. The complete pipeline supports T2VA Base4 and Ref2VA Turbo4 on one RTX 4090 with 48 GB of memory.
 
 ## What runs where
 
 Vflash owns the native four-step denoiser, stage lifetimes, local reference loading and MP4 delivery. The text encoder and reference encoder use pinned Diffusers, Transformers and PEFT adapters. Video and audio decoding use the official H3 VAE code. These adapters are explicit dependencies; they are not described as new native kernels. No LightX2V runtime or application server is needed.
 
-Each request has one to three images, four denoising evaluations, a five-second result and the native 24 fps clock. Width and height must be multiples of 32, with at most `928 × 512` pixels and an aspect ratio between 1:4 and 4:1. The model generates 124 frames and delivery takes the first 120. The prompt is used verbatim. Images are numbered in the order supplied: `<Picture 1>`, `<Picture 2>` and `<Picture 3>`. Describe each image’s subject and role in your prompt. These are visual references, not frame positions or guaranteed keyframes.
+Each request uses four denoising evaluations, a five-second result and the native 24 fps clock. Width and height must be multiples of 32, with at most `928 × 512` pixels and an aspect ratio between 1:4 and 4:1. The model generates 124 frames and delivery takes the first 120. The prompt is used verbatim. For Ref2VA, the one to three images are numbered in the order supplied: `<Picture 1>`, `<Picture 2>` and `<Picture 3>`. Describe each image’s subject and role in your prompt. These are visual references, not frame positions or guaranteed keyframes.
+
+Choose the [fixed model profile](../reference/pipeline-profiles) before preparing assets. Ref2VA uses `transformer_ref` and Ref4 v0.1; T2VA uses `transformer` and Base4 v1.0. Each model has its own prepared assets and persistent pipeline. A request of the other mode is rejected before execution.
 
 ## Installation and assets
 
@@ -22,11 +24,11 @@ Prepare a local asset configuration with six explicit paths:
 
 | Field | Contents |
 | --- | --- |
-| `model_directory` | The official Diffusers component directories, including `transformer_ref`, from `MiniMaxAI/MiniMax-H3` at `42ed227ee7df40d41602854ae760620d6eb651fe` |
-| `adapter_path` | The pinned Ref2VA Turbo4 v0.1 BF16 adapter described in [runtime assets](../reference/runtime-assets) |
+| `model_directory` | The official Diffusers components from `MiniMaxAI/MiniMax-H3` at `42ed227ee7df40d41602854ae760620d6eb651fe`, with the selected `transformer_ref` or `transformer` component |
+| `adapter_path` | The selected profile's pinned BF16 adapter from [runtime assets](../reference/runtime-assets) |
 | `decoder_directory` | The `FL2VA` directory from that same official H3 revision, containing `video_vae` and `audio_vae` |
-| `artifact` | A complete BF16 Ref4 native artifact with runtime LoRA residuals |
-| `schedule_overlay` | Its matching four-evaluation training-Euler schedule, video shift 12 and audio shift 3 |
+| `artifact` | The selected profile's complete BF16 native artifact with runtime LoRA residuals |
+| `schedule_overlay` | Matching four-evaluation training-Euler schedule: video/audio shifts 12/3 for Ref4, 6/3 for T2VA |
 | `auxiliary_tensor` | Its matching native input and output tensors |
 
 The last three are prepared native assets, not arbitrary upstream checkpoint files. Follow the [official-weight compiler recipe](./compile-weights) to create them, or check the [asset contracts](../reference/runtime-assets) before supplying an existing artifact. A ready-made model package is not currently published.
@@ -51,7 +53,7 @@ vflash generate \
   --output video.mp4 --trust-local-code
 ```
 
-Supply one, two or three `--reference` arguments. Progress is emitted as JSON lines on stderr; stdout contains the final result. Each command starts and closes its own models. For a ready-made environment and complete mounting example, see [Docker generation](./docker#pipeline).
+Supply one, two or three `--reference` arguments for Ref2VA. For T2VA, prepare with `--profile t2va-turbo4-exact-sm89` and omit all `--reference` arguments. In Python, use `VideoRequest(prompt=..., seed=...)`. Progress is emitted as JSON lines on stderr; stdout contains the final result. Each command starts and closes its own models. For a ready-made environment and complete mounting example, see [Docker generation](./docker#pipeline).
 
 ## One owned pipeline
 

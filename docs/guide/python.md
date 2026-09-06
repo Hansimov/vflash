@@ -1,6 +1,6 @@
 # Python integration
 
-Use a `NativeEngineSession` when your application already prepares compatible conditioning bundles and needs to reuse loaded weights. A session owns one fixed profile and GPU group, and processes requests **serially**.
+Use [`H3Pipeline`](./complete-pipeline) to generate complete videos from text or reference images on SM89. Use a `NativeEngineSession` when your application already prepares compatible conditioning bundles and needs to reuse loaded weights. A session owns one fixed profile and GPU group, and processes requests **serially**.
 
 For process isolation and an HTTP queue, use the [Docker service](./docker) instead.
 

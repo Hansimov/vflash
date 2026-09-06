@@ -36,10 +36,19 @@ def test_released_model_identities_and_adapter_scaling_remain_distinct():
     assert transformer_identity(base.definition.id)["transformer_sha256"] == (
         "b63ed7be75bb888ac4c46355c12f6273791f26c06773162c0e51152cd94ee05e"
     )
-    assert (
-        transformer_identity("ref2va-turbo4-exact-sm86")["transformer_sha256"]
-        == (transformer_identity()["transformer_sha256"])
-    )
+
+
+def test_unqualified_complete_hardware_fails_before_asset_ingestion(tmp_path):
+    adapter = tmp_path / "unread-adapter"
+    adapter.write_bytes(b"not a model payload")
+    with pytest.raises(ContractError, match="unsupported complete"):
+        raw_assets.prepare_weights(
+            tmp_path,
+            adapter,
+            tmp_path / "receipt.json",
+            profile_id="ref2va-turbo4-exact-sm86",
+        )
+    assert not (tmp_path / "receipt.json").exists()
 
 
 @pytest.mark.parametrize("profile_id", COMPLETE_MODEL_PROFILES)
@@ -162,12 +171,8 @@ def test_official_call_keeps_mode_specific_inputs_and_reference_order(monkeypatc
         assert "references" not in calls[0]
 
 
-@pytest.mark.parametrize(
-    "profile_id,peer", [("t2va-turbo4-exact-sm89", False), ("ref2va-turbo4-exact-sm86", True)]
-)
-def test_complete_constructor_owns_one_explicit_device_group(
-    monkeypatch, tmp_path, profile_id, peer
-):
+@pytest.mark.parametrize("profile_id", COMPLETE_MODEL_PROFILES)
+def test_complete_constructor_owns_one_explicit_device_group(monkeypatch, tmp_path, profile_id):
     from vflash.hardware import NvidiaDevice
     from vflash.pipeline.assets import PreparedPipelineAssets
     from vflash.pipeline.contracts import PipelineAssets
@@ -179,23 +184,22 @@ def test_complete_constructor_owns_one_explicit_device_group(
     device = NvidiaDevice(
         0, "primary-test-device", "test", 48, profile.hardware.compute_capability, 300
     )
-    second = NvidiaDevice(1, "peer-test-device", "test", 20, "8.6", 300) if peer else None
     plans = []
     monkeypatch.setattr("vflash.pipeline.runtime.media_executables", lambda: None)
     monkeypatch.setattr("vflash.pipeline.runtime.validate_adapter_dependencies", lambda: None)
     monkeypatch.setattr(H3Pipeline, "_load_stages", lambda self, plan: plans.append(plan))
-    with H3Pipeline(
-        prepared, device=device, peer_device=second, trust_local_code=True
-    ) as pipeline:
+    with H3Pipeline(prepared, device=device, trust_local_code=True) as pipeline:
         bad = (
-            VideoRequest("A scene.", Path("missing")) if not peer else VideoRequest("A scene.")
+            VideoRequest("A scene.", Path("missing"))
+            if profile.definition.mode.value == "t2va"
+            else VideoRequest("A scene.")
         )
         with pytest.raises(ContractError, match="request mode"):
             pipeline.generate(bad, tmp_path / "bad.mp4")
         assert not pipeline._closed
     assert plans[0].profile.id == profile_id
-    assert plans[0].parallel_strategy == ("sequence-head" if peer else "single")
-    assert plans[0].gpu_uuids == ((device.uuid, second.uuid) if peer else (device.uuid,))
+    assert plans[0].parallel_strategy == "single"
+    assert plans[0].gpu_uuids == (device.uuid,)
 
 
 def test_pipeline_assets_reject_wrong_mode_adapter_and_gpu_target(monkeypatch, tmp_path):

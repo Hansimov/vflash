@@ -164,7 +164,7 @@ def test_adaln_padding_does_not_influence_real_rows():
 
 @pytest.mark.parametrize(
     "profile_id",
-    ["ref2va-turbo4-exact-sm89", "ref2va-turbo4-exact-sm86", "t2va-turbo4-exact-sm89"],
+    ["ref2va-turbo4-exact-sm89", "t2va-turbo4-exact-sm89"],
 )
 def test_artifact_schema_five_loads_with_no_replay_and_keeps_schema_four(
     monkeypatch, tmp_path, profile_id
@@ -245,12 +245,9 @@ def test_artifact_schema_five_loads_with_no_replay_and_keeps_schema_four(
     with pytest.raises(ValueError, match="AdaLN rows"):
         runtime.load_h3_runtime_artifact(tmp_path, verify_content_hashes=False)
     manifest["blocks"][0]["adaln_rows"] = 6 if profile.definition.mode.value == "t2va" else 9
-    wrong = (
-        "ref2va-turbo4-exact-sm89"
-        if profile.architecture == "sm86"
-        else "ref2va-turbo4-exact-sm86"
+    manifest["target"] = asdict(
+        runtime.resolve_h3_artifact_target("rtx3080-20g-sm86-bf16-block-ring")
     )
-    manifest["target"] = asdict(compile_target(wrong))
     path.write_text(json.dumps(manifest))
     with pytest.raises(ValueError, match="target differs"):
         runtime.load_h3_runtime_artifact(tmp_path, verify_content_hashes=False)

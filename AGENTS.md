@@ -16,7 +16,7 @@ Keep it installable from this repository alone, without external project paths o
 
 Inspect the current implementation and supported profiles before extending a surface. Preserve numerical evidence,
 licenses and attribution, but do not treat old module layout as a constraint. State the actual runnable boundary;
-the Ref4 SM89 Python/container pipeline generates complete videos from one to three ordered references; other profiles retain their latent interface.
+the SM89 Python/container pipeline generates complete Ref4 videos from one to three ordered references, or Base4 T2VA videos from text alone. SM86 and Turbo8 retain their latent interface.
 
 Install development dependencies with `python -m pip install -e '.[dev,server]'`. Use focused tests during iteration;
 public commits must pass the existing privacy hook. Never commit model payloads, private cases, credentials or GPU

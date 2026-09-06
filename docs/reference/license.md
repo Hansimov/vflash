@@ -19,7 +19,7 @@ The runtime uses [PyTorch](https://github.com/pytorch/pytorch) and [Triton](http
 
 Acknowledgement does not imply that every referenced implementation or adapter is included in this release. The supported runtime configurations are listed under [profiles and hardware](../guide/profiles).
 
-The complete-pipeline development adapter uses [Diffusers](https://github.com/huggingface/diffusers), [Transformers](https://github.com/huggingface/transformers), [Accelerate](https://github.com/huggingface/accelerate), [PEFT](https://github.com/huggingface/peft), and the official decoder code distributed with the pinned MiniMax H3 model. Local MP4 delivery uses [FFmpeg](https://ffmpeg.org/legal.html). Each dependency retains its own license; the Vflash repository does not redistribute their model payloads.
+The complete pipeline uses [Diffusers](https://github.com/huggingface/diffusers), [Transformers](https://github.com/huggingface/transformers), [Accelerate](https://github.com/huggingface/accelerate), [PEFT](https://github.com/huggingface/peft), and the official decoder code distributed with the pinned MiniMax H3 model. Local MP4 delivery uses [FFmpeg](https://ffmpeg.org/legal.html). Each dependency retains its own license; the Vflash repository does not redistribute their model payloads.
 
 ## Complete pipeline dependencies
 

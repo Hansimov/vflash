@@ -2,7 +2,7 @@ name: vflash
 
 services:
   native-core:
-    image: "${VFLASH_IMAGE:-hansimov/vflash:0.1.0}"
+    image: "${VFLASH_IMAGE:-hansimov/vflash:0.2.0}"
     build:
       context: ..
       target: runtime

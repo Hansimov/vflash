@@ -1,44 +1,40 @@
-# Complete pipeline profiles
+# Complete model profiles
 
-This development branch extends the complete pipeline beyond the Ref4 SM89 profile in the published [0.1.0 release](./releases). The new T2VA and SM86 paths are undergoing container qualification; this page describes their configuration contract, not additional released support.
+A prepared pipeline uses one fixed model, adapter and scheduler. Vflash 0.2.0 supports these complete pipelines on one RTX 4090 48 GB:
 
-Each prepared pipeline has one fixed model profile. The profile binds the Transformer checkpoint, distilled adapter, scheduler and GPU architecture together. A running pipeline does not switch between Base and Ref weights.
-
-| Profile | Transformer component | Adapter | Video/audio shifts | Hardware |
+| Profile | Input | Transformer | Adapter | Video/audio shifts |
 | --- | --- | --- | --- | --- |
-| `ref2va-turbo4-exact-sm89` | `transformer_ref` | Ref Turbo4 v0.1 | 12 / 3 | SM89 48 GB |
-| `ref2va-turbo4-exact-sm86` | `transformer_ref` | Ref Turbo4 v0.1 | 12 / 3 | SM86 20 GB, explicit cooperating pair supported by the native plan |
-| `t2va-turbo4-exact-sm89` | `transformer` | Base Turbo4 v1.0 | 6 / 3 | SM89 48 GB |
+| `ref2va-turbo4-exact-sm89` | Prompt and 1–3 ordered images | `transformer_ref` | Ref Turbo4 v0.1, alpha 8 / rank 128 | 12 / 3 |
+| `t2va-turbo4-exact-sm89` | Prompt without images | `transformer` | Base Turbo4 v1.0, alpha 128 / rank 128 | 6 / 3 |
 
-All three use four evaluations and separate BF16 adapter residuals. Base4 v1.0 uses rank 128 and alpha 128; Ref4 v0.1 uses rank 128 and alpha 8. A newer adapter with a similar filename does not satisfy these fixed identities. Refer to the pinned [asset inventory](./runtime-assets) and upstream model terms before obtaining weights.
+Both use four evaluations, BF16 weights and separate adapter residuals. The default is Ref4. A running pipeline does not switch between Base and Ref weights. Prepare separate assets and sessions when an application needs both modes. See [hardware and validation scope](../guide/profiles) for the native interfaces; complete SM86 generation is not supported in this release.
 
-## Prepare and compile
+## Prepare T2VA
 
-The compiler selects its contract when raw weights are prepared:
+Follow the [official-weight download recipe](../guide/compile-weights), selecting `t2va-turbo4-exact-sm89`. Then prepare the Base checkpoint and its exact pinned adapter:
 
-```sh
+```bash
 python -m vflash.compiler prepare \
   --profile t2va-turbo4-exact-sm89 \
-  --transformer /models/MiniMax-H3/transformer \
-  --adapter /models/base4-v1.0.safetensors \
-  --receipt /models/base4-weights.json
+  --transformer models/minimax-h3/transformer \
+  --adapter models/adapters/minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors \
+  --receipt base4-weights.json
 python -m vflash.compiler compile \
-  --receipt /models/base4-weights.json --output /models/base4-compiled --gpu 0
+  --receipt base4-weights.json --output models/base4-native --gpu 0
 vflash prepare-pipeline \
   --profile t2va-turbo4-exact-sm89 \
-  --assets /models/base4-assets.json --receipt /models/base4-pipeline.json
+  --assets base4-assets.json --receipt base4-pipeline.json
+vflash generate \
+  --prepared-assets base4-pipeline.json --prompt-file prompt.txt \
+  --output video.mp4 --gpu 0 --seed 1234 --trust-local-code
 ```
 
-The six asset paths retain their [existing schema](../guide/complete-pipeline). The explicit profile belongs to the receipt, rather than being inferred from a path or a filename. A compiler uses an exclusively assigned GPU of the profile's architecture; it does not acquire a deployment's device lease itself. Preparation verifies official bytes once, and startup checks local file identity without rehashing the large weights.
+The six fields in `base4-assets.json` follow the [complete pipeline asset schema](../guide/complete-pipeline). Use the Base adapter and the newly compiled Base artifact, schedule and auxiliary paths. The official decoder directory and common encoders can be shared as immutable files.
 
-The time-embedding MLP and AdaLN projections preserve each evaluation's original row count. Ref4 has `(2, 3, 3, 3)` distinct timestep rows; T2VA has `(1, 2, 2, 2)`. Padding occurs after each learned projection. The original Ref4 SM89 model identity, asset receipt and Python compiler entrypoints remain compatible.
+Omit `--reference` for T2VA. Its Python request is `VideoRequest(prompt=..., seed=...)`. Ref2VA accepts one to three references and preserves their order. Unbound `<Picture N>` labels and mode mismatches are rejected before execution.
 
-## Requests and ownership
+The Base adapter filename includes `fl2v`; this release qualifies it for T2VA, not first/last-frame generation. Newer Base4 adapters are not interchangeable with this pinned v1.0 profile. Revision, file hash and license links are in [runtime assets](./runtime-assets).
 
-A `VideoRequest` without images is T2VA. One to three ordered images select Ref2VA. Passing a request to a pipeline of the other mode fails before any encoding or denoising stage starts. `<Picture N>` labels must refer to supplied images.
+## Resource lifetime
 
-```python
-request = VideoRequest(prompt="A structured H3 text-to-video description.", seed=17)
-```
-
-The CLI follows the same rule: omit `--reference` for T2VA. For a prepared SM86 profile, `--gpu 0 --peer-gpu 1` selects an explicit pair, using the native `sequence-head` strategy by default. The Python equivalents are `device=...`, `peer_device=...` and optional `strategy=...`. The text encoder and VAE run serially on the primary device; the native denoiser owns both devices. Session shutdown retires the stages before releasing the native GPU group. Queueing and resource borrowing remain application responsibilities.
+Prepare and hash files once in their final location. Startup checks the resulting local receipt without rereading all model payloads. A persistent pipeline initializes before requests, uses one GPU serially for encoding, denoising and decoding, and retains CPU model copies for reuse. Report preparation, construction, first request and warm request separately. Cancelling an active request retires the pipeline; create a new instance before further work.

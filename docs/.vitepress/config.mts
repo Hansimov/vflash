@@ -29,6 +29,7 @@ const sidebar = (zh = false) => {
     {
       text: zh ? '参考' : 'Reference',
       items: [
+        { text: zh ? '完整链路模型配置' : 'Complete model profiles', link: `${prefix}/reference/pipeline-profiles` },
         { text: zh ? '实现方式' : 'How it works', link: `${prefix}/reference/architecture` },
         { text: zh ? '实测数据' : 'Benchmark results', link: `${prefix}/reference/benchmarks` },
         { text: zh ? '版本更新' : 'Release notes', link: `${prefix}/reference/releases` },

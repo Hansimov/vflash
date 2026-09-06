@@ -1,6 +1,20 @@
 # Release notes
 
-The current release is **0.1.0**. Its complete Ref4 pipeline supports one to three ordered reference images, Python integration and a container command. See [the support table](../guide/profiles) for the separate complete-video and native-latent interfaces.
+The current release is **0.2.0**. Generate a video from text alone or from one to three ordered reference images on an RTX 4090 48 GB. See [the support table](../guide/profiles) for the separate complete-video and native-latent interfaces.
+
+## 0.2.0 · complete text-to-video {#v0-2-0}
+
+[Source tag](https://github.com/Hansimov/vflash/tree/v0.2.0)
+
+The Python and container pipelines now generate a five-second, 24 fps MP4 without reference images. Select `t2va-turbo4-exact-sm89`, prepare the fixed Base4 v1.0 assets and omit `--reference`. Ref4 keeps its one-to-three-image interface. Each mode owns separate prepared assets and a persistent pipeline; mismatched requests are rejected before execution. The [model-profile guide](./pipeline-profiles) shows the complete T2VA commands.
+
+The official-weight compiler now creates Base4 assets as well as Ref4 assets. On SM89, all 50 compiled Base4 blocks, four schedule tensors and nine auxiliary tensors matched independently prepared BF16 assets exactly. The actual installed container then completed two requests for one fixed 928 × 512 case: all 14 conditioning tensors and final FP32 video/audio latents matched independent controls. Every repeated raw video frame matched; both MP4s decoded fully with 120 frames and five-second stereo audio. Cancelling another request after its first denoising evaluation removed temporary output and retired the pipeline.
+
+These checks establish implementation and resource lifetime for this workload, not broad instruction or audio quality. The Ref4 path retains its 0.1.0 multi-reference qualification. Small repeat differences in the official audio VAE remain possible. Both complete profiles use BF16, pinned LoRAs and strict original audio delivery; this release does not include W8, dynamic LoRA or first/last-frame generation. Complete SM86 generation is not yet qualified and is rejected; its native interfaces remain available.
+
+The images also provide a writable Inductor cache for arbitrary user IDs. Final image checks cover installed package identity, supported profile contracts and CPU startup; the cache-directory and support-list changes preserve the GPU-qualified numerical implementation.
+
+Published Linux AMD64 images: [`hansimov/vflash:0.2.0-pipeline`](https://hub.docker.com/r/hansimov/vflash/tags) for complete generation and `hansimov/vflash:0.2.0` for the native HTTP service. Both support anonymous pulls. The [immutable digest inventory](https://github.com/Hansimov/vflash/blob/v0.2.0/docker/images.json) records their source and qualification. Model weights are separate downloads under their own licenses.
 
 ## 0.1.0 · multi-reference video generation {#v0-1-0}
 
@@ -72,6 +86,6 @@ Added explicit block streaming on a 4090 and completed-step callbacks for integr
 
 ## Availability {#availability}
 
-The package provides the listed **BF16 Ref2VA Turbo4/Turbo8 and SM89 T2VA Turbo4 denoisers**, plus the **single-SM89 Ref4 Python/container pipeline and official-weight compiler**. The compiler creates Ref4 assets; assets for other profiles must already be prepared. Published container images are available separately; model weights are not bundled.
+The package provides the listed **BF16 Ref2VA Turbo4/Turbo8 and SM89 T2VA Turbo4 denoisers**, plus the **single-SM89 Ref4 and T2VA Python/container pipelines and official-weight compiler**. The compiler creates Ref4 and Base4 assets for SM89; assets for other native profiles must already be prepared. Published container images are available separately; model weights are not bundled.
 
 New modes, adapters and hardware require their own installation, numerical and decoded-output checks before entering the support table.

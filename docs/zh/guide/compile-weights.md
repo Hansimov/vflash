@@ -1,29 +1,36 @@
-# 从官方权重准备 Ref4
+# 编译官方权重
 
-编译器可以从固定版本的 H3 官方权重和 Ref4 v0.1 LoRA，直接准备 BF16 Ref2VA Turbo4 运行资产。不需要捕获请求、参考图片或其他项目的实验资产。首个目标为 SM89。全部 1,250 个层内张量、4 个调度张量和 9 个辅助张量均与已验证的 BF16 运行资产精确一致。
+编译器从固定 H3 官方权重和匹配的 LoRA 准备运行资产，支持 SM89 上的 Ref4 v0.1 和 T2VA Base4 v1.0。不需要捕获请求、参考图片或其他项目的实验资产。两种配置的全部 50 层、调度和辅助张量均已与固定控制逐位核对。
 
-发布验收将本次新编译资产与固定官方编码器及 VAE 组合，生成了一个 928 × 512、五秒、24 fps 的完整 MP4，并在第二个请求完成一步去噪后取消。全部 14 个条件张量、最终音视频 latent 与已核验控制精确一致，120 帧解码画面也一致。这证明该负载的官方权重到成片安装链路闭合，不代表广泛的质量或硬件资格。
+Ref4 验收将新编译资产与固定官方编码器及 VAE 组合，生成了一个 928 × 512、五秒、24 fps 的完整 MP4，并在第二个请求完成一步去噪后取消。全部 14 个条件张量、最终音视频 latent 与已核验控制精确一致，120 帧解码画面也一致。T2VA 在 [0.2.0](../reference/releases#v0-2-0) 中另行通过了编译、完整容器生成和取消检查。这些证明对应负载的官方权重到成片安装链路闭合，不代表广泛的质量或硬件资格。
+
+T2VA 的 Base4 使用 alpha 128，Ref4 使用 alpha 8；两者 rank 都为 128。下面的命令默认使用 Ref4，完整 T2VA 命令见[模型配置](../reference/pipeline-profiles)。
 
 ## 下载源文件
 
 在发布版源码中执行 `python -m pip install '.[pipeline]'`。编译使用 Linux、PyTorch 2.11.0、CUDA 13.0 和明确分配的 SM89 显卡。下载与文件核验仅使用 CPU。官方文件与 LoRA 合计约 146 GiB，编译输出还需要至少 48 GiB 可用磁盘空间。模型文件遵循各自的[上游许可证](../reference/license)。
 
-以下代码按固定版本和 Vflash 内置清单下载 Ref 模型、文本及参考图编码器、官方解码器，不下载独立的 Base 模型：
+以下代码只下载所选配置的模型和公共组件。默认是 Ref4；改为 `model_profile("t2va-turbo4-exact-sm89")` 可下载 T2VA Base4 资源。两种模式的原生资产和准备记录分别创建。
 
 ```python
 from pathlib import Path
 from huggingface_hub import hf_hub_download, snapshot_download
-from vflash.model_assets import MODEL_REVISION, upstream_inventory
-from vflash.native.h3_distilled_lora import LIGHTX_H3_REF_TURBO4_CONTRACT
+from vflash.model_assets import MODEL_REVISION, model_profile, upstream_inventory
 
 root = Path("models").resolve()
+profile = model_profile("ref2va-turbo4-exact-sm89")
+patterns = [
+    name for name in upstream_inventory()
+    if not name.startswith(("transformer/", "transformer_ref/"))
+    or name.startswith(profile.transformer_component + "/")
+]
 snapshot_download(
     "MiniMaxAI/MiniMax-H3",
     revision=MODEL_REVISION,
-    allow_patterns=list(upstream_inventory()),
+    allow_patterns=patterns,
     local_dir=root / "minimax-h3",
 )
-adapter = LIGHTX_H3_REF_TURBO4_CONTRACT
+adapter = profile.adapter
 hf_hub_download(
     adapter.repository,
     adapter.filename,
@@ -88,4 +95,4 @@ prepare_pipeline_assets(assets, Path("prepared-assets.json"))
 
 新资产采用 schema 5，调度采用 schema 2。来源分别绑定基础权重摘要，以及 LoRA 的仓库、版本、摘要、alpha 8、rank 128、strength 1 和编译方法，不编造请求或 replay 标识。保留的组合 transformer 摘要与 `oracle` 字段用于匹配现有条件编码合同，不代表编译器执行过一次参考生成。旧 schema-4 资产和 schema-1 调度仍按原有来源合同读取。
 
-此编译器不量化权重、不合并 LoRA，也不编译 Turbo8 或 Base T2VA。它不替代质量评估。更换模型、LoRA 或调度后，需要独立实现与验证。
+此编译器不量化权重、不合并 LoRA，也不编译 Turbo8 或 SM86 配置。它不替代质量评估。更换模型、LoRA 或调度后，需要独立实现与验证。
