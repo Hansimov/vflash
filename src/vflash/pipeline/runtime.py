@@ -124,7 +124,7 @@ class H3Pipeline:
             raise ContractError(
                 "this pipeline is busy; schedule the next request after completion"
             )
-        reference = None
+        references: list[DecodedReference] = []
         self._active_thread_id = threading.get_ident()
         try:
             if self._closed:
@@ -133,11 +133,14 @@ class H3Pipeline:
             # an otherwise healthy session. Read/hash exactly the decoded bytes.
             self.prepared.check_unchanged()
             reference_started = time.monotonic()
-            reference = read_reference(request.reference)
+            for path in request.ordered_references:
+                references.append(read_reference(path))
             reference_loading_seconds = time.monotonic() - reference_started
             input_preparation_seconds = time.monotonic() - started
             try:
-                result = self._generate_one(request, reference, output_path, progress=progress)
+                result = self._generate_one(
+                    request, tuple(references), output_path, progress=progress
+                )
             except BaseException as exc:
                 try:
                     self._close_owned()
@@ -147,7 +150,7 @@ class H3Pipeline:
                     clear_frames(exc.__traceback__)
                 raise
         finally:
-            if reference is not None:
+            for reference in reversed(references):
                 reference.close()
             self._active_thread_id = None
             self._lock.release()
@@ -170,7 +173,7 @@ class H3Pipeline:
     def _generate_one(
         self,
         request: VideoRequest,
-        reference: DecodedReference,
+        references: tuple[DecodedReference, ...],
         output_path: Path,
         *,
         progress: Callable[[PipelineProgress], None] | None,
@@ -194,7 +197,7 @@ class H3Pipeline:
             report("encoding", 0, 1)
             weight_resume_seconds = self._conditioner.resume_cuda()
             call_started = time.monotonic()
-            bundle = self._conditioner.capture(request, reference, directory / "conditioning")
+            bundle = self._conditioner.capture(request, references, directory / "conditioning")
             capture_call_seconds = time.monotonic() - call_started
             suspend_seconds = self._conditioner.suspend_cuda()
             report("encoding", 1, 1)

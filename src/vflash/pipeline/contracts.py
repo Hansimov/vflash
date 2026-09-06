@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+import re
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -48,18 +49,21 @@ class PipelineAssets:
 
 @dataclass(frozen=True)
 class VideoRequest:
-    """One image-guided five-second video at the native 24 fps clock.
+    """An image-guided five-second video at the native 24 fps clock.
 
     The prompt is used verbatim; an application may format or polish it before
-    this boundary. Its image label is ``<Picture 1>``. Other modes and clocks
+    this boundary. Images are ordered and labeled ``<Picture 1>`` through
+    ``<Picture 3>``. ``reference`` preserves the original single-image API;
+    use ``references`` for an ordered tuple instead. Other modes and clocks
     remain separate profiles until their complete pipeline has been qualified.
     """
 
     prompt: str
-    reference: Path
+    reference: Path | None = None
     width: int = 928
     height: int = 512
     seed: int = 0
+    references: tuple[Path, ...] = field(default=(), kw_only=True)
 
     def __post_init__(self) -> None:
         if (
@@ -68,8 +72,21 @@ class VideoRequest:
             or len(self.prompt) > 65536
         ):
             raise ContractError("prompt must contain 1-65536 characters")
-        if not isinstance(self.reference, Path):
+        if self.reference is not None and not isinstance(self.reference, Path):
             raise ContractError("reference must be a local pathlib.Path")
+        if not isinstance(self.references, tuple) or any(
+            not isinstance(path, Path) for path in self.references
+        ):
+            raise ContractError("references must be an ordered tuple of local pathlib.Paths")
+        if self.reference is not None and self.references:
+            raise ContractError("provide reference or references, not both")
+        if not 1 <= len(self.ordered_references) <= 3:
+            raise ContractError("Ref2VA requires one to three reference images")
+        if any(
+            index not in {str(value) for value in range(1, len(self.ordered_references) + 1)}
+            for index in re.findall(r"<Picture (\d+)>", self.prompt)
+        ):
+            raise ContractError("a prompt picture label has no corresponding reference image")
         if any(
             type(value) is not int or value < 32 or value % 32
             for value in (self.width, self.height)
@@ -77,10 +94,14 @@ class VideoRequest:
             raise ContractError("the canvas must use positive multiples of 32")
         if self.width * self.height > 928 * 512 or not 0.25 <= self.width / self.height <= 4:
             raise ContractError(
-                "this preview supports a canvas up to 928x512 pixels at 1:4-4:1"
+                "this pipeline supports a canvas up to 928x512 pixels at 1:4-4:1"
             )
         if type(self.seed) is not int or not 0 <= self.seed < 2**63:
             raise ContractError("seed must be an integer between 0 and 2^63-1")
+
+    @property
+    def ordered_references(self) -> tuple[Path, ...]:
+        return self.references or ((self.reference,) if self.reference is not None else ())
 
     @property
     def model_frames(self) -> int:

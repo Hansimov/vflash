@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -297,3 +298,74 @@ def test_request_limits_are_cpu_contracts(tmp_path, changes):
     values = {"prompt": "An example scene.", "reference": tmp_path / "reference.png", **changes}
     with pytest.raises(ContractError):
         VideoRequest(**values)
+
+
+def test_ordered_multi_reference_request_keeps_labels_and_seed_replacement(tmp_path):
+    images = tuple(tmp_path / f"image-{index}.png" for index in range(3))
+    request = VideoRequest(
+        "<Picture 3> is the setting; <Picture 1> and <Picture 2> are the subjects.",
+        references=images,
+    )
+    assert request.ordered_references == images
+    assert replace(request, seed=19).ordered_references == images
+    legacy = VideoRequest("<Picture 1> moves.", images[0])
+    assert replace(legacy, seed=19).ordered_references == (images[0],)
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        {},
+        {"references": (Path("one"),) * 4},
+        {"reference": Path("one"), "references": (Path("two"),)},
+        {"references": [Path("one")]},
+        {"references": ("one",)},
+        {"prompt": "<Picture 0>", "reference": Path("one")},
+        {"prompt": "<Picture 2>", "reference": Path("one")},
+    ],
+)
+def test_ambiguous_or_invalid_reference_contracts_fail_before_cuda(values):
+    with pytest.raises(ContractError):
+        VideoRequest(**{"prompt": "A scene.", **values})
+
+
+def test_multi_reference_loading_preserves_order_and_closes_all_images(tmp_path, monkeypatch):
+    pipeline, _events = _pipeline()
+    paths = tuple(tmp_path / str(index) for index in range(3))
+    loaded, closed, captured = [], [], []
+
+    def read(path):
+        loaded.append(path)
+        return SimpleNamespace(image=path, close=lambda: closed.append(path))
+
+    monkeypatch.setattr("vflash.pipeline.runtime.read_reference", read)
+    original = pipeline._conditioner.capture
+
+    def capture(request, references, directory):
+        captured.extend(reference.image for reference in references)
+        return original(request, references, directory)
+
+    pipeline._conditioner.capture = capture
+    pipeline.generate(VideoRequest("Three references.", references=paths), tmp_path / "out.mp4")
+    assert loaded == captured == list(paths)
+    assert closed == list(reversed(paths))
+
+
+def test_invalid_later_image_closes_previous_images_without_retiring_models(
+    tmp_path, monkeypatch
+):
+    pipeline, events = _pipeline()
+    paths = (tmp_path / "good.png", tmp_path / "bad.png")
+    closed = []
+
+    def read(path):
+        if path == paths[1]:
+            raise ContractError("invalid second image")
+        return SimpleNamespace(image=path, close=lambda: closed.append(path))
+
+    monkeypatch.setattr("vflash.pipeline.runtime.read_reference", read)
+    with pytest.raises(ContractError, match="second image"):
+        pipeline.generate(VideoRequest("A scene.", references=paths), tmp_path / "out.mp4")
+    assert closed == [paths[0]]
+    assert not events and not pipeline._closed and not pipeline._lock.locked()
+    assert not (tmp_path / "out.mp4").exists()

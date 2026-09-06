@@ -71,8 +71,8 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
 
 CMD ["python", "-m", "vflash.server"]
 
-# Optional complete Python pipeline. Its default HTTP service keeps the latent
-# contract; applications invoke H3Pipeline directly for complete videos.
+# Complete Python and command-line pipeline. The separate runtime target keeps
+# the resident HTTP bundle-to-latent service.
 FROM runtime AS pipeline
 USER root
 RUN apt-get update \
@@ -87,6 +87,9 @@ RUN python -m pip install --timeout 120 --retries 5 pip==25.3
 RUN python -m pip install --timeout 120 --retries 5 --resume-retries 5 'vflash[pipeline]'
 USER 10001:10001
 RUN python -c "import torch; from vflash.adapters.diffusers_h3 import validate_adapter_dependencies; from vflash.media.encoding import media_executables; validate_adapter_dependencies(); media_executables(); assert not torch.cuda.is_initialized()"
+HEALTHCHECK NONE
+ENTRYPOINT ["vflash"]
+CMD ["--help"]
 
 # A plain build and the existing Compose service keep the native-only image.
 FROM runtime AS default

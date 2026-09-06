@@ -23,6 +23,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     commands.add_parser("profiles", help="list the available GPU and model configurations")
 
+    from vflash.pipeline.cli import add_pipeline_commands
+
+    add_pipeline_commands(commands)
+
     plan = commands.add_parser(
         "plan", help="resolve a profile onto one physical GPU or a cooperating pair"
     )
@@ -62,6 +66,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "doctor":
             print(json.dumps([asdict(item) for item in discover_nvidia_devices()], indent=2))
             return 0
+        if args.command in {"prepare-pipeline", "generate"}:
+            from vflash.pipeline.cli import run_pipeline_command
+
+            return run_pipeline_command(args)
         catalog = (
             ProfileCatalog.load(args.catalog) if args.catalog else ProfileCatalog.bundled()
         )

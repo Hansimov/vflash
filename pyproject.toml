@@ -4,14 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "vflash"
-version = "0.1.0a7"
+version = "0.1.0"
 description = "A hardware-specialized MiniMax H3 inference engine for RTX 3080 and RTX 4090"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 authors = [{ name = "Vflash contributors" }]
 classifiers = [
-  "Development Status :: 2 - Pre-Alpha",
   "License :: OSI Approved :: Apache Software License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",

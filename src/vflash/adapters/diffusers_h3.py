@@ -247,7 +247,7 @@ class DiffusersConditioner:
         self._torch.cuda.empty_cache()
         return time.monotonic() - started
 
-    def _invoke(self, request: VideoRequest, reference: DecodedReference) -> None:
+    def _invoke(self, request: VideoRequest, references: tuple[DecodedReference, ...]) -> None:
         from diffusers.modular_pipelines.minimax_h3 import MiniMaxH3ImageReference
 
         self.pipe(
@@ -258,25 +258,29 @@ class DiffusersConditioner:
             num_inference_steps=5,
             generator=self._torch.Generator().manual_seed(request.seed),
             output=["videos", "audio", "sampling_rate"],
-            references=[MiniMaxH3ImageReference(image=reference.image)],
+            references=[
+                MiniMaxH3ImageReference(image=reference.image) for reference in references
+            ],
         )
 
     def capture(
         self,
         request: VideoRequest,
-        reference: DecodedReference,
+        references: tuple[DecodedReference, ...],
         directory: Path,
     ) -> H3ConditioningBundle:
         self._require_open()
         if not self._cuda_active:
             raise ContractError("resume the conditioner before encoding a request")
+        if len(references) != len(request.ordered_references):
+            raise ContractError("decoded reference count differs from the request")
         if directory.exists() and any(directory.iterdir()):
             raise ContractError("conditioning output must be a new or empty directory")
         capture = H3ConditioningCaptureSession(directory)
         try:
             capture.install(self.transformer)
             try:
-                self._invoke(request, reference)
+                self._invoke(request, references)
             except H3ConditioningCaptureComplete as complete:
                 self._torch.cuda.synchronize(self.device)
                 clear_frames(complete.__traceback__)
@@ -300,11 +304,12 @@ class DiffusersConditioner:
                 ],
                 "references": [
                     {
-                        "picture_index": 1,
+                        "picture_index": index,
                         "role": "reference",
                         "size_bytes": reference.size_bytes,
                         "sha256": reference.sha256,
                     }
+                    for index, reference in enumerate(references, 1)
                 ],
             }
             profile = H3ConditioningProfile(
