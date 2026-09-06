@@ -43,6 +43,20 @@ docker compose --env-file docker/.env -f docker/compose.yaml up -d --build --pul
 
 Compose 默认只将接口绑定到 **127.0.0.1:8000**。引擎没有内置身份验证；本地使用时保留这个绑定，需要远程访问时则先接入应用的鉴权层。
 
+## 完整 Python 链路镜像 {#pipeline}
+
+可选的 `pipeline` 构建目标额外安装固定的编码与解码依赖、与 CUDA 匹配的 Torchvision、FFmpeg 和 FFprobe：
+
+```bash
+docker build --target pipeline -t vflash:0.1.0a7-pipeline .
+```
+
+用此镜像执行[完整链路指南](./complete-pipeline)中的 Python 示例，将脚本与准备好的模型资源只读挂载，输出使用单独的可写目录。镜像以 UID/GID `10001` 运行，输出和内核缓存目录应允许该用户写入。模型文件不在镜像内。只读容器还需挂载可写的 `/tmp` 与 `/cache`，其中 `/cache` 必须允许加载编译后的共享库。
+
+模型在容器内的挂载路径应与 `prepared-assets.json` 记录的路径一致；路径改变时，在最终挂载完成后重新生成资源校验记录。脚本应写入 `/outputs/video.mp4` 这样的可写输出路径；执行 Python 脚本而非 HTTP 服务时，添加 `--no-healthcheck`。完整链路需要单独安排[主机内存预算](./complete-pipeline)。
+
+该镜像补齐 Python 链路的依赖。默认 HTTP 服务仍接收条件包、返回潜变量；完整视频使用 Python 的 `H3Pipeline` 接口。构建时的依赖检查不使用 GPU，不构成端到端 GPU 性能验证。
+
 ## 双卡协作 {#parallel}
 
 使用两张 RTX 3080 20 GB 时，提供 SM86 权重与调度资源，并设置：
