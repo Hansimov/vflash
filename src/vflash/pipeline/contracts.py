@@ -8,10 +8,10 @@ from pathlib import Path
 from typing import Any
 
 from vflash.contracts import ContractError
+from vflash.model_assets import DIFFUSERS_REVISION as DIFFUSERS_REVISION
+from vflash.model_assets import MODEL_REVISION as MODEL_REVISION
 
 PIPELINE_PROFILE = "ref2va-turbo4-exact-sm89"
-MODEL_REVISION = "42ed227ee7df40d41602854ae760620d6eb651fe"
-DIFFUSERS_REVISION = "d035dcd7cc7c88e0a154609b62887d50bba9fdc2"
 
 
 @dataclass(frozen=True)

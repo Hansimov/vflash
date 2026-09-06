@@ -1,6 +1,6 @@
 # Complete video pipeline preview
 
-This development branch adds a Python pipeline from a written prompt and one reference image to an MP4. Its first target is Ref2VA Turbo4 on one SM89 GPU with 48 GiB of memory. Two sequential requests and cancellation have passed a complete GPU integration check at 928 × 512. It is not part of the published latent-only release yet, and still requires prepared native assets; a standalone compilation recipe is being completed.
+This development branch adds a Python pipeline from a written prompt and one reference image to an MP4. Its first target is Ref2VA Turbo4 on one SM89 GPU with 48 GiB of memory. Two sequential requests and cancellation have passed a complete GPU integration check at 928 × 512. It is not part of the published latent-only release yet. The new [official-weight compiler](./compile-weights) is available on this branch and awaits its own GPU qualification.
 
 ## What runs where
 
@@ -29,7 +29,7 @@ Prepare a local asset configuration with six explicit paths:
 | `schedule_overlay` | Its matching four-evaluation training-Euler schedule, video shift 12 and audio shift 3 |
 | `auxiliary_tensor` | Its matching native input and output tensors |
 
-The last three are prepared native assets, not arbitrary upstream checkpoint files. This branch does not yet provide their standalone compilation recipe or publish a ready-made model package. See the [asset contracts](../reference/runtime-assets) before supplying an existing artifact.
+The last three are prepared native assets, not arbitrary upstream checkpoint files. Follow the [official-weight compiler recipe](./compile-weights) to create them, or check the [asset contracts](../reference/runtime-assets) before supplying an existing artifact. A ready-made model package is not currently published.
 
 Place assets in their final read-only snapshot before preparation. The ingestion step hashes all consumed files against the bundled upstream inventory or native artifact manifest. It also verifies source, LoRA and schedule identities. This is intentionally a one-time disk operation. The resulting local receipt is bound to this filesystem: model startup and requests check file identity and timestamps without rehashing model weights. Moving or changing an asset requires a new receipt.
 

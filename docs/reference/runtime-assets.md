@@ -1,8 +1,8 @@
 # Runtime assets
 
-Vflash currently starts from already compiled inputs. Installing the package does not prepare model weights, encode a prompt, or download an example bundle. The public runtime asset pack and an end-user preparation command are not yet available.
+The released latent CLI starts from already compiled inputs. Installing the package does not download model weights or example bundles. The development branch adds a [complete pipeline](../guide/complete-pipeline) and an [official-weight compiler](../guide/compile-weights); each guide states its validation and release status.
 
-This preview is intended for developers who already have compatible compiled assets.
+The CLI contract below applies to developers supplying compatible compiled assets.
 
 ## The four inputs {#inputs}
 

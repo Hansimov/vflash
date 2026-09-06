@@ -5,52 +5,31 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import stat
 import uuid
 from dataclasses import dataclass
-from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
 from vflash.adapters.checkpoints import read_weight_map
 from vflash.contracts import ContractError
+from vflash.model_assets import (
+    canonical_sha256,
+    ref4_transformer_identity,
+    upstream_inventory,
+)
+from vflash.model_assets import (
+    file_identity as _stamp,
+)
 from vflash.native.h3_distilled_lora import LIGHTX_H3_REF_TURBO4_CONTRACT
 from vflash.native.h3_runtime_artifact import load_h3_runtime_artifact
 from vflash.native.h3_schedule_overlay import load_h3_schedule_overlay
 from vflash.pipeline.contracts import (
-    DIFFUSERS_REVISION,
-    MODEL_REVISION,
     PIPELINE_PROFILE,
     PipelineAssets,
 )
 
 
-def canonical_sha256(value: Any) -> str:
-    return hashlib.sha256(
-        json.dumps(value, sort_keys=True, separators=(",", ":")).encode(),
-    ).hexdigest()
-
-
-def upstream_inventory() -> dict[str, dict[str, Any]]:
-    payload = json.loads(files("vflash").joinpath("data/h3-pipeline-assets.json").read_text())
-    if payload["repository"] != "MiniMaxAI/MiniMax-H3" or payload["revision"] != MODEL_REVISION:
-        raise ContractError("the bundled pipeline asset revision changed")
-    return {row["path"]: row for row in payload["files"]}
-
-
 def conditioning_source(*, runtime_versions: dict[str, str] | None = None) -> dict[str, str]:
-    inventory = upstream_inventory()
-    transformer_files = [
-        {key: row[key] for key in ("path", "size", "sha256")}
-        for path, row in sorted(inventory.items())
-        if path.startswith("transformer_ref/")
-    ]
-    identity = {
-        "repository": "MiniMaxAI/MiniMax-H3",
-        "revision": MODEL_REVISION,
-        "transformer_files": transformer_files,
-        "adapter_sha256": LIGHTX_H3_REF_TURBO4_CONTRACT.sha256,
-    }
     configuration = {
         "profile_id": PIPELINE_PROFILE,
         "reference_image_policy": "match",
@@ -63,28 +42,10 @@ def conditioning_source(*, runtime_versions: dict[str, str] | None = None) -> di
         "nfe": 4,
     }
     return {
-        "model_repository": "MiniMaxAI/MiniMax-H3",
-        "model_revision": MODEL_REVISION,
-        "transformer_sha256": canonical_sha256(identity),
-        "oracle": "diffusers",
-        "oracle_revision": DIFFUSERS_REVISION,
-        "oracle_profile": "ref2va-adapter-bf16-torch-sdpa-sm89",
+        **ref4_transformer_identity(),
         "oracle_config_sha256": canonical_sha256(configuration),
         "oracle_hardware": "sm89-single",
         "oracle_runtime_sha256": canonical_sha256(runtime_versions or {}),
-    }
-
-
-def _stamp(path: Path) -> dict[str, int]:
-    value = path.stat()
-    if not stat.S_ISREG(value.st_mode) or value.st_size <= 0:
-        raise ContractError(f"pipeline asset must be a nonempty regular file: {path.name}")
-    return {
-        "size": value.st_size,
-        "device": value.st_dev,
-        "inode": value.st_ino,
-        "mtime_ns": value.st_mtime_ns,
-        "ctime_ns": value.st_ctime_ns,
     }
 
 

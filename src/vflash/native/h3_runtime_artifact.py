@@ -25,7 +25,8 @@ from vflash.native.h3_tensor_file import (
     inspect_safetensors_header,
 )
 
-H3_RUNTIME_ARTIFACT_SCHEMA_VERSION = 4
+H3_RUNTIME_ARTIFACT_SCHEMA_VERSION = 5
+H3_LEGACY_ARTIFACT_SCHEMA_VERSION = 4
 H3_RUNTIME_ARTIFACT_LAYOUT = "row-major-reference-v1"
 
 
@@ -156,6 +157,12 @@ def _validate_source(
     weight_profile: str,
     schema_version: int,
 ) -> dict[str, str]:
+    if schema_version == 5:
+        from vflash.model_assets import ref4_weights_source
+
+        if weight_profile != "lightx-ref-turbo4-v0.1" or value != ref4_weights_source():
+            raise H3RuntimeArtifactError("weights-only artifact source differs from fixed Ref4")
+        return dict(value)
     base_fields = {
         "model_repository",
         "model_revision",
@@ -397,7 +404,11 @@ def load_h3_runtime_artifact(
         "compile_environment",
         "adapter_execution",
     }
-    if schema_version != H3_RUNTIME_ARTIFACT_SCHEMA_VERSION or set(value) != expected_fields:
+    if (
+        schema_version
+        not in {H3_LEGACY_ARTIFACT_SCHEMA_VERSION, H3_RUNTIME_ARTIFACT_SCHEMA_VERSION}
+        or set(value) != expected_fields
+    ):
         raise H3RuntimeArtifactError("H3 RuntimeArtifact manifest schema is invalid")
     artifact_id = value.get("artifact_id")
     created_at = value.get("created_at")
@@ -406,12 +417,17 @@ def load_h3_runtime_artifact(
     nfe = value.get("nfe")
     weight_profile = value.get("weight_profile")
     adapter_execution = value.get("adapter_execution")
+    expected_status = (
+        "complete-block-stack"
+        if schema_version == 5
+        else "complete-block-stack-missing-auxiliary-runtime"
+    )
     if (
         not isinstance(artifact_id, str)
         or not _ARTIFACT_ID.fullmatch(artifact_id)
         or not isinstance(created_at, str)
         or not created_at
-        or status != "complete-block-stack-missing-auxiliary-runtime"
+        or status != expected_status
         or layout != H3_RUNTIME_ARTIFACT_LAYOUT
         or not isinstance(nfe, int)
         or isinstance(nfe, bool)
@@ -427,6 +443,8 @@ def load_h3_runtime_artifact(
     target = resolve_h3_artifact_target(target_value["target_id"])
     if target_value != asdict(target):
         raise H3RuntimeArtifactError("H3 RuntimeArtifact target fields drifted")
+    if schema_version == 5 and (target.compute_capability != "sm89" or nfe != 4):
+        raise H3RuntimeArtifactError("weights-only artifacts currently support Ref4 SM89")
     expected_precision = {
         "attention_weight_bits": target.attention_weight_bits,
         "attention_activation": target.attention_activation,
@@ -533,7 +551,7 @@ def load_h3_runtime_artifact(
     if len({row.index for row in blocks}) != len(blocks):
         raise H3RuntimeArtifactError("H3 RuntimeArtifact contains duplicate block indices")
     complete = tuple(row.index for row in blocks) == tuple(range(spec.num_layers))
-    if complete != (status == "complete-block-stack-missing-auxiliary-runtime"):
+    if not complete:
         raise H3RuntimeArtifactError("H3 RuntimeArtifact completeness status is false")
     return H3RuntimeArtifact(
         directory=directory,

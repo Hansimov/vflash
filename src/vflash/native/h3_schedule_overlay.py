@@ -20,7 +20,9 @@ from vflash.native.h3_tensor_file import (
     load_safetensor_tensors,
 )
 
-H3_SCHEDULE_OVERLAY_SCHEMA_VERSION = 1
+H3_SCHEDULE_OVERLAY_SCHEMA_VERSION = 2
+H3_LEGACY_SCHEDULE_OVERLAY_SCHEMA_VERSION = 1
+H3_WEIGHTS_SCHEDULE_METHOD = "direct-official-weights-fixed-schedule-v1"
 H3_SCHEDULE_OVERLAY_LAYOUT = "h3-base-adaln-table-overlay-v1"
 H3_SCHEDULE_OVERLAY_METHOD = "piecewise-linear-exact-source-table-v1"
 
@@ -191,7 +193,10 @@ def load_h3_schedule_overlay(
     }
     if not isinstance(value, dict) or set(value) != expected:
         raise H3ScheduleOverlayError("H3 schedule-overlay fields differ from schema v1")
-    if value.get("schema_version") != H3_SCHEDULE_OVERLAY_SCHEMA_VERSION:
+    if value.get("schema_version") not in {
+        H3_LEGACY_SCHEDULE_OVERLAY_SCHEMA_VERSION,
+        H3_SCHEDULE_OVERLAY_SCHEMA_VERSION,
+    }:
         raise H3ScheduleOverlayError("H3 schedule-overlay schema version is unsupported")
     overlay_id = value.get("overlay_id")
     if not isinstance(overlay_id, str) or _OVERLAY_ID.fullmatch(overlay_id) is None:
@@ -220,26 +225,42 @@ def load_h3_schedule_overlay(
             "adapted H3 artifacts accept only their exact source schedule"
         )
     source = value.get("source")
-    if (
-        not isinstance(source, dict)
-        or set(source)
-        != {
-            "method",
-            "source_artifact_id",
-            "source_packed_input_sha256",
-            "source_replay_case_id",
-            "transformer_tensor_file",
-            "transformer_tensor_sha256",
+    if value["schema_version"] == 2:
+        from vflash.model_assets import ref4_weights_source
+
+        expected_source = {
+            "method": H3_WEIGHTS_SCHEDULE_METHOD,
+            "source_artifact_id": base.artifact_id,
+            "transformer_sha256": base.source["transformer_sha256"],
+            "compile_recipe": "ref4-bf16-runtime-residual-sm89-v1",
         }
-        or source.get("method") != H3_SCHEDULE_OVERLAY_METHOD
-        or source.get("source_artifact_id") != base.artifact_id
-        or any(not isinstance(item, str) or not item for item in source.values())
-        or _SHA256.fullmatch(source.get("source_packed_input_sha256", "")) is None
-        or _SHA256.fullmatch(source.get("transformer_tensor_sha256", "")) is None
-        or Path(source.get("transformer_tensor_file", "")).name
-        != source.get("transformer_tensor_file")
-    ):
-        raise H3ScheduleOverlayError("H3 schedule-overlay source contract is invalid")
+        if base.source != ref4_weights_source() or source != expected_source:
+            raise H3ScheduleOverlayError(
+                "weights-only schedule source differs from its artifact"
+            )
+        if schedule != H3NativeSchedule.shifted_linear(4, video_shift=12.0, audio_shift=3.0):
+            raise H3ScheduleOverlayError("weights-only schedule differs from fixed Ref4")
+    else:
+        if (
+            not isinstance(source, dict)
+            or set(source)
+            != {
+                "method",
+                "source_artifact_id",
+                "source_packed_input_sha256",
+                "source_replay_case_id",
+                "transformer_tensor_file",
+                "transformer_tensor_sha256",
+            }
+            or source.get("method") != H3_SCHEDULE_OVERLAY_METHOD
+            or source.get("source_artifact_id") != base.artifact_id
+            or any(not isinstance(item, str) or not item for item in source.values())
+            or _SHA256.fullmatch(source.get("source_packed_input_sha256", "")) is None
+            or _SHA256.fullmatch(source.get("transformer_tensor_sha256", "")) is None
+            or Path(source.get("transformer_tensor_file", "")).name
+            != source.get("transformer_tensor_file")
+        ):
+            raise H3ScheduleOverlayError("H3 schedule-overlay source contract is invalid")
 
     auxiliary_value = value.get("auxiliary")
     if not isinstance(auxiliary_value, dict) or set(auxiliary_value) != {
