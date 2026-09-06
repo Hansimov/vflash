@@ -145,11 +145,18 @@ class NativeEngineSession:
         }
 
     def close(self) -> None:
-        if not self.closed:
-            self.closed = True
-            close = getattr(self.runtime, "close", None)
-            if close is not None:
-                close()
+        self.closed = True
+        if self.runtime is not None:
+            self.runtime.close()
+            self.runtime = None
+
+    def __enter__(self) -> NativeEngineSession:
+        if self.closed:
+            raise ContractError("the native engine session is closed")
+        return self
+
+    def __exit__(self, _type: Any, _value: Any, _traceback: Any) -> None:
+        self.close()
 
 
 def denoise_conditioning_bundle(
@@ -163,14 +170,11 @@ def denoise_conditioning_bundle(
     weight_residency: str = "default",
 ) -> dict[str, Any]:
     """One-shot CLI path; services retain a NativeEngineSession instead."""
-    session = NativeEngineSession(
+    with NativeEngineSession(
         plan,
         artifact=artifact,
         schedule_overlay=schedule_overlay,
         auxiliary_tensor=auxiliary_tensor,
         weight_residency=weight_residency,
-    )
-    try:
+    ) as session:
         return session.generate(bundle, output_latents)
-    finally:
-        session.close()

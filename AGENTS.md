@@ -5,6 +5,8 @@ Keep it installable from this repository alone, without external project paths o
 
 - `contracts.py`, `catalog.py`, `planner.py`: immutable profiles and resolved hardware plans.
 - `native/runner.py`: fixed-profile engine sessions; `native/worker.py`: isolated process ownership.
+- `native/h3_native_conditioning_runtime.py`: owned input, head and trunk resources per session.
+- `native/h3_tensor_file.py`: owned tensor reads and short-lived mapped load scopes.
 - Other `native/` modules: H3 mathematics, artifacts, scheduling and kernels.
 - `server.py`: transport, bounded temporary job queue and output delivery, not model mathematics.
 - `docker/`: standalone deployment. `docs/`: matching English and Chinese guides.

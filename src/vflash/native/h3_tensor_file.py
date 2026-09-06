@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import mmap
 import os
 import re
@@ -10,7 +11,7 @@ import stat
 import struct
 import sys
 import uuid
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -51,40 +52,12 @@ def _safetensors_dtypes() -> dict[Any, str]:
 
 def load_safetensor_tensor(path: Path, name: str) -> Any:
     """Load one tensor without materializing any other payload in the file."""
+    return load_safetensor_tensors(path, (name,))[name]
 
-    torch = _torch()
-    try:
-        resolved = path.resolve(strict=True)
-    except OSError as exc:
-        raise H3TensorFileError(f"H3 tensor file is unavailable: {path}") from exc
-    header = inspect_safetensors_header(resolved)
-    try:
-        row = header[name]
-    except KeyError as exc:
-        raise H3TensorFileError(f"H3 tensor is missing: {name}") from exc
-    dtype = _torch_dtypes().get(str(row["dtype"]))
-    if dtype is None:
-        raise H3TensorFileError(f"H3 tensor dtype is unsupported: {name}")
-    try:
-        with resolved.open("rb") as handle:
-            prefix = handle.read(8)
-            if len(prefix) != 8:
-                raise H3TensorFileError(f"safetensors prefix is truncated: {resolved.name}")
-            header_size = struct.unpack("<Q", prefix)[0]
-            start, stop = row["data_offsets"]
-            handle.seek(8 + header_size + start)
-            payload = bytearray(handle.read(stop - start))
-    except H3TensorFileError:
-        raise
-    except OSError as exc:
-        raise H3TensorFileError(f"H3 tensor payload is unavailable: {name}") from exc
-    if len(payload) != stop - start:
-        raise H3TensorFileError(f"H3 tensor payload is truncated: {name}")
-    try:
-        tensor = torch.frombuffer(payload, dtype=dtype).reshape(row["shape"]).clone()
-    except (RuntimeError, ValueError) as exc:
-        raise H3TensorFileError(f"H3 tensor payload cannot be decoded: {name}") from exc
-    return tensor.contiguous()
+
+def load_safetensor_tensors(path: Path, names: Iterable[str]) -> dict[str, Any]:
+    """Read a group into owned CPU tensors with one header validation and no staging copy."""
+    return H3SingleTensorStore(path).load_many(names)
 
 
 class H3MappedSafetensor:
@@ -218,22 +191,77 @@ def save_safetensors_atomic(
 
 
 class H3SingleTensorStore:
-    """Read tensors from one verified, regular safetensors blob."""
+    """Index an immutable tensor file; every returned tensor owns its CPU storage.
+
+    No file descriptor, mapping or tensor payload is retained between calls.
+    Replacing or modifying the indexed file requires a new store.
+    """
 
     def __init__(self, path: Path) -> None:
         try:
             self.path = path.resolve(strict=True)
         except OSError as exc:
             raise H3TensorFileError(f"H3 tensor store is unavailable: {path}") from exc
-        self.header = inspect_safetensors_header(self.path)
+        self.header, self._data_offset, file_stat = _inspect_safetensors(self.path)
+        self._identity = _file_identity(file_stat)
 
     def names(self) -> tuple[str, ...]:
         return tuple(sorted(self.header))
 
     def load(self, name: str) -> Any:
-        if name not in self.header:
-            raise H3TensorFileError(f"H3 tensor is missing: {name}")
-        return load_safetensor_tensor(self.path, name)
+        return self.load_many((name,))[name]
+
+    def load_many(self, names: Iterable[str]) -> dict[str, Any]:
+        """Fill final tensor storage directly, without bytearray → tensor → clone copies."""
+        torch = _torch()
+        requested = tuple(names)
+        if len(set(requested)) != len(requested):
+            raise H3TensorFileError("H3 tensor request contains duplicate names")
+        dtypes = _torch_dtypes()
+        specs = []
+        for name in requested:
+            if name not in self.header:
+                raise H3TensorFileError(f"H3 tensor is missing: {name}")
+            row = self.header[name]
+            dtype = dtypes.get(row["dtype"])
+            if dtype is None:
+                raise H3TensorFileError(f"H3 tensor dtype is unsupported: {name}")
+            start, stop = row["data_offsets"]
+            item_size = torch.empty((), dtype=dtype).element_size()
+            if math.prod(row["shape"]) * item_size != stop - start:
+                raise H3TensorFileError(f"H3 tensor shape and payload size differ: {name}")
+            specs.append((name, dtype, row["shape"], start, stop))
+        result = {}
+        try:
+            with self.path.open("rb") as handle:
+                if _file_identity(os.fstat(handle.fileno())) != self._identity:
+                    raise H3TensorFileError("H3 tensor file changed after indexing")
+                for name, dtype, shape, start, stop in specs:
+                    tensor = torch.empty(shape, dtype=dtype, device="cpu")
+                    if stop != start:
+                        handle.seek(self._data_offset + start)
+                        view = memoryview(tensor.reshape(-1).view(torch.uint8).numpy()).cast(
+                            "B"
+                        )
+                        try:
+                            if handle.readinto(view) != stop - start:
+                                raise H3TensorFileError(
+                                    f"H3 tensor payload is truncated: {name}"
+                                )
+                        finally:
+                            view.release()
+                    result[name] = tensor
+                if _file_identity(os.fstat(handle.fileno())) != self._identity:
+                    raise H3TensorFileError("H3 tensor file changed during reading")
+        except BaseException as exc:
+            # An application may keep a failed load's traceback. Do not let it
+            # keep partially read model tensors alive through this frame.
+            result.clear()
+            tensor = None
+            if isinstance(exc, OSError):
+                raise H3TensorFileError("H3 tensor payload is unavailable") from exc
+            raise
+        return result
 
 
 _HEADER_LIMIT = 64 * 1024 * 1024
@@ -252,9 +280,19 @@ def _regular_file(path: Path) -> stat.struct_stat:
 
 def inspect_safetensors_header(path: Path) -> dict[str, dict[str, Any]]:
     """Read and validate a safetensors header without loading tensor payloads."""
+    return _inspect_safetensors(path)[0]
+
+
+def _file_identity(value: os.stat_result) -> tuple[int, ...]:
+    return value.st_dev, value.st_ino, value.st_size, value.st_mtime_ns, value.st_ctime_ns
+
+
+def _inspect_safetensors(path: Path) -> tuple[dict[str, dict[str, Any]], int, os.stat_result]:
     file_stat = _regular_file(path)
     try:
         with path.open("rb") as handle:
+            if _file_identity(os.fstat(handle.fileno())) != _file_identity(file_stat):
+                raise H3TensorFileError("H3 tensor file changed while opening")
             prefix = handle.read(8)
             if len(prefix) != 8:
                 raise H3TensorFileError(f"safetensors prefix is truncated: {path.name}")
@@ -310,4 +348,4 @@ def inspect_safetensors_header(path: Path) -> dict[str, dict[str, Any]]:
         if start < previous_stop:
             raise H3TensorFileError(f"safetensors tensors overlap at {name}")
         previous_stop = max(previous_stop, stop)
-    return tensors
+    return tensors, 8 + header_size, file_stat

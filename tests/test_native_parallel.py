@@ -151,6 +151,7 @@ def test_failed_rank_aborts_waiting_peer_and_rejects_reuse(monkeypatch):
     pair.groups = (Group(0), Group(1))
     pair.pool = ThreadPoolExecutor(max_workers=2)
     pair.closed = False
+    pair._released = False
     monkeypatch.setattr(
         h3_parallel,
         "_torch",
@@ -173,4 +174,5 @@ def test_failed_rank_aborts_waiting_peer_and_rejects_reuse(monkeypatch):
     assert aborted == [0, 1]
     with pytest.raises(H3NativeDenoiserError, match="lane is closed"):
         pair.run(action)
-    pair.close()
+    with pytest.raises(H3NativeDenoiserError, match=r"cleanup.*not confirmed"):
+        pair.close()

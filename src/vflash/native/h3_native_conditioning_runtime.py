@@ -13,6 +13,7 @@ import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from traceback import clear_frames
 from typing import Any
 
 from vflash.native.h3_conditioning_bundle import load_h3_conditioning_bundle
@@ -39,7 +40,7 @@ from vflash.native.h3_runtime_artifact import load_h3_runtime_artifact
 from vflash.native.h3_runtime_auxiliary import load_h3_runtime_auxiliary
 from vflash.native.h3_schedule_overlay import load_h3_schedule_overlay
 from vflash.native.h3_tensor_file import (
-    load_safetensor_tensor,
+    load_safetensor_tensors,
     save_safetensors_atomic,
 )
 
@@ -250,13 +251,48 @@ class H3NativeConditioningRuntime:
             )
         contract_seconds = time.monotonic() - contract_started
 
-        store = auxiliary_store
+        self._torch = torch
+        self.device = resolved_device
+        self.devices = devices
+        self.parallel_strategy = parallel_strategy
+        self.weight_residency = weight_residency
+        self.compute_capability = capability
+        self.artifact = artifact
+        self.overlay = overlay
+        self.auxiliary_tensor_path = auxiliary_store.path
+        self.attention_backend = attention_backend
+        self.input_packer = self.final_layer = self.denoiser = None
+        self._closed = self._released = False
+        try:
+            self.initialization_stages = {
+                "contract": contract_seconds,
+                **self._load_components(auxiliary_store),
+            }
+        except BaseException as exc:
+            # The failed caller may retain the traceback. Release resources
+            # after completion, then clear only unwound loader-frame locals.
+            try:
+                self.close()
+            except BaseException:
+                exc.add_note("Vflash cleanup could not complete; exit the CUDA worker process.")
+            else:
+                clear_frames(exc.__traceback__)
+            raise
+        self.initialization_seconds = time.monotonic() - started
+
+    def _load_components(self, auxiliary_store: Any) -> dict[str, float]:
+        """Acquire the input/head/trunk resources under one runtime owner."""
+        torch = self._torch
+        artifact, overlay, store = self.artifact, self.overlay, auxiliary_store
+        resolved_device, devices = self.device, self.devices
+        parallel_strategy, weight_residency = self.parallel_strategy, self.weight_residency
+        attention_backend = self.attention_backend
         input_started = time.monotonic()
         projection_weights = load_h3_native_input_projection_weights(
             base_load=store.load,
             device=resolved_device,
         )
-        input_packer = H3NativeInputPacker(projection_weights)
+        self.input_packer = H3NativeInputPacker(projection_weights)
         input_seconds = time.monotonic() - input_started
 
         final_started = time.monotonic()
@@ -267,7 +303,7 @@ class H3NativeConditioningRuntime:
             adaln_table_override=auxiliary["final_adaln_table"],
             device=resolved_device,
         )
-        final_layer = H3NativeFinalLayer(final_weights)
+        self.final_layer = H3NativeFinalLayer(final_weights)
         del auxiliary
         torch.cuda.empty_cache()
         final_seconds = time.monotonic() - final_started
@@ -279,7 +315,7 @@ class H3NativeConditioningRuntime:
                 if weight_residency == "block-ring"
                 else H3NativeDenoiserBF16Resident
             )
-            denoiser = denoiser_type.load(
+            self.denoiser = denoiser_type.load(
                 artifact,
                 device=resolved_device,
                 adaln_table_load=(overlay.load_block_table if overlay.blocks else None),
@@ -291,7 +327,7 @@ class H3NativeConditioningRuntime:
         else:
             from vflash.native.h3_parallel import H3NativeDenoiserParallel
 
-            denoiser = H3NativeDenoiserParallel.load(
+            self.denoiser = H3NativeDenoiserParallel.load(
                 artifact,
                 devices=devices,
                 strategy=parallel_strategy,
@@ -301,28 +337,14 @@ class H3NativeConditioningRuntime:
             torch.cuda.synchronize(selected)
         denoiser_seconds = time.monotonic() - denoiser_started
 
-        self._torch = torch
-        self.device = resolved_device
-        self.devices = devices
-        self.parallel_strategy = parallel_strategy
-        self.weight_residency = weight_residency
-        self.compute_capability = capability
-        self.artifact = artifact
-        self.overlay = overlay
-        self.auxiliary_tensor_path = auxiliary_store.path
-        self.input_packer = input_packer
-        self.final_layer = final_layer
-        self.denoiser = denoiser
-        self.attention_backend = attention_backend
-        self.initialization_seconds = time.monotonic() - started
-        self.initialization_stages = {
-            "contract": contract_seconds,
+        return {
             "input_projection": input_seconds,
             "final_layer": final_seconds,
             "denoiser": denoiser_seconds,
         }
 
     def metadata(self) -> dict[str, Any]:
+        self._require_open()
         torch = self._torch
         host_memory = torch.cuda.memory.host_memory_stats()
         return {
@@ -371,21 +393,35 @@ class H3NativeConditioningRuntime:
             )
         validate_conditioning_source(bundle.source, self.artifact.source)
         tensor_path = bundle.directory / "conditioning.safetensors"
-        video_indices = load_safetensor_tensor(tensor_path, "video_indices")
-        audio_indices = load_safetensor_tensor(tensor_path, "audio_indices")
-        text_indices = load_safetensor_tensor(tensor_path, "text_indices")
-        first_packed = load_safetensor_tensor(tensor_path, "first_packed_input")
+        loaded = load_safetensor_tensors(
+            tensor_path,
+            (
+                "video_indices",
+                "audio_indices",
+                "text_indices",
+                "first_packed_input",
+                "initial_video_latents",
+                "initial_audio_latents",
+                "token_tags",
+                "rotary_cos",
+                "rotary_sin",
+            ),
+        )
+        video_indices = loaded["video_indices"]
+        audio_indices = loaded["audio_indices"]
+        text_indices = loaded["text_indices"]
+        first_packed = loaded["first_packed_input"]
         refined_text = first_packed.index_select(1, text_indices.to(torch.int64)).contiguous()
         tensors = {
-            "initial_video": load_safetensor_tensor(tensor_path, "initial_video_latents"),
-            "initial_audio": load_safetensor_tensor(tensor_path, "initial_audio_latents"),
+            "initial_video": loaded["initial_video_latents"],
+            "initial_audio": loaded["initial_audio_latents"],
             "refined_text": refined_text,
             "video_indices": video_indices,
             "audio_indices": audio_indices,
             "text_indices": text_indices,
-            "token_tags": load_safetensor_tensor(tensor_path, "token_tags"),
-            "rotary_cos": load_safetensor_tensor(tensor_path, "rotary_cos"),
-            "rotary_sin": load_safetensor_tensor(tensor_path, "rotary_sin"),
+            "token_tags": loaded["token_tags"],
+            "rotary_cos": loaded["rotary_cos"],
+            "rotary_sin": loaded["rotary_sin"],
         }
         return bundle, tensors
 
@@ -398,6 +434,7 @@ class H3NativeConditioningRuntime:
     ) -> H3NativeConditioningRuntimeResult:
         """Run one live request and export target-only VAE-ready latents."""
 
+        self._require_open()
         torch = self._torch
         if output_path.exists() or output_path.is_symlink():
             raise H3NativeConditioningRuntimeError("native latent output already exists")
@@ -509,7 +546,22 @@ class H3NativeConditioningRuntime:
             peak_allocated_bytes_by_device=device_peaks,
         )
 
+    def _require_open(self) -> None:
+        if self._closed:
+            raise H3NativeConditioningRuntimeError("the native runtime is closed")
+
     def close(self) -> None:
+        """Retire owned tensors after all devices complete; do not destroy global CUDA state."""
+        if self._released:
+            return
+        self._closed = True
+        # Pinned host memory must outlive every asynchronous copy. If CUDA
+        # cannot confirm completion, keep the resources fenced until process
+        # exit (or a successful explicit retry of close), never reuse them.
+        for device in self.devices:
+            self._torch.cuda.synchronize(device)
         close = getattr(self.denoiser, "close", None)
         if close is not None:
             close()
+        self.denoiser = self.input_packer = self.final_layer = None
+        self._released = True

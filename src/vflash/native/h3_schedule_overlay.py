@@ -17,6 +17,7 @@ from vflash.native.h3_runtime_artifact import H3RuntimeArtifact, load_h3_runtime
 from vflash.native.h3_tensor_file import (
     inspect_safetensors_header,
     load_safetensor_tensor,
+    load_safetensor_tensors,
 )
 
 H3_SCHEDULE_OVERLAY_SCHEMA_VERSION = 1
@@ -97,15 +98,15 @@ class H3ScheduleOverlay:
 
     def load_auxiliary_tensors(self) -> dict[str, Any]:
         path = self.directory / self.auxiliary.path
-        return {
-            name: load_safetensor_tensor(path, name)
-            for name in (
+        return load_safetensor_tensors(
+            path,
+            (
                 "final_adaln_table",
                 "time_embeddings",
                 "timestep_counts",
                 "timesteps",
-            )
-        }
+            ),
+        )
 
 
 def _safe_relative_file(directory: Path, value: Any, *, name: str) -> Path:

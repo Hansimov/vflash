@@ -205,6 +205,7 @@ class _DevicePair:
         self.devices = devices
         self.pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="vflash-rank")
         self.closed = False
+        self._released = False
         store = distributed.HashStore()
 
         def create(rank: int) -> Any:
@@ -247,14 +248,35 @@ class _DevicePair:
         return [future.result() for future in futures]
 
     def close(self) -> None:
-        if self.closed:
+        if self._released:
             return
+        if self.closed:
+            raise H3NativeDenoiserError(
+                "two-device cleanup was not confirmed; exit the CUDA worker process"
+            )
         self.closed = True
-        try:
-            for group in self.groups:
+        failure: BaseException | None = None
+        for group in self.groups:
+            try:
                 group.shutdown()
-        finally:
+            except BaseException as exc:
+                if failure is None:
+                    failure = exc
+                else:
+                    failure.add_note("The peer NCCL rank also failed to shut down.")
+        try:
             self.pool.shutdown(wait=True)
+        except BaseException as exc:
+            if failure is None:
+                failure = exc
+            else:
+                failure.add_note("The rank executor also failed to shut down.")
+        if failure is not None:
+            # A closed lane cannot be reused, but that is not proof of cleanup.
+            # Do not retry uncertain NCCL destruction or report false success.
+            failure.add_note("Exit the CUDA worker process; group cleanup is unconfirmed.")
+            raise failure
+        self._released = True
 
 
 def _partition_invocation(

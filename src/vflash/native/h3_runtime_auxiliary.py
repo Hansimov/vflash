@@ -4,10 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from vflash.native.h3_tensor_file import (
-    H3SingleTensorStore,
-    inspect_safetensors_header,
-)
+from vflash.native.h3_tensor_file import H3SingleTensorStore
 
 
 class H3RuntimeAuxiliaryError(ValueError):
@@ -32,7 +29,7 @@ def load_h3_runtime_auxiliary(path: Path) -> H3SingleTensorStore:
     """Open the exact nine-tensor pack used outside the compiled block trunk."""
 
     store = H3SingleTensorStore(path)
-    header = inspect_safetensors_header(store.path)
+    header = store.header
     if set(header) != set(H3_RUNTIME_AUXILIARY_SPECS):
         raise H3RuntimeAuxiliaryError("H3 runtime auxiliary tensor set is incomplete")
     for name, (dtype, shape) in H3_RUNTIME_AUXILIARY_SPECS.items():

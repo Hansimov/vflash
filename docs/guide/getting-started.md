@@ -33,8 +33,8 @@ Choose the GPU index shown by `doctor` and check a profile:
 # RTX 4090 with 48 GB
 vflash plan ref2va-turbo4-exact-sm89 --gpu 0
 
-# RTX 3080 with 20 GB
-vflash plan ref2va-turbo4-exact-sm86 --gpu 0
+# Two RTX 3080 GPUs with 20 GB each
+vflash plan ref2va-turbo4-exact-sm86 --gpu 0 --peer-gpu 1
 ```
 
 `plan` checks the hardware match without loading model weights. For the 3080 profile, we recommend **at least 64 GiB of available system memory per worker for the tested workload**, plus headroom for other processes. Larger inputs need separate capacity checks. These profiles target the stated memory capacities; the usual 10/12 GB 3080 and 24 GB 4090 are outside this release's supported configurations.
@@ -69,10 +69,10 @@ The command writes the video and audio latent tensors to `result.safetensors` an
 
 ## Use two 3080s for one request {#parallel}
 
-Select two RTX 3080 20 GB devices with the same SM86 Turbo4 assets:
+For a 3080 service focused on first-result latency, use two RTX 3080 20 GB devices with the same SM86 Turbo4 assets:
 
 ```bash
-vflash plan ref2va-turbo4-exact-sm86 --gpu 0 --peer-gpu 1 --strategy tensor
+vflash plan ref2va-turbo4-exact-sm86 --gpu 0 --peer-gpu 1 --strategy sequence-head
 ```
 
 Add the same `--gpu`, `--peer-gpu`, and `--strategy` options to `vflash denoise`. Both GPUs belong to one request; this does not start two independent workers.
@@ -90,7 +90,7 @@ Parallel execution changes GEMM shapes or reduction order. Results are **not bit
 
 Each `denoise` command starts a fresh session. For repeated requests, use the [HTTP service](./docker): it loads a fixed profile on the first job and reuses that model for later jobs.
 
-Python integrations can retain a `vflash.native.runner.NativeEngineSession` and call `session.generate(bundle, output_latents, progress_callback=on_step)`. The optional callback receives `(completed_steps, total_steps)` after each evaluation has completed on all selected GPUs. Omit it when step notifications are unnecessary; enabling it adds a device synchronization at each step. Close the session when its owner stops. A 4090 session can select `weight_residency="block-ring"` during construction to reserve more device memory for activations.
+Python integrations can retain a `vflash.native.runner.NativeEngineSession` and call `session.generate(bundle, output_latents, progress_callback=on_step)`. The optional callback receives `(completed_steps, total_steps)` after each evaluation has completed on all selected GPUs. Omit it when step notifications are unnecessary; enabling it adds a device synchronization at each step. Use the session as a context manager, or call `close()` when its owner stops. Closing waits for the owned device group, closes its communication resources, and drops its weight references even if your application retains the closed session object. It leaves the process CUDA context and allocator caches intact; process exit releases those. A closed session rejects further requests; close a session after failed inference rather than resuming it. A 4090 session can select `weight_residency="block-ring"` during construction to reserve more device memory for activations.
 
 ## If a check fails {#troubleshooting}
 

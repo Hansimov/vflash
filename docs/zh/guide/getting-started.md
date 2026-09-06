@@ -34,7 +34,7 @@ vflash profiles
 vflash plan ref2va-turbo4-exact-sm89 --gpu 0
 
 # 配备 20 GB 显存的 RTX 3080
-vflash plan ref2va-turbo4-exact-sm86 --gpu 0
+vflash plan ref2va-turbo4-exact-sm86 --gpu 0 --peer-gpu 1
 ```
 
 `plan` 只检查硬件匹配情况，不加载模型权重。对于 3080 配置，已测负载的部署建议是**每个 worker 至少预留 64 GiB 可用系统内存**，并为其他进程保留额外余量。更大输入需要重新检查容量。这里的支持范围只覆盖上述显存容量；常见的 10/12 GB 版 3080 和 24 GB 版 4090 不在本次支持范围内。
@@ -72,7 +72,7 @@ vflash denoise ref2va-turbo4-exact-sm89 \
 选择两张 RTX 3080 20 GB，继续使用相同的 SM86 Turbo4 资源：
 
 ```bash
-vflash plan ref2va-turbo4-exact-sm86 --gpu 0 --peer-gpu 1 --strategy tensor
+vflash plan ref2va-turbo4-exact-sm86 --gpu 0 --peer-gpu 1 --strategy sequence-head
 ```
 
 在 `vflash denoise` 中使用相同的 `--gpu`、`--peer-gpu` 和 `--strategy` 参数即可。两张卡共同执行一个请求；这不会创建两个独立 worker。
@@ -100,3 +100,7 @@ Python 接入可保留 `vflash.native.runner.NativeEngineSession`，调用 `sess
 | 配置与显卡不匹配 | 根据 `doctor` 显示的显卡型号和显存容量选择配置。 |
 | 资源缺失或不兼容 | 检查四类输入的模型、LoRA、调度和硬件版本。见[运行资源](../reference/runtime-assets)。 |
 | 3080 进程耗尽系统内存 | 释放系统内存或减少 worker 数量。已测负载建议每个 worker 预留至少 64 GiB 可用 RAM；更大输入需要重新检查容量。 |
+
+## Python 会话的资源释放 {#python-lifetime}
+
+`NativeEngineSession` 支持 `with`，也可以显式调用 `close()`。关闭时先等待本会话的显卡完成工作，再关闭通信资源并释放持有的权重；即使调用方继续保存已关闭的 Python 会话对象，权重也会释放。CUDA 上下文和分配器缓存由进程持有，随进程退出释放。已关闭的会话会拒绝后续请求；推理失败后也应关闭会话，不再继续使用。

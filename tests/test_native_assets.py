@@ -155,8 +155,8 @@ def test_conditioning_capture_schedule_can_differ_from_execution(monkeypatch, tm
         lambda _: bundle,
     )
     monkeypatch.setattr(
-        "vflash.native.h3_native_conditioning_runtime.load_safetensor_tensor",
-        lambda _path, name: tensors[name],
+        "vflash.native.h3_native_conditioning_runtime.load_safetensor_tensors",
+        lambda _path, names: {name: tensors[name] for name in names},
     )
     loaded_bundle, loaded = runtime._load_request_tensors(tmp_path)
     assert loaded_bundle.profile.nfe == 8

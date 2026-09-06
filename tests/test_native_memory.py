@@ -16,6 +16,7 @@ def test_host_allocation_and_retained_cache_are_reported_separately():
         get_device_name=lambda _device: "Test GPU",
     )
     runtime = H3NativeConditioningRuntime.__new__(H3NativeConditioningRuntime)
+    runtime._closed = False
     runtime._torch = SimpleNamespace(cuda=cuda, get_float32_matmul_precision=lambda: "high")
     runtime.device = "cuda:0"
     runtime.devices = (SimpleNamespace(index=0),)

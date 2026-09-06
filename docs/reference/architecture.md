@@ -1,45 +1,57 @@
 # How Vflash works
 
-Vflash is a native H3 inference engine built with PyTorch and Triton. It owns the denoising execution path and uses compiled data instead of the LightX2V runtime or its model object graph.
+Vflash turns an encoded H3 request into video and audio latents. Its PyTorch and Triton runtime owns the transformer, LoRA residuals, schedule updates and output heads. It does not import the LightX2V inference framework.
 
-## The current data path {#data-path}
+## The data path {#data-path}
 
 ```text
-Compiled weights + schedule + auxiliary tensors
-                      ↓
-Conditioning bundle → Vflash session → Video and audio latents
+Compiled weights + adapter + schedule
+                    ↓
+Conditioning bundle → Native session → Video and audio latents
 ```
 
-A conditioning bundle supplies the encoded request and initial video/audio state. The session runs H3's packed multimodal transformer and updates both latent streams according to the selected schedule.
+The conditioning bundle contains the encoded text and references, token layout and initial noise. Prompt/reference encoding runs before this boundary; VAE decoding and MP4 creation run after it. Those surrounding stages are not included in the public package yet.
 
-Encoding prompts and references happens before this boundary. Decoding the final latents and creating a playable media file happen after it. Those stages are not currently part of the public runtime.
+Model, adapter, schedule and hardware identities must agree. Changing a profile name does not convert its assets or change the mathematics of its compiled request.
 
-## Two memory strategies {#memory-strategies}
+## One owner at each layer {#sessions}
 
-On a **4090 with 48 GB**, compiled weights stay in GPU memory. Repeated requests reuse the loaded model, so they do not pay the loading cost again.
+| Layer | Owns | Lifetime |
+| --- | --- | --- |
+| CLI or HTTP service | Validation, job status and output paths | Command or server process |
+| Native session | One fixed profile, GPU group and loaded runtime | Reused across serial requests |
+| Request execution | Conditioning tensors, working latents and progress | One call to `generate` |
 
-On a **3080 with 20 GB**, weights stay in pinned host memory and move through a small ring of device buffers. Transfer and compute overlap; a buffer is reused only after the GPU has finished reading its previous contents. This reduces the amount of VRAM needed at the cost of host memory and transfer work.
+`native/runner.py` is the common session entrypoint. `native/h3_native_conditioning_runtime.py` connects validated inputs to the mathematical modules. The HTTP service delegates CUDA work to a spawned worker process; it does not build a second model execution path.
 
-The hardware strategies share the same session interface. They do not imply identical performance or bitwise equality across GPU architectures.
+Use `NativeEngineSession` as a context manager, or close it explicitly. Closing first waits for the session's device group, then closes communication and releases owned weight references. Retaining the closed Python object does not retain those weights. The process still owns its CUDA context and allocator caches; exiting the worker releases them.
 
-## Cooperative execution on two GPUs {#parallel}
+The HTTP worker exits after a failed trajectory. Python callers should close a failed session and never resume it. If device completion or cleanup cannot be confirmed, terminate its worker rather than reuse that CUDA context. The service's in-memory job records are separate from this execution lifetime; an application supplies durable storage, authentication and fleet scheduling.
 
-A two-device session owns one process, two CUDA contexts, two event-protected device rings, and a local NCCL group. Two CPU threads issue CUDA work without creating global `torch.distributed` state or a framework model graph.
+## Loading weights once {#loading}
 
-Weight tensor parallelism divides column projections and their LoRA up matrices, then divides row projections and their LoRA down matrices. Row-parallel low-rank partials are reduced before the replicated up projection. Sequence/head execution instead divides token rows, exchanges Q/K/V into complete sequences with a subset of heads, and returns attention outputs to their original token owners. An odd sequence length is padded for transport; padded keys and values never enter the softmax.
+A tensor store indexes an immutable safetensors file without retaining an open file descriptor. Grouped reads validate the requested shapes, then fill the final CPU tensor storage directly. They avoid repeatedly parsing the same header and allocating an intermediate byte buffer followed by a clone. Each returned tensor owns its storage and remains valid after the file is closed.
 
-A sequence/head session shares one pinned host weight store. A weight-TP session holds compact shards rather than two complete host copies. Both maintain two device slots per GPU and reuse the existing transfer events. The sequence/head exchange overlaps communication and compute in four groups of attention heads. Session closure releases the NCCL resources; a failed rank aborts its peer and makes the session unusable.
+Block streaming uses a different, scoped path: a temporary memory map supplies the compiled block, then tensors are copied into a shared segmented pinned-memory arena before the map closes. The arena spans blocks, reducing allocation padding. Large payload hashes are checked when assets are published; workers retain format, identity and size checks without rehashing the entire model on every request.
 
-## LoRA execution {#lora-execution}
+## Choosing memory placement {#memory-strategies}
 
-The compiled resources include the selected adapter and schedule. The released profiles preserve the low-rank residual computations alongside the base weights and use exact attention. Changing the adapter changes the resources; it is not a per-request switch.
+On a **4090 with 48 GB**, the default is resident weights. Python integrations can select `weight_residency="block-ring"` to leave more VRAM for activations. Extra resident memory is useful only when it improves your workload; measure the first request and repeated requests separately.
 
-Vflash can use compatible LightX2V Turbo checkpoints without importing the LightX2V inference framework. Model compatibility and runtime implementation are separate concerns.
+On a **3080 with 20 GB**, weights remain in pinned system memory and stream through two device buffers. Copy events mark a buffer ready; compute events prevent its reuse until the previous operation finishes. The session reuses these resources across requests.
 
-## Session and service ownership {#sessions}
+The two strategies share the same numerical execution interface. They do not promise equal performance or bitwise equality across GPU architectures.
 
-The command-line runner creates one session for one call. The HTTP service starts one CUDA worker process, loads one fixed profile on its first job, and runs subsequent jobs serially in that process.
+## Two 3080s for one request {#parallel}
 
-The worker owns its weights and CUDA state. Exiting it releases the device context. The HTTP process owns request validation, job status, and result downloads; it does not run model mathematics itself.
+For a 3080 service focused on request latency, start with two GPUs using `sequence-head`. The caller selects the peer explicitly. A single-GPU session remains available; Vflash never acquires another GPU automatically.
 
-The service's job records live in memory. A larger application must provide durable task storage, user identity, resource scheduling, and any usage accounting it needs. See [Docker and API](../guide/docker) for the current operational behavior.
+A paired session owns two device rings, two submitting CPU threads and a local NCCL group. `sequence-head` shares one host weight store, divides token rows for projections, then exchanges attention data so each device processes complete sequences for its assigned heads. `tensor` instead streams weight shards and reduces partial projections, including the LoRA branches. No global `torch.distributed` group or distributed launcher is required.
+
+Both strategies preserve the complete profile and use event-protected buffers. A rank failure aborts its peer. Partitioning changes floating-point reduction order, so parallel output need not be bitwise identical to single-GPU output. See the [measured scope](./performance#parallel).
+
+## LoRA is part of the profile {#lora-execution}
+
+The released Turbo profiles preserve the original low-rank residual computations alongside the base weights. Their compiled adapter and schedule are fixed for the session. Switching adapters requires compatible resources and a new session; it is not an unchecked per-request option.
+
+Exact attention describes an implementation choice. It does not mean that a distilled Turbo profile has base-model quality. Judge a generated result against the task and references, not only against tensor similarity.

@@ -28,12 +28,12 @@ Python 3.11 or newer is required. For GPU execution, see the [installation guide
 
 | GPU | Profiles | Memory strategy |
 | --- | --- | --- |
-| RTX 4090 48 GB | Ref2VA Turbo4 / Turbo8 | Weights stay in GPU memory |
-| RTX 3080 20 GB, one or two GPUs | Ref2VA Turbo4 | Blocks stream from host memory |
+| RTX 4090 48 GB | Ref2VA Turbo4 / Turbo8 | Resident weights, or an explicit block ring for activation headroom |
+| Two RTX 3080 20 GB GPUs | Ref2VA Turbo4 | Shared host weights with sequence/head parallelism |
 
-For the tested 3080 workload, the process uses about 60 GiB of RAM. We recommend at least **64 GiB of available system memory per worker**, plus headroom for other processes. Larger inputs need separate capacity checks. It has been checked for capacity and same-GPU serial/overlapped loading consistency; broader quality and independent reference checks remain pending. These profiles target the stated GPU memory capacities.
+For 3080 deployments focused on request latency, start with **two GPUs** and `sequence-head`. Explicit single-GPU execution remains available. Select the peer yourself; Vflash never claims another device automatically. See the [dual-GPU guide](https://hansimov.github.io/vflash/guide/getting-started#parallel).
 
-Two 3080s can cooperate on one request using weight tensor parallelism (`tensor`) or token/head partitioning (`sequence-head`). Select the second GPU with `--peer-gpu`; see the [dual-GPU guide](https://hansimov.github.io/vflash/guide/getting-started#parallel). Parallel results are not bitwise identical to single-GPU results, and broader quality qualification remains pending.
+Allow at least **64 GiB of available system memory per worker**, plus capacity for your request and other processes. Larger inputs need their own capacity check. Hardware and memory strategies do not guarantee identical floating-point outputs across devices.
 
 Turbo4 and Turbo8 use distilled adapters. Exact attention does not promise base-model quality or identical results across GPUs. See [profiles and hardware](https://hansimov.github.io/vflash/guide/profiles) for the complete scope.
 
