@@ -70,3 +70,23 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=3)"]
 
 CMD ["python", "-m", "vflash.server"]
+
+# Optional complete Python pipeline. Its default HTTP service keeps the latent
+# contract; applications invoke H3Pipeline directly for complete videos.
+FROM runtime AS pipeline
+USER root
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends ffmpeg git \
+    && rm -rf /var/lib/apt/lists/*
+RUN python -m pip install --no-deps \
+        --index-url https://download.pytorch.org/whl/cu130 \
+        torchvision==0.26.0+cu130
+# This installer can resume interrupted dependency downloads with hash checks.
+RUN python -m pip install --timeout 120 --retries 5 pip==25.3
+# Resolve the installed wheel's extras without rebuilding or replacing it.
+RUN python -m pip install --timeout 120 --retries 5 --resume-retries 5 'vflash[pipeline]'
+USER 10001:10001
+RUN python -c "import torch; from vflash.adapters.diffusers_h3 import validate_adapter_dependencies; from vflash.media.encoding import media_executables; validate_adapter_dependencies(); media_executables(); assert not torch.cuda.is_initialized()"
+
+# A plain build and the existing Compose service keep the native-only image.
+FROM runtime AS default

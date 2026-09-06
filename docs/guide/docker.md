@@ -43,6 +43,20 @@ These instructions build `vflash:0.1.0a7` locally from your checkout. The first 
 
 The Compose configuration binds the API to **127.0.0.1:8000**. The engine has no built-in authentication. Keep this binding for local use, or put the API behind your application's authentication before allowing remote access.
 
+## Complete Python pipeline image {#pipeline}
+
+The optional `pipeline` target also installs the fixed encoder and decoder dependencies, CUDA-matched Torchvision, FFmpeg and FFprobe:
+
+```bash
+docker build --target pipeline -t vflash:0.1.0a7-pipeline .
+```
+
+Use this image to run the Python example in the [complete pipeline guide](./complete-pipeline), with your script and prepared model assets mounted read-only and a separate writable output directory. It runs as UID/GID `10001`; give that user write access to the output and kernel cache mounts. The model files are not included. In a read-only container, mount writable `/tmp` and `/cache`; `/cache` must allow loading compiled shared libraries.
+
+Keep asset mount paths identical to the paths recorded in `prepared-assets.json`. If paths change inside the container, prepare the receipt again after mounting the final assets. Give your script a writable output path such as `/outputs/video.mp4`; use `--no-healthcheck` when running a Python script instead of the HTTP service. The complete pipeline needs its own [host-memory budget](./complete-pipeline#one-owned-pipeline).
+
+The image adds Python pipeline dependencies. Its default HTTP service still accepts conditioning bundles and returns latents; complete videos use the Python `H3Pipeline` interface. Build-time dependency checks run without a GPU and do not constitute an end-to-end GPU benchmark.
+
 ## Cooperating GPU pair {#parallel}
 
 For two RTX 3080 20 GB devices, use the SM86 artifact and schedule paths, then set:
