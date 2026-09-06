@@ -59,6 +59,7 @@ Put your six-path `pipeline-assets.json`, prompt and reference images in `inputs
 
 ```bash
 docker run --rm --runtime=runc -e NVIDIA_VISIBLE_DEVICES=void \
+  -e TORCHINDUCTOR_CACHE_DIR=/cache/inductor \
   --network none --read-only --user "$(id -u):$(id -g)" \
   --tmpfs /tmp:rw,noexec,mode=1777 \
   -v /absolute/model-directory:/models:ro \
@@ -72,6 +73,7 @@ Generate on one RTX 4090 48 GB. Reference order determines the `<Picture N>` lab
 
 ```bash
 docker run --rm --gpus device=0 --shm-size 4g \
+  -e TORCHINDUCTOR_CACHE_DIR=/cache/inductor \
   --network none --read-only --user "$(id -u):$(id -g)" \
   --tmpfs /tmp:rw,noexec,mode=1777 \
   -v /absolute/model-directory:/models:ro \
@@ -88,7 +90,7 @@ Use one to three `--reference` arguments. The model produces five seconds at 24 
 
 To build the complete image from the tagged source, run `docker build --target pipeline -t vflash:0.1.0-pipeline .` and substitute that local image name in the commands.
 
-The image defaults to UID/GID `10001`; these examples instead use your current user so outputs remain writable. `/cache` must permit loading compiled shared libraries: do not put it on a `noexec` mount. Asset paths and filesystem identities must remain the same as during preparation. Repeated work should use a persistent Python `H3Pipeline` in a dedicated container process, avoiding a new model load per command.
+The image defaults to UID/GID `10001`; these examples instead use your current user so outputs remain writable. The explicit Inductor cache also works when that user has no account entry inside the image, including with the 0.1.0 image. `/cache` must permit loading compiled shared libraries: do not put it on a `noexec` mount. Asset paths and filesystem identities must remain the same as during preparation. Repeated work should use a persistent Python `H3Pipeline` in a dedicated container process, avoiding a new model load per command.
 
 ## Cooperating GPU pair {#parallel}
 

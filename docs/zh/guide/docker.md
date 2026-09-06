@@ -59,6 +59,7 @@ mkdir -p inputs outputs cache
 
 ```bash
 docker run --rm --runtime=runc -e NVIDIA_VISIBLE_DEVICES=void \
+  -e TORCHINDUCTOR_CACHE_DIR=/cache/inductor \
   --network none --read-only --user "$(id -u):$(id -g)" \
   --tmpfs /tmp:rw,noexec,mode=1777 \
   -v /absolute/model-directory:/models:ro \
@@ -72,6 +73,7 @@ docker run --rm --runtime=runc -e NVIDIA_VISIBLE_DEVICES=void \
 
 ```bash
 docker run --rm --gpus device=0 --shm-size 4g \
+  -e TORCHINDUCTOR_CACHE_DIR=/cache/inductor \
   --network none --read-only --user "$(id -u):$(id -g)" \
   --tmpfs /tmp:rw,noexec,mode=1777 \
   -v /absolute/model-directory:/models:ro \
@@ -88,7 +90,7 @@ docker run --rm --gpus device=0 --shm-size 4g \
 
 如需从标签源码构建完整镜像，可执行 `docker build --target pipeline -t vflash:0.1.0-pipeline .`，并将命令中的镜像名替换为本地名称。
 
-镜像默认使用 UID/GID `10001`；示例改用当前用户，方便写入输出。`/cache` 必须允许加载编译后的共享库，不要放在 `noexec` 挂载点。准备记录中的资产路径和文件身份必须保持一致。连续生成时，建议在独立容器进程中复用 Python `H3Pipeline`，避免每次执行命令都重新加载模型。
+镜像默认使用 UID/GID `10001`；示例改用当前用户，方便写入输出。显式设置 Inductor 缓存后，即使这个用户未登记在容器中也能运行；此设置也适用于 0.1.0 镜像。`/cache` 必须允许加载编译后的共享库，不要放在 `noexec` 挂载点。准备记录中的资产路径和文件身份必须保持一致。连续生成时，建议在独立容器进程中复用 Python `H3Pipeline`，避免每次执行命令都重新加载模型。
 
 ## 双卡协作 {#parallel}
 
