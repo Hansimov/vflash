@@ -40,3 +40,7 @@ Vflash 会检查资源声明的元数据。文件名正确并不代表兼容；�
 输出为 safetensors 文件，包含视频和音频 latent 张量。它需要交给兼容的解码器，而解码器尚未包含在当前公开运行时中。
 
 模型和 LoRA 文件各自遵循相应的[许可证及使用条款](./license)，与 Vflash 源码许可证分开。
+
+## LoRA 文件核对 {#adapter-files}
+
+Turbo4 使用 `minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors`，Turbo8 使用 `minimax_h3_ref2v_turbo_8step_v1.0_768p_bf16.safetensors`。这两个文件的摘要与 2026-09-05 核对的上游修订 `2f015e66b37c585cea9dc4ae6f1850ea8788e742` 一致。这是一次固定来源核对，不保证未来修订自动兼容。

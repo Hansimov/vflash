@@ -11,7 +11,7 @@
 需要 Python 3.11 或更新版本。基础安装很轻量，不会下载模型权重或 PyTorch。
 
 ```bash
-git clone https://github.com/Hansimov/vflash.git
+git clone --branch v0.1.0a5 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
@@ -33,7 +33,7 @@ vflash profiles
 # 配备 48 GB 显存的 RTX 4090
 vflash plan ref2va-turbo4-exact-sm89 --gpu 0
 
-# 配备 20 GB 显存的 RTX 3080
+# 两张配备 20 GB 显存的 RTX 3080
 vflash plan ref2va-turbo4-exact-sm86 --gpu 0 --peer-gpu 1
 ```
 
@@ -82,15 +82,17 @@ vflash plan ref2va-turbo4-exact-sm86 --gpu 0 --peer-gpu 1 --strategy sequence-he
 | `tensor` | QKV、注意力输出、FFN 和 LoRA 投影权重 | 否 |
 | `sequence-head` | GEMM 按 token 行分片，注意力按头分片并处理完整序列 | 是 |
 
-`sequence-head` 从同一份主机权重向两张卡传输完整权重，用四组注意力头重叠 NCCL 通信和计算。`tensor` 传输各自的一半权重，并归约投影结果，包含原生 LoRA 分支。两种方式都使用 BF16 权重和精确注意力，执行完整四步调度，无需分布式启动器或 LightX2V 运行时。
+两种方式均使用 BF16 权重、精确注意力和完整的四步调度。选择第二张卡后，默认策略是 `sequence-head`。实现说明见[双卡架构](../reference/architecture#parallel)。
 
-并行计算改变 GEMM 形状或归约顺序，**不保证与单卡逐位一致**。一个负载已通过完整 latent 和解码媒体烟测，跨案例指令遵循质量仍待评测。测量边界与内存口径见[性能测量](../reference/performance#parallel)。
+并行计算改变 GEMM 形状或归约顺序，**不保证与单卡逐位一致**。一个负载已通过完整 latent 与解码后视频、音频的基础检查，跨案例指令遵循质量仍待评测。测量边界与内存口径见[性能测量](../reference/performance#parallel)。
 
 ## 复用已加载的模型 {#reuse}
 
-每次执行 `denoise` 都会新建会话。要连续处理多个请求，请使用 [HTTP 服务](./docker)：首个任务加载指定模型，后续任务复用已加载的权重。
+连续处理多个请求时，使用 [Python 会话](./python)或 [HTTP 服务](./docker)。Python 会话在创建时加载模型，HTTP 服务在首个任务加载，后续请求继续复用；每次重新运行 `vflash denoise` 则会重新加载。
 
-Python 接入可保留 `vflash.native.runner.NativeEngineSession`，调用 `session.generate(bundle, output_latents, progress_callback=on_step)`。可选回调接收 `(已完成步数, 总步数)`，在所选 GPU 都完成本次评估后触发。不需要步数通知时可省略回调；启用后每步会增加一次设备同步。会话所有者停止时应关闭会话。4090 会话构造时还可选择 `weight_residency="block-ring"`，为激活张量保留更多显存。
+<span id="python-lifetime"></span>
+
+会话的创建、进度回调和关闭规则见 [Python 集成](./python#lifetime)。
 
 ## 检查失败时 {#troubleshooting}
 
@@ -100,7 +102,3 @@ Python 接入可保留 `vflash.native.runner.NativeEngineSession`，调用 `sess
 | 配置与显卡不匹配 | 根据 `doctor` 显示的显卡型号和显存容量选择配置。 |
 | 资源缺失或不兼容 | 检查四类输入的模型、LoRA、调度和硬件版本。见[运行资源](../reference/runtime-assets)。 |
 | 3080 进程耗尽系统内存 | 释放系统内存或减少 worker 数量。已测负载建议每个 worker 预留至少 64 GiB 可用 RAM；更大输入需要重新检查容量。 |
-
-## Python 会话的资源释放 {#python-lifetime}
-
-`NativeEngineSession` 支持 `with`，也可以显式调用 `close()`。关闭时先等待本会话的显卡完成工作，再关闭通信资源并释放持有的权重；即使调用方继续保存已关闭的 Python 会话对象，权重也会释放。CUDA 上下文和分配器缓存由进程持有，随进程退出释放。已关闭的会话会拒绝后续请求；推理失败后也应关闭会话，不再继续使用。

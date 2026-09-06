@@ -1,17 +1,17 @@
 # Vflash
 
-Native MiniMax H3 inference for **RTX 3080 20 GB** and **RTX 4090 48 GB**, with support for pinned LightX2V Turbo LoRAs. Vflash implements its own denoising runtime with PyTorch and Triton; it does not depend on the LightX2V inference framework.
+Native **MiniMax H3 inference** for RTX 3080 20 GB and RTX 4090 48 GB. Vflash uses PyTorch and Triton, with its own denoising runtime and support for pinned LightX2V Turbo LoRAs.
 
-[Documentation](https://hansimov.github.io/vflash/) · [Getting started](https://hansimov.github.io/vflash/guide/getting-started) · [中文](README.zh-CN.md)
+[Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
-> **Alpha preview:** compiled conditioning bundles in, video and audio latents (tensors ready for decoding) out. Compatible runtime assets are required and are not yet publicly available. Prompt processing, reference uploads, and MP4 output are still in development.
+**0.1.0a5 · Developer preview.** The public interface accepts compiled conditioning bundles and returns video/audio latent tensors for decoding. Compatible runtime assets are required and are not yet published. Prompt processing, reference uploads and MP4 output are outside this release.
 
-## Get started
+## Check your setup
 
-Install the lightweight CLI to inspect hardware and supported profiles. This does not download model weights or PyTorch.
+Python 3.11 or newer is required. The base install does not download model weights or PyTorch.
 
 ```bash
-git clone https://github.com/Hansimov/vflash.git
+git clone --branch v0.1.0a5 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
@@ -22,29 +22,26 @@ vflash profiles
 vflash plan ref2va-turbo4-exact-sm89 --gpu 0
 ```
 
-Python 3.11 or newer is required. For GPU execution, see the [installation guide](https://hansimov.github.io/vflash/guide/getting-started) or [Docker and API setup](docker/README.md).
-
-## Supported profiles
-
-| GPU | Profiles | Memory strategy |
+| GPU configuration | Released profiles | Weight placement |
 | --- | --- | --- |
-| RTX 4090 48 GB | Ref2VA Turbo4 / Turbo8 | Resident weights, or an explicit block ring for activation headroom |
-| Two RTX 3080 20 GB GPUs | Ref2VA Turbo4 | Shared host weights with sequence/head parallelism |
+| One RTX 4090 48 GB | Ref2VA Turbo4 / Turbo8 | Resident by default; optional block streaming |
+| One RTX 3080 20 GB | Ref2VA Turbo4 | Streamed from host RAM |
+| Two RTX 3080 20 GB GPUs | Ref2VA Turbo4 | Shared host weights; cooperative execution |
 
-For 3080 deployments focused on request latency, start with **two GPUs** and `sequence-head`. Explicit single-GPU execution remains available. Select the peer yourself; Vflash never claims another device automatically. See the [dual-GPU guide](https://hansimov.github.io/vflash/guide/getting-started#parallel).
+For a cooperating 3080 pair, select the peer explicitly with `--peer-gpu 1`. The default paired strategy is `sequence-head`; `tensor` is also available. The engine never selects another device automatically.
 
-Allow at least **64 GiB of available system memory per worker**, plus capacity for your request and other processes. Larger inputs need their own capacity check. Hardware and memory strategies do not guarantee identical floating-point outputs across devices.
+Allow **64 GiB or more of available system memory per worker** for the tested workload, plus headroom. Larger inputs need separate capacity checks. These profiles cover the listed memory capacities. See [hardware, adapters and quality limits](https://hansimov.github.io/vflash/guide/profiles).
 
-Turbo4 and Turbo8 use distilled adapters. Exact attention does not promise base-model quality or identical results across GPUs. See [profiles and hardware](https://hansimov.github.io/vflash/guide/profiles) for the complete scope.
+## Build with Vflash
 
-## Use it in an application
+- [Run a bundle](https://hansimov.github.io/vflash/guide/getting-started#run-a-bundle) with compatible compiled assets.
+- [Integrate through Python](https://hansimov.github.io/vflash/guide/python) and reuse a loaded model across requests.
+- [Start Docker and HTTP](https://hansimov.github.io/vflash/guide/docker) for an isolated worker and bounded job queue.
+- [Measure speed and quality](https://hansimov.github.io/vflash/reference/performance), with loading and end-to-end costs kept separate.
 
-- [Run a compiled bundle](https://hansimov.github.io/vflash/guide/getting-started#run-a-bundle) and save latent tensors.
-- [Start the HTTP service](https://hansimov.github.io/vflash/guide/docker) to reuse a loaded model across requests.
-- [Understand the runtime inputs](https://hansimov.github.io/vflash/reference/runtime-assets) and match their versions.
-- [Measure performance](https://hansimov.github.io/vflash/reference/performance) with first-use and repeated-request costs separated.
+Turbo4 and Turbo8 are distilled adapters. Exact attention is not a base-model quality guarantee, and different GPU or parallel configurations need not produce bitwise-identical results. W8 and T2VA are not released profiles.
 
-## Development
+## Contribute
 
 ```bash
 python -m pip install -e '.[dev,server]'
@@ -53,10 +50,10 @@ pre-commit run --all-files
 pytest
 ```
 
-Build the documentation with `npm ci` and `npm run docs:build`.
+Build the bilingual docs with `npm ci` and `npm run docs:build`. See [the contributor map](AGENTS.md) for code ownership.
 
 ## License
 
-Vflash source code is [Apache-2.0](LICENSE). Model weights and adapters retain their own licenses and usage terms; this repository contains no model weights.
+Vflash source is [Apache-2.0](LICENSE). Models and adapters retain their own licenses and terms; this repository contains no model weights. The LightX2V inference framework is not a runtime dependency.
 
-Thanks to [MiniMax H3](https://huggingface.co/MiniMaxAI/MiniMax-H3), [LightX2V](https://github.com/ModelTC/LightX2V), and the PyTorch, Triton, and CUDA communities. See [license and acknowledgements](https://hansimov.github.io/vflash/reference/license) for sources and additional credits.
+Thanks to [MiniMax H3](https://huggingface.co/MiniMaxAI/MiniMax-H3), [LightX2V](https://github.com/ModelTC/LightX2V), and the PyTorch, Triton and CUDA communities. [Sources and acknowledgements](https://hansimov.github.io/vflash/reference/license).

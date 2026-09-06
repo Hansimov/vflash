@@ -29,28 +29,15 @@ Changing from Turbo8 to Turbo4 changes the model's distilled schedule as well as
 
 ## Two-device execution {#parallel}
 
-The comparison below was measured on the **a3** runtime, before a4 introduced segmented pinned storage. Its original timings and memory figures are retained as historical evidence, not a benchmark of every later release. The a5 loader and lifecycle changes do not update this ranking.
+A cooperating pair can reduce latency for one request; independent workers serve a different throughput goal. Compare both using the same primary GPU, input and timing boundary. Keep one-request latency separate from the total throughput of two devices.
 
-A target-hardware measurement on one frozen Ref2VA Turbo4 request (928 × 512, 124 model frames, four evaluations, 18,175 tokens, BF16 weights and exact attention) compared one RTX 3080 20 GB with the same primary device plus a second 3080. Both ran at their default 320 W limits, on PCIe 3.0 x16 host-bridge links without peer access. The runtime used PyTorch 2.11.0+cu130 and Triton 3.6 with eight CPU threads.
-
-| Warm execution | Repeats | Median conditioning-to-latent time | Range |
-| --- | ---: | ---: | ---: |
-| One GPU | 4 anchors | 85.694 s | 85.539–85.805 s |
-| Two GPUs, `sequence-head` | 3 | 49.671 s | 49.599–49.973 s |
-
-This is a **1.725× speedup** on the measured workload, below a 1.8× optimization target. Three interleaved A/B/A2 comparisons had at most 0.227% anchor drift, no sampled thermal throttling or thermal-counter growth, and successful CUDA probes before and after every request. The same process retained both single/parallel device rings and shared their host weights to avoid repeated loading during the comparison. Memory figures below come from a separate standalone session.
-
-That a3 standalone sequence/head session initialized in 41.758 s with an already warm filesystem cache; its first request took 51.186 s and its next request 49.441 s. Denoising allocation peaked at 4.745 / 4.614 GiB across the pair. Active pinned host allocation was 58.009 GiB, with peak process RSS of 59.90 GiB. Initialization, storage cache, GPU allocation, reserved memory and process RAM are distinct costs.
-
-Standard weight `tensor` completed three warm requests in a separate standalone session: median 58.615 s, range 58.526–58.709 s, approximately **1.462×** against the preceding same-primary single-GPU anchors. Initialization took 47.899 s and the first request 60.079 s. Denoising allocation peaked at 4.825 / 4.785 GiB, pinned host allocation at 58.792 GiB, and process RSS at 60.70 GiB. This is a separate TP screen without a new interleaved A/B/A2 comparison. One sample reported a transient software thermal flag without thermal-counter growth or a corresponding clock reduction. All three results are retained; this screen has a narrower evidence level than the isolated comparison above.
-
-These measurements stop at the exported latent file. Prompt/reference encoding, VAE decoding, MP4 encoding, queueing and network transfer are outside the boundary. Two cooperating GPUs improve one-request latency; independent single-GPU workers provide a different throughput tradeoff.
-
-Both parallel strategies completed full trajectories and a paired decoded-video/audio smoke. They are not bitwise equal to single-GPU execution. The pipelined head exchange itself matched the unpipelined sequence/head trajectory bitwise, but the partitioning changes GEMM shapes and standard tensor parallelism adds reduction boundaries. One decoded example is not cross-case quality qualification; no same-quality or general prompt-to-video speed claim is made.
+The published [a3 dual-3080 comparison](./benchmarks#sm86-parallel) measured a 1.725× speedup on one fixed workload. It retains its original software version, thermal observations and quality limits; it is not a speed guarantee for the current release or other workloads.
 
 ## Check output quality {#quality}
 
-A faster result is useful only if it still meets your task. Compare representative outputs for instruction following, reference consistency, motion, audio, and visible artifacts. Tensor similarity is helpful for debugging a fixed computation, but it does not replace reviewing decoded results.
+A faster result is useful only if it still meets your task. Judge decoded outputs against the original instructions and references: instruction following, identity and detail consistency, motion, visual artifacts, and the relationship between audio and video. A candidate matching a baseline may still fail the task if the baseline also fails.
+
+Inspect multiple decoded frames over time, watch at normal speed, and listen to the audio. Still frames cannot establish natural motion; a waveform cannot establish correct meaning. Keep supported findings separate from unknown dimensions, sampling gaps and reviewer disagreements. Tensor error diagnoses implementation differences; it is not a generation-quality score.
 
 Exact attention does not make a distilled adapter equivalent to the base model, or guarantee identical floating-point results across GPU architectures. The current [support notes](../guide/profiles#lora) describe the narrower checks completed for each profile.
 

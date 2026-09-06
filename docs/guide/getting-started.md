@@ -11,7 +11,7 @@ This alpha release runs **compiled conditioning → video and audio latents (ten
 Use Python 3.11 or newer. The base installation is lightweight and does not download model weights or PyTorch.
 
 ```bash
-git clone https://github.com/Hansimov/vflash.git
+git clone --branch v0.1.0a5 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
@@ -69,7 +69,7 @@ The command writes the video and audio latent tensors to `result.safetensors` an
 
 ## Use two 3080s for one request {#parallel}
 
-For a 3080 service focused on first-result latency, use two RTX 3080 20 GB devices with the same SM86 Turbo4 assets:
+To use two RTX 3080 20 GB devices for one request, keep the same SM86 Turbo4 assets:
 
 ```bash
 vflash plan ref2va-turbo4-exact-sm86 --gpu 0 --peer-gpu 1 --strategy sequence-head
@@ -82,15 +82,13 @@ Add the same `--gpu`, `--peer-gpu`, and `--strategy` options to `vflash denoise`
 | `tensor` | QKV, attention output, FFN, and LoRA projection weights | No |
 | `sequence-head` | Token rows for GEMMs, then attention heads for complete-sequence attention | Yes |
 
-`sequence-head` streams full weights to each GPU from one shared host copy. Four groups of heads overlap NCCL communication with attention. `tensor` streams half-sized weight shards and reduces projection results, including the native LoRA branches. Both execute the complete four-step schedule with BF16 weights and exact attention. No distributed launcher or LightX2V runtime is required.
+Both strategies use BF16 weights, exact attention and the complete four-step schedule. Selecting a peer defaults to `sequence-head`. See [the architecture guide](../reference/architecture#parallel) for the implementation.
 
 Parallel execution changes GEMM shapes or reduction order. Results are **not bitwise identical to single-GPU execution**. Full latent and decoded-media smoke checks passed on one workload; cross-case instruction-quality qualification remains pending. See [performance measurement](../reference/performance#parallel) for scope and memory accounting.
 
 ## Reuse a loaded model {#reuse}
 
-Each `denoise` command starts a fresh session. For repeated requests, use the [HTTP service](./docker): it loads a fixed profile on the first job and reuses that model for later jobs.
-
-Python integrations can retain a `vflash.native.runner.NativeEngineSession` and call `session.generate(bundle, output_latents, progress_callback=on_step)`. The optional callback receives `(completed_steps, total_steps)` after each evaluation has completed on all selected GPUs. Omit it when step notifications are unnecessary; enabling it adds a device synchronization at each step. Use the session as a context manager, or call `close()` when its owner stops. Closing waits for the owned device group, closes its communication resources, and drops its weight references even if your application retains the closed session object. It leaves the process CUDA context and allocator caches intact; process exit releases those. A closed session rejects further requests; close a session after failed inference rather than resuming it. A 4090 session can select `weight_residency="block-ring"` during construction to reserve more device memory for activations.
+For repeated requests, use a [Python session](./python) or the [HTTP service](./docker). A Python session loads during construction; the HTTP service loads on its first job. Both then reuse the model. Every new `vflash denoise` process loads a fresh model.
 
 ## If a check fails {#troubleshooting}
 

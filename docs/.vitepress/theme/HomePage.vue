@@ -1,122 +1,150 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { useData, withBase } from 'vitepress'
 
-const { lang } = useData()
+const { lang, theme } = useData()
 const zh = computed(() => lang.value.startsWith('zh'))
 const selected = ref(0)
 const tabs = ref<HTMLButtonElement[]>([])
+const copied = ref(false)
+const copyFailed = ref(false)
+let copyTimer: ReturnType<typeof setTimeout> | undefined
 const link = (path: string) => withBase(`${zh.value ? '/zh' : ''}${path}`)
 const text = computed(() => zh.value ? {
-  eyebrow: '原生 MiniMax H3 推理引擎',
-  title: 'H3 推理，',
-  accent: '为你的显卡而优化。',
-  intro: '按显存容量优化执行方式，支持 LightX2V Turbo LoRA，让 H3 去噪推理更高效。',
+  eyebrow: '开发者预览版',
+  title: '原生 H3 推理。',
+  accent: '充分发挥你的显卡。',
+  intro: '为 RTX 3080 与 4090 构建的 MiniMax H3 引擎。支持 Turbo LoRA，用 Python 或 HTTP 接入你的应用。',
   start: '开始使用',
   support: '查看支持范围',
-  preview: '开发者预览版',
-  boundaryShort: '条件包 → 潜变量',
-  choose: '选择你的显卡',
-  memory: '显存',
-  execution: '权重加载',
+  choose: '找到适合的配置',
+  memory: '显存容量',
+  execution: '执行方式',
   available: '可用配置',
-  inspect: '检查运行配置',
+  inspect: '检查硬件，不加载权重',
+  copy: '复制', copied: '已复制', copyFailed: '请手动选择命令复制',
   gpu: [
-    { execution: '常驻显存', profiles: 'Turbo4 · Turbo8', note: '模型加载后保留在显存中，供后续请求复用。' },
-    { execution: '分块加载', profiles: 'Turbo4', note: '已测负载：建议每个 worker 预留 64 GiB 以上可用 RAM。' },
+    { execution: '单卡 · 权重常驻', profiles: 'Turbo4 / Turbo8', note: '在连续请求中复用权重，也可分块加载，为较大输入留出显存。' },
+    { execution: '单卡 · 分块加载', profiles: 'Turbo4', note: '权重从系统内存传入显卡。已测负载需预留至少 64 GiB 可用 RAM。' },
+    { execution: '双卡协作 · 分块加载', profiles: 'Turbo4', note: '两张卡共同处理一个请求；需要显式选择第二张卡，并预留系统内存。' },
   ],
-  boundary: '当前版本能做什么',
-  boundaryText: '接收预编译的条件包，输出视频和音频潜变量（latents，即解码前的张量）。运行所需的资源包尚未公开；提示词处理和 MP4 输出还未提供。',
-  inputs: '了解所需文件',
-  next: '从这里开始',
+  boundary: '当前公开版的输入与输出',
+  boundaryText: '预编译条件包 → 视频与音频 latent 张量。运行资源包尚未公开，当前接口不直接接收提示词或导出 MP4。',
+  inputs: '了解运行前提',
+  next: '按你的任务开始',
   guides: [
-    { number: '01', title: '安装与检查', text: '安装轻量命令行工具，确认显卡和配置是否匹配。', path: '/guide/getting-started' },
-    { number: '02', title: '运行一次推理', text: '准备匹配的运行资源，执行条件包并保存输出。', path: '/guide/getting-started#run-a-bundle' },
-    { number: '03', title: '接入你的服务', text: '使用 Docker 启动 HTTP 接口，提交任务并下载结果。', path: '/guide/docker' },
+    { number: '01', title: '检查环境与配置', text: '先安装轻量 CLI，确认显卡、内存和模型配置。无需下载权重。', path: '/guide/getting-started' },
+    { number: '02', title: '接入已有应用', text: '通过 Python 复用模型会话，或用 Docker 运行 HTTP 服务。', path: '/guide/python' },
+    { number: '03', title: '评估速度与质量', text: '区分冷启动、重复请求和成片耗时，按真实任务检查结果。', path: '/reference/performance' },
   ],
-  source: '独立执行，开放源码。',
-  sourceText: 'Vflash 使用 PyTorch 和 Triton 实现 H3 推理，无需安装 LightX2V 执行框架。',
-  architecture: '了解实现方式',
+  source: '理解实现，按需扩展。',
+  sourceText: 'PyTorch 与 Triton 原生执行，独立实现 LoRA 计算与显存调度。',
+  architecture: '阅读架构',
 } : {
-  eyebrow: 'Native MiniMax H3 inference',
-  title: 'H3 inference.',
-  accent: 'Made for your GPU.',
-  intro: 'Hardware-specific execution and support for LightX2V Turbo LoRAs, built to make H3 denoising faster.',
+  eyebrow: 'Developer preview',
+  title: 'Native H3 inference.',
+  accent: 'Built for your GPU.',
+  intro: 'A MiniMax H3 engine for RTX 3080 and 4090, with Turbo LoRA support. Bring it into your application through Python or HTTP.',
   start: 'Get started',
-  support: 'See supported profiles',
-  preview: 'Developer preview',
-  boundaryShort: 'Compiled bundles → latents',
-  choose: 'Choose your GPU',
-  memory: 'VRAM',
-  execution: 'Weight loading',
+  support: 'Supported profiles',
+  choose: 'Find your configuration',
+  memory: 'VRAM capacity',
+  execution: 'Execution',
   available: 'Available profiles',
-  inspect: 'Inspect the configuration',
+  inspect: 'Inspect hardware without loading weights',
+  copy: 'Copy', copied: 'Copied', copyFailed: 'Select the command to copy it',
   gpu: [
-    { execution: 'Resident', profiles: 'Turbo4 · Turbo8', note: 'Loaded weights stay in GPU memory for subsequent requests.' },
-    { execution: 'Streamed', profiles: 'Turbo4', note: 'Tested workload: allow 64 GiB+ available RAM per worker.' },
+    { execution: 'One GPU · resident', profiles: 'Turbo4 / Turbo8', note: 'Reuse weights across requests, or stream blocks to leave VRAM for larger inputs.' },
+    { execution: 'One GPU · streamed', profiles: 'Turbo4', note: 'Weights stream from system memory. Allow 64 GiB+ available RAM for the tested workload.' },
+    { execution: 'Two GPUs · streamed', profiles: 'Turbo4', note: 'Both GPUs cooperate on one request. Select the peer explicitly and allow sufficient host RAM.' },
   ],
-  boundary: 'What runs today',
-  boundaryText: 'Compiled conditioning bundles in; video and audio latents (tensors ready for decoding) out. Compatible runtime assets are required and are not yet published. Prompt processing and MP4 output are still in development.',
-  inputs: 'See the required files',
-  next: 'A clear path to your first run',
+  boundary: 'The current public interface',
+  boundaryText: 'Compiled conditioning in; video and audio latent tensors out. Runtime assets are not yet published. The API does not accept prompts or export MP4 files.',
+  inputs: 'Check the prerequisites',
+  next: 'Start with what you need',
   guides: [
-    { number: '01', title: 'Install & check', text: 'Install the lightweight CLI and check that your GPU matches a profile.', path: '/guide/getting-started' },
-    { number: '02', title: 'Run a bundle', text: 'Bring matching runtime assets, run denoising, and save the output.', path: '/guide/getting-started#run-a-bundle' },
-    { number: '03', title: 'Connect your service', text: 'Start the HTTP API with Docker, submit jobs, and download results.', path: '/guide/docker' },
+    { number: '01', title: 'Check your setup', text: 'Install the lightweight CLI and inspect your GPU, memory and profiles. No weights required.', path: '/guide/getting-started' },
+    { number: '02', title: 'Build an integration', text: 'Reuse a model session in Python or run an HTTP service with Docker.', path: '/guide/python' },
+    { number: '03', title: 'Evaluate the results', text: 'Separate loading, repeated requests and video delivery. Check quality against your task.', path: '/reference/performance' },
   ],
-  source: 'Independent execution. Open source.',
-  sourceText: 'Vflash implements H3 inference with PyTorch and Triton. The LightX2V runtime is not required.',
-  architecture: 'See how it works',
+  source: 'Understand it. Build on it.',
+  sourceText: 'Native PyTorch and Triton execution, with its own LoRA computation and memory scheduling.',
+  architecture: 'Explore the architecture',
 })
 const profile = computed(() => `ref2va-turbo4-exact-sm${selected.value === 0 ? '89' : '86'}`)
+const command = computed(() => `vflash plan ${profile.value} \\\n  --gpu 0${selected.value === 2 ? ' --peer-gpu 1 \\\n  --strategy sequence-head' : ''}`)
+
+function select(index: number) {
+  selected.value = index
+  copied.value = false
+  copyFailed.value = false
+}
 
 function selectWithKeyboard(event: KeyboardEvent) {
   if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
   event.preventDefault()
-  selected.value = event.key === 'Home' ? 0 : event.key === 'End' ? 1 : 1 - selected.value
-  tabs.value[selected.value]?.focus()
+  const next = event.key === 'Home' ? 0 : event.key === 'End' ? 2
+    : (selected.value + (event.key === 'ArrowRight' ? 1 : 2)) % 3
+  select(next)
+  tabs.value[next]?.focus()
 }
+
+async function copyCommand() {
+  try {
+    await navigator.clipboard.writeText(command.value)
+    copied.value = true
+    copyFailed.value = false
+    clearTimeout(copyTimer)
+    copyTimer = setTimeout(() => { copied.value = false }, 2000)
+  } catch {
+    copyFailed.value = true
+  }
+}
+onBeforeUnmount(() => clearTimeout(copyTimer))
 </script>
 
 <template>
   <div class="vf-home">
     <section class="vf-hero" aria-labelledby="vf-title">
       <div class="vf-intro">
-        <p class="vf-eyebrow"><span aria-hidden="true"></span>{{ text.eyebrow }}</p>
+        <p class="vf-eyebrow"><a class="vf-release" :href="link('/reference/releases')">{{ theme.version }}</a>{{ text.eyebrow }}</p>
         <h1 id="vf-title">{{ text.title }}<br><span>{{ text.accent }}</span></h1>
         <p class="vf-description">{{ text.intro }}</p>
         <div class="vf-actions">
           <a class="vf-button" :href="link('/guide/getting-started')">{{ text.start }} <span aria-hidden="true">→</span></a>
           <a class="vf-text-link" :href="link('/guide/profiles')">{{ text.support }} <span aria-hidden="true">↗</span></a>
         </div>
-        <p class="vf-meta">{{ text.preview }}<span aria-hidden="true">/</span>{{ text.boundaryShort }}</p>
+        <p class="vf-meta"><span>SM86 / SM89</span><span>Turbo4 / Turbo8</span><span>Apache 2.0</span></p>
       </div>
 
       <div class="vf-gpu-card">
-        <div class="vf-card-label">{{ text.choose }}<span aria-hidden="true">↳</span></div>
-        <div class="vf-tabs" role="tablist" :aria-label="text.choose" @keydown="selectWithKeyboard">
-          <button v-for="(name, index) in ['RTX 4090', 'RTX 3080']" :id="`gpu-tab-${index}`" :key="name"
-            :ref="element => { if (element) tabs[index] = element as HTMLButtonElement }"
-            type="button" role="tab" :aria-selected="selected === index" aria-controls="gpu-panel"
-            :tabindex="selected === index ? 0 : -1" @click="selected = index">{{ name }}</button>
-        </div>
-        <div id="gpu-panel" role="tabpanel" :aria-labelledby="`gpu-tab-${selected}`" tabindex="0">
-          <div class="vf-gpu-name">{{ selected === 0 ? '48' : '20' }}<span>GB</span><small>{{ text.memory }}</small></div>
-          <dl class="vf-specs">
-            <div><dt>{{ text.execution }}</dt><dd>{{ text.gpu[selected].execution }}</dd></div>
-            <div><dt>{{ text.available }}</dt><dd>{{ text.gpu[selected].profiles }}</dd></div>
-          </dl>
-          <p class="vf-gpu-note">{{ text.gpu[selected].note }}</p>
-          <div class="vf-command">
-            <div>{{ text.inspect }}</div>
-            <code><span class="vf-prompt" aria-hidden="true">$ </span>vflash plan &#92;<br><span class="vf-command-indent">{{ profile }} &#92;</span><br><span class="vf-command-indent">--gpu 0</span></code>
+        <div class="vf-card-heading"><span>{{ text.choose }}</span><span>RTX / CUDA</span></div>
+        <div class="vf-card-body">
+          <div class="vf-tabs" role="tablist" :aria-label="text.choose" @keydown="selectWithKeyboard">
+            <button v-for="(name, index) in ['RTX 4090', 'RTX 3080', '2 × RTX 3080']" :id="`gpu-tab-${index}`" :key="name"
+              :ref="element => { if (element) tabs[index] = element as HTMLButtonElement }"
+              type="button" role="tab" :aria-selected="selected === index" aria-controls="gpu-panel"
+              :tabindex="selected === index ? 0 : -1" @click="select(index)">{{ name }}</button>
+          </div>
+          <div id="gpu-panel" role="tabpanel" :aria-labelledby="`gpu-tab-${selected}`" tabindex="0">
+            <div class="vf-gpu-name">{{ ['48', '20', '2 × 20'][selected] }}<span>GB</span><small>{{ text.memory }}</small></div>
+            <dl class="vf-specs">
+              <div><dt>{{ text.execution }}</dt><dd>{{ text.gpu[selected].execution }}</dd></div>
+              <div><dt>{{ text.available }}</dt><dd>{{ text.gpu[selected].profiles }}</dd></div>
+            </dl>
+            <p class="vf-gpu-note">{{ text.gpu[selected].note }}</p>
+            <div class="vf-command">
+              <div class="vf-command-label"><span>{{ text.inspect }}</span><span role="status"><button type="button" @click="copyCommand">{{ copied ? text.copied : text.copy }}</button></span></div>
+              <code>{{ command }}</code>
+              <p v-if="copyFailed" role="status" class="vf-gpu-note">{{ text.copyFailed }}</p>
+            </div>
           </div>
         </div>
       </div>
     </section>
 
     <section class="vf-availability" aria-labelledby="vf-availability-title">
-      <div><span class="vf-preview-dot" aria-hidden="true"></span><h2 id="vf-availability-title">{{ text.boundary }}</h2></div>
+      <h2 id="vf-availability-title">{{ text.boundary }}</h2>
       <p>{{ text.boundaryText }} <a :href="link('/reference/runtime-assets')">{{ text.inputs }} <span aria-hidden="true">→</span></a></p>
     </section>
 

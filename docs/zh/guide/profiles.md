@@ -21,35 +21,36 @@ vflash plan ref2va-turbo8-exact-sm89 --gpu 0
 
 ## 内存与部署 {#memory}
 
-**4090 配置**默认把权重保留在显存中，常驻服务可以在多个请求之间复用。较大的条件包也可在 Python 会话中选择 `weight_residency="block-ring"`，或在 CLI 中添加 `--weight-residency block-ring`。此时权重从系统内存分块传入，为激活张量腾出显存。这是容量选项：一个同卡 4 步对照的输出 latent 逐位一致，但耗时比权重常驻更长。HTTP 服务目前使用默认驻留策略。
+| 硬件 | 显存策略 | 选择时考虑 |
+| --- | --- | --- |
+| 单 4090 48 GB | 默认权重常驻 | 多次请求复用权重；为中间结果留出足够显存 |
+| 单或双 3080 20 GB | 从系统内存分块加载 | 权重保存在系统内存；双卡共同处理一个请求 |
+| 单 4090，显存需要更多余量 | 显式选择 `block-ring` | 用系统内存换取显存余量，需要单独测量延迟 |
 
-`block-ring` 现在把权重张量放进较大的锁页内存块，减少逐张量分配留下的空余，权重内容和逻辑字节数保持不变。
+CLI 使用 `--weight-residency block-ring`，Python 使用同名的[会话选项](./python#memory)。HTTP 服务使用所选配置的默认策略。
 
-单张 **RTX 4090 48 GB / SM89** 的一次 Ref2VA 对照使用了 3 张参考图、928 × 512 分辨率、124 个模型帧和 24 fps 模型时钟。在 PyTorch 2.11.0+cu130 中比较 0.1.0a3 的分配方式与随 0.1.0a4 发布的分配方式。固定配置为 BF16 Ref Turbo4 v0.1、4 NFE，视频/音频 shift 为 12/3，LoRA strength 为 1、alpha 为 8。权重的活跃锁页内存从约 **58.009 GiB 降到 40 GiB**。相同输入下，最终视频与音频 latent 和原分配方式逐位一致。预热后的原生去噪耗时由 **41.607 s 变为 41.641 s**，持平；实测收益是降低主存占用。40 GiB 仅为锁页权重分配量，整个进程仍需额外系统内存。
+已测的 928 × 512、124 模型帧、4 步负载，建议**每个 worker 至少预留 64 GiB 可用系统内存**，并为操作系统和其他进程留出余量。使用分块加载时，显存占用不包括系统内存中的完整权重。更大输入和并发 worker 都需要重新检查容量。
 
-**3080 配置**将权重保存在锁页系统内存中，按块传入 GPU，并让传输与计算重叠。对 928 × 512、124 帧、4 步这类负载，建议**每个 worker 至少预留 64 GiB 可用系统内存**，并为操作系统和其他应用保留额外余量。更大输入和多 worker 并发需要重新测量容量；64 GiB 不是通用的容量保证。主机到 GPU 的传输速度、可用 RAM 和 GPU 算力都会影响运行效果。
+双 3080 可选择 `sequence-head` 或 `tensor`，由调用方显式指定第二张卡。已测拓扑为无 peer access 的 PCIe 3.0 x16 主机桥连接，不需要 NVLink。设置方法见[双卡执行](./getting-started#parallel)，对照范围见[实测数据](../reference/benchmarks#sm86-parallel)。
 
-当前支持范围覆盖上述 20 GB 和 48 GB 版本。两张 RTX 3080 20 GB 还可通过[权重 TP 或序列/注意力头分片](./getting-started#parallel)共同执行一个 Turbo4 请求。其他显存容量、其他显卡型号、更大的 GPU 组，以及任意分辨率或帧数组合仍不在支持范围内。
+上述支持范围只覆盖 20 GB 版 3080 和 48 GB 版 4090。其他显存容量、型号、更大的 GPU 组，以及任意分辨率或帧数组合尚未获得相同验证。
 
 ## Turbo LoRA 支持 {#lora}
 
 Vflash 可以直接执行固定版本的 [LightX2V H3 Turbo](https://huggingface.co/lightx2v/Minimax-h3-Turbo) LoRA，无需安装 LightX2V 推理框架。配置中的 LoRA、调度方式和步数必须与编译资源一致。
 
+| 适配器 | 已支持硬件 | 上游文件 |
+| --- | --- | --- |
+| Turbo4 v0.1 | 单/双 3080、单 4090 | `minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors` |
+| Turbo8 v1.0 768p | 单 4090 | `minimax_h3_ref2v_turbo_8step_v1.0_768p_bf16.safetensors` |
 
-支持的上游文件分别固定如下：
-
-- **Turbo4：单卡或双卡 3080、单卡 4090:** [`minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors`](https://huggingface.co/lightx2v/Minimax-h3-Turbo/blob/83b617309219e859c1c264520eba07492d22e958/minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors)，修订 `83b617309219e859c1c264520eba07492d22e958`.
-- **Turbo8：单卡 4090:** [`minimax_h3_ref2v_turbo_8step_v1.0_768p_bf16.safetensors`](https://huggingface.co/lightx2v/Minimax-h3-Turbo/blob/0eebcc7e79f9cb200927c80b8e7595265b770e34/minimax_h3_ref2v_turbo_8step_v1.0_768p_bf16.safetensors)，修订 `0eebcc7e79f9cb200927c80b8e7595265b770e34`.
-
-这些文件的摘要与 2026-09-05 核对的上游仓库修订 `2f015e66b37c585cea9dc4ae6f1850ea8788e742` 一致。支持范围仅包含这些 Ref2VA 文件，不代表支持当前或将来所有 LightX2V LoRA。ComfyUI 和 FL2VA 文件是不同的输入。
+固定修订与来源见[运行资源](../reference/runtime-assets#versions)。只支持表中 Ref2VA 文件；ComfyUI、FL2VA、任意自定义 LoRA 和未来上游版本需要单独适配。
 
 Turbo4 和 Turbo8 都是蒸馏配置。减少步数可以降低计算量，但不代表输出质量与 50 步基础模型相同。名称中的 `exact` 描述所用注意力路径和指定 LoRA 的执行方式，不承诺不同 GPU 上的张量完全一致。
 
 双卡模式已执行完整轨迹，并完成一个案例的视频与音频解码对照。它们保留精确注意力，但浮点舍入不同，不承诺输出一致或质量相同。
 
 单卡 3080 预览版已检查容量，以及同一显卡上串行加载与传输计算重叠时的结果一致性。独立参考实现对照和更广泛的质量评测仍待完成。
-
-当前不支持任意 LoRA 文件，也不会自动兼容上游未来发布的新版本。版本匹配方式见[运行资源](../reference/runtime-assets)。
 
 ## 当前版本的边界 {#scope}
 

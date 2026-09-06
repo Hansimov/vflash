@@ -40,3 +40,7 @@ Keep model assets and bundles outside the source checkout. In Docker, mount them
 The output is a safetensors file with video and audio latent tensors. It is suitable for a compatible decoder, which is outside the current public runtime.
 
 Model and adapter files retain their own [licenses and terms](./license), independently of the Vflash source code.
+
+## Adapter file verification {#adapter-files}
+
+Turbo4 uses `minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors`; Turbo8 uses `minimax_h3_ref2v_turbo_8step_v1.0_768p_bf16.safetensors`. Their digests match the upstream repository checked on 2026-09-05 at revision `2f015e66b37c585cea9dc4ae6f1850ea8788e742`. This records a fixed-source check, not automatic compatibility with later revisions.
