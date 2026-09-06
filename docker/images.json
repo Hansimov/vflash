@@ -1,27 +1,33 @@
 {
   "schema_version": 1,
-  "version": "0.2.1",
+  "version": "0.2.2",
   "platform": "linux/amd64",
-  "implementation_revision": "d2a8d6d3f025469746c1a3750c262c1638ac74b3",
-  "gpu_qualified_revision": "703860d25700fad4bd27427c5a483584d1827fe4",
-  "wheel_sha256": "7b01b954376126910675ed4c09e16eaf415ff4f83f54f5a35e335866e9f8555b",
-  "qualification_delta": "Final package differs from the SM86 GPU-qualified package only in version metadata and CLI help/strategy discovery. All 54 remaining package files, including all 22 native implementation files, are identical. SM89 qualification is retained from 0.2.0. Final images pass installed-package, CLI, UID, prepared-asset and early-rejection CPU checks.",
-  "build_recipe": "https://github.com/Hansimov/vflash/releases/download/v0.2.1/Dockerfile.release",
+  "implementation_revision": "18cda3e5fb61901b7ff9422f1e142ae0c61bc6fc",
+  "gpu_qualified_baseline_revision": "de08a81c48c28c608ad61987e585334be029f36a",
+  "promotion_source": {
+    "repository": "video-gen",
+    "revision": "5c01b6dd3902b3e56602f36be0d1831b8442de2c",
+    "license": "Apache-2.0",
+    "kernel_sha256": "6289ddbb4115e750f66075a71440ac27182a6fa7e1285fbff1703b7b6dc1a796"
+  },
+  "wheel_sha256": "3a97bc6ed9e3f337067a62237d8fb42b9ab8e5554f9bee5a9cdcf3dd2385ae98",
+  "qualification_delta": "The qualified SM89 Ref4 FFN merge/SiLU kernel is promoted through a direct method call; only this profile with strict backends, block size 1024 and scaling 0.0625 selects it. All 54 other package files and all pre-existing mathematical function definitions match the 0.2.1 complete-pipeline qualification source, which included the default-preserving FFN method seam. The promoted kernel and BF16 round helper have identical ASTs, and all 224 SM89 instructions / 448 machine words match offline in the pinned runtime. Public dispatch, temporary ownership, install, prepared-assets, arbitrary UID/cache and CLI checks pass on CPU. No new end-to-end speed ratio is claimed.",
+  "build_recipe": "https://github.com/Hansimov/vflash/releases/download/v0.2.2/Dockerfile.release",
   "images": {
     "pipeline": {
-      "name": "hansimov/vflash:0.2.1-pipeline",
-      "digest": "sha256:da97b6f31552a956d7d79d98e0aed787c8834d43f16f9649f163454fff001a2c",
+      "name": "hansimov/vflash:0.2.2-pipeline",
+      "digest": "sha256:0370072751597fe51a75a4cea9c0fa7de4fad8554329cde97cef2fa981daf283",
       "interface": "five-second MP4: T2VA or Ref4 with one to three ordered images on one SM89 48 GB; Ref4 on two SM86 20 GB GPUs with sequence-head",
-      "qualification": "Dual SM86: same-primary official conditioning (14 exact tensors), same-pair standalone native final FP32 AV latents exact, one three-reference 928x512 complete MP4, all-frame/audio decoding and NFE1 cancellation/cleanup. Same-SM86 compiler arithmetic: 52 exact comparisons. Thermal throttling precludes isolated speed claims. SM89: retained 0.2.0 T2VA and 0.1.0 multi-reference validation. No broad semantic or bitwise audio guarantee.",
-      "dependency_image": "hansimov/vflash@sha256:44f65093103d6461db77cd03f757e8889c5b4b0ece2500f27a3b0582e31b9901",
+      "qualification": "SM89 Ref4: same-instance original/fused/original three-reference complete requests; 14 conditioning tensors, final FP32 AV latents, 124 raw video frames and 120 delivery RGB frames exact; all video/audio decodes; NFE1 cancellation, partial-output removal and owned-storage release. Native-only fixed-workload median improvement 43.033 to 42.569 seconds (three warm repeats each), peak saving 597180416 bytes; no broad quality or bitwise audio guarantee. Existing SM86 and T2VA qualification is retained.",
+      "dependency_image": "hansimov/vflash@sha256:da97b6f31552a956d7d79d98e0aed787c8834d43f16f9649f163454fff001a2c",
       "anonymous_pull": true
     },
     "native": {
-      "name": "hansimov/vflash:0.2.1",
-      "digest": "sha256:11035e55c50e46c3a7e71bcdcfbdafad051de69f59687054f0fd25e516d715ad",
+      "name": "hansimov/vflash:0.2.2",
+      "digest": "sha256:cd7878b28d747ebdbc0836df0c256349583cffc85110fbdacc65858e83500e0e",
       "interface": "compiled conditioning bundles to video and audio latents, including native single and dual SM86 profiles",
-      "qualification": "installed package and CPU service checks; all native arithmetic unchanged from 0.2.0",
-      "dependency_image": "hansimov/vflash@sha256:43ec96a8271855b730ec6b993a8d2a02a1e6b46edd7e3d4fa4a2bf3305f15de7",
+      "qualification": "Same-SM89 Ref4 complete-trajectory exact AV outputs and three warm native repeats per implementation, plus installed CPU service and profile-dispatch checks. Other profiles preserve their prior operators. The published performance boundary excludes real-time encoding and media decoding.",
+      "dependency_image": "hansimov/vflash@sha256:11035e55c50e46c3a7e71bcdcfbdafad051de69f59687054f0fd25e516d715ad",
       "anonymous_pull": true
     }
   }
