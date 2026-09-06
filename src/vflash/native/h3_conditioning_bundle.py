@@ -5,10 +5,13 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import re
 import stat
+import uuid
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -407,6 +410,46 @@ def _files(directory: Path, profile: H3ConditioningProfile) -> tuple[H3Condition
             )
         )
     return tuple(rows)
+
+
+def seal_h3_conditioning_bundle(
+    directory: Path,
+    *,
+    bundle_id: str,
+    profile: H3ConditioningProfile,
+    request: Mapping[str, Any],
+    source: Mapping[str, str],
+) -> H3ConditioningBundle:
+    """Validate and content-bind an already written conditioning directory."""
+
+    if _BUNDLE_ID.fullmatch(bundle_id) is None:
+        raise H3ConditioningBundleError("H3 conditioning bundle_id is invalid")
+    if directory.is_symlink() or not directory.is_dir():
+        raise H3ConditioningBundleError("H3 conditioning directory must be a real directory")
+    profile = H3ConditioningProfile.from_mapping(asdict(profile))
+    request_value = _validate_request(dict(request), task=profile.task)
+    source_value = _validate_source(dict(source))
+    H3NativeSchedule.from_json(directory / _FILES["scheduler"], expected_nfe=profile.nfe)
+    files = _files(directory, profile)
+    payload = {
+        "schema_version": H3_CONDITIONING_BUNDLE_SCHEMA_VERSION,
+        "bundle_id": bundle_id,
+        "created_at": datetime.now(UTC).isoformat(),
+        "profile": asdict(profile),
+        "request": request_value,
+        "source": source_value,
+        "files": [asdict(row) for row in files],
+    }
+    target = directory / "bundle.json"
+    temporary = directory / f".bundle-{uuid.uuid4().hex}.json"
+    try:
+        with temporary.open("x", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2)
+            handle.write("\n")
+        os.link(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return load_h3_conditioning_bundle(directory)
 
 
 def load_h3_conditioning_bundle(directory: Path) -> H3ConditioningBundle:

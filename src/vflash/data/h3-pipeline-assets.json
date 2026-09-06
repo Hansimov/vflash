@@ -1,0 +1,469 @@
+{
+  "schema_version": 1,
+  "repository": "MiniMaxAI/MiniMax-H3",
+  "revision": "42ed227ee7df40d41602854ae760620d6eb651fe",
+  "files": [
+    {
+      "path": "FL2VA/audio_vae/config.json",
+      "size": 1973,
+      "git_blob_sha1": "bc2a8dc3bfe9037e1f0e82e97f309019b6a398e6"
+    },
+    {
+      "path": "FL2VA/audio_vae/config.yaml",
+      "size": 91,
+      "git_blob_sha1": "4ad8704ca5bf410fb2f471978fe9537c98ca4aa0"
+    },
+    {
+      "path": "FL2VA/audio_vae/dac_activations.py",
+      "size": 2189,
+      "git_blob_sha1": "234a4223d1fc7340f0dc450b7c7e286555c5065d"
+    },
+    {
+      "path": "FL2VA/audio_vae/dac_alias_free_act.py",
+      "size": 835,
+      "git_blob_sha1": "d39ca2802eec1bd98e31cb2065c088ac6b57c2b0"
+    },
+    {
+      "path": "FL2VA/audio_vae/dac_alias_free_filter.py",
+      "size": 3300,
+      "git_blob_sha1": "ad025952f5ada1c57be051f8e6dc999267b58d36"
+    },
+    {
+      "path": "FL2VA/audio_vae/dac_alias_free_resample.py",
+      "size": 1740,
+      "git_blob_sha1": "af4b2b44891ac10d5f4a544a73a0d1a5d3342637"
+    },
+    {
+      "path": "FL2VA/audio_vae/dac_attn_proj.py",
+      "size": 3317,
+      "git_blob_sha1": "d3b9b1fcba4e8e2ab4ce323577a1f7321a9f7ab1"
+    },
+    {
+      "path": "FL2VA/audio_vae/dac_audio_vae.py",
+      "size": 7266,
+      "git_blob_sha1": "b8b8c8b3ce0f2144b46663ea560bd1904b654925"
+    },
+    {
+      "path": "FL2VA/audio_vae/dac_bigvgan.py",
+      "size": 7102,
+      "git_blob_sha1": "00d639800dbe91e91f1cef39f2642848622e47ff"
+    },
+    {
+      "path": "FL2VA/audio_vae/dac_utils.py",
+      "size": 362,
+      "git_blob_sha1": "b1d30c34fa506c62c338a9bb7e10816e3bbc32cb"
+    },
+    {
+      "path": "FL2VA/audio_vae/metadata.json",
+      "size": 440,
+      "git_blob_sha1": "db6aa0b9d2022da4b04f1f80fa2a5260231c5c83"
+    },
+    {
+      "path": "FL2VA/audio_vae/minimax_h3_audio_vae.py",
+      "size": 3532,
+      "git_blob_sha1": "b03f1e5027888da226701e20c097053068e3e310"
+    },
+    {
+      "path": "FL2VA/audio_vae/model.safetensors",
+      "size": 605429308,
+      "sha256": "37dddc2f3e6d5d5139d823d5ea283bbf304dadcb885b1ccda818aa13dade5ea2"
+    },
+    {
+      "path": "FL2VA/video_vae/attention.py",
+      "size": 5785,
+      "git_blob_sha1": "0443bd31cefe7bd5022aa7f36fbc6aced9fdd84f"
+    },
+    {
+      "path": "FL2VA/video_vae/base_module.py",
+      "size": 9520,
+      "git_blob_sha1": "b13137b8d163afea25c235beef1476039d7f6c0e"
+    },
+    {
+      "path": "FL2VA/video_vae/config.json",
+      "size": 1807,
+      "git_blob_sha1": "20f91e40ea9bc24c21a0e757715f93acf49eb841"
+    },
+    {
+      "path": "FL2VA/video_vae/conv.py",
+      "size": 4487,
+      "git_blob_sha1": "f10f5002b13bfa46c8eb9a9b4ba8d88bc891a517"
+    },
+    {
+      "path": "FL2VA/video_vae/flash.py",
+      "size": 5763,
+      "git_blob_sha1": "40b7cac47cabc3755c8c06dc620c689418cb769d"
+    },
+    {
+      "path": "FL2VA/video_vae/func.py",
+      "size": 5840,
+      "git_blob_sha1": "f142c48a932430b67d77164a6bfba3f61102ac3d"
+    },
+    {
+      "path": "FL2VA/video_vae/klvae.py",
+      "size": 48594,
+      "git_blob_sha1": "3e66f174c2c82600b6bc924ede9fb3fb068d1f3e"
+    },
+    {
+      "path": "FL2VA/video_vae/minimax_h3_video_vae.py",
+      "size": 5123,
+      "git_blob_sha1": "231d9c77a7a3dc74de007c29332cfe92e3782f7d"
+    },
+    {
+      "path": "FL2VA/video_vae/norm.py",
+      "size": 10686,
+      "git_blob_sha1": "00a96b83c6ee3f78cf75873e46d96be5d50879a6"
+    },
+    {
+      "path": "FL2VA/video_vae/normalize.py",
+      "size": 1200,
+      "git_blob_sha1": "fd4038037c22d9c7b2e375e455e975ef4c56db7b"
+    },
+    {
+      "path": "FL2VA/video_vae/parallel.py",
+      "size": 12997,
+      "git_blob_sha1": "e63b13c9b20738d4a2835e8fde4504a8145e121f"
+    },
+    {
+      "path": "FL2VA/video_vae/source/config.json",
+      "size": 1164,
+      "git_blob_sha1": "fb5105116e094aface836f5182b126bb4fbdc699"
+    },
+    {
+      "path": "FL2VA/video_vae/source/model.safetensors",
+      "size": 10415548320,
+      "sha256": "5f0c2e161d895a9fee7645ca32d4a7e3a22b90cacfcbeba62ec999cdbbefe0d3"
+    },
+    {
+      "path": "FL2VA/video_vae/utils.py",
+      "size": 764,
+      "git_blob_sha1": "89c13d28758834b1fa8a1cd69018ec00807402f6"
+    },
+    {
+      "path": "FL2VA/video_vae/vae_cnn.py",
+      "size": 8836,
+      "git_blob_sha1": "40a7917a1144162372f53328753f00e2f4c40a20"
+    },
+    {
+      "path": "FL2VA/video_vae/vae_module.py",
+      "size": 1884,
+      "git_blob_sha1": "6f2bf8d091c35eba2c4b6e92ee0038c0bfc9f137"
+    },
+    {
+      "path": "FL2VA/video_vae/vae_processor.py",
+      "size": 8369,
+      "git_blob_sha1": "0f2611987b6b0a0bfde2a3192121eede32dc9d8d"
+    },
+    {
+      "path": "FL2VA/video_vae/vae_vit.py",
+      "size": 13490,
+      "git_blob_sha1": "9021bcdd1dd2120ef5d0f7e0d0521199dbc1d3f9"
+    },
+    {
+      "path": "audio_scheduler/scheduler_config.json",
+      "size": 96,
+      "git_blob_sha1": "28a3d4ed602d925031c7e5d6eeb07df8958ff0f1"
+    },
+    {
+      "path": "audio_vae/config.json",
+      "size": 2271,
+      "git_blob_sha1": "15df6fe0b288b260dca0f2aebf1cd81334d77e96"
+    },
+    {
+      "path": "audio_vae/diffusion_pytorch_model.safetensors",
+      "size": 605429340,
+      "sha256": "52c59e67ba8de5477c81bfbced0327aabf500f1bfdeefd5ee754529241cb26cb"
+    },
+    {
+      "path": "model_index.json",
+      "size": 2936,
+      "git_blob_sha1": "454be19164878173a962c39c81633e4377880fca"
+    },
+    {
+      "path": "modular_model_index.json",
+      "size": 2935,
+      "git_blob_sha1": "5b69f1e801bd0a7e9733c48704c732339f2002fe"
+    },
+    {
+      "path": "processor/chat_template.json",
+      "size": 5499,
+      "git_blob_sha1": "1081bacf1af7c7c6de4a585ce02cd0fd34e382da"
+    },
+    {
+      "path": "processor/merges.txt",
+      "size": 1671839,
+      "git_blob_sha1": "20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0"
+    },
+    {
+      "path": "processor/preprocessor_config.json",
+      "size": 390,
+      "git_blob_sha1": "2ea84a437d448ff71b08df68fdd949d5cc4ebb64"
+    },
+    {
+      "path": "processor/tokenizer.json",
+      "size": 7032403,
+      "git_blob_sha1": "c6cc1014128b19d1fc46b1d30a23e3b1d35db421"
+    },
+    {
+      "path": "processor/tokenizer_config.json",
+      "size": 11003,
+      "git_blob_sha1": "204d76f78dac6dedc820418c30bf01145de78a21"
+    },
+    {
+      "path": "processor/video_preprocessor_config.json",
+      "size": 385,
+      "git_blob_sha1": "3ba673a5ad7d4d13f54155ecd38b2a94a6dac8fe"
+    },
+    {
+      "path": "processor/vocab.json",
+      "size": 2776833,
+      "git_blob_sha1": "4783fe10ac3adce15ac8f358ef5462739852c569"
+    },
+    {
+      "path": "scheduler/scheduler_config.json",
+      "size": 97,
+      "git_blob_sha1": "1d44f95b955a648ad4fab455e4fe11053888c30b"
+    },
+    {
+      "path": "text_encoder/chat_template.json",
+      "size": 5499,
+      "git_blob_sha1": "1081bacf1af7c7c6de4a585ce02cd0fd34e382da"
+    },
+    {
+      "path": "text_encoder/config.json",
+      "size": 1474,
+      "git_blob_sha1": "29e925092dee9f14278c53e7e7d876cea8a997bc"
+    },
+    {
+      "path": "text_encoder/merges.txt",
+      "size": 1671839,
+      "git_blob_sha1": "20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0"
+    },
+    {
+      "path": "text_encoder/model-00001-of-00014.safetensors",
+      "size": 4932328944,
+      "sha256": "6b9dfbc930e505402ae9d7e5091a9d7d656cda5f34614f01cfe70bfb0cca27cb"
+    },
+    {
+      "path": "text_encoder/model-00002-of-00014.safetensors",
+      "size": 4875990528,
+      "sha256": "d8bb44b4ff303fe76fe9e894022fb3dc71b15a2e716592790fe0e3c3e60478fa"
+    },
+    {
+      "path": "text_encoder/model-00003-of-00014.safetensors",
+      "size": 4875990552,
+      "sha256": "54f22e8b3168f8dc962fac0d313607ebf52a12b433d4cf3098a0d82d9f042940"
+    },
+    {
+      "path": "text_encoder/model-00004-of-00014.safetensors",
+      "size": 4875990584,
+      "sha256": "ad09c74d3c13ee29b5d0d84548fd8a3424a651564eaccd519946c296e59c557f"
+    },
+    {
+      "path": "text_encoder/model-00005-of-00014.safetensors",
+      "size": 4875990584,
+      "sha256": "fc993c8a0e2a5b0570f383e1a95dc3a1281d1b224b6f3ee908f4827941e1dfc2"
+    },
+    {
+      "path": "text_encoder/model-00006-of-00014.safetensors",
+      "size": 4875990584,
+      "sha256": "82f05620d1f718a90c362b221d6a184ff1a0f53301d706882d3df49695fa1974"
+    },
+    {
+      "path": "text_encoder/model-00007-of-00014.safetensors",
+      "size": 4875990584,
+      "sha256": "fb91da8cb01ff4de3eef0eab1c3e769a734b3a1aafc61734068638a0d6c86934"
+    },
+    {
+      "path": "text_encoder/model-00008-of-00014.safetensors",
+      "size": 4875990584,
+      "sha256": "431ca56535c8781944ce3801f5eb61c45531e853ecc5846d936ebaf4761b764f"
+    },
+    {
+      "path": "text_encoder/model-00009-of-00014.safetensors",
+      "size": 4875990584,
+      "sha256": "3825e3f4302f4d2f7d76aa7430d2ce0864fde6b9e540a5806bf0d8e38e4d9f47"
+    },
+    {
+      "path": "text_encoder/model-00010-of-00014.safetensors",
+      "size": 4875990584,
+      "sha256": "aded5a4d1d5e22dbd8b6f79266b6eb88c840411b09527c53917a1419ace22e2f"
+    },
+    {
+      "path": "text_encoder/model-00011-of-00014.safetensors",
+      "size": 4875990584,
+      "sha256": "3820ffe8d8d6477f6fe8d614ef3c87abb264ee39accebf43a1507b970d80946f"
+    },
+    {
+      "path": "text_encoder/model-00012-of-00014.safetensors",
+      "size": 4875990584,
+      "sha256": "05ad2d08ce71963121c9b03f1d9ec5d7641052f4b23c6c12b80d71065eb8e98e"
+    },
+    {
+      "path": "text_encoder/model-00013-of-00014.safetensors",
+      "size": 4875990584,
+      "sha256": "b64f2289871261fdd1abbd3b78bcd66011b341de3dc8eeb2ed1a473ee7c8d95c"
+    },
+    {
+      "path": "text_encoder/model-00014-of-00014.safetensors",
+      "size": 3270697008,
+      "sha256": "e45b6c9998c77ee5a6577f9f47bc76416c1d4d387169e50c4c9d3134ea51b13b"
+    },
+    {
+      "path": "text_encoder/model.safetensors.index.json",
+      "size": 97831,
+      "git_blob_sha1": "b7f68f12031a25c81d72d46a284fe9e1daa448b8"
+    },
+    {
+      "path": "text_encoder/preprocessor_config.json",
+      "size": 390,
+      "git_blob_sha1": "2ea84a437d448ff71b08df68fdd949d5cc4ebb64"
+    },
+    {
+      "path": "text_encoder/tokenizer.json",
+      "size": 7032403,
+      "git_blob_sha1": "c6cc1014128b19d1fc46b1d30a23e3b1d35db421"
+    },
+    {
+      "path": "text_encoder/tokenizer_config.json",
+      "size": 11003,
+      "git_blob_sha1": "204d76f78dac6dedc820418c30bf01145de78a21"
+    },
+    {
+      "path": "text_encoder/video_preprocessor_config.json",
+      "size": 385,
+      "git_blob_sha1": "3ba673a5ad7d4d13f54155ecd38b2a94a6dac8fe"
+    },
+    {
+      "path": "text_encoder/vocab.json",
+      "size": 2776833,
+      "git_blob_sha1": "4783fe10ac3adce15ac8f358ef5462739852c569"
+    },
+    {
+      "path": "tokenizer/merges.txt",
+      "size": 1671839,
+      "git_blob_sha1": "20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0"
+    },
+    {
+      "path": "tokenizer/tokenizer.json",
+      "size": 7032403,
+      "git_blob_sha1": "c6cc1014128b19d1fc46b1d30a23e3b1d35db421"
+    },
+    {
+      "path": "tokenizer/tokenizer_config.json",
+      "size": 11003,
+      "git_blob_sha1": "204d76f78dac6dedc820418c30bf01145de78a21"
+    },
+    {
+      "path": "tokenizer/vocab.json",
+      "size": 2776833,
+      "git_blob_sha1": "4783fe10ac3adce15ac8f358ef5462739852c569"
+    },
+    {
+      "path": "transformer_ref/config.json",
+      "size": 546,
+      "git_blob_sha1": "c251a4133c81852a150c6668a570e142dc776b6e",
+      "sha256": "74c11bff524336576096993cbfcdcdc2ef4fa2fa4409df693bdcbc6c666282ae"
+    },
+    {
+      "path": "transformer_ref/diffusion_pytorch_model-00001-of-00014.safetensors",
+      "size": 4825958704,
+      "sha256": "7a3fcad885f51560e550b2e84c9a8d8b35e62996cfd9076937e992bd23478df9"
+    },
+    {
+      "path": "transformer_ref/diffusion_pytorch_model-00002-of-00014.safetensors",
+      "size": 4702158032,
+      "sha256": "1638ae1dc8ae26c4ba43ad28a6d851ad8983847324bb2b468719c7c81f219706"
+    },
+    {
+      "path": "transformer_ref/diffusion_pytorch_model-00003-of-00014.safetensors",
+      "size": 4933368192,
+      "sha256": "1ef3c4954ffe5a664c2e3028e2a3241190d9c159dce6ba1136002c6af1db5353"
+    },
+    {
+      "path": "transformer_ref/diffusion_pytorch_model-00004-of-00014.safetensors",
+      "size": 4567069608,
+      "sha256": "12d92f2975cfd5c5b786126385c52e5bf64884d4b4d6e60c3ef5d857c3f7469f"
+    },
+    {
+      "path": "transformer_ref/diffusion_pytorch_model-00005-of-00014.safetensors",
+      "size": 4702158080,
+      "sha256": "304d41ce03d59ac94bceb055935bf4e034df0badf8b0df4ded327c08a288a4cc"
+    },
+    {
+      "path": "transformer_ref/diffusion_pytorch_model-00006-of-00014.safetensors",
+      "size": 4933368232,
+      "sha256": "12a134b7c76d86edbe8fa2dc315f6cdaf4e1aca1b6ea4dfe4cad92df03d42eeb"
+    },
+    {
+      "path": "transformer_ref/diffusion_pytorch_model-00007-of-00014.safetensors",
+      "size": 4567069608,
+      "sha256": "b96395261359937c00fb42f4eb29306dc59b1a3368eeba52af4fb66e3e142c69"
+    },
+    {
+      "path": "transformer_ref/diffusion_pytorch_model-00008-of-00014.safetensors",
+      "size": 4702158080,
+      "sha256": "1897a6bf3b4fc834bb82d73ca02a7afc7d38c07f50ec5382cd54cd2f91b604d1"
+    },
+    {
+      "path": "transformer_ref/diffusion_pytorch_model-00009-of-00014.safetensors",
+      "size": 4933368232,
+      "sha256": "edfb38235adc96b99f55a401849befce59075a745e99c2d8c63ff358dd36443d"
+    },
+    {
+      "path": "transformer_ref/diffusion_pytorch_model-00010-of-00014.safetensors",
+      "size": 4567069608,
+      "sha256": "f8710775cf3413670edd7e23861b650a3431a71a6cc14cb1080623ab6b052385"
+    },
+    {
+      "path": "transformer_ref/diffusion_pytorch_model-00011-of-00014.safetensors",
+      "size": 4702158080,
+      "sha256": "9e18acc09f84edb5b34df9628efa15cfcab8bb76e8e20c1c2e979a107a0f7215"
+    },
+    {
+      "path": "transformer_ref/diffusion_pytorch_model-00012-of-00014.safetensors",
+      "size": 4933368232,
+      "sha256": "ea2e18228f8bdba1a4e0f32b155e4586df055997c45356213d05b971ba13e2f4"
+    },
+    {
+      "path": "transformer_ref/diffusion_pytorch_model-00013-of-00014.safetensors",
+      "size": 4567069608,
+      "sha256": "1e12083b1875678f7414ff55b09cd8bb1c30b861243f9bb7ff1e75b6ad3f1bdc"
+    },
+    {
+      "path": "transformer_ref/diffusion_pytorch_model-00014-of-00014.safetensors",
+      "size": 4644161920,
+      "sha256": "b340f44b5690cc745d48ae399381ec15b26a4fe25d483f677ccb4960dadb50d4"
+    },
+    {
+      "path": "transformer_ref/diffusion_pytorch_model.safetensors.index.json",
+      "size": 64488,
+      "git_blob_sha1": "da038def25abb5a5e4be509816ee55a0b7105e09",
+      "sha256": "ac30a3b58963f2e735d493475fbb81853a5735ec947619648b3e045acda6783e"
+    },
+    {
+      "path": "vae/config.json",
+      "size": 2011,
+      "git_blob_sha1": "ed4874a5886972f4029fcd99cbbe72de0177b2c9"
+    },
+    {
+      "path": "vae/diffusion_pytorch_model-00001-of-00003.safetensors",
+      "size": 5061033024,
+      "sha256": "72f4c6be84ac0674f27398cde991dd9d719762f3952c4921aa66b2ce542f6374"
+    },
+    {
+      "path": "vae/diffusion_pytorch_model-00002-of-00003.safetensors",
+      "size": 4955986528,
+      "sha256": "2e05e8bc23fa4071043e17fd242be8acd0685e781a43987432b2eae925be4198"
+    },
+    {
+      "path": "vae/diffusion_pytorch_model-00003-of-00003.safetensors",
+      "size": 398539336,
+      "sha256": "c05d6ac4b1a33de372799d708531da6320f6a3ce6d1ce6d895e770988e004a39"
+    },
+    {
+      "path": "vae/diffusion_pytorch_model.safetensors.index.json",
+      "size": 74228,
+      "git_blob_sha1": "05dfb255c44daa4f1ac487f57f18210fa5c19439"
+    }
+  ]
+}
