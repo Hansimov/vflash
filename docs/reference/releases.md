@@ -1,6 +1,18 @@
 # Release notes
 
-The current release is **0.1.0a6**, a developer preview of H3 denoising. Its public interface accepts compiled conditioning and exports video/audio latents. See [the support table](../guide/profiles) before choosing a profile.
+The current release is **0.1.0a7**, a developer preview with a complete Ref4 Python pipeline and an official-weight compiler. See [the support table](../guide/profiles) before choosing an interface.
+
+## 0.1.0a7 · prompt and image to MP4 {#a7}
+
+[Source tag](https://github.com/Hansimov/vflash/tree/v0.1.0a7)
+
+A prompt and one image can now produce a five-second, 24 fps MP4 on one RTX 4090 48 GB. The Python pipeline owns the native denoiser and stage lifetimes, with explicit pinned official text, reference and VAE adapters. It supports sequential reuse, progress and cancellation. [Generate a video](../guide/complete-pipeline).
+
+The [Ref4 compiler](../guide/compile-weights) builds native assets from fixed official H3 weights and Turbo4 v0.1, without a captured request or another project. Base weights and LoRA identities remain separate. All 1,250 layer tensors, four schedule tensors and nine auxiliary tensors matched the qualified BF16 assets exactly.
+
+Complete checks reproduced conditioning and native latents exactly, with matching decoded video. Small variations in the official audio VAE remain under investigation; this is not a bitwise audio or broad quality guarantee. Total request timing now includes input preparation and cleanup, while weight transfers and stage calls are reported separately.
+
+The complete pipeline and compiler initially cover Ref4 on SM89. T2VA Turbo4, Ref8 and SM86 keep their existing bundle-to-latent interfaces. Dynamic LoRA, FL2VA and W8 are not released. The Docker HTTP service also remains a latent interface. Model weights are downloaded separately under their own licenses.
 
 ## 0.1.0a6 · text-to-video {#t2va}
 
@@ -46,6 +58,6 @@ Added explicit block streaming on a 4090 and completed-step callbacks for integr
 
 ## Availability {#availability}
 
-The public package supports the listed **BF16 Ref2VA Turbo4/Turbo8 and SM89 T2VA Turbo4 profiles**. W8 quantization, live prompt/reference encoding and MP4 output are not released capabilities. Runtime assets and an end-user preparation command are not yet published.
+The package provides the listed **BF16 Ref2VA Turbo4/Turbo8 and SM89 T2VA Turbo4 denoisers**, plus the **single-SM89 Ref4 Python pipeline and official-weight compiler**. The compiler creates Ref4 assets; assets for other profiles must already be prepared. No model payload or prebuilt public container image is bundled with this source release.
 
-New capabilities need their own installation path, hardware validation and decoded-output checks before they appear in the public support table. Applications can supply stages outside the current engine boundary; that does not make those stages part of this package.
+New modes, adapters and hardware require their own installation, numerical and decoded-output checks before entering the support table.

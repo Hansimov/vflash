@@ -1,10 +1,10 @@
 # Prepare Ref4 from official weights
 
-This development preview compiles the BF16 Ref2VA Turbo4 model directly from fixed official H3 weights and the Ref4 v0.1 LoRA. It does not need a captured request, reference image or assets from another project. Its first target is SM89. CPU checks are complete; the new compiler still awaits its own GPU comparison before a release.
+The BF16 Ref2VA Turbo4 compiler reads fixed official H3 weights and the Ref4 v0.1 LoRA. It does not need a captured request, reference image or assets from another project. Its first target is SM89. All 1,250 block tensors, four schedule tensors and nine auxiliary tensors matched the verified BF16 runtime controls exactly.
 
 ## Get the source files
 
-Install this branch with `python -m pip install '.[pipeline]'`. Use PyTorch 2.11.0 with CUDA 13.0, Linux, and an explicitly assigned SM89 GPU for compilation. Downloads and file verification use the CPU. The source files occupy about 146 GiB including the adapter; leave at least 48 GiB more free for the compiled pack. Model files keep their [upstream licenses](../reference/license).
+Install the release checkout with `python -m pip install '.[pipeline]'`. Use PyTorch 2.11.0 with CUDA 13.0, Linux, and an explicitly assigned SM89 GPU for compilation. Downloads and file verification use the CPU. The source files occupy about 146 GiB including the adapter; leave at least 48 GiB more free for the compiled pack. Model files keep their [upstream licenses](../reference/license).
 
 The following download uses a fixed revision and the exact file list bundled with Vflash. It fetches the Ref model, text and reference encoders, and official decoders without downloading the separate Base model:
 

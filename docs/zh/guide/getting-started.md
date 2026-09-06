@@ -1,9 +1,9 @@
 # 开始使用
 
-安装 Vflash 后，可以检查显卡并选择可用配置。实际推理还需要匹配的模型运行资源和预编译条件包。
+安装 Vflash 后，可以检查显卡并选择配置。需要在单张 RTX 4090 48 GB 上用提示词和图片生成视频时，请接着阅读 [Ref4 完整链路](./complete-pipeline)和[官方权重准备流程](./compile-weights)。下文介绍更底层的条件包接口。
 
 ::: info 开始前请确认
-当前 alpha 版本完成的是 **预编译条件包 → 视频和音频潜变量（latents，即解码前的张量）**。运行资源包尚未公开。当前接口还不支持处理提示词、上传参考素材或输出 MP4。
+完整 Python 链路支持**一张参考图 → 五秒 Ref4 MP4**。CLI 和 HTTP 服务仍使用**预编译条件包 → 音视频 latent**，T2VA 也保留在这一底层接口中。模型需要明确下载和编译，不随软件包附带。
 :::
 
 ## 安装命令行工具 {#install}
@@ -11,7 +11,7 @@
 需要 Python 3.11 或更新版本。基础安装很轻量，不会下载模型权重或 PyTorch。
 
 ```bash
-git clone --branch v0.1.0a6 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.1.0a7 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate

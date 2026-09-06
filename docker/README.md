@@ -4,7 +4,7 @@
 
 The service accepts compiled conditioning bundles and returns video and audio latents (tensors ready for decoding). It uses one GPU or a cooperating pair and reuses a loaded model across serial requests.
 
-You need Linux AMD64, Docker Compose v2, NVIDIA Container Toolkit, a CUDA 13.0-compatible driver, a supported GPU, and matching compiled runtime assets. The asset pack is not yet publicly available; the image does not contain model weights or provide prompt-to-MP4 generation.
+You need Linux AMD64, Docker Compose v2, NVIDIA Container Toolkit, a CUDA 13.0-compatible driver, a supported GPU, and matching compiled runtime assets. The image does not contain model weights and serves the bundle-to-latent API. The separate [Ref4 compiler](../docs/guide/compile-weights.md) prepares native assets from official weights; [complete MP4 generation](../docs/guide/complete-pipeline.md) uses the Python pipeline extra.
 
 ## Start from source
 
@@ -14,7 +14,7 @@ From the repository root:
 cp docker/.env.example docker/.env
 ```
 
-Edit `docker/.env` with your absolute asset paths and selected GPU. Keep `VFLASH_IMAGE=vflash:0.1.0a6` to build the current checkout. Choose one of:
+Edit `docker/.env` with your absolute asset paths and selected GPU. Keep `VFLASH_IMAGE=vflash:0.1.0a7` to build the current checkout. Choose one of:
 
 | GPU | `VFLASH_PROFILE_ID` |
 | --- | --- |

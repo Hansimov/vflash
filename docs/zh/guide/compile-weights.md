@@ -1,10 +1,10 @@
 # 从官方权重准备 Ref4
 
-此开发预览版可以从固定版本的 H3 官方权重和 Ref4 v0.1 LoRA，直接编译 BF16 Ref2VA Turbo4 运行资产。不需要捕获请求、参考图片或其他项目的实验资产。首个目标为 SM89。CPU 检查已完成；新编译器还需独立 GPU 对比后才能发布。
+编译器可以从固定版本的 H3 官方权重和 Ref4 v0.1 LoRA，直接准备 BF16 Ref2VA Turbo4 运行资产。不需要捕获请求、参考图片或其他项目的实验资产。首个目标为 SM89。全部 1,250 个层内张量、4 个调度张量和 9 个辅助张量均与已验证的 BF16 运行资产精确一致。
 
 ## 下载源文件
 
-在此分支执行 `python -m pip install '.[pipeline]'`。编译使用 Linux、PyTorch 2.11.0、CUDA 13.0 和明确分配的 SM89 显卡。下载与文件核验仅使用 CPU。官方文件与 LoRA 合计约 146 GiB，编译输出还需要至少 48 GiB 可用磁盘空间。模型文件遵循各自的[上游许可证](../reference/license)。
+在发布版源码中执行 `python -m pip install '.[pipeline]'`。编译使用 Linux、PyTorch 2.11.0、CUDA 13.0 和明确分配的 SM89 显卡。下载与文件核验仅使用 CPU。官方文件与 LoRA 合计约 146 GiB，编译输出还需要至少 48 GiB 可用磁盘空间。模型文件遵循各自的[上游许可证](../reference/license)。
 
 以下代码按固定版本和 Vflash 内置清单下载 Ref 模型、文本及参考图编码器、官方解码器，不下载独立的 Base 模型：
 

@@ -4,7 +4,7 @@
 
 服务接收预编译条件包，返回视频和音频潜变量（latents，即解码前的张量）。它使用一张 GPU 或一组协作双卡，并在多个串行请求之间复用已加载的模型。
 
-需要 Linux AMD64、Docker Compose v2、NVIDIA Container Toolkit、兼容 CUDA 13.0 的驱动、受支持的显卡和匹配的编译资源。资源包尚未公开；镜像不包含模型权重，也不提供从提示词到 MP4 的完整生成。
+需要 Linux AMD64、Docker Compose v2、NVIDIA Container Toolkit、兼容 CUDA 13.0 的驱动、受支持的显卡和匹配的编译资源。镜像不含模型权重，提供条件包到 latent 的接口。独立的 [Ref4 编译器](../docs/zh/guide/compile-weights.md)可以从官方权重准备运行资产；[完整 MP4 生成](../docs/zh/guide/complete-pipeline.md)使用 Python pipeline 扩展。
 
 ## 从源码启动
 
@@ -14,7 +14,7 @@
 cp docker/.env.example docker/.env
 ```
 
-编辑 `docker/.env`，填写资源的绝对路径并选择显卡。保留 `VFLASH_IMAGE=vflash:0.1.0a6` 以构建当前源码。配置可选：
+编辑 `docker/.env`，填写资源的绝对路径并选择显卡。保留 `VFLASH_IMAGE=vflash:0.1.0a7` 以构建当前源码。配置可选：
 
 | 显卡 | `VFLASH_PROFILE_ID` |
 | --- | --- |

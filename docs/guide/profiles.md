@@ -4,7 +4,7 @@ A profile chooses the model, LoRA revision, step count, and arithmetic. Its defa
 
 ## Available profiles {#available}
 
-Ref2VA generates video and audio from reference conditioning. T2VA uses text conditioning without reference images. Both start from compiled conditioning bundles; Base and Ref weights are separate.
+Ref2VA generates video and audio from reference conditioning. T2VA uses text conditioning without reference images. The native interfaces use compiled conditioning bundles; Base and Ref weights are separate. The [complete Ref4 Python pipeline](./complete-pipeline) additionally accepts a prompt and one image on an RTX 4090 48 GB.
 
 | GPU | Profile | Steps | Weight loading |
 | --- | --- | ---: | --- |
@@ -40,6 +40,8 @@ Use `--weight-residency block-ring` in the CLI or the matching [Python session o
 
 For the measured 928 × 512, 124-model-frame, four-step workload, allow **at least 64 GiB of available system memory per worker**, plus headroom for the OS and other processes. With block streaming, VRAM usage excludes the complete weights stored in host RAM. Larger inputs and concurrent workers require their own capacity checks.
 
+That budget covers the native denoiser. The complete Ref4 pipeline also owns text/reference encoders and official VAEs; its integration checks used a 240 GiB host-memory limit. Its stages take turns on one SM89 GPU and the native core uses block streaming.
+
 A 3080 pair supports `sequence-head` or `tensor`; the caller selects the peer explicitly. The measured topology uses PCIe 3.0 x16 host-bridge links without peer access and does not require NVLink. See [dual-GPU setup](./getting-started#parallel) and the [measurement scope](../reference/benchmarks#sm86-parallel).
 
 This support scope covers the 20 GB 3080 and 48 GB 4090 variants. Other capacities, models, larger GPU groups and arbitrary resolutions or frame counts have not received the same validation.
@@ -63,4 +65,4 @@ The single-device 3080 preview has been checked for capacity and repeatable resu
 
 ## What is outside this release {#scope}
 
-The current public engine does not provide live text/reference encoding, VAE decoding, MP4 output, first/last-frame generation, or dynamic LoRA loading. The HTTP API provides one serial execution lane; account management, billing, and distributed GPU scheduling belong to the application using Vflash.
+The complete pipeline and official-weight compiler currently cover Ref4 on SM89 only. T2VA, Turbo8 and SM86 remain bundle-to-latents interfaces. First/last-frame generation, dynamic LoRA loading and W8 are not released features. The HTTP API provides one serial denoising lane; account management, billing and distributed GPU scheduling belong to the application.

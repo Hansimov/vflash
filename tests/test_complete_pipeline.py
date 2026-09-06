@@ -28,11 +28,13 @@ def _pipeline(*, fail: str | None = None) -> tuple[H3Pipeline, list[str]]:
         def close(self) -> None:
             self._event("close")
 
-        def resume_cuda(self) -> None:
+        def resume_cuda(self) -> float:
             self._event("resume")
+            return 0.0
 
-        def suspend_cuda(self) -> None:
+        def suspend_cuda(self) -> float:
             self._event("suspend")
+            return 0.0
 
         def capture(self, request, reference, directory):
             self._event("capture")
@@ -128,6 +130,91 @@ def test_two_requests_reuse_the_session_and_retire_each_stage(video_request, tmp
     pipeline.close()
     pipeline.close()
     assert events[-3:] == ["conditioning:close", "media:close", "native:close"]
+
+
+def test_total_time_covers_input_loading_and_reference_cleanup(
+    video_request, tmp_path, monkeypatch
+):
+    pipeline, _events = _pipeline()
+    clock = [100.0]
+
+    def advance(seconds):
+        clock[0] += seconds
+
+    def read(_path):
+        advance(3)
+        return SimpleNamespace(image=object(), close=lambda: advance(17))
+
+    monkeypatch.setattr("vflash.pipeline.runtime.time.monotonic", lambda: clock[0])
+    monkeypatch.setattr("vflash.pipeline.runtime.read_reference", read)
+    pipeline.prepared.check_unchanged = lambda: advance(2)
+    for stage, method_name, seconds in (
+        (pipeline._conditioner, "capture", 7),
+        (pipeline._core, "generate", 13),
+        (pipeline._media, "generate_mp4", 11),
+    ):
+        original = getattr(stage, method_name)
+
+        def timed(*args, _original=original, _seconds=seconds, **kwargs):
+            advance(_seconds)
+            return _original(*args, **kwargs)
+
+        setattr(stage, method_name, timed)
+    result = pipeline.generate(video_request, tmp_path / "complete.mp4")
+    assert result.elapsed_seconds == 53
+    assert result.stages["input_preparation"] == {
+        "elapsed_seconds": 5,
+        "reference_loading_seconds": 3,
+    }
+    assert result.stages["encoding"]["elapsed_seconds"] == 7
+    assert result.stages["media"]["elapsed_seconds"] == 11
+    assert result.stages["session_initialization_seconds"] == 1
+    assert not pipeline._lock.locked()
+
+
+def test_stage_timings_keep_transfer_and_call_costs_inside_outer_duration(
+    video_request, tmp_path, monkeypatch
+):
+    pipeline, _events = _pipeline()
+    clock = [0.0]
+    monkeypatch.setattr("vflash.pipeline.runtime.time.monotonic", lambda: clock[0])
+
+    def duration(seconds):
+        clock[0] += seconds
+        return seconds
+
+    for stage, resume, suspend in (
+        (pipeline._conditioner, 2, 3),
+        (pipeline._media, 5, 7),
+    ):
+        stage.resume_cuda = lambda value=resume: duration(value)
+        stage.suspend_cuda = lambda value=suspend: duration(value)
+    for stage, name, seconds in (
+        (pipeline._conditioner, "capture", 11),
+        (pipeline._media, "generate_mp4", 13),
+    ):
+        original = getattr(stage, name)
+
+        def timed(*args, _original=original, _seconds=seconds, **kwargs):
+            duration(_seconds)
+            return _original(*args, **kwargs)
+
+        setattr(stage, name, timed)
+    result = pipeline.generate(
+        video_request,
+        tmp_path / "timed.mp4",
+        progress=lambda event: duration(1) if event.stage in {"encoding", "decoding"} else None,
+    )
+    encoding, media = result.stages["encoding"], result.stages["media"]
+    assert encoding["elapsed_seconds"] == 18
+    assert encoding["weight_resume_seconds"] == 2
+    assert encoding["capture_call_seconds"] == 11
+    assert encoding["suspend_seconds"] == 3
+    assert media["elapsed_seconds"] == 27
+    assert media["weight_resume_seconds"] == 5
+    assert media["decode_call_seconds"] == 13
+    assert media["suspend_seconds"] == 7
+    assert result.elapsed_seconds == 45
 
 
 @pytest.mark.parametrize(

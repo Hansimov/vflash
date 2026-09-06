@@ -1,6 +1,6 @@
-# Complete video pipeline preview
+# Generate a video with Python
 
-This development branch adds a Python pipeline from a written prompt and one reference image to an MP4. Its first target is Ref2VA Turbo4 on one SM89 GPU with 48 GiB of memory. Two sequential requests and cancellation have passed a complete GPU integration check at 928 × 512. It is not part of the published latent-only release yet. The new [official-weight compiler](./compile-weights) is available on this branch and awaits its own GPU qualification.
+Vflash 0.1.0a7 provides a Python pipeline from a written prompt and one reference image to an MP4. Its first target is Ref2VA Turbo4 on one SM89 GPU with 48 GiB of memory. Two sequential requests and cancellation passed complete GPU integration checks at 928 × 512. The [official-weight compiler](./compile-weights) creates all required native assets without a captured request or another project.
 
 ## What runs where
 
@@ -10,7 +10,7 @@ The initial request has one image, four denoising evaluations, a five-second res
 
 ## Installation and assets
 
-Install the pipeline extra from this branch and provide `ffmpeg` and `ffprobe` on `PATH`:
+Install the pipeline extra from the release checkout and provide `ffmpeg` and `ffprobe` on `PATH`:
 
 ```bash
 python -m pip install '.[pipeline]'
@@ -70,6 +70,10 @@ with H3Pipeline(prepared, device=devices[0], trust_local_code=True) as pipeline:
 `trust_local_code=True` permits loading the official decoder Python files from the verified local snapshot. Review the [model and code licenses](../reference/license) first.
 
 Reuse the same pipeline for sequential requests. Its native block ring leaves device memory available while the encoder and VAE take turns. CPU model masters remain owned for reuse, so sufficient host memory is also required. A progress callback runs synchronously and may raise to cancel; it must not call `close` from inside that callback. Application queues, accounts, storage and parallel worker scheduling stay outside this API.
+
+The integration checks used a 240 GiB host-memory limit. This is a tested budget, not a measured minimum. The 64 GiB recommendation for the denoiser alone does not cover these additional encoders and decoders.
+
+`VideoResult.elapsed_seconds` covers the successful `generate` call from input validation through reference cleanup. `stages.input_preparation` includes asset checks and image loading; its `reference_loading_seconds` is nested inside that preparation duration. Model initialization is reported separately. Encoding and media stages report `weight_resume_seconds`, `suspend_seconds`, and `capture_call_seconds` or `decode_call_seconds`. Their outer durations also cover synchronous callbacks and other orchestration. These nested fields must not all be summed as independent costs.
 
 The output path must not already exist. A video is published only after encoding, media probing and GPU stage cleanup have succeeded. A failed execution retires the pipeline and removes temporary files. `close()` releases owned models and hooks after a CUDA completion fence; it never resets another owner's CUDA context. CUDA libraries may retain process-level workspaces after a model closes. Exit the dedicated process when the application needs to relinquish its entire CUDA context.
 

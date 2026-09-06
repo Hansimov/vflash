@@ -7,7 +7,7 @@ import tempfile
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 from traceback import clear_frames
 from typing import Any
@@ -113,6 +113,7 @@ class H3Pipeline:
         progress: Callable[[PipelineProgress], None] | None = None,
     ) -> VideoResult:
         """Return a complete MP4; failed or concurrent requests never publish a partial file."""
+        started = time.monotonic()
         if self._closed:
             raise ContractError("the pipeline is closed")
         if not isinstance(request, VideoRequest) or not isinstance(output_path, Path):
@@ -131,9 +132,12 @@ class H3Pipeline:
             # Input errors are checked before stage activation and do not retire
             # an otherwise healthy session. Read/hash exactly the decoded bytes.
             self.prepared.check_unchanged()
+            reference_started = time.monotonic()
             reference = read_reference(request.reference)
+            reference_loading_seconds = time.monotonic() - reference_started
+            input_preparation_seconds = time.monotonic() - started
             try:
-                return self._generate_one(request, reference, output_path, progress=progress)
+                result = self._generate_one(request, reference, output_path, progress=progress)
             except BaseException as exc:
                 try:
                     self._close_owned()
@@ -147,6 +151,21 @@ class H3Pipeline:
                 reference.close()
             self._active_thread_id = None
             self._lock.release()
+        # Report the public call, including input checks, image decoding/hash,
+        # temporary-file cleanup and reference.close(). Model initialization is
+        # separate. Reference loading is nested inside preparation, not added
+        # a second time to an independently reported total.
+        return replace(
+            result,
+            elapsed_seconds=time.monotonic() - started,
+            stages={
+                **result.stages,
+                "input_preparation": {
+                    "elapsed_seconds": input_preparation_seconds,
+                    "reference_loading_seconds": reference_loading_seconds,
+                },
+            },
+        )
 
     def _generate_one(
         self,
@@ -171,18 +190,23 @@ class H3Pipeline:
             dir=output_path.parent, prefix=".vflash-request-"
         ) as tmp:
             directory = Path(tmp)
-            report("encoding", 0, 1)
             stage_started = time.monotonic()
-            self._conditioner.resume_cuda()
+            report("encoding", 0, 1)
+            weight_resume_seconds = self._conditioner.resume_cuda()
+            call_started = time.monotonic()
             bundle = self._conditioner.capture(request, reference, directory / "conditioning")
-            self._conditioner.suspend_cuda()
+            capture_call_seconds = time.monotonic() - call_started
+            suspend_seconds = self._conditioner.suspend_cuda()
+            report("encoding", 1, 1)
             stages["encoding"] = {
                 "elapsed_seconds": time.monotonic() - stage_started,
+                "weight_resume_seconds": weight_resume_seconds,
+                "capture_call_seconds": capture_call_seconds,
+                "suspend_seconds": suspend_seconds,
                 "profile": asdict(bundle.profile),
                 "source": dict(bundle.source),
                 "bundle_id": bundle.bundle_id,
             }
-            report("encoding", 1, 1)
             report("denoising", 0, 4)
             native = self._core.generate(
                 bundle.directory,
@@ -196,9 +220,10 @@ class H3Pipeline:
                 for key, value in native["generation"].items()
                 if key != "output_path"
             }
-            report("decoding", 0, 1)
             stage_started = time.monotonic()
-            self._media.resume_cuda()
+            report("decoding", 0, 1)
+            weight_resume_seconds = self._media.resume_cuda()
+            call_started = time.monotonic()
             media = self._media.generate_mp4(
                 directory / "latents.safetensors",
                 directory / "video.mp4",
@@ -207,13 +232,17 @@ class H3Pipeline:
                 duration_seconds=5,
                 fps=24,
             )
-            self._media.suspend_cuda()
+            decode_call_seconds = time.monotonic() - call_started
+            suspend_seconds = self._media.suspend_cuda()
+            report("decoding", 1, 1)
             stages["media"] = {
                 "elapsed_seconds": time.monotonic() - stage_started,
+                "weight_resume_seconds": weight_resume_seconds,
+                "decode_call_seconds": decode_call_seconds,
+                "suspend_seconds": suspend_seconds,
                 "stage_durations": media.stage_durations,
                 "peak_allocated_bytes": media.peak_allocated_bytes,
             }
-            report("decoding", 1, 1)
             os.link(directory / "video.mp4", output_path)
         self.request_count += 1
         # A callback cannot turn a successfully published MP4 into a reported
