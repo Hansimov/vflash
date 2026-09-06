@@ -16,7 +16,7 @@
 cp docker/.env.example docker/.env
 ```
 
-编辑 `docker/.env`，填写资源的绝对路径并选择显卡。使用 `VFLASH_IMAGE=hansimov/vflash:0.2.1` 拉取已发布镜像。配置可选：
+编辑 `docker/.env`，填写资源的绝对路径并选择显卡。使用 `VFLASH_IMAGE=hansimov/vflash:0.2.2` 拉取已发布镜像。配置可选：
 
 | 显卡 | `VFLASH_PROFILE_ID` |
 | --- | --- |

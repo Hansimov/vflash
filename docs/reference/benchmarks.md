@@ -2,6 +2,19 @@
 
 Each result belongs to its stated software version, hardware and workload. These published summaries preserve their original scope for reproduction; they are not a ranking of the current release. See [profiles and hardware](../guide/profiles) for current support and [performance and quality](./performance) for measurement guidance.
 
+## 4090 FFN fusion · promoted in 0.2.2 {#sm89-ffn}
+
+The implementation promoted in 0.2.2 was measured against the 0.1.0a6 native runtime on the same RTX 4090 48 GB at its default 450 W limit. The fixed workload used BF16 Ref4 v0.1 (rank 128, alpha 8, scale 0.0625), 928 × 512, 124 model frames, 20,828 packed tokens and four evaluations through all 50 layers. Both implementations used block streaming, the same conditioning bundle, cuBLAS GEMMs, Torch Flash attention, PyTorch 2.11.0+cu130 and Triton 3.6.0. Only FFN adapter merge plus SiLU changed. Encoding, VAE decoding, MP4 export and model initialization are outside this native request boundary.
+
+| Warm native request | Repeats | Median | Range | Peak allocated GPU memory |
+| --- | ---: | ---: | ---: | ---: |
+| Separate merge and activation | 3 | 43.033 s | 42.994–43.082 s | 9,281,030,144 B |
+| Combined kernel | 3 | 42.569 s | 42.539–42.600 s | 8,683,849,728 B |
+
+The median reduction is **0.464 s / 1.08%**; the GPU allocation reduction is **597,180,416 B**. Interleaved requests bracketed the candidate with original-implementation runs; anchor drift was 0.204%, temperature reached 75°C and thermal counters did not grow. All final FP32 video/audio latents matched exactly. This is a target-hardware measurement of one fixed native workload, not a broad speed or quality guarantee.
+
+Complete-pipeline integration was then checked with a different packed length, 18,922 tokens, on the 0.2.1 pipeline using the same kernel. A three-reference original/fused/original sequence preserved conditioning, final latents and every decoded video frame, and cancellation released owned storage. In that case denoising allocation fell from 8,577,681,920 to 8,035,150,336 B; the maximum observed across pipeline stages stayed at 9,945,532,928 B. The runs had different first-use caches and only one sample per arm, so their total times do not establish an end-to-end speed ratio. Host RSS peaked at 114.38 GiB. The [0.2.2 release notes](./releases#v0-2-2) describe the supported dispatch and remaining audio limits.
+
 ## Two 3080s · a3 {#sm86-parallel}
 
 The comparison below was measured on the **a3** runtime, before a4 introduced segmented pinned storage. Its original timings and memory figures are retained as historical evidence, not a benchmark of every later release. The a5 loader and lifecycle changes do not update this ranking.

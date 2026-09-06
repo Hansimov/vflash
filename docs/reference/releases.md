@@ -1,6 +1,18 @@
 # Release notes
 
-The current release is **0.2.1**. Generate a video from text alone or up to three ordered references on one RTX 4090 48 GB, or from references on two RTX 3080 20 GB GPUs. See [the complete profile table](./pipeline-profiles) for hardware and mode selection.
+The current release is **0.2.2**. Generate a video from text alone or up to three ordered references on one RTX 4090 48 GB, or from references on two RTX 3080 20 GB GPUs. See [the complete profile table](./pipeline-profiles) for hardware and mode selection.
+
+## 0.2.2 · lower FFN memory on 4090 {#v0-2-2}
+
+[Source tag](https://github.com/Hansimov/vflash/tree/v0.2.2)
+
+SM89 Ref4 now combines the FFN LoRA merge and SiLU activation in one kernel. It preserves the original BF16 rounding after adapter scaling, addition and activation, while removing a large intermediate tensor. The default strict Ref4 path selects it automatically; model assets and generation commands stay compatible. SM86, Base4 T2VA and Ref8 retain their previous kernels.
+
+A same-device native comparison measured a median **43.033 → 42.569 seconds** over three warm runs per implementation, a **0.464-second (1.08%)** reduction. Peak denoising allocation fell by 597 MB on that fixed workload. See [the workload and measurement boundary](./benchmarks#sm89-ffn). These are native-engine results, not an end-to-end speed claim.
+
+The same kernel then passed an original/fused/original sequence in a persistent complete pipeline, using three ordered references at 928 × 512. All 14 conditioning tensors, final FP32 video/audio latents, 124 raw video frames and 120 delivered RGB frames matched exactly. Each MP4 decoded fully with five-second stereo audio. Cancellation after the first denoising evaluation retired the pipeline, removed partial output and released owned storage. The three-reference denoising peak fell by 517 MiB; the observed maximum across pipeline stages stayed unchanged because another stage dominated. Repeated official audio decoding can still vary slightly; this is not a bitwise audio or broad generation-quality guarantee.
+
+The public implementation uses a direct method call with no experiment hooks. Installed-package and CPU dispatch checks bind it to the qualified kernel; the other native and pipeline computations are unchanged. The [versioned image inventory](https://github.com/Hansimov/vflash/blob/v0.2.2/docker/images.json) records source, wheel and immutable container identities.
 
 ## 0.2.1 · complete video on two 3080s {#v0-2-1}
 

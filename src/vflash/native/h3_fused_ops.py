@@ -196,6 +196,61 @@ def _strict_bf16_silu_mul_kernel() -> tuple[Any, Any]:
 
 
 @cache
+def _strict_bf16_ffn_adapter_silu_kernel() -> Any:
+    """Build the JIT definition without requesting a device or compiling it."""
+    import triton
+    import triton.language as tl
+    from triton.language.extra import libdevice
+
+    @triton.jit
+    def round_bf16(value):
+        return tl.inline_asm_elementwise(
+            asm="""
+            {
+            .reg .b16 rounded;
+            cvt.rn.bf16.f32 rounded, $1;
+            cvt.f32.bf16 $0, rounded;
+            }
+            """,
+            constraints="=f,f",
+            args=[value],
+            dtype=tl.float32,
+            is_pure=True,
+            pack=1,
+        )
+
+    @triton.jit
+    def strict_ffn_adapter_silu_kernel(
+        output_ptr,
+        base_ptr,
+        adapter_ptr,
+        elements,
+        hidden_size,
+        scaling,
+        BLOCK_SIZE: tl.constexpr,
+    ):
+        offsets = tl.program_id(0) * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+        mask = offsets < elements
+        hidden_offsets = offsets % hidden_size
+        rows = offsets // hidden_size
+        value_offsets = rows * (2 * hidden_size) + hidden_offsets
+        gate_offsets = value_offsets + hidden_size
+        base_value = tl.load(base_ptr + value_offsets, mask=mask, other=0).to(tl.float32)
+        adapter_value = tl.load(adapter_ptr + value_offsets, mask=mask, other=0).to(tl.float32)
+        base_gate = tl.load(base_ptr + gate_offsets, mask=mask, other=0).to(tl.float32)
+        adapter_gate = tl.load(adapter_ptr + gate_offsets, mask=mask, other=0).to(tl.float32)
+
+        # Retain the separate adapter merge and SiLU BF16 round boundaries.
+        value = round_bf16(base_value + round_bf16(adapter_value * scaling))
+        gate = round_bf16(base_gate + round_bf16(adapter_gate * scaling))
+        activated = gate / (1.0 + libdevice.exp(-gate))
+        output = value * round_bf16(activated)
+        tl.store(output_ptr + offsets, output, mask=mask)
+
+    return strict_ffn_adapter_silu_kernel
+
+
+@cache
 def _strict_bf16_adapter_kernels() -> tuple[Any, Any, Any]:
     try:
         import triton
@@ -590,6 +645,56 @@ def triton_strict_bf16_silu_mul(
         hidden_size,
         BLOCK_SIZE=block_size,
         num_warps=min(8, block_size // 32),
+    )
+    return output
+
+
+def triton_strict_bf16_ffn_adapter_silu(
+    base: Any, adapter: Any, *, scaling: float, block_size: int
+) -> Any:
+    """Merge the FFN adapter and SiLU without a merged [B,S,2F] temporary.
+
+    The separate BF16 LoRA product, addition and SiLU round boundaries remain
+    explicit. This entry is dispatched only for the qualified SM89 Ref4 profile.
+    """
+
+    import torch
+    import triton
+
+    if (
+        not isinstance(base, torch.Tensor)
+        or not isinstance(adapter, torch.Tensor)
+        or base.device.type != "cuda"
+        or adapter.device != base.device
+        or base.dtype != torch.bfloat16
+        or adapter.dtype != base.dtype
+        or base.ndim != 3
+        or tuple(adapter.shape) != tuple(base.shape)
+        or not base.is_contiguous()
+        or not adapter.is_contiguous()
+        or any(size <= 0 for size in base.shape)
+        or base.shape[-1] % 2
+        or base.numel() >= 2**31
+    ):
+        raise H3FusedOpsError("FFN fusion requires matching contiguous CUDA BF16 [B,S,2F]")
+    if (
+        not isinstance(scaling, (float, int))
+        or isinstance(scaling, bool)
+        or not math.isfinite(scaling)
+        or block_size != 1024
+    ):
+        raise H3FusedOpsError("FFN fusion requires finite scaling and block size 1024")
+    width = base.shape[-1] // 2
+    output = torch.empty((*base.shape[:-1], width), device=base.device, dtype=base.dtype)
+    _strict_bf16_ffn_adapter_silu_kernel()[(triton.cdiv(output.numel(), block_size),)](
+        output,
+        base,
+        adapter,
+        output.numel(),
+        width,
+        float(scaling),
+        BLOCK_SIZE=block_size,
+        num_warps=8,
     )
     return output
 

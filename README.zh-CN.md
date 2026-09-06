@@ -4,14 +4,14 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
-**0.2.1 正式版。** 支持纯文字生成，也支持提示词加一至三张有序参考图。通过 Python 或容器命令行的[完整链路](https://hansimov.github.io/vflash/zh/guide/complete-pipeline)生成五秒 MP4：Ref4 支持单张 RTX 4090 48 GB 或双张 RTX 3080 20 GB，纯文字 T2VA 使用单张 4090；运行资产可以[从固定官方权重直接编译](https://hansimov.github.io/vflash/zh/guide/compile-weights)。原生 Python、CLI 和 HTTP 接口也支持在下列显卡上接收条件包、输出音视频 latent。
+**0.2.2 正式版。** 支持纯文字生成，也支持提示词加一至三张有序参考图。通过 Python 或容器命令行的[完整链路](https://hansimov.github.io/vflash/zh/guide/complete-pipeline)生成五秒 MP4：Ref4 支持单张 RTX 4090 48 GB 或双张 RTX 3080 20 GB，纯文字 T2VA 使用单张 4090；运行资产可以[从固定官方权重直接编译](https://hansimov.github.io/vflash/zh/guide/compile-weights)。原生 Python、CLI 和 HTTP 接口也支持在下列显卡上接收条件包、输出音视频 latent。
 
 ## 检查运行环境
 
 需要 Python 3.11 或更新版本。基础安装不会下载模型权重或 PyTorch。
 
 ```bash
-git clone --branch v0.2.1 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.2.2 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate

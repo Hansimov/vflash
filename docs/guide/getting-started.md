@@ -11,7 +11,7 @@ The Python pipeline and `vflash generate` support **text alone or one to three r
 Use Python 3.11 or newer. The base installation is lightweight and does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.2.1 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.2.2 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate

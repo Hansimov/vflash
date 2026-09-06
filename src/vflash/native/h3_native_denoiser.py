@@ -343,6 +343,15 @@ class _H3BlockOperations:
         value, gate = packed.chunk(2, dim=-1)
         return value * functional.silu(gate)
 
+    def _ffn_input(self, normalized: Any) -> Any:
+        return self._silu_mul(
+            self._adapted_linear(
+                normalized,
+                self.weights.ffn_in,
+                self.weights.ffn_in_residual,
+            )
+        )
+
     def _rotary(self, hidden_states: Any, cos: Any, sin: Any) -> Any:
         return _apply_rotary(hidden_states, cos, sin)
 
@@ -491,13 +500,7 @@ class _H3BlockOperations:
         residual = hidden_states
         normalized = _rms_norm(hidden_states, self.weights.ffn_norm, eps=self.norm_eps)
         normalized = self._modulate(normalized, scale_mlp, shift_mlp)
-        ffn = self._silu_mul(
-            self._adapted_linear(
-                normalized,
-                self.weights.ffn_in,
-                self.weights.ffn_in_residual,
-            )
-        )
+        ffn = self._ffn_input(normalized)
         return self._adapted_gate_residual(
             ffn,
             self.weights.ffn_out,
@@ -858,6 +861,27 @@ class H3NativeBlockBF16Resident(_H3BlockOperations):
 
         return triton_strict_bf16_silu_mul(
             packed,
+            block_size=self.elementwise_block_size,
+        )
+
+    def _ffn_input(self, normalized: Any) -> Any:
+        adapter = self.weights.ffn_in_residual
+        if (
+            self.elementwise_backend != "triton-strict"
+            or self.adapter_fusion_backend != "triton-strict"
+            or self.elementwise_block_size != 1024
+            or self.artifact.target.compute_capability != "sm89"
+            or self.artifact.weight_profile != "lightx-ref-turbo4-v0.1"
+            or adapter is None
+            or adapter.scaling != 0.0625
+        ):
+            return super()._ffn_input(normalized)
+        from vflash.native.h3_fused_ops import triton_strict_bf16_ffn_adapter_silu
+
+        return triton_strict_bf16_ffn_adapter_silu(
+            self._linear(normalized, self.weights.ffn_in),
+            self._residual_linear_unscaled(normalized, adapter),
+            scaling=adapter.scaling,
             block_size=self.elementwise_block_size,
         )
 

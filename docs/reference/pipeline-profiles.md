@@ -1,6 +1,6 @@
 # Complete model profiles
 
-A prepared pipeline uses one fixed model, adapter and scheduler. Vflash 0.2.1 supports these complete pipelines:
+A prepared pipeline uses one fixed model, adapter and scheduler. Vflash 0.2.2 supports these complete pipelines:
 
 | Profile | Hardware | Input | Transformer | Adapter | Video/audio shifts |
 | --- | --- | --- | --- | --- | --- |

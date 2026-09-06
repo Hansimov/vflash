@@ -1,6 +1,6 @@
 # Generate a video
 
-Vflash 0.2.1 generates a five-second MP4 from text alone, or from a prompt and one to three ordered reference images. Use the Python API for repeated requests or the container CLI for a single generation. The complete pipeline supports T2VA Base4 and Ref2VA Turbo4 on one RTX 4090 48 GB; Ref4 also runs on two RTX 3080 20 GB GPUs.
+Vflash 0.2.2 generates a five-second MP4 from text alone, or from a prompt and one to three ordered reference images. Use the Python API for repeated requests or the container CLI for a single generation. The complete pipeline supports T2VA Base4 and Ref2VA Turbo4 on one RTX 4090 48 GB; Ref4 also runs on two RTX 3080 20 GB GPUs.
 
 ## What runs where
 
