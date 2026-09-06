@@ -8,7 +8,7 @@ Vflash is released under [Apache License 2.0](https://github.com/Hansimov/vflash
 
 MiniMax H3 and optional LoRA checkpoints retain their own licenses, usage rules, and geographic terms. The Vflash code license does not grant rights to those weights or override their restrictions. Read the terms for the exact model and adapter revision you use.
 
-- [MiniMax H3 model, documentation, and license](https://huggingface.co/MiniMaxAI/MiniMax-H3)
+- [MiniMax H3 model and documentation](https://huggingface.co/MiniMaxAI/MiniMax-H3) · [Pinned model license](https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/42ed227ee7df40d41602854ae760620d6eb651fe/LICENSE)
 - [LightX2V MiniMax H3 Turbo adapters](https://huggingface.co/lightx2v/Minimax-h3-Turbo)
 
 ## Thanks {#acknowledgements}

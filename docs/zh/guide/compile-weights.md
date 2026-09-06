@@ -93,6 +93,6 @@ prepare_pipeline_assets(assets, Path("prepared-assets.json"))
 
 原始权重核验记录与完整链路记录用途不同：前者核验编译输入，后者核验完整生成所需的所有文件，包括编码器和解码器。两者均绑定到当前文件系统，不能在移动文件后继续使用。
 
-新资产采用 schema 5，调度采用 schema 2。来源分别绑定基础权重摘要，以及 LoRA 的仓库、版本、摘要、alpha 8、rank 128、strength 1 和编译方法，不编造请求或 replay 标识。保留的组合 transformer 摘要与 `oracle` 字段用于匹配现有条件编码合同，不代表编译器执行过一次参考生成。旧 schema-4 资产和 schema-1 调度仍按原有来源合同读取。
+新资产采用 schema 5，调度采用 schema 2。来源分别绑定基础权重摘要，以及 LoRA 的仓库、版本、摘要、alpha（Ref4 为 8，Base4 为 128）、rank 128、strength 1 和编译方法，不编造请求或 replay 标识。保留的组合 transformer 摘要与 `oracle` 字段用于匹配现有条件编码合同，不代表编译器执行过一次参考生成。旧 schema-4 资产和 schema-1 调度仍按原有来源合同读取。
 
 此编译器不量化权重、不合并 LoRA，也不编译 Turbo8 或 SM86 配置。它不替代质量评估。更换模型、LoRA 或调度后，需要独立实现与验证。

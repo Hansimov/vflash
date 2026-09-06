@@ -1,20 +1,28 @@
 {
   "schema_version": 1,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "platform": "linux/amd64",
-  "implementation_revision": "9e312046be1ab8199364e5f641e91d5124fdf6ce",
+  "implementation_revision": "bee10c01b9f55278fa91ec62e7ec768676a45cdb",
+  "gpu_qualified_revision": "87154ad780467df52657db12b704389e7462cd83",
+  "wheel_sha256": "eaee0312f9ecce76d2182f59649c1e0450d16e6c94ff364ef1ebfc3d653d5685",
+  "qualification_delta": "The final package only removes the unqualified complete SM86 profile from the admission allowlist; numerical implementation files are identical to the GPU-qualified package. Final images add the explicit Inductor cache and pass installed-package, CLI, UID and prepared-asset CPU checks.",
+  "build_recipe": "https://github.com/Hansimov/vflash/releases/download/v0.2.0/Dockerfile.release",
   "images": {
     "pipeline": {
-      "name": "hansimov/vflash:0.1.0-pipeline",
-      "digest": "sha256:15f27fa27a3ec28fe7aa43e58e12b2975def961c21c254660267552ceb495e69",
-      "interface": "prompt and one to three references to Ref4 MP4 on SM89 48 GB",
-      "qualification": "actual installed container; three sequential complete requests and cancellation"
+      "name": "hansimov/vflash:0.2.0-pipeline",
+      "digest": "sha256:44f65093103d6461db77cd03f757e8889c5b4b0ece2500f27a3b0582e31b9901",
+      "interface": "text-only T2VA or prompt and one to three ordered references to five-second MP4 on SM89 48 GB",
+      "qualification": "T2VA: all 50 compiled blocks exact; two complete requests with exact conditioning and final AV latents, repeated video frames, complete media decoding and cancellation. Ref4: retained 0.1.0 multi-reference qualification. No broad semantic or bitwise audio guarantee.",
+      "dependency_image": "hansimov/vflash@sha256:15f27fa27a3ec28fe7aa43e58e12b2975def961c21c254660267552ceb495e69",
+      "anonymous_pull": true
     },
     "native": {
-      "name": "hansimov/vflash:0.1.0",
-      "digest": "sha256:7f1cb4a952b28ed39fa0ab80dd250283304f9eb4b0b89b936585846a79ed739b",
-      "interface": "compiled conditioning bundles to video and audio latents",
-      "qualification": "canonical Docker build and CPU package checks; unchanged a7 native arithmetic"
+      "name": "hansimov/vflash:0.2.0",
+      "digest": "sha256:43ec96a8271855b730ec6b993a8d2a02a1e6b46edd7e3d4fa4a2bf3305f15de7",
+      "interface": "compiled conditioning bundles to video and audio latents, including native SM86 profiles",
+      "qualification": "installed package and CPU service checks; native arithmetic unchanged",
+      "dependency_image": "hansimov/vflash@sha256:7f1cb4a952b28ed39fa0ab80dd250283304f9eb4b0b89b936585846a79ed739b",
+      "anonymous_pull": true
     }
   }
 }

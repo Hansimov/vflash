@@ -8,7 +8,7 @@ Vflash 源码采用 [Apache License 2.0](https://github.com/Hansimov/vflash/blob
 
 MiniMax H3 和可选 LoRA 权重各自遵循其许可证、使用规则和地域条款。Vflash 的源码许可证不会授予这些权重的使用权，也不会改变上游限制。请阅读所用模型和 LoRA 确切版本的条款。
 
-- [MiniMax H3 模型、文档与许可证](https://huggingface.co/MiniMaxAI/MiniMax-H3)
+- [MiniMax H3 模型与文档](https://huggingface.co/MiniMaxAI/MiniMax-H3) · [固定模型版本的许可证](https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/42ed227ee7df40d41602854ae760620d6eb651fe/LICENSE)
 - [LightX2V MiniMax H3 Turbo LoRA](https://huggingface.co/lightx2v/Minimax-h3-Turbo)
 
 ## 致谢 {#acknowledgements}

@@ -90,6 +90,8 @@ Use one to three `--reference` arguments for Ref4. For T2VA, prepare Base4 asset
 
 To build the complete image from the tagged source, run `docker build --target pipeline -t vflash:0.2.0-pipeline .` and substitute that local image name in the commands.
 
+The published images reuse the immutable 0.1.0 dependency layers and install the 0.2.0 wheel. The [release assets](https://github.com/Hansimov/vflash/releases/tag/v0.2.0) include that wheel and `Dockerfile.release`; [the inventory](https://github.com/Hansimov/vflash/blob/v0.2.0/docker/images.json) records its hash, dependency images and qualification. This avoids redownloading unchanged dependencies; the source Dockerfile above remains the full build recipe.
+
 The image defaults to UID/GID `10001`; these examples instead use your current user so outputs remain writable. The explicit Inductor cache also works when that user has no account entry inside the image, including with the 0.1.0 image. `/cache` must permit loading compiled shared libraries: do not put it on a `noexec` mount. Asset paths and filesystem identities must remain the same as during preparation. Repeated work should use a persistent Python `H3Pipeline` in a dedicated container process, avoiding a new model load per command.
 
 ## Cooperating GPU pair {#parallel}
