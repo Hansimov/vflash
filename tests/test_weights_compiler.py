@@ -7,7 +7,7 @@ from dataclasses import asdict
 import pytest
 
 from vflash.compiler import assets
-from vflash.compiler.ref4 import _publish_directory
+from vflash.compiler.h3 import _publish_directory
 from vflash.contracts import ContractError
 from vflash.model_assets import ref4_transformer_identity, ref4_weights_source
 from vflash.native.h3_runtime_artifact import _validate_source
@@ -30,7 +30,7 @@ def test_raw_receipt_rejects_changes_and_missing_files(monkeypatch, tmp_path):
         "sha256": hashlib.sha256(weight.read_bytes()).hexdigest(),
     }
     monkeypatch.setattr(
-        assets, "_required_files", lambda _a, _b: {"test-weight": (weight, expected)}
+        assets, "_required_files", lambda _a, _b, _profile: {"test-weight": (weight, expected)}
     )
     receipt = tmp_path / "receipt.json"
     prepared = assets.prepare_ref4_weights(tmp_path, weight, receipt)
@@ -53,7 +53,7 @@ def test_raw_verification_does_not_publish_a_bad_hash(monkeypatch, tmp_path):
     monkeypatch.setattr(
         assets,
         "_required_files",
-        lambda _a, _b: {"test-weight": (weight, {"size": 5, "sha256": "a" * 64})},
+        lambda _a, _b, _profile: {"test-weight": (weight, {"size": 5, "sha256": "a" * 64})},
     )
     receipt = tmp_path / "receipt.json"
     with pytest.raises(ContractError, match="bytes differ"):
@@ -162,11 +162,21 @@ def test_adaln_padding_does_not_influence_real_rows():
     assert torch.count_nonzero(actual[0, 6:]) == 0
 
 
-def test_artifact_schema_five_loads_with_no_replay_and_keeps_schema_four(monkeypatch, tmp_path):
-    from vflash.compiler.ref4 import SPEC, TARGET
+@pytest.mark.parametrize(
+    "profile_id",
+    ["ref2va-turbo4-exact-sm89", "ref2va-turbo4-exact-sm86", "t2va-turbo4-exact-sm89"],
+)
+def test_artifact_schema_five_loads_with_no_replay_and_keeps_schema_four(
+    monkeypatch, tmp_path, profile_id
+):
+    from vflash.compiler.h3 import SPEC, compile_target
+    from vflash.model_assets import model_profile, weights_source
+
+    profile = model_profile(profile_id)
+    TARGET = compile_target(profile_id)
     from vflash.native import h3_runtime_artifact as runtime
 
-    source = ref4_weights_source()
+    source = weights_source(profile_id)
     blocks = tmp_path / "blocks"
     blocks.mkdir()
     rows = []
@@ -180,7 +190,7 @@ def test_artifact_schema_five_loads_with_no_replay_and_keeps_schema_four(monkeyp
                 "path": relative,
                 "size_bytes": 1,
                 "sha256": "a" * 64,
-                "adaln_rows": 9,
+                "adaln_rows": 6 if profile.definition.mode.value == "t2va" else 9,
                 "tensors": names,
             }
         )
@@ -194,7 +204,7 @@ def test_artifact_schema_five_loads_with_no_replay_and_keeps_schema_four(monkeyp
         "spec": asdict(SPEC),
         "nfe": 4,
         "source": source,
-        "weight_profile": "lightx-ref-turbo4-v0.1",
+        "weight_profile": profile.adapter.profile_id,
         "adapter_execution": "runtime-residual",
         "precision": {
             "attention_weight_bits": 16,
@@ -208,7 +218,7 @@ def test_artifact_schema_five_loads_with_no_replay_and_keeps_schema_four(monkeyp
         "compile_environment": {
             "device_type": "cuda",
             "device_name": "test",
-            "compute_capability": "sm89",
+            "compute_capability": profile.architecture,
             "torch_version": "2.11.0",
             "cuda_version": "13.0",
             "cudnn_version": "test",
@@ -227,4 +237,20 @@ def test_artifact_schema_five_loads_with_no_replay_and_keeps_schema_four(monkeyp
     manifest["source"] = {**source, "replay_case_id": "not-allowed"}
     path.write_text(json.dumps(manifest))
     with pytest.raises(ValueError, match="fixed Ref4"):
+        runtime.load_h3_runtime_artifact(tmp_path, verify_content_hashes=False)
+
+    manifest["source"] = source
+    manifest["blocks"][0]["adaln_rows"] = 9 if profile.definition.mode.value == "t2va" else 6
+    path.write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="AdaLN rows"):
+        runtime.load_h3_runtime_artifact(tmp_path, verify_content_hashes=False)
+    manifest["blocks"][0]["adaln_rows"] = 6 if profile.definition.mode.value == "t2va" else 9
+    wrong = (
+        "ref2va-turbo4-exact-sm89"
+        if profile.architecture == "sm86"
+        else "ref2va-turbo4-exact-sm86"
+    )
+    manifest["target"] = asdict(compile_target(wrong))
+    path.write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="target differs"):
         runtime.load_h3_runtime_artifact(tmp_path, verify_content_hashes=False)

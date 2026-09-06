@@ -78,7 +78,12 @@ def _pipeline(*, fail: str | None = None) -> tuple[H3Pipeline, list[str]]:
         Stage("conditioning"),
         Stage("media"),
     )
-    pipeline.prepared = SimpleNamespace(check_unchanged=lambda: None)
+    pipeline.prepared = SimpleNamespace(
+        check_unchanged=lambda: None, profile_id="ref2va-turbo4-exact-sm89"
+    )
+    from vflash.model_assets import model_profile
+
+    pipeline.profile = model_profile()
     pipeline.initialization_seconds = 1.0
     pipeline.request_count = 0
     return pipeline, events
@@ -315,7 +320,7 @@ def test_ordered_multi_reference_request_keeps_labels_and_seed_replacement(tmp_p
 @pytest.mark.parametrize(
     "values",
     [
-        {},
+        {"prompt": "<Picture 1> without an image"},
         {"references": (Path("one"),) * 4},
         {"reference": Path("one"), "references": (Path("two"),)},
         {"references": [Path("one")]},
@@ -369,3 +374,35 @@ def test_invalid_later_image_closes_previous_images_without_retiring_models(
     assert closed == [paths[0]]
     assert not events and not pipeline._closed and not pipeline._lock.locked()
     assert not (tmp_path / "out.mp4").exists()
+
+
+def test_text_only_request_reuses_all_stages_without_reference_loading(tmp_path, monkeypatch):
+    from vflash.model_assets import model_profile
+
+    pipeline, events = _pipeline()
+    pipeline.profile = model_profile("t2va-turbo4-exact-sm89")
+    pipeline.prepared.profile_id = pipeline.profile.definition.id
+    monkeypatch.setattr(
+        "vflash.pipeline.runtime.read_reference", lambda _: pytest.fail("T2VA loaded an image")
+    )
+    observed = []
+    original = pipeline._conditioner.capture
+
+    def capture(request, references, directory):
+        observed.append(references)
+        bundle = original(request, references, directory)
+        bundle.profile = H3ConditioningProfile(
+            "t2va", request.width, request.height, 124, 4, 6, 3, 0, 0, 0
+        )
+        return bundle
+
+    pipeline._conditioner.capture = capture
+    with pipeline:
+        first = pipeline.generate(VideoRequest("A scene.", seed=12), tmp_path / "first.mp4")
+        second = pipeline.generate(
+            VideoRequest("A second scene.", seed=13), tmp_path / "second.mp4"
+        )
+    assert first.profile_id == second.profile_id == "t2va-turbo4-exact-sm89"
+    assert observed == [(), ()]
+    assert events.count("native:generate") == 2 and events.count("media:generate") == 2
+    assert events[-3:] == ["conditioning:close", "media:close", "native:close"]

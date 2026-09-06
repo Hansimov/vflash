@@ -14,13 +14,13 @@ from vflash.adapters.checkpoints import read_weight_map
 from vflash.contracts import ContractError
 from vflash.model_assets import (
     canonical_sha256,
-    ref4_transformer_identity,
+    model_profile,
+    transformer_identity,
     upstream_inventory,
 )
 from vflash.model_assets import (
     file_identity as _stamp,
 )
-from vflash.native.h3_distilled_lora import LIGHTX_H3_REF_TURBO4_CONTRACT
 from vflash.native.h3_runtime_artifact import load_h3_runtime_artifact
 from vflash.native.h3_schedule_overlay import load_h3_schedule_overlay
 from vflash.pipeline.contracts import (
@@ -29,27 +29,32 @@ from vflash.pipeline.contracts import (
 )
 
 
-def conditioning_source(*, runtime_versions: dict[str, str] | None = None) -> dict[str, str]:
+def conditioning_source(
+    *, profile_id: str = PIPELINE_PROFILE, runtime_versions: dict[str, str] | None = None
+) -> dict[str, str]:
+    profile = model_profile(profile_id)
     configuration = {
-        "profile_id": PIPELINE_PROFILE,
+        "profile_id": profile_id,
         "reference_image_policy": "match",
         "reference_policy_revision": 3,
         "text_precision": "bf16",
         "text_execution": "full",
-        "video_flow_shift": 12.0,
-        "audio_flow_shift": 3.0,
+        "video_flow_shift": profile.definition.video_flow_shift,
+        "audio_flow_shift": profile.definition.audio_flow_shift,
         "scheduler": "training_euler",
-        "nfe": 4,
+        "nfe": profile.definition.nfe,
     }
     return {
-        **ref4_transformer_identity(),
+        **transformer_identity(profile_id),
         "oracle_config_sha256": canonical_sha256(configuration),
-        "oracle_hardware": "sm89-single",
+        "oracle_hardware": f"{profile.architecture}-single",
         "oracle_runtime_sha256": canonical_sha256(runtime_versions or {}),
     }
 
 
-def _consumed_official_files(assets: PipelineAssets) -> list[tuple[str, Path]]:
+def _consumed_official_files(
+    assets: PipelineAssets, profile_id: str = PIPELINE_PROFILE
+) -> list[tuple[str, Path]]:
     inventory = upstream_inventory()
     model, decoder = assets.model_directory, assets.decoder_directory
     prefixes = ("text_encoder/", "processor/", "tokenizer/", "scheduler/", "audio_scheduler/")
@@ -57,7 +62,7 @@ def _consumed_official_files(assets: PipelineAssets) -> list[tuple[str, Path]]:
     names.update({"model_index.json", "audio_vae/config.json"})
     for component, prefixes in (
         (
-            "transformer_ref",
+            model_profile(profile_id).transformer_component,
             (
                 "proj_in.",
                 "audio_proj_in.",
@@ -93,6 +98,7 @@ class PreparedPipelineAssets:
     receipt: Path
     receipt_sha256: str
     inventory: tuple[dict[str, Any], ...]
+    profile_id: str = PIPELINE_PROFILE
 
     def check_unchanged(self) -> None:
         """Invalidate receipts after replacement, modification or relocation of an asset."""
@@ -107,10 +113,16 @@ class PreparedPipelineAssets:
                 raise ContractError("a prepared asset changed; prepare the assets again")
 
 
-def _planned_files(assets: PipelineAssets) -> list[tuple[str, Path, dict[str, Any]]]:
+def _planned_files(
+    assets: PipelineAssets, profile_id: str = PIPELINE_PROFILE
+) -> list[tuple[str, Path, dict[str, Any]]]:
     upstream = upstream_inventory()
-    planned = [(name, path, upstream[name]) for name, path in _consumed_official_files(assets)]
-    contract = LIGHTX_H3_REF_TURBO4_CONTRACT
+    profile = model_profile(profile_id)
+    planned = [
+        (name, path, upstream[name])
+        for name, path in _consumed_official_files(assets, profile_id)
+    ]
+    contract = profile.adapter
     planned.append(
         (
             "adapter",
@@ -123,7 +135,7 @@ def _planned_files(assets: PipelineAssets) -> list[tuple[str, Path, dict[str, An
     )
     artifact = load_h3_runtime_artifact(assets.artifact, verify_content_hashes=False)
     overlay = load_h3_schedule_overlay(assets.schedule_overlay, artifact=artifact)
-    source = conditioning_source()
+    source = conditioning_source(profile_id=profile_id)
     identity_keys = (
         "model_repository",
         "model_revision",
@@ -136,21 +148,28 @@ def _planned_files(assets: PipelineAssets) -> list[tuple[str, Path, dict[str, An
         or artifact.nfe != 4
         or artifact.adapter_execution != "runtime-residual"
         or not artifact.is_complete_block_stack
-        or "sm89" not in artifact.target.compute_capability
+        or profile.architecture != artifact.target.compute_capability
         or any(artifact.source.get(key) != source[key] for key in identity_keys)
         or artifact.source.get("adapter_revision") != contract.revision
-        or artifact.source.get("oracle_profile") != source["oracle_profile"]
+        or artifact.source.get("oracle_profile", "").removesuffix("-sm89").removesuffix("-sm86")
+        != source["oracle_profile"].removesuffix("-sm89").removesuffix("-sm86")
     ):
-        raise ContractError("the native artifact differs from the complete Ref4 SM89 profile")
-    from vflash.native.h3_native_conditioning_runtime import validate_declared_schedule
-
-    validate_declared_schedule(
-        overlay.schedule,
-        expected_nfe=4,
-        expected_scheduler="h3-training-euler",
-        expected_video_flow_shift=12.0,
-        expected_audio_flow_shift=3.0,
+        raise ContractError("the native artifact differs from the complete pipeline profile")
+    from vflash.native.h3_native_conditioning_runtime import (
+        H3NativeConditioningRuntimeError,
+        validate_declared_schedule,
     )
+
+    try:
+        validate_declared_schedule(
+            overlay.schedule,
+            expected_nfe=4,
+            expected_scheduler="h3-training-euler",
+            expected_video_flow_shift=profile.definition.video_flow_shift,
+            expected_audio_flow_shift=profile.definition.audio_flow_shift,
+        )
+    except H3NativeConditioningRuntimeError as exc:
+        raise ContractError(str(exc)) from exc
     planned.extend(
         (
             f"native/{row.path}",
@@ -174,7 +193,9 @@ def _planned_files(assets: PipelineAssets) -> list[tuple[str, Path, dict[str, An
     return planned
 
 
-def prepare_pipeline_assets(assets: PipelineAssets, receipt: Path) -> PreparedPipelineAssets:
+def prepare_pipeline_assets(
+    assets: PipelineAssets, receipt: Path, *, profile_id: str = PIPELINE_PROFILE
+) -> PreparedPipelineAssets:
     """Verify consumed official files and compiled blocks at an explicit ingestion boundary.
 
     The receipt belongs to this filesystem instance. Use a read-only asset snapshot
@@ -183,7 +204,7 @@ def prepare_pipeline_assets(assets: PipelineAssets, receipt: Path) -> PreparedPi
     """
     if receipt.exists() or receipt.is_symlink():
         raise ContractError("the asset receipt already exists")
-    planned = _planned_files(assets)
+    planned = _planned_files(assets, profile_id)
     inventory = []
     for role, path, expected in planned:
         before = _stamp(path)
@@ -212,7 +233,7 @@ def prepare_pipeline_assets(assets: PipelineAssets, receipt: Path) -> PreparedPi
         )
     value = {
         "schema_version": 1,
-        "profile_id": PIPELINE_PROFILE,
+        "profile_id": profile_id,
         "assets": assets.to_mapping(),
         "inventory": inventory,
     }
@@ -242,17 +263,19 @@ def load_prepared_pipeline_assets(receipt: Path) -> PreparedPipelineAssets:
             "inventory",
         }
         or value["schema_version"] != 1
-        or value["profile_id"] != PIPELINE_PROFILE
+        or not isinstance(value["profile_id"], str)
         or not isinstance(value["inventory"], list)
         or not value["inventory"]
     ):
         raise ContractError("the pipeline asset receipt has an unsupported schema")
+    profile_id = value["profile_id"]
+    model_profile(profile_id)
     assets = PipelineAssets.from_mapping(value["assets"])
     if any(not path.is_absolute() for path in vars(assets).values()):
         raise ContractError("prepared asset paths must be absolute")
     planned = {
         role: (path.resolve(strict=True), expected)
-        for role, path, expected in _planned_files(assets)
+        for role, path, expected in _planned_files(assets, profile_id)
     }
     seen: set[str] = set()
     for row in value["inventory"]:
@@ -287,6 +310,7 @@ def load_prepared_pipeline_assets(receipt: Path) -> PreparedPipelineAssets:
         receipt,
         hashlib.sha256(data).hexdigest(),
         tuple(value["inventory"]),
+        profile_id,
     )
     result.check_unchanged()
     return result

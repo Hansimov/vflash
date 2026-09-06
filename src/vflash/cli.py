@@ -11,6 +11,7 @@ from pathlib import Path
 from vflash.catalog import ProfileCatalog
 from vflash.contracts import ContractError
 from vflash.hardware import discover_nvidia_devices
+from vflash.native.errors import VflashNativeError
 from vflash.planner import resolve_plan
 
 
@@ -116,7 +117,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         print(json.dumps(plan.to_dict(), indent=2))
         return 0
-    except (ContractError, OSError, json.JSONDecodeError) as exc:
+    except (ContractError, VflashNativeError, OSError, json.JSONDecodeError) as exc:
         raise SystemExit(f"vflash: {exc}") from exc
 
 

@@ -20,7 +20,7 @@ def receipt(tmp_path, monkeypatch):
     }
     monkeypatch.setattr(
         "vflash.pipeline.assets._planned_files",
-        lambda assets: [("test-weight", asset, expected)],
+        lambda assets, profile_id: [("test-weight", asset, expected)],
     )
     assets = PipelineAssets(**{name: tmp_path for name in PipelineAssets.__dataclass_fields__})
     value = {

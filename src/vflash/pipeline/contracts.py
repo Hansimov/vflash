@@ -1,4 +1,4 @@
-"""Small explicit contracts for the first complete Ref2VA pipeline."""
+"""Small explicit contracts for the complete H3 pipelines."""
 
 from __future__ import annotations
 
@@ -9,10 +9,11 @@ from pathlib import Path
 from typing import Any
 
 from vflash.contracts import ContractError
+from vflash.model_assets import DEFAULT_MODEL_PROFILE
 from vflash.model_assets import DIFFUSERS_REVISION as DIFFUSERS_REVISION
 from vflash.model_assets import MODEL_REVISION as MODEL_REVISION
 
-PIPELINE_PROFILE = "ref2va-turbo4-exact-sm89"
+PIPELINE_PROFILE = DEFAULT_MODEL_PROFILE
 
 
 @dataclass(frozen=True)
@@ -49,13 +50,13 @@ class PipelineAssets:
 
 @dataclass(frozen=True)
 class VideoRequest:
-    """An image-guided five-second video at the native 24 fps clock.
+    """A text- or image-guided five-second video at the native 24 fps clock.
 
     The prompt is used verbatim; an application may format or polish it before
     this boundary. Images are ordered and labeled ``<Picture 1>`` through
     ``<Picture 3>``. ``reference`` preserves the original single-image API;
-    use ``references`` for an ordered tuple instead. Other modes and clocks
-    remain separate profiles until their complete pipeline has been qualified.
+    use ``references`` for an ordered tuple instead. Without images the request
+    is T2VA and requires a prepared T2VA pipeline. A session never swaps models.
     """
 
     prompt: str
@@ -80,8 +81,8 @@ class VideoRequest:
             raise ContractError("references must be an ordered tuple of local pathlib.Paths")
         if self.reference is not None and self.references:
             raise ContractError("provide reference or references, not both")
-        if not 1 <= len(self.ordered_references) <= 3:
-            raise ContractError("Ref2VA requires one to three reference images")
+        if len(self.ordered_references) > 3:
+            raise ContractError("Ref2VA supports at most three reference images")
         if any(
             index not in {str(value) for value in range(1, len(self.ordered_references) + 1)}
             for index in re.findall(r"<Picture (\d+)>", self.prompt)
@@ -102,6 +103,10 @@ class VideoRequest:
     @property
     def ordered_references(self) -> tuple[Path, ...]:
         return self.references or ((self.reference,) if self.reference is not None else ())
+
+    @property
+    def mode(self) -> str:
+        return "ref2va" if self.ordered_references else "t2va"
 
     @property
     def model_frames(self) -> int:

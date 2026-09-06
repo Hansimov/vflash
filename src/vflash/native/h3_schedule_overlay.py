@@ -226,20 +226,29 @@ def load_h3_schedule_overlay(
         )
     source = value.get("source")
     if value["schema_version"] == 2:
-        from vflash.model_assets import ref4_weights_source
+        from vflash.model_assets import model_schedule, weights_source_profile
+
+        try:
+            profile = weights_source_profile(base.source)
+        except ValueError as exc:
+            raise H3ScheduleOverlayError(
+                "weights-only schedule has no fixed source profile"
+            ) from exc
 
         expected_source = {
             "method": H3_WEIGHTS_SCHEDULE_METHOD,
             "source_artifact_id": base.artifact_id,
             "transformer_sha256": base.source["transformer_sha256"],
-            "compile_recipe": "ref4-bf16-runtime-residual-sm89-v1",
+            "compile_recipe": profile.recipe,
         }
-        if base.source != ref4_weights_source() or source != expected_source:
+        if source != expected_source:
             raise H3ScheduleOverlayError(
                 "weights-only schedule source differs from its artifact"
             )
-        if schedule != H3NativeSchedule.shifted_linear(4, video_shift=12.0, audio_shift=3.0):
-            raise H3ScheduleOverlayError("weights-only schedule differs from fixed Ref4")
+        if schedule != model_schedule(profile.definition.id):
+            raise H3ScheduleOverlayError(
+                "weights-only schedule differs from its fixed model profile"
+            )
     else:
         if (
             not isinstance(source, dict)
@@ -282,6 +291,10 @@ def load_h3_schedule_overlay(
         or timestep_rows <= 0
     ):
         raise H3ScheduleOverlayError("H3 schedule-overlay timestep row count is invalid")
+    if value["schema_version"] == 2 and timestep_rows != (
+        2 if profile.definition.mode.value == "t2va" else 3
+    ):
+        raise H3ScheduleOverlayError("weights-only timestep rows differ from the model profile")
     auxiliary_header = inspect_safetensors_header(auxiliary_path)
     expected_auxiliary = {
         "final_adaln_table": ("BF16", (schedule.nfe, timestep_rows, 2, base.spec.hidden_size)),

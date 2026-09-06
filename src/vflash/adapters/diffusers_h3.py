@@ -22,6 +22,7 @@ from vflash.adapters.conditioning_vae import load_h3_image_conditioning_vae_comp
 from vflash.adapters.modular_config import local_modular_config
 from vflash.adapters.references import DecodedReference, install_match_reference_setup_block
 from vflash.contracts import ContractError
+from vflash.model_assets import model_profile
 from vflash.native.h3_conditioning_bundle import H3ConditioningBundle, H3ConditioningProfile
 from vflash.pipeline.assets import (
     PreparedPipelineAssets,
@@ -47,7 +48,7 @@ def validate_adapter_dependencies() -> dict[str, str]:
     if diffusers.__version__ != "0.40.0" or actual != expected:
         raise ContractError("install the pinned vflash pipeline extra for official H3 encoding")
     if torch.__version__.split("+")[0] != "2.11.0":
-        raise ContractError("the complete pipeline preview requires PyTorch 2.11.0")
+        raise ContractError("the complete pipeline requires PyTorch 2.11.0")
     return {**actual, "diffusers": diffusers.__version__, "torch": torch.__version__}
 
 
@@ -69,6 +70,7 @@ class DiffusersConditioner:
         if self.device.type != "cuda":
             raise ContractError("the official conditioner requires a CUDA execution device")
         self.prepared = prepared
+        self.profile = model_profile(prepared.profile_id)
         self.pipe = self.transformer = self._reference_setup = None
         self._cpu_masters: tuple[tuple[Any, Any], ...] = ()
         self._text_groups: tuple[Any, ...] = ()
@@ -95,14 +97,16 @@ class DiffusersConditioner:
         from transformers import Qwen3VLForConditionalGeneration
 
         torch, model = self._torch, self.prepared.assets.model_directory
+        definition = self.profile.definition
+        component = self.profile.transformer_component
         self.pipe = MiniMaxH3ModularPipeline(
             pretrained_model_name_or_path=model,
-            workflow="ref2va",
-            modular_config_dict=local_modular_config(model),
+            workflow=definition.mode.value,
+            modular_config_dict=local_modular_config(model, transformer_component=component),
         )
         prefix = load_h3_conditioning_transformer(
             MiniMaxH3Transformer3DModel,
-            transformer_directory=model / "transformer_ref",
+            transformer_directory=model / component,
             device=torch.device("cpu"),
             torch_module=torch,
             init_empty_weights=init_empty_weights,
@@ -111,6 +115,7 @@ class DiffusersConditioner:
         self.adapter_metadata = apply_h3_conditioning_adapter(
             self.transformer,
             self.prepared.assets.adapter_path,
+            profile_id=self.prepared.profile_id,
         )
         encoder = Qwen3VLForConditionalGeneration.from_pretrained(
             str(model),
@@ -131,7 +136,7 @@ class DiffusersConditioner:
             text_encoder=encoder,
             vae=vae.video_vae,
             audio_vae=vae.audio_vae,
-            transformer_ref=self.transformer,
+            **{component: self.transformer},
         )
         self.pipe.load_components(
             names=["tokenizer", "processor", "scheduler", "audio_scheduler"],
@@ -141,11 +146,11 @@ class DiffusersConditioner:
         )
         self.pipe.update_components(
             scheduler=type(self.pipe.scheduler).from_config(
-                self.pipe.scheduler.config, shift=12
+                self.pipe.scheduler.config, shift=definition.video_flow_shift
             ),
             audio_scheduler=type(self.pipe.audio_scheduler).from_config(
                 self.pipe.audio_scheduler.config,
-                shift=3,
+                shift=definition.audio_flow_shift,
             ),
         )
         if self.pipe.text_encoder_layer != 50:
@@ -154,7 +159,8 @@ class DiffusersConditioner:
             raise ContractError(
                 "the official pipeline did not load every conditioning component"
             )
-        self._reference_setup = install_match_reference_setup_block(self.pipe)
+        if definition.mode.value == "ref2va":
+            self._reference_setup = install_match_reference_setup_block(self.pipe)
         for module in (self.transformer, encoder, self.pipe.vae, self.pipe.audio_vae):
             module.eval().requires_grad_(False)
         self._cpu_masters = tuple(
@@ -198,8 +204,11 @@ class DiffusersConditioner:
         started = time.monotonic()
         self._cuda_touched = True
         try:
-            if tuple(self._torch.cuda.get_device_capability(self.device)) != (8, 9):
-                raise ContractError("this complete pipeline preview requires SM89")
+            capability = tuple(
+                int(part) for part in self.profile.hardware.compute_capability.split(".")
+            )
+            if tuple(self._torch.cuda.get_device_capability(self.device)) != capability:
+                raise ContractError("the conditioner GPU differs from its prepared profile")
             if not self._offload_installed:
                 self._install_offload()
             self.pipe.vae.encoder.to(self.device)
@@ -250,17 +259,20 @@ class DiffusersConditioner:
     def _invoke(self, request: VideoRequest, references: tuple[DecodedReference, ...]) -> None:
         from diffusers.modular_pipelines.minimax_h3 import MiniMaxH3ImageReference
 
+        options = {}
+        if request.mode == "ref2va":
+            options["references"] = [
+                MiniMaxH3ImageReference(image=reference.image) for reference in references
+            ]
         self.pipe(
             prompt=request.prompt,
             height=request.height,
             width=request.width,
             num_frames=request.model_frames,
-            num_inference_steps=5,
+            num_inference_steps=self.profile.definition.nfe + 1,
             generator=self._torch.Generator().manual_seed(request.seed),
             output=["videos", "audio", "sampling_rate"],
-            references=[
-                MiniMaxH3ImageReference(image=reference.image) for reference in references
-            ],
+            **options,
         )
 
     def capture(
@@ -272,6 +284,8 @@ class DiffusersConditioner:
         self._require_open()
         if not self._cuda_active:
             raise ContractError("resume the conditioner before encoding a request")
+        if request.mode != self.profile.definition.mode.value:
+            raise ContractError("the request mode differs from the conditioner profile")
         if len(references) != len(request.ordered_references):
             raise ContractError("decoded reference count differs from the request")
         if directory.exists() and any(directory.iterdir()):
@@ -288,7 +302,9 @@ class DiffusersConditioner:
                 raise ContractError("the official conditioner did not stop before denoising")
             capture.close()
             video_prefix, audio_prefix = capture.prefix_counts()
-            source = conditioning_source(runtime_versions=self.versions)
+            source = conditioning_source(
+                profile_id=self.prepared.profile_id, runtime_versions=self.versions
+            )
             request_metadata = {
                 "source_case_id": "vflash-live",
                 "prompt": request.prompt,
@@ -313,13 +329,13 @@ class DiffusersConditioner:
                 ],
             }
             profile = H3ConditioningProfile(
-                task="ref2va",
+                task=request.mode,
                 width=request.width,
                 height=request.height,
                 frames=request.model_frames,
-                nfe=4,
-                video_flow_shift=12.0,
-                audio_flow_shift=3.0,
+                nfe=self.profile.definition.nfe,
+                video_flow_shift=self.profile.definition.video_flow_shift,
+                audio_flow_shift=self.profile.definition.audio_flow_shift,
                 reference_token_budget=capture.reference_token_budget(
                     width=request.width,
                     height=request.height,

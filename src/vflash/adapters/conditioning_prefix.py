@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from vflash.adapters.checkpoints import IndexedCheckpoint
-from vflash.native.h3_distilled_lora import LIGHTX_H3_REF_TURBO4_CONTRACT
+from vflash.model_assets import DEFAULT_MODEL_PROFILE, model_profile
 from vflash.native.h3_tensor_file import H3SingleTensorStore, inspect_safetensors_header
 
 
@@ -49,6 +49,8 @@ class H3ConditioningTransformerLoad:
 def apply_h3_conditioning_adapter(
     transformer: Any,
     adapter_path: Path,
+    *,
+    profile_id: str = DEFAULT_MODEL_PROFILE,
 ) -> dict[str, Any]:
     """Load a task-specific distilled LoRA's TokenRefiner residuals.
 
@@ -61,11 +63,12 @@ def apply_h3_conditioning_adapter(
 
     from peft import LoraConfig
 
-    contract = LIGHTX_H3_REF_TURBO4_CONTRACT
+    profile = model_profile(profile_id)
+    contract = profile.adapter
     header = inspect_safetensors_header(adapter_path)
     expected = {name for name in header if name.startswith("token_refiner.")}
     if len(expected) != 24:
-        raise H3ConditioningTransformerError("Ref4 requires 24 TokenRefiner LoRA tensors")
+        raise H3ConditioningTransformerError("H3 requires 24 TokenRefiner LoRA tensors")
     transformer.add_adapter(
         LoraConfig(
             r=contract.rank,
@@ -115,10 +118,10 @@ def apply_h3_conditioning_adapter(
         "sha256": contract.sha256,
         "rank": contract.rank,
         "alpha": contract.alpha,
-        "workflow": "ref2va",
+        "workflow": profile.definition.mode.value,
         "nfe": contract.nfe,
-        "video_flow_shift": 12.0,
-        "audio_flow_shift": 3.0,
+        "video_flow_shift": profile.definition.video_flow_shift,
+        "audio_flow_shift": profile.definition.audio_flow_shift,
         "strength": contract.strength,
         "loaded_tensor_count": len(state),
         "loaded_bytes": sum(

@@ -1,4 +1,4 @@
-"""Fixed Ref4 timestep and AdaLN arithmetic, independent of pipeline frameworks."""
+"""Fixed H3 timestep and AdaLN arithmetic, independent of pipeline frameworks."""
 
 from __future__ import annotations
 
@@ -6,44 +6,51 @@ import math
 from collections.abc import Callable
 from typing import Any
 
-from vflash.native.h3_native_scheduler import H3NativeSchedule
+from vflash.model_assets import DEFAULT_MODEL_PROFILE, model_profile, model_schedule
 
 
-def ref4_timesteps() -> tuple[Any, ...]:
-    """Distinct rows for generated video/text, generated audio and reference video.
+def profile_timesteps(profile_id: str = DEFAULT_MODEL_PROFILE) -> tuple[Any, ...]:
+    """Original distinct-row counts; reference rows exist only for Ref2VA.
 
-    The number of tokens in each modality does not change these values. Keep
-    the first evaluation's two distinct rows: padding it to three before a
-    GEMM can select a different floating-point kernel.
+    Padding before the timestep MLP changes GEMM selection and FP32 rounding.
+    Keep each evaluation's actual rows through both learned projections.
     """
     import torch
 
-    schedule = H3NativeSchedule.shifted_linear(4, video_shift=12.0, audio_shift=3.0)
-    return tuple(
-        torch.tensor(
-            [1.0 - video, 1.0 - audio, max(1.0 - video, schedule.keyframe_noise_aug)],
-            dtype=torch.float32,
-        ).unique(sorted=True)
-        for video, audio in zip(
-            schedule.video_sigmas[:-1], schedule.audio_sigmas[:-1], strict=True
-        )
-    )
+    profile = model_profile(profile_id)
+    schedule = model_schedule(profile_id)
+    rows = []
+    for video, audio in zip(
+        schedule.video_sigmas[:-1], schedule.audio_sigmas[:-1], strict=True
+    ):
+        values = [1.0 - video, 1.0 - audio]
+        if profile.definition.mode.value == "ref2va":
+            values.append(max(1.0 - video, schedule.keyframe_noise_aug))
+        rows.append(torch.tensor(values, dtype=torch.float32).unique(sorted=True))
+    return tuple(rows)
 
 
-def time_embeddings(load: Callable[[str], Any], device: Any) -> dict[str, Any]:
+def ref4_timesteps() -> tuple[Any, ...]:
+    return profile_timesteps()
+
+
+def time_embeddings(
+    load: Callable[[str], Any], device: Any, *, profile_id: str = DEFAULT_MODEL_PROFILE
+) -> dict[str, Any]:
     """One FP32/TF32 MLP per evaluation, with the original distinct-row counts."""
     import torch
     import torch.nn.functional as functional
 
-    rows = tuple(row.to(device) for row in ref4_timesteps())
+    rows = tuple(row.to(device) for row in profile_timesteps(profile_id))
+    max_rows = max(row.numel() for row in rows)
     weights = {
         name: load(f"time_embedder.{name}").to(device)
         for name in ("linear_1.weight", "linear_1.bias", "linear_2.weight", "linear_2.bias")
     }
     frequency = -math.log(10000) * torch.arange(128, dtype=torch.float32, device=device)
     frequency = frequency / 128
-    embeddings = torch.zeros((4, 3, 2688), dtype=torch.float32, device=device)
-    timesteps = torch.zeros((4, 3), dtype=torch.float32, device=device)
+    embeddings = torch.zeros((len(rows), max_rows, 2688), dtype=torch.float32, device=device)
+    timesteps = torch.zeros((len(rows), max_rows), dtype=torch.float32, device=device)
     counts = torch.tensor([row.numel() for row in rows], dtype=torch.int64, device=device)
     previous_precision = torch.get_float32_matmul_precision()
     try:

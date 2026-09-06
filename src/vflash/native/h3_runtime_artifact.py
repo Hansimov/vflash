@@ -158,10 +158,18 @@ def _validate_source(
     schema_version: int,
 ) -> dict[str, str]:
     if schema_version == 5:
-        from vflash.model_assets import ref4_weights_source
+        from vflash.model_assets import weights_source_profile
 
-        if weight_profile != "lightx-ref-turbo4-v0.1" or value != ref4_weights_source():
-            raise H3RuntimeArtifactError("weights-only artifact source differs from fixed Ref4")
+        try:
+            profile = weights_source_profile(value)
+        except ValueError as exc:
+            raise H3RuntimeArtifactError(
+                "weights-only artifact source differs from fixed Ref4 or Base4"
+            ) from exc
+        if weight_profile != profile.adapter.profile_id:
+            raise H3RuntimeArtifactError(
+                "weights-only artifact source differs from fixed Ref4 or Base4"
+            )
         return dict(value)
     base_fields = {
         "model_repository",
@@ -443,8 +451,6 @@ def load_h3_runtime_artifact(
     target = resolve_h3_artifact_target(target_value["target_id"])
     if target_value != asdict(target):
         raise H3RuntimeArtifactError("H3 RuntimeArtifact target fields drifted")
-    if schema_version == 5 and (target.compute_capability != "sm89" or nfe != 4):
-        raise H3RuntimeArtifactError("weights-only artifacts currently support Ref4 SM89")
     expected_precision = {
         "attention_weight_bits": target.attention_weight_bits,
         "attention_activation": target.attention_activation,
@@ -462,13 +468,30 @@ def load_h3_runtime_artifact(
         weight_profile=weight_profile,
         schema_version=schema_version,
     )
+    if schema_version == 5:
+        from vflash.model_assets import weights_source_profile
+
+        profile = weights_source_profile(source)
+        if (
+            target.compute_capability != profile.architecture
+            or nfe != profile.definition.nfe
+            or target.attention_weight_bits != 16
+            or target.ffn_weight_bits != 16
+        ):
+            raise H3RuntimeArtifactError(
+                "weights-only artifact target differs from its compiler profile"
+            )
     if weight_profile in {
         "lightx-turbo8-v1.0",
         "lightx-ref-turbo4-v0.1",
         "lightx-turbo4-v1.0",
     } and (
         source.get("oracle_profile")
-        not in {"ref2va-adapter-bf16-torch-sdpa-sm89", "t2va-adapter-bf16-torch-sdpa-sm89"}
+        not in {
+            "ref2va-adapter-bf16-torch-sdpa-sm89",
+            "ref2va-adapter-bf16-torch-sdpa-sm86",
+            "t2va-adapter-bf16-torch-sdpa-sm89",
+        }
         or nfe
         != h3_distilled_lora_contract_for_profile(
             weight_profile,
@@ -476,7 +499,7 @@ def load_h3_runtime_artifact(
         ).nfe
     ):
         raise H3RuntimeArtifactError(
-            "H3 distilled-LoRA artifact lacks a pinned SM89 Diffusers oracle identity"
+            "H3 distilled-LoRA artifact lacks a pinned Diffusers oracle identity"
         )
     compile_environment = (
         _validate_compile_environment(value.get("compile_environment"), target=target)
@@ -521,6 +544,12 @@ def load_h3_runtime_artifact(
             or tuple(tensors) != tuple(sorted(expected_tensor_names))
         ):
             raise H3RuntimeArtifactError("H3 RuntimeArtifact block row is invalid")
+        if schema_version == 5 and adaln_rows != (
+            6 if profile.definition.mode.value == "t2va" else 9
+        ):
+            raise H3RuntimeArtifactError(
+                "weights-only AdaLN rows differ from the model profile"
+            )
         path = directory / relative
         file_stat = _regular_file(path)
         if file_stat.st_size != size_bytes or (

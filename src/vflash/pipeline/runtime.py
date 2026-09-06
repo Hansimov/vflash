@@ -19,10 +19,10 @@ from vflash.contracts import ContractError
 from vflash.hardware import NvidiaDevice
 from vflash.media.encoding import media_executables
 from vflash.media.runtime import OfficialMediaDecoder
+from vflash.model_assets import model_profile
 from vflash.native.runner import NativeEngineSession
 from vflash.pipeline.assets import PreparedPipelineAssets
 from vflash.pipeline.contracts import (
-    PIPELINE_PROFILE,
     PipelineProgress,
     VideoRequest,
     VideoResult,
@@ -31,7 +31,7 @@ from vflash.planner import resolve_plan
 
 
 class H3Pipeline:
-    """Serial, persistent Ref4 SM89 encoding, native inference, decoding and MP4.
+    """Serial, persistent H3 encoding, native inference, decoding and MP4.
 
     Construct before CUDA initialization in a dedicated process. Native weights
     use the tested block ring so the official encoding and VAE stages can take
@@ -45,6 +45,8 @@ class H3Pipeline:
         *,
         device: NvidiaDevice,
         trust_local_code: bool = False,
+        peer_device: NvidiaDevice | None = None,
+        strategy: str | None = None,
     ) -> None:
         if trust_local_code is not True:
             raise ContractError("the official decoder adapter requires trust_local_code=True")
@@ -54,9 +56,14 @@ class H3Pipeline:
         media_executables()
         validate_adapter_dependencies()
         plan = resolve_plan(
-            ProfileCatalog.bundled(), profile_id=PIPELINE_PROFILE, device=device
+            ProfileCatalog.bundled(),
+            profile_id=prepared.profile_id,
+            device=device,
+            peer_device=peer_device,
+            strategy=strategy,
         )
         self.prepared = prepared
+        self.profile = model_profile(prepared.profile_id)
         self._lock = threading.Lock()
         self._active_thread_id: int | None = None
         self._closed = self._released = False
@@ -118,6 +125,8 @@ class H3Pipeline:
             raise ContractError("the pipeline is closed")
         if not isinstance(request, VideoRequest) or not isinstance(output_path, Path):
             raise ContractError("generate requires a VideoRequest and pathlib.Path output")
+        if request.mode != self.profile.definition.mode.value:
+            raise ContractError("the request mode differs from the prepared pipeline profile")
         if output_path.exists() or output_path.is_symlink():
             raise ContractError("the output path already exists")
         if not self._lock.acquire(blocking=False):
@@ -252,7 +261,7 @@ class H3Pipeline:
         # generation failure. The final result is the completion notification.
         return VideoResult(
             output_path,
-            PIPELINE_PROFILE,
+            self.prepared.profile_id,
             request.seed,
             time.monotonic() - started,
             stages,

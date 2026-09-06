@@ -10,6 +10,8 @@ from typing import Any
 
 def local_modular_config(
     model_path: Path,
+    *,
+    transformer_component: str = "transformer_ref",
 ) -> dict[str, Any]:
     """Load the official index while rebinding its Hub component specs locally.
 
@@ -35,7 +37,8 @@ def local_modular_config(
         or config.get("_blocks_class_name") != "MiniMaxH3Blocks"
     ):
         raise RuntimeError("MiniMax-H3 modular model index has an unexpected pipeline contract")
-    transformer_component = "transformer_ref"
+    if transformer_component not in {"transformer", "transformer_ref"}:
+        raise ValueError("unsupported H3 transformer component")
     rebound = copy.deepcopy(config)
     expected_components = {
         "text_encoder",

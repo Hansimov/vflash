@@ -1,4 +1,4 @@
-"""Once-only verification of official raw Ref4 weights before asset compilation."""
+"""Once-only verification of official raw H3 weights before asset compilation."""
 
 from __future__ import annotations
 
@@ -12,28 +12,38 @@ from pathlib import Path
 from typing import Any
 
 from vflash.contracts import ContractError
-from vflash.model_assets import file_identity, ref4_weights_source, upstream_inventory
-from vflash.native.h3_distilled_lora import LIGHTX_H3_REF_TURBO4_CONTRACT
+from vflash.model_assets import (
+    DEFAULT_MODEL_PROFILE,
+    file_identity,
+    model_profile,
+    upstream_inventory,
+    weights_source,
+)
 
 
-def _required_files(transformer: Path, adapter: Path) -> dict[str, tuple[Path, dict[str, Any]]]:
+def _required_files(
+    transformer: Path, adapter: Path, profile_id: str = DEFAULT_MODEL_PROFILE
+) -> dict[str, tuple[Path, dict[str, Any]]]:
+    profile = model_profile(profile_id)
+    prefix = profile.transformer_component + "/"
     rows = {
-        name: (transformer / name.removeprefix("transformer_ref/"), expected)
+        name: (transformer / name.removeprefix(prefix), expected)
         for name, expected in upstream_inventory().items()
-        if name.startswith("transformer_ref/")
+        if name.startswith(prefix)
     }
-    contract = LIGHTX_H3_REF_TURBO4_CONTRACT
+    contract = profile.adapter
     rows["adapter"] = (adapter, {"size": contract.size_bytes, "sha256": contract.sha256})
     return rows
 
 
 @dataclass(frozen=True)
-class PreparedRef4Weights:
+class PreparedWeights:
     transformer_directory: Path
     adapter_path: Path
     receipt: Path
     receipt_sha256: str
     inventory: tuple[dict[str, Any], ...]
+    profile_id: str = DEFAULT_MODEL_PROFILE
 
     def check_unchanged(self) -> None:
         for row in self.inventory:
@@ -41,19 +51,20 @@ class PreparedRef4Weights:
                 raise ContractError("a prepared compiler input changed; verify weights again")
 
 
-def prepare_ref4_weights(
+def prepare_weights(
     transformer_directory: Path,
     adapter_path: Path,
     receipt: Path,
     *,
+    profile_id: str = DEFAULT_MODEL_PROFILE,
     progress: Callable[[int, int], None] | None = None,
-) -> PreparedRef4Weights:
+) -> PreparedWeights:
     """Hash the pinned transformer shards and LoRA without importing CUDA libraries."""
     if receipt.exists() or receipt.is_symlink():
         raise ContractError("the weights receipt already exists")
     transformer_directory = transformer_directory.resolve(strict=True)
     adapter_path = adapter_path.resolve(strict=True)
-    required = _required_files(transformer_directory, adapter_path)
+    required = _required_files(transformer_directory, adapter_path, profile_id)
     rows = []
     for index, (role, (path, expected)) in enumerate(sorted(required.items()), 1):
         path = path.resolve(strict=True)
@@ -73,8 +84,9 @@ def prepare_ref4_weights(
             progress(index, len(required))
     value = {
         "schema_version": 1,
-        "kind": "h3-ref4-official-weights",
-        "source": ref4_weights_source(),
+        "kind": "h3-official-weights",
+        "profile_id": profile_id,
+        "source": weights_source(profile_id),
         "transformer_directory": str(transformer_directory),
         "adapter_path": str(adapter_path),
         "files": rows,
@@ -86,29 +98,33 @@ def prepare_ref4_weights(
         os.link(temporary, receipt)
     finally:
         temporary.unlink(missing_ok=True)
-    return load_prepared_ref4_weights(receipt)
+    return load_prepared_weights(receipt)
 
 
-def load_prepared_ref4_weights(receipt: Path) -> PreparedRef4Weights:
+def load_prepared_weights(receipt: Path) -> PreparedWeights:
     data = receipt.read_bytes()
     try:
         value = json.loads(data)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ContractError("invalid raw-weights receipt") from exc
+    if not isinstance(value, dict):
+        raise ContractError("invalid raw-weights receipt")
+    legacy = value.get("kind") == "h3-ref4-official-weights"
+    fields = {
+        "schema_version",
+        "kind",
+        "source",
+        "transformer_directory",
+        "adapter_path",
+        "files",
+    }
+    profile_id = DEFAULT_MODEL_PROFILE if legacy else value.get("profile_id")
+    model_profile(profile_id)
     if (
-        not isinstance(value, dict)
-        or set(value)
-        != {
-            "schema_version",
-            "kind",
-            "source",
-            "transformer_directory",
-            "adapter_path",
-            "files",
-        }
+        set(value) != (fields if legacy else fields | {"profile_id"})
         or value["schema_version"] != 1
-        or value["kind"] != "h3-ref4-official-weights"
-        or value["source"] != ref4_weights_source()
+        or value["kind"] != ("h3-ref4-official-weights" if legacy else "h3-official-weights")
+        or value["source"] != weights_source(profile_id)
         or not isinstance(value["files"], list)
     ):
         raise ContractError("raw-weights receipt differs from the fixed compiler contract")
@@ -116,7 +132,7 @@ def load_prepared_ref4_weights(receipt: Path) -> PreparedRef4Weights:
         if not isinstance(value[name], str) or not Path(value[name]).is_absolute():
             raise ContractError("raw-weights receipt requires absolute local paths")
     transformer, adapter = Path(value["transformer_directory"]), Path(value["adapter_path"])
-    required = _required_files(transformer, adapter)
+    required = _required_files(transformer, adapter, profile_id)
     seen = set()
     for row in value["files"]:
         if (
@@ -142,8 +158,35 @@ def load_prepared_ref4_weights(receipt: Path) -> PreparedRef4Weights:
         seen.add(row["role"])
     if seen != set(required):
         raise ContractError("raw-weights receipt is incomplete")
-    result = PreparedRef4Weights(
-        transformer, adapter, receipt, hashlib.sha256(data).hexdigest(), tuple(value["files"])
+    result = PreparedWeights(
+        transformer,
+        adapter,
+        receipt,
+        hashlib.sha256(data).hexdigest(),
+        tuple(value["files"]),
+        profile_id,
     )
     result.check_unchanged()
     return result
+
+
+# Keep the released single-profile Python entrypoints working. New callers use
+# the profile-bound names above; a Ref4 loader never accepts a Base receipt.
+PreparedRef4Weights = PreparedWeights
+
+
+def prepare_ref4_weights(
+    transformer_directory: Path,
+    adapter_path: Path,
+    receipt: Path,
+    *,
+    progress: Callable[[int, int], None] | None = None,
+) -> PreparedWeights:
+    return prepare_weights(transformer_directory, adapter_path, receipt, progress=progress)
+
+
+def load_prepared_ref4_weights(receipt: Path) -> PreparedWeights:
+    prepared = load_prepared_weights(receipt)
+    if prepared.profile_id != DEFAULT_MODEL_PROFILE:
+        raise ContractError("the Ref4 SM89 entrypoint requires its matching weights receipt")
+    return prepared

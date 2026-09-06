@@ -40,7 +40,11 @@ def test_generate_cli_runs_one_owned_pipeline_and_keeps_progress_off_stdout(
     events = []
     device = SimpleNamespace(index=4)
     monkeypatch.setattr("vflash.hardware.discover_nvidia_devices", lambda: (device,))
-    monkeypatch.setattr(vflash.pipeline, "load_prepared_pipeline_assets", lambda _: "prepared")
+    monkeypatch.setattr(
+        vflash.pipeline,
+        "load_prepared_pipeline_assets",
+        lambda _: SimpleNamespace(profile_id="ref2va-turbo4-exact-sm89"),
+    )
     monkeypatch.setattr(
         "vflash.adapters.references.read_reference",
         lambda _: SimpleNamespace(close=lambda: events.append("reference:close")),
@@ -48,7 +52,7 @@ def test_generate_cli_runs_one_owned_pipeline_and_keeps_progress_off_stdout(
 
     class Pipeline:
         def __init__(self, prepared, **kwargs):
-            assert prepared == "prepared"
+            assert prepared.profile_id == "ref2va-turbo4-exact-sm89"
             assert kwargs == {"device": device, "trust_local_code": True}
 
         def __enter__(self):
@@ -110,3 +114,54 @@ def test_generate_cli_requires_explicit_official_code_consent(tmp_path):
                 str(tmp_path / "out.mp4"),
             ]
         )
+
+
+def test_text_only_and_dual_gpu_flags_are_explicit_cli_contracts():
+    args = build_parser().parse_args(
+        [
+            "generate",
+            "--prepared-assets",
+            "receipt.json",
+            "--prompt-file",
+            "prompt.txt",
+            "--gpu",
+            "0",
+            "--output",
+            "output.mp4",
+            "--trust-local-code",
+        ]
+    )
+    assert args.reference == [] and args.peer_gpu is None and args.strategy is None
+    args = build_parser().parse_args(
+        [
+            "generate",
+            "--prepared-assets",
+            "receipt.json",
+            "--prompt-file",
+            "prompt.txt",
+            "--reference",
+            "ref.png",
+            "--gpu",
+            "0",
+            "--peer-gpu",
+            "1",
+            "--strategy",
+            "sequence-head",
+            "--output",
+            "output.mp4",
+            "--trust-local-code",
+        ]
+    )
+    assert args.peer_gpu == 1 and args.strategy == "sequence-head"
+    args = build_parser().parse_args(
+        [
+            "prepare-pipeline",
+            "--assets",
+            "assets.json",
+            "--receipt",
+            "receipt.json",
+            "--profile",
+            "t2va-turbo4-exact-sm89",
+        ]
+    )
+    assert args.profile == "t2va-turbo4-exact-sm89"
