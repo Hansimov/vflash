@@ -11,7 +11,7 @@ Ref2VA 基于参考素材生成视频和音频；T2VA 使用文本条件，不�
 | RTX 4090 48 GB | `ref2va-turbo4-exact-sm89` | 4 | 常驻显存 |
 | RTX 4090 48 GB | `ref2va-turbo8-exact-sm89` | 8 | 常驻显存 |
 | RTX 3080 20 GB | `ref2va-turbo4-exact-sm86` | 4 | 从系统内存分块加载 |
-| RTX 4090 48 GB | `t2va-turbo4-exact-sm89` | 4 | 常驻显存；见下方源码预览 |
+| RTX 4090 48 GB | `t2va-turbo4-exact-sm89` | 4 | 常驻显存；见下方验证范围 |
 
 HTTP 服务默认使用 4090 Turbo4。切换配置时，需要同时更换匹配的资源并重启服务。
 
@@ -20,9 +20,9 @@ vflash profiles
 vflash plan ref2va-turbo8-exact-sm89 --gpu 0
 ```
 
-## 文生视频源码预览 {#t2va}
+## 文生视频 {#t2va}
 
-`main` 源码新增 `t2va-turbo4-exact-sm89`，**0.1.0a5 标签不包含此配置**。初始实现固定在 [74d9996](https://github.com/Hansimov/vflash/commit/74d99968387e3c94fd68ffc3f52ba56afe98cf15)。
+**0.1.0a6** 新增 `t2va-turbo4-exact-sm89`。请使用[源码标签](https://github.com/Hansimov/vflash/tree/v0.1.0a6)与下方对应资源。
 
 需要 Base4 v1.0 权重工件、Base 辅助张量、video/audio shift 6/3 调度，以及没有参考图的 T2VA 条件包。Ref2VA 工件不能执行这个任务；切换模式需要建立独立会话并加载对应资源。
 
@@ -53,7 +53,7 @@ Vflash 可以直接执行固定版本的 [LightX2V H3 Turbo](https://huggingface
 | Turbo4 v0.1 | 单/双 3080、单 4090 | `minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors` |
 | Turbo8 v1.0 768p | 单 4090 | `minimax_h3_ref2v_turbo_8step_v1.0_768p_bf16.safetensors` |
 
-固定修订与来源见[运行资源](../reference/runtime-assets#versions)。源码预览还支持用于 SM89 T2VA 的 `minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors`，alpha 128 / rank 128。仅支持明确列出的文件和修订；ComfyUI、FL2VA、任意自定义 LoRA 和未来上游版本需要单独适配。
+固定修订与来源见[运行资源](../reference/runtime-assets#versions)。T2VA 还支持用于 SM89 T2VA 的 `minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors`，alpha 128 / rank 128。仅支持明确列出的文件和修订；ComfyUI、FL2VA、任意自定义 LoRA 和未来上游版本需要单独适配。
 
 Turbo4 和 Turbo8 都是蒸馏配置。减少步数可以降低计算量，但不代表输出质量与 50 步基础模型相同。名称中的 `exact` 描述所用注意力路径和指定 LoRA 的执行方式，不承诺不同 GPU 上的张量完全一致。
 

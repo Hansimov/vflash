@@ -4,14 +4,14 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
-**0.1.0a5 · 开发者预览版。** 公开接口接收预编译条件包，输出供解码器使用的视频与音频 latent 张量。实际运行需要兼容资源，资源包尚未公开。提示词处理、参考素材上传和 MP4 输出不在本次发布范围内。
+**0.1.0a6 · 开发者预览版。** 公开接口接收预编译条件包，输出供解码器使用的视频与音频 latent 张量。实际运行需要兼容资源，资源包尚未公开。提示词处理、参考素材上传和 MP4 输出不在本次发布范围内。
 
 ## 检查运行环境
 
 需要 Python 3.11 或更新版本。基础安装不会下载模型权重或 PyTorch。
 
 ```bash
-git clone --branch v0.1.0a5 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.1.0a6 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
@@ -24,7 +24,7 @@ vflash plan ref2va-turbo4-exact-sm89 --gpu 0
 
 | 显卡配置 | 已发布配置 | 权重放置 |
 | --- | --- | --- |
-| 单 RTX 4090 48 GB | Ref2VA Turbo4 / Turbo8 | 默认常驻显存，也可选择分块加载 |
+| 单 RTX 4090 48 GB | Ref2VA Turbo4 / Turbo8；T2VA Turbo4 | 默认常驻显存，也可选择分块加载 |
 | 单 RTX 3080 20 GB | Ref2VA Turbo4 | 从系统内存分块加载 |
 | 双 RTX 3080 20 GB | Ref2VA Turbo4 | 共享主机权重，两卡协作执行 |
 
@@ -39,7 +39,7 @@ vflash plan ref2va-turbo4-exact-sm89 --gpu 0
 - [启动 Docker 与 HTTP 服务](https://hansimov.github.io/vflash/zh/guide/docker)，使用独立 worker 和有容量限制的任务队列。
 - [测量性能与质量](https://hansimov.github.io/vflash/zh/reference/performance)，区分加载、推理和端到端成本。
 
-Turbo4 和 Turbo8 使用蒸馏 LoRA。精确注意力不保证基础模型的质量；不同显卡或并行策略也不保证逐位一致的结果。W8 尚不是已发布配置。当前源码另含 SM89 T2VA Turbo4 预览，见[范围与源码修订](https://hansimov.github.io/vflash/zh/guide/profiles#t2va)；上面的 `0.1.0a5` 标签仍只支持 Ref2VA。
+Turbo4 和 Turbo8 使用蒸馏 LoRA。精确注意力不保证基础模型的质量；不同显卡或并行策略也不保证逐位一致的结果。W8 尚不是已发布配置。SM89 已支持 T2VA Turbo4，需要独立的 Base4 v1.0 资源；请查看[验证范围](https://hansimov.github.io/vflash/zh/guide/profiles#t2va)。
 
 ## 参与开发
 

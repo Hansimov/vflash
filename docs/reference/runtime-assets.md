@@ -46,4 +46,4 @@ Model and adapter files retain their own [licenses and terms](./license), indepe
 
 Turbo4 uses `minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors`; Turbo8 uses `minimax_h3_ref2v_turbo_8step_v1.0_768p_bf16.safetensors`. Their digests match the upstream repository checked on 2026-09-05 at revision `2f015e66b37c585cea9dc4ae6f1850ea8788e742`. This records a fixed-source check, not automatic compatibility with later revisions.
 
-The T2VA source preview uses the separate Base4 v1.0 file at the revision above. Its SHA-256 is `1bdabc2e9fce20b1db563b96bcf6e46adcad4c1964f423676436bf266cc7416c`, with alpha 128 / rank 128. It is not interchangeable with Ref4 or newer Base4 releases.
+The T2VA profile uses the separate Base4 v1.0 file at the revision above. Its SHA-256 is `1bdabc2e9fce20b1db563b96bcf6e46adcad4c1964f423676436bf266cc7416c`, with alpha 128 / rank 128. It is not interchangeable with Ref4 or newer Base4 releases.

@@ -11,7 +11,7 @@ This alpha release runs **compiled conditioning → video and audio latents (ten
 Use Python 3.11 or newer. The base installation is lightweight and does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.1.0a5 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.1.0a6 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
