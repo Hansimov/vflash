@@ -13,6 +13,42 @@ from vflash.pipeline.contracts import VideoRequest
 from vflash.pipeline.runtime import H3Pipeline
 
 
+@pytest.mark.parametrize("strategy", ["single", "tensor", "sequence-head"])
+def test_complete_sm86_requires_a_cooperating_sequence_head_pair(
+    tmp_path, monkeypatch, strategy
+):
+    from vflash.hardware import NvidiaDevice
+    from vflash.pipeline.assets import PreparedPipelineAssets
+    from vflash.pipeline.contracts import PipelineAssets
+
+    prepared = PreparedPipelineAssets(
+        PipelineAssets(**{name: tmp_path for name in PipelineAssets.__dataclass_fields__}),
+        tmp_path / "receipt.json",
+        "a" * 64,
+        (),
+        "ref2va-turbo4-exact-sm86",
+    )
+    primary = NvidiaDevice(0, "first", "RTX 3080", 20, "8.6", 320)
+    peer = NvidiaDevice(1, "second", "RTX 3080", 20, "8.6", 320)
+    plans = []
+    monkeypatch.setattr("vflash.pipeline.runtime.media_executables", lambda: None)
+    monkeypatch.setattr("vflash.pipeline.runtime.validate_adapter_dependencies", lambda: None)
+    monkeypatch.setattr(H3Pipeline, "_load_stages", lambda _self, plan: plans.append(plan))
+    options = dict(
+        device=primary,
+        peer_device=None if strategy == "single" else peer,
+        strategy=strategy,
+        trust_local_code=True,
+    )
+    if strategy == "sequence-head":
+        with H3Pipeline(prepared, **options):
+            assert plans[0].gpu_uuids == (primary.uuid, peer.uuid)
+    else:
+        with pytest.raises(ContractError, match="two GPUs with sequence-head"):
+            H3Pipeline(prepared, **options)
+        assert plans == []
+
+
 def _pipeline(*, fail: str | None = None) -> tuple[H3Pipeline, list[str]]:
     events: list[str] = []
 

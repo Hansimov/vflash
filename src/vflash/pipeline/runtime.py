@@ -62,6 +62,13 @@ class H3Pipeline:
             peer_device=peer_device,
             strategy=strategy,
         )
+        if (
+            plan.target.compute_capability == "8.6"
+            and plan.parallel_strategy != "sequence-head"
+        ):
+            raise ContractError(
+                "the complete SM86 pipeline requires two GPUs with sequence-head execution"
+            )
         self.prepared = prepared
         self.profile = model_profile(prepared.profile_id)
         self._lock = threading.Lock()

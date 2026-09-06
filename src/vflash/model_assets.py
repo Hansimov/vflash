@@ -51,6 +51,7 @@ DEFAULT_MODEL_PROFILE = "ref2va-turbo4-exact-sm89"
 COMPLETE_MODEL_PROFILES = (
     DEFAULT_MODEL_PROFILE,
     "t2va-turbo4-exact-sm89",
+    "ref2va-turbo4-exact-sm86",
 )
 
 
