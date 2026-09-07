@@ -9,6 +9,7 @@ import pytest
 from vflash.catalog import ProfileCatalog
 from vflash.contracts import ContractError
 from vflash.hardware import NvidiaDevice
+from vflash.native.h3_mixed_ffnin import PROFILE_ID as MIXED_PROFILE
 from vflash.native.runner import NativeEngineSession
 from vflash.planner import resolve_plan
 
@@ -127,3 +128,69 @@ def test_session_rejects_a_target_outside_its_profile(tmp_path):
             schedule_overlay=tmp_path / "schedule",
             auxiliary_tensor=tmp_path / "auxiliary",
         )
+
+
+@pytest.mark.parametrize(
+    "profile_id,sidecar,residency",
+    [
+        (MIXED_PROFILE, None, "default"),
+        (MIXED_PROFILE, "weights", "resident"),
+        ("ref2va-turbo4-exact-sm89", "weights", "block-ring"),
+    ],
+)
+def test_precision_profile_and_payload_cannot_be_mixed(
+    tmp_path, profile_id, sidecar, residency
+):
+    plan = resolve_plan(
+        ProfileCatalog.bundled(),
+        profile_id=profile_id,
+        device=NvidiaDevice(0, "test-uuid", "Test GPU", 48.0, "8.9", 450.0),
+    )
+    with pytest.raises(ContractError, match="mixed FFN-in profile"):
+        NativeEngineSession(
+            plan,
+            artifact=tmp_path / "artifact",
+            schedule_overlay=tmp_path / "schedule",
+            auxiliary_tensor=tmp_path / "auxiliary",
+            mixed_ffn_in=tmp_path / sidecar if sidecar else None,
+            weight_residency=residency,
+        )
+
+
+def test_mixed_session_uses_its_own_runtime_and_forces_two_slot_residency(
+    monkeypatch, tmp_path
+):
+    loads = []
+    sidecars = []
+
+    class Runtime:
+        def __init__(self, **options):
+            loads.append(options)
+
+        def close(self):
+            pass
+
+    def choose(sidecar):
+        sidecars.append(sidecar)
+        return Runtime
+
+    monkeypatch.setattr("vflash.native.h3_mixed_ffnin.mixed_ffn_in_runtime", choose)
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "")
+    plan = resolve_plan(
+        ProfileCatalog.bundled(),
+        profile_id=MIXED_PROFILE,
+        device=NvidiaDevice(0, "test-uuid", "Test GPU", 48.0, "8.9", 450.0),
+    )
+    with NativeEngineSession(
+        plan,
+        artifact=tmp_path / "artifact",
+        schedule_overlay=tmp_path / "schedule",
+        auxiliary_tensor=tmp_path / "auxiliary",
+        mixed_ffn_in=tmp_path / "weights",
+    ):
+        pass
+    assert sidecars == [tmp_path / "weights"]
+    assert loads[0]["weight_residency"] == "block-ring"
+    assert loads[0]["expected_nfe"] == 4
+    assert loads[0]["expected_weight_profile"] == "lightx-ref-turbo4-v0.1"
+    assert loads[0]["parallel_strategy"] == "single"

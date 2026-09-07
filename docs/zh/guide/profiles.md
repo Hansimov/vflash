@@ -15,6 +15,39 @@ Ref2VA 基于参考素材生成视频和音频；T2VA 使用文本条件，不�
 
 HTTP 服务默认使用 4090 Turbo4。切换配置时，需要同时更换匹配的资源并重启服务。
 
+### 实验性混合 FFN-in 权重
+
+源码提供 `ref2va-turbo4-mixed-ffnin31-sm89`，通过单张 SM89 显卡把条件包生成 latent。
+它将 31 层 FFN 输入主矩阵及其激活量化为 INT8；另外 19 层、其他矩阵和 LoRA 操作数
+仍使用 BF16，注意力与四步调度保持原样。默认配置继续使用 BF16。
+
+此配置需要原有完整 BF16 工件加单独准备的量化权重侧车、Linux CPython 3.11、Torch 2.11.0 / CUDA 13.0，
+以及 `w8` 可选依赖中的 `comfy-kitchen==0.2.31`。运行时直接调用已固定的原生扩展，
+拒绝不匹配的二进制。目前没有自动量化、模型下载、HTTP 暴露或完整 pipeline 选择入口。
+
+```python
+session = NativeEngineSession(
+    plan,  # 单 SM89，配置为 ref2va-turbo4-mixed-ffnin31-sm89。
+    artifact=artifact,
+    schedule_overlay=schedule,
+    auxiliary_tensor=auxiliary,
+    mixed_ffn_in=sidecar_directory,
+)
+```
+
+CLI 在对应配置的 `vflash denoise` 命令中增加 `--mixed-ffn-in SIDECAR`。
+此配置要求双槽加载。选中层在加载时跳过原 BF16 主矩阵，仅保留一份固定在主机内存中的
+INT8 表示；两个显存槽仍保留未量化层所需的容量。
+选中层的 BF16 权重仍存在磁盘上，因此这不是独立的瘦身模型包；目前仅针对已有的
+48 GB SM89 硬件目标，不据此降低显存准入门槛。
+
+[侧车格式](../reference/runtime-assets#mixed-ffnin)明确绑定每个量化文件与基础工件。
+
+底层加载器与此前 INT8 实现的一条完整轨迹逐位一致，**比较对象不是 BF16**。
+独立 Ref4 图片案例中发现过动作差异。这次公开装配已做 CPU 所有权与分派检查，尚未以
+完整的新配置运行 GPU；没有通用质量或端到端加速承诺。SM86、T2VA、Ref8、参考视频
+和更广输入范围仍需单独验证。
+
 ```bash
 vflash profiles
 vflash plan ref2va-turbo8-exact-sm89 --gpu 0

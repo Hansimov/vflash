@@ -15,6 +15,48 @@ Ref2VA generates video and audio from reference conditioning. T2VA uses text con
 
 The HTTP service defaults to Turbo4 on a 4090. To change profiles, restart the service with the selected profile and its matching assets.
 
+### Experimental mixed FFN-in weights
+
+The source tree includes `ref2va-turbo4-mixed-ffnin31-sm89`, an opt-in native
+bundle-to-latents profile for one SM89 GPU. It quantizes the main FFN input
+projection in 31 layers and their activations to INT8. The other 19 layers,
+remaining matrices and LoRA operands stay BF16; attention and the four-step
+schedule are unchanged. BF16 remains the default.
+
+This profile needs the existing full BF16 artifact plus a separately prepared
+weight sidecar, Linux CPython 3.11,
+Torch 2.11.0 with CUDA 13.0, and `comfy-kitchen==0.2.31` from the `w8` extra.
+It uses the native provider directly and rejects a different binary. There is
+no automatic conversion, model download, HTTP exposure or complete-pipeline
+selection for this profile.
+
+```python
+session = NativeEngineSession(
+    plan,  # Resolve ref2va-turbo4-mixed-ffnin31-sm89 on one SM89 GPU.
+    artifact=artifact,
+    schedule_overlay=schedule,
+    auxiliary_tensor=auxiliary,
+    mixed_ffn_in=sidecar_directory,
+)
+```
+
+The CLI equivalent adds `--mixed-ffn-in SIDECAR` to `vflash denoise` with this
+profile. Two-slot streaming is required. Replaced BF16 matrices are skipped
+during loading; one pinned INT8 representation is kept on the host. The two
+device slots retain enough capacity for the unquantized layers.
+The selected BF16 weights still exist on disk; this is not a standalone reduced
+model package. Hardware selection remains limited to the existing 48 GB SM89 target.
+
+The [sidecar format](../reference/runtime-assets#mixed-ffnin) binds each weight file to the base artifact.
+
+The underlying loader preserved a tested mixed-precision trajectory exactly;
+that comparison was against the previous INT8 implementation, **not BF16**.
+Independent Ref4 image tests found motion differences. The source integration
+has CPU ownership and dispatch checks, but has not yet been run on a GPU as
+this assembled public profile. No general quality or end-to-end speed claim
+is made. SM86, T2VA, Ref8, video references and broader input settings need
+separate qualification.
+
 ```bash
 vflash profiles
 vflash plan ref2va-turbo8-exact-sm89 --gpu 0

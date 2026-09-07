@@ -51,6 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
     denoise.add_argument("--artifact", type=Path, required=True)
     denoise.add_argument("--schedule-overlay", type=Path, required=True)
     denoise.add_argument("--auxiliary-tensor", type=Path, required=True)
+    denoise.add_argument("--mixed-ffn-in", type=Path, help="fixed mixed FFN-in weight sidecar")
     denoise.add_argument("--output-latents", type=Path, required=True)
     denoise.add_argument(
         "--weight-residency",
@@ -111,6 +112,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 schedule_overlay=args.schedule_overlay,
                 auxiliary_tensor=args.auxiliary_tensor,
                 weight_residency=args.weight_residency,
+                mixed_ffn_in=args.mixed_ffn_in,
                 output_latents=args.output_latents,
             )
             print(json.dumps(result, indent=2))

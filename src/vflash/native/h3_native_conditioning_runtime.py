@@ -133,6 +133,7 @@ class H3NativeConditioningRuntime:
     """Own one hardware-specialized H3 trunk and execute matching live bundles."""
 
     backend_id = "vflash-native-live-conditioning-v1"
+    _block_ring_type = H3NativeDenoiserBF16Ring
 
     def __init__(
         self,
@@ -320,7 +321,7 @@ class H3NativeConditioningRuntime:
         denoiser_started = time.monotonic()
         if parallel_strategy == "single":
             denoiser_type = (
-                H3NativeDenoiserBF16Ring
+                self._block_ring_type
                 if weight_residency == "block-ring"
                 else H3NativeDenoiserBF16Resident
             )

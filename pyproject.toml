@@ -28,6 +28,7 @@ gpu = [
   "triton>=3.6,<3.7",
 ]
 server = ["fastapi>=0.136,<0.137", "uvicorn>=0.47,<0.48"]
+w8 = ["comfy-kitchen==0.2.31"]
 pipeline = [
   "numpy>=2.3,<2.4",
   "safetensors>=0.8.0rc0,<0.9",

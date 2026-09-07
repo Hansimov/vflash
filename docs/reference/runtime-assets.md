@@ -57,3 +57,14 @@ The native reader accepts one visual-only reference, 2–5 seconds at a normaliz
 The adapter must record the source file and decoded RGB hashes, source dimensions, normalized frame count, the actual official canvas, VAE input/latent frames and condition-video rows. The policy is `official-video-cfr24-v1`: decode at the source display size, then let the pinned official setup resize once. The final canvas has a maximum dimension of 1376, at most 1376×768 pixels and at most 33,024 condition-video rows. The VAE consumes complete temporal chunks; the text encoder samples the full normalized clip. These are different boundaries.
 
 `H3ConditioningCaptureSession.finish(..., schema_version=2)` seals this metadata and the same 14 captured tensors. Loading checks source identity, the exact Ref4 schedule, tensor widths, modality indices and temporal prefixes. A schema change does not convert an existing image capture into video conditioning. The 0.3.1 `H3Pipeline` accepts a local `VideoRequest(reference_video=Path(...))` and creates this capture through the official video setup; see [input limits and examples](../guide/complete-pipeline#reference-video). The installed public pipeline completed an image/video/image sequence, checking 14 conditioning tensors, final FP32 audio/video latents, every delivered RGB frame and cancellation cleanup. The [release notes](./releases#v0-3-0) distinguish that implementation evidence from content quality and audio reproducibility.
+
+## Experimental mixed FFN-in sidecar {#mixed-ffnin}
+
+The sidecar's schema-1 `manifest.json` contains `profile_id`, `base_signature`,
+`alpha: 0.5`, and ordered `layers`. Each layer has `block` and `files`; `q`,
+`scale` and `d` each declare `bytes` and `sha256`. Files are
+`block-NNN/{q,scale,d}.bin`: row-major INT8 weights, FP32 output-row scales and
+FP32 input-channel balances. The fixed layer list and `artifact_signature`
+live in `vflash.native.h3_mixed_ffnin`. Verify the sidecar with
+`FFNInPayloads(sidecar, artifact, verify_content_hashes=True)` at ingestion;
+normal starts check metadata, file sizes and scales without rehashing the model.

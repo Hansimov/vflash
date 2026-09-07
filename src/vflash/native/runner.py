@@ -11,12 +11,14 @@ from pathlib import Path
 from typing import Any
 
 from vflash.contracts import ContractError, ExecutionPlan, GenerationMode
+from vflash.native.h3_mixed_ffnin import PROFILE_ID as MIXED_FFN_IN_PROFILE
 
 WEIGHT_PROFILES = {
     "t2va-turbo4-exact-sm89": "lightx-turbo4-v1.0",
     "ref2va-turbo4-exact-sm86": "lightx-ref-turbo4-v0.1",
     "ref2va-turbo4-exact-sm89": "lightx-ref-turbo4-v0.1",
     "ref2va-turbo8-exact-sm89": "lightx-turbo8-v1.0",
+    MIXED_FFN_IN_PROFILE: "lightx-ref-turbo4-v0.1",
 }
 
 
@@ -35,9 +37,25 @@ class NativeEngineSession:
         schedule_overlay: Path,
         auxiliary_tensor: Path,
         weight_residency: str = "default",
+        mixed_ffn_in: Path | None = None,
     ) -> None:
         started = time.perf_counter()
         profile = plan.profile
+        mixed = profile.id == MIXED_FFN_IN_PROFILE
+        if mixed != (mixed_ffn_in is not None) or (
+            mixed
+            and (
+                not isinstance(mixed_ffn_in, Path)
+                or plan.target.compute_capability != "8.9"
+                or plan.parallel_strategy != "single"
+                or weight_residency not in {"default", "block-ring"}
+            )
+        ):
+            raise ContractError(
+                "the mixed FFN-in profile requires its sidecar and single SM89 ring"
+            )
+        if mixed:
+            weight_residency = "block-ring"
         if weight_residency not in {"default", "resident", "block-ring"} or (
             plan.target.compute_capability == "8.6" and weight_residency == "resident"
         ):
@@ -49,11 +67,11 @@ class NativeEngineSession:
             or not profile.attention.exact
             or plan.target.id not in profile.target_ids
             or (plan.target.compute_capability, plan.target.weight_residency)
-            not in {("8.6", "block-ring"), ("8.9", "resident")}
+            not in {("8.6", "block-ring"), ("8.9", "resident"), ("8.9", "block-ring")}
         ):
             raise ContractError(
                 "the public denoiser supports exact Ref2VA Turbo4 on SM86 "
-                "and Ref2VA Turbo4/Turbo8 or T2VA Turbo4 on SM89"
+                "and Ref2VA Turbo4/Turbo8, optional mixed Ref4 or T2VA Turbo4 on SM89"
             )
         if "torch" in sys.modules and sys.modules["torch"].cuda.is_initialized():
             raise ContractError("select the Vflash GPU before initializing CUDA")
@@ -74,7 +92,12 @@ class NativeEngineSession:
         from vflash.native.h3_native_conditioning_runtime import H3NativeConditioningRuntime
 
         self.plan = plan
-        self.runtime = H3NativeConditioningRuntime(
+        runtime_type = H3NativeConditioningRuntime
+        if mixed:
+            from vflash.native.h3_mixed_ffnin import mixed_ffn_in_runtime
+
+            runtime_type = mixed_ffn_in_runtime(mixed_ffn_in)
+        self.runtime = runtime_type(
             artifact_path=artifact,
             schedule_overlay_path=schedule_overlay,
             auxiliary_tensor_path=auxiliary_tensor,
@@ -170,6 +193,7 @@ def denoise_conditioning_bundle(
     auxiliary_tensor: Path,
     output_latents: Path,
     weight_residency: str = "default",
+    mixed_ffn_in: Path | None = None,
 ) -> dict[str, Any]:
     """One-shot CLI path; services retain a NativeEngineSession instead."""
     with NativeEngineSession(
@@ -178,5 +202,6 @@ def denoise_conditioning_bundle(
         schedule_overlay=schedule_overlay,
         auxiliary_tensor=auxiliary_tensor,
         weight_residency=weight_residency,
+        mixed_ffn_in=mixed_ffn_in,
     ) as session:
         return session.generate(bundle, output_latents)

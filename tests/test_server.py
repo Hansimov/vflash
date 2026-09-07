@@ -3,9 +3,12 @@ from dataclasses import replace
 from pathlib import Path
 from threading import Event
 
+import pytest
 from fastapi.testclient import TestClient
 
+from vflash.contracts import ContractError
 from vflash.hardware import NvidiaDevice
+from vflash.native.h3_mixed_ffnin import PROFILE_ID as MIXED_PROFILE
 from vflash.server import NativeDenoiseExecutor, ServerSettings, create_app
 
 
@@ -65,6 +68,12 @@ def test_health_readiness_and_profiles_are_honest(tmp_path: Path) -> None:
     assert [item["id"] for item in profiles.json()["profiles"]] == ["ref2va-turbo4-exact-sm89"]
     assert not_ready.status_code == 503
     assert not_ready.json()["checks"]["auxiliary_tensor"] is False
+
+
+def test_mixed_weights_are_not_advertised_without_a_server_asset_contract(tmp_path):
+    settings = replace(_settings(tmp_path), profile_id=MIXED_PROFILE)
+    with pytest.raises(ContractError, match="not exposed"):
+        create_app(settings, device_provider=_sm89_devices)
 
 
 def test_denoise_job_uses_relative_bundle_and_server_owned_output(tmp_path: Path) -> None:

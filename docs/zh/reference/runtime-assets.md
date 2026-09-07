@@ -57,3 +57,13 @@ T2VA 配置使用独立的 Base4 v1.0 文件及上表对应修订。SHA-256 为 
 adapter 必须记录源文件及解码 RGB 的摘要、源尺寸、归一化帧数、实际官方画布、VAE 输入与 latent 帧数及条件视频行数。`official-video-cfr24-v1` 规则要求先按源显示尺寸解码，再由固定官方 setup 缩放一次。最终画布长边不超过 1376、面积不超过 1376×768，条件视频行不超过 33,024。VAE 只消费完整时序块，文本编码器则从整段归一化视频采样，两者不能混称。
 
 `H3ConditioningCaptureSession.finish(..., schema_version=2)` 将这些元数据与真实捕获的 14 个张量绑定。读取时检查来源、精确 Ref4 调度、张量宽度、模态索引和时序前缀；修改 schema 不能把图片捕获转换成视频条件。0.3.1 的 `H3Pipeline` 接受本地 `VideoRequest(reference_video=Path(...))`，通过官方视频 setup 完成捕获，见[输入限制与示例](../guide/complete-pipeline#reference-video)。实际安装的公开流水线已完成图片、视频、图片的连续请求，并核验 14 个条件张量、最终 FP32 音视频 latent、全部交付 RGB 帧及取消清理。[发布说明](./releases#v0-3-0)区分实现验证、内容质量与音频重复性。
+
+## 实验性混合 FFN-in 侧车 {#mixed-ffnin}
+
+侧车的 schema-1 `manifest.json` 包含 `profile_id`、`base_signature`、`alpha: 0.5`
+及有序 `layers`。每层含 `block` 和 `files`，其中 `q`、`scale`、`d` 分别声明
+`bytes` 与 `sha256`。文件为 `block-NNN/{q,scale,d}.bin`，依次是行优先 INT8 权重、
+FP32 输出行 scale 和 FP32 输入通道 balance。固定选层及 `artifact_signature` 位于
+`vflash.native.h3_mixed_ffnin`；入库时通过
+`FFNInPayloads(sidecar, artifact, verify_content_hashes=True)` 校验内容。
+日常启动仅核查 metadata、文件大小和 scale，不重复哈希模型。

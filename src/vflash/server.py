@@ -28,13 +28,14 @@ from vflash import __version__
 from vflash.catalog import ProfileCatalog
 from vflash.contracts import ContractError
 from vflash.hardware import NvidiaDevice, discover_nvidia_devices
+from vflash.native.h3_mixed_ffnin import PROFILE_ID as MIXED_FFN_IN_PROFILE
 from vflash.native.runner import WEIGHT_PROFILES
 from vflash.native.worker import ResidentDenoiseWorker
 from vflash.planner import resolve_plan
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_PROFILE_ID = "ref2va-turbo4-exact-sm89"
-SUPPORTED_PROFILE_IDS = frozenset(WEIGHT_PROFILES)
+SUPPORTED_PROFILE_IDS = frozenset(WEIGHT_PROFILES) - {MIXED_FFN_IN_PROFILE}
 CAPABILITIES = {
     "input": "compiled-conditioning-bundle",
     "output": "vae-ready-video-audio-latents",

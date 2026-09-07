@@ -112,6 +112,7 @@ def load_h3_native_block(
     *,
     adaln_table: Any | None = None,
     tensor_load: Callable[[str], Any] | None = None,
+    ffn_in_weight: Any | None = None,
 ) -> tuple[H3RuntimeArtifact, H3NativeBlockWeights]:
     """Load one validated block without constructing a Diffusers model graph."""
 
@@ -189,7 +190,9 @@ def load_h3_native_block(
             input_features=inner,
             output_features=spec.hidden_size,
         ),
-        ffn_in=_bf16_weight(
+        ffn_in=ffn_in_weight
+        if ffn_in_weight is not None
+        else _bf16_weight(
             load("ffn.in.weight"),
             load("ffn.in.scale"),
             bits=target.ffn_weight_bits,
@@ -582,7 +585,10 @@ def _pin_low_rank(
 
 
 def _pin_bf16_block(
-    weights: H3NativeBlockWeights, *, pin: Callable[[Any], Any] = _pin_tensor
+    weights: H3NativeBlockWeights,
+    *,
+    pin: Callable[[Any], Any] = _pin_tensor,
+    ffn_in_pin: Callable[..., Any] = _pin_bf16_weight,
 ) -> H3NativeBlockWeights:
     """Create the immutable host half of the SM86 two-slot weight ring."""
 
@@ -590,7 +596,7 @@ def _pin_bf16_block(
         adaln_table=pin(weights.adaln_table),
         qkv=_pin_bf16_weight(weights.qkv, pin=pin),
         attention_out=_pin_bf16_weight(weights.attention_out, pin=pin),
-        ffn_in=_pin_bf16_weight(weights.ffn_in, pin=pin),
+        ffn_in=ffn_in_pin(weights.ffn_in, pin=pin),
         ffn_out=_pin_bf16_weight(weights.ffn_out, pin=pin),
         attention_norm=pin(weights.attention_norm),
         ffn_norm=pin(weights.ffn_norm),
@@ -654,6 +660,8 @@ def _empty_bf16_block_like(
 def _copy_bf16_block_(
     destination: H3NativeBlockWeights,
     source: H3NativeBlockWeights,
+    *,
+    copy_ffn_in: bool = True,
 ) -> None:
     """Queue one fixed-shape pinned-host block into an existing CUDA slot."""
 
@@ -661,7 +669,7 @@ def _copy_bf16_block_(
         (destination.adaln_table, source.adaln_table),
         (destination.qkv.values, source.qkv.values),
         (destination.attention_out.values, source.attention_out.values),
-        (destination.ffn_in.values, source.ffn_in.values),
+        *([(destination.ffn_in.values, source.ffn_in.values)] if copy_ffn_in else []),
         (destination.ffn_out.values, source.ffn_out.values),
         (destination.attention_norm, source.attention_norm),
         (destination.ffn_norm, source.ffn_norm),
@@ -1129,6 +1137,10 @@ class H3NativeDenoiserBF16Ring:
     backend_id = "cuda-bf16-pinned-host-two-slot-event-ring-torch-flash-v1"
     timing_eligible = True
     block_type = H3NativeBlockBF16Resident
+    _load_block = staticmethod(load_h3_native_block)
+    _pin_block = staticmethod(_pin_bf16_block)
+    _copy_block = staticmethod(_copy_bf16_block_)
+    _weight_bytes = staticmethod(_block_tensor_bytes)
 
     def __init__(
         self,
@@ -1162,7 +1174,7 @@ class H3NativeDenoiserBF16Ring:
         self.host_blocks = host_blocks
         self.device = runtime_device
         self.attention_backend = attention_backend
-        self.host_weight_bytes = sum(_block_tensor_bytes(row) for row in host_blocks)
+        self.host_weight_bytes = sum(self._weight_bytes(row) for row in host_blocks)
 
         with torch.cuda.device(runtime_device):
             slot_weights = tuple(
@@ -1207,7 +1219,7 @@ class H3NativeDenoiserBF16Ring:
             )
         self.rotary_backend = resolved_rotary_backends.pop()
         self.device_slot_weight_bytes = sum(
-            _block_tensor_bytes(slot.weights) for slot in self.slots
+            self._weight_bytes(slot.weights) for slot in self.slots
         )
 
     @classmethod
@@ -1238,7 +1250,7 @@ class H3NativeDenoiserBF16Ring:
                 with H3MappedSafetensor(artifact.directory / block.path) as mapped:
                     weights = None
                     try:
-                        loaded_artifact, weights = load_h3_native_block(
+                        loaded_artifact, weights = cls._load_block(
                             artifact,
                             block.index,
                             adaln_table=(
@@ -1252,7 +1264,7 @@ class H3NativeDenoiserBF16Ring:
                             raise H3NativeDenoiserError(
                                 "BF16 ring block artifact changed while loading"
                             )
-                        host_blocks.append(_pin_bf16_block(weights, pin=arena.copy))
+                        host_blocks.append(cls._pin_block(weights, pin=arena.copy))
                     except BaseException as exc:
                         # Release mmap views retained by unwound loader frames
                         # before __exit__ closes the mapping. Keep the traceback
@@ -1304,7 +1316,7 @@ class H3NativeDenoiserBF16Ring:
                 # The prior invocation may still be consuming the last two
                 # blocks. An unrecorded event on the first invocation is a no-op.
                 self.copy_stream.wait_event(self.compute_done_events[index])
-                _copy_bf16_block_(self.slots[index].weights, self.host_blocks[index])
+                self._copy_block(self.slots[index].weights, self.host_blocks[index])
                 self.ready_events[index].record(self.copy_stream)
 
     def forward_prevalidated(
@@ -1342,7 +1354,7 @@ class H3NativeDenoiserBF16Ring:
             if next_index < len(self.host_blocks):
                 with torch.cuda.stream(self.copy_stream):
                     self.copy_stream.wait_event(self.compute_done_events[slot_index])
-                    _copy_bf16_block_(
+                    self._copy_block(
                         slot.weights,
                         self.host_blocks[next_index],
                     )
@@ -1367,7 +1379,7 @@ class H3NativeDenoiserBF16Ring:
         for index, host_block in enumerate(self.host_blocks):
             with torch.cuda.stream(self.copy_stream):
                 self.copy_stream.wait_event(self.compute_done_events[0])
-                _copy_bf16_block_(slot.weights, host_block)
+                self._copy_block(slot.weights, host_block)
                 self.ready_events[0].record(self.copy_stream)
             compute_stream.wait_event(self.ready_events[0])
             hidden_states = slot.forward_prevalidated(hidden_states, invocation)
