@@ -1,8 +1,10 @@
 # Release notes
 
-The current release is **0.3.0**. Generate from text, images or one short reference video on an RTX 4090 48 GB. A pair of RTX 3080 20 GB GPUs retains complete image-reference generation. See [complete profiles](./pipeline-profiles).
+The current release is **0.3.1**. Generate from text, images or one short reference video on an RTX 4090 48 GB. A pair of RTX 3080 20 GB GPUs retains complete image-reference generation. See [complete profiles](./pipeline-profiles).
 
-## 0.3.1 · lower QKV memory on 4090 (unreleased) {#v0-3-1}
+## 0.3.1 · lower QKV memory on 4090 {#v0-3-1}
+
+[Source tag](https://github.com/Hansimov/vflash/tree/v0.3.1)
 
 The strict Ref4 path on RTX 4090 uses fewer temporary tensors when combining its LoRA projections. It selects the optimization automatically and keeps existing model assets and API calls compatible. Other profiles retain their existing implementation.
 

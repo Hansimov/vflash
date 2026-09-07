@@ -1,6 +1,6 @@
 # Generate a video
 
-Vflash 0.3.0 generates a five-second MP4 from text alone, or from a prompt and one to three ordered reference images. Use the Python API for repeated requests or the container CLI for a single generation. The complete pipeline supports T2VA Base4 and Ref2VA Turbo4 on one RTX 4090 48 GB; Ref4 also runs on two RTX 3080 20 GB GPUs.
+Vflash 0.3.1 generates a five-second MP4 from text alone, or from a prompt and one to three ordered reference images. Use the Python API for repeated requests or the container CLI for a single generation. The complete pipeline supports T2VA Base4 and Ref2VA Turbo4 on one RTX 4090 48 GB; Ref4 also runs on two RTX 3080 20 GB GPUs.
 
 On one 4090, Ref4 also accepts [a short reference video](#reference-video). The same instance can alternate images and video without switching weights.
 
@@ -85,7 +85,7 @@ with H3Pipeline(prepared, device=devices[0], trust_local_code=True) as pipeline:
 
 The original single-image `reference=Path(...)` argument remains supported. Use it or `references=(...)`, never both.
 
-In 0.3.0, construction checks the profile on the CPU. The first `generate` call reads and validates its inputs before loading any models. To preload a fixed pipeline before accepting requests, call `pipeline.prepare()` explicitly. Repeated calls reuse its stages; invalid inputs preserve a healthy loaded instance. Preloading does not run conditioning or compile every input shape: first use can still incur operator preparation costs.
+In 0.3.1, construction checks the profile on the CPU. The first `generate` call reads and validates its inputs before loading any models. To preload a fixed pipeline before accepting requests, call `pipeline.prepare()` explicitly. Repeated calls reuse its stages; invalid inputs preserve a healthy loaded instance. Preloading does not run conditioning or compile every input shape: first use can still incur operator preparation costs.
 
 For two RTX 3080 20 GB GPUs, prepare the [SM86 assets](../reference/pipeline-profiles#sm86) and pass `peer_device=devices[1], strategy="sequence-head"` to `H3Pipeline`, with exactly that pair visible. Encoding and decoding use `devices[0]`; native denoising uses both. Single-SM86 and `tensor` complete pipelines are rejected before model loading. The equivalent CLI options are `--gpu 0 --peer-gpu 1 --strategy sequence-head`.
 

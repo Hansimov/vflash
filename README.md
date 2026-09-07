@@ -4,14 +4,14 @@ Native **MiniMax H3 inference** for RTX 3080 20 GB and RTX 4090 48 GB. Vflash us
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
-**0.3.0.** Generate five-second MP4s from text, one to three images, or [a short reference video](https://hansimov.github.io/vflash/guide/complete-pipeline#reference-video). One RTX 4090 48 GB supports all three inputs; two RTX 3080 20 GB GPUs support image references. Use the [Python or container pipeline](https://hansimov.github.io/vflash/guide/complete-pipeline), with [assets compiled from official weights](https://hansimov.github.io/vflash/guide/compile-weights). The native Python, CLI and HTTP interfaces accept conditioning bundles and return audio/video latents.
+**0.3.1.** Generate five-second MP4s from text, one to three images, or [a short reference video](https://hansimov.github.io/vflash/guide/complete-pipeline#reference-video). One RTX 4090 48 GB supports all three inputs; two RTX 3080 20 GB GPUs support image references. Use the [Python or container pipeline](https://hansimov.github.io/vflash/guide/complete-pipeline), with [assets compiled from official weights](https://hansimov.github.io/vflash/guide/compile-weights). The native Python, CLI and HTTP interfaces accept conditioning bundles and return audio/video latents.
 
 ## Check your setup
 
 Python 3.11 or newer is required. The base install does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.3.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.3.1 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
