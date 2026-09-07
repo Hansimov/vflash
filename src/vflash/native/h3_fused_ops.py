@@ -773,6 +773,141 @@ def triton_strict_bf16_qkv_adapter_merge(
     return output
 
 
+def _shares_storage(left: Any, right: Any) -> bool:
+    return left.untyped_storage().data_ptr() == right.untyped_storage().data_ptr()
+
+
+def _validate_qkv_direct_merge(
+    base: Any,
+    adapters: tuple[Any, Any, Any],
+    scalings: tuple[float, float, float],
+    *,
+    block_size: int,
+) -> tuple[int, int, tuple[float, float, float]]:
+    """Validate separate BF16 branches and exclusive ownership of the base storage."""
+    import torch
+
+    if (
+        not isinstance(base, torch.Tensor)
+        or base.dtype != torch.bfloat16
+        or base.ndim != 3
+        or any(size <= 0 for size in base.shape)
+        or base.shape[-1] % 3
+        or not base.is_contiguous()
+        or base.numel() >= 2**31
+        or base.requires_grad
+        or not isinstance(adapters, tuple)
+        or len(adapters) != 3
+    ):
+        raise H3FusedOpsError("base must be a contiguous inference BF16 [B,S,3H]")
+    expected = (*base.shape[:-1], base.shape[-1] // 3)
+    for adapter in adapters:
+        if (
+            not isinstance(adapter, torch.Tensor)
+            or adapter.device != base.device
+            or adapter.dtype != base.dtype
+            or tuple(adapter.shape) != expected
+            or not adapter.is_contiguous()
+            or adapter.requires_grad
+            or _shares_storage(base, adapter)
+        ):
+            raise H3FusedOpsError("adapters must be separate contiguous BF16 [B,S,H]")
+    if (
+        not isinstance(scalings, tuple)
+        or len(scalings) != 3
+        or any(
+            not isinstance(value, (int, float))
+            or isinstance(value, bool)
+            or not math.isfinite(value)
+            for value in scalings
+        )
+        or block_size != 1024
+    ):
+        raise H3FusedOpsError("require three finite scalings and SM89 block size 1024")
+    return base.numel() // 3, expected[-1], tuple(float(value) for value in scalings)
+
+
+@cache
+def _strict_bf16_qkv_direct_merge_kernel() -> Any:
+    """Build a Triton JIT definition without selecting a device or compiling."""
+    import triton
+    import triton.language as tl
+
+    @triton.jit
+    def strict_qkv_direct_merge_kernel(
+        base_ptr,
+        query_adapter_ptr,
+        key_adapter_ptr,
+        value_adapter_ptr,
+        branch_elements,
+        branch_width,
+        scaling_0,
+        scaling_1,
+        scaling_2,
+        BLOCK_SIZE: tl.constexpr,
+    ):
+        offsets = tl.program_id(0) * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+        branch = tl.program_id(1)
+        mask = offsets < branch_elements
+        rows = offsets // branch_width
+        columns = offsets % branch_width
+        packed_offsets = rows * (3 * branch_width) + branch * branch_width + columns
+        adapter_ptr = tl.where(
+            branch == 0,
+            query_adapter_ptr,
+            tl.where(branch == 1, key_adapter_ptr, value_adapter_ptr),
+        )
+        scaling = tl.where(branch == 0, scaling_0, tl.where(branch == 1, scaling_1, scaling_2))
+        base = tl.load(base_ptr + packed_offsets, mask=mask, other=0).to(tl.float32)
+        adapter = tl.load(adapter_ptr + offsets, mask=mask, other=0).to(tl.float32)
+        scaled = tl.inline_asm_elementwise(
+            asm="""
+            {
+            .reg .b16 rounded;
+            cvt.rn.bf16.f32 rounded, $1;
+            cvt.f32.bf16 $0, rounded;
+            }
+            """,
+            constraints="=f,f",
+            args=[adapter * scaling],
+            dtype=tl.float32,
+            is_pure=True,
+            pack=1,
+        )
+        # Store the second BF16 round, exactly as the original merged output.
+        merged = (base + scaled).to(tl.bfloat16)
+        tl.store(base_ptr + packed_offsets, merged, mask=mask)
+
+    return strict_qkv_direct_merge_kernel
+
+
+def triton_strict_bf16_qkv_direct_merge(
+    base: Any,
+    adapters: tuple[Any, Any, Any],
+    *,
+    scalings: tuple[float, float, float],
+    block_size: int = 1024,
+) -> Any:
+    """Merge three LoRA branches into a fresh base; the caller relinquishes its old values."""
+    elements, width, scales = _validate_qkv_direct_merge(
+        base, adapters, scalings, block_size=block_size
+    )
+    if base.device.type != "cuda":
+        raise H3FusedOpsError("the direct QKV merge requires CUDA BF16 tensors")
+    import triton
+
+    _strict_bf16_qkv_direct_merge_kernel()[(triton.cdiv(elements, block_size), 3)](
+        base,
+        *adapters,
+        elements,
+        width,
+        *scales,
+        BLOCK_SIZE=block_size,
+        num_warps=8,
+    )
+    return base
+
+
 def triton_strict_bf16_adapter_gate_residual(
     base: Any,
     adapter: Any,

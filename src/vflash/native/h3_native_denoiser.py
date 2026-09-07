@@ -895,6 +895,25 @@ class H3NativeBlockBF16Resident(_H3BlockOperations):
         from vflash.native.h3_fused_ops import triton_strict_bf16_qkv_adapter_merge
 
         base = self._linear(states, self.weights.qkv)
+        if (
+            self.elementwise_backend == "triton-strict"
+            and self.adapter_fusion_backend == "triton-strict"
+            and self.elementwise_block_size == 1024
+            and self.artifact.target.compute_capability == "sm89"
+            and self.artifact.weight_profile == "lightx-ref-turbo4-v0.1"
+            and all(row.scaling == 0.0625 for row in residuals)
+        ):
+            from vflash.native.h3_fused_ops import triton_strict_bf16_qkv_direct_merge
+
+            if base.untyped_storage().data_ptr() == states.untyped_storage().data_ptr():
+                raise H3NativeDenoiserError("QKV base must not alias the input states")
+            adapters = tuple(self._residual_linear_unscaled(states, row) for row in residuals)
+            return triton_strict_bf16_qkv_direct_merge(
+                base,
+                adapters,
+                scalings=tuple(row.scaling for row in residuals),
+                block_size=self.elementwise_block_size,
+            )
         packed_adapter = torch.cat(
             tuple(self._residual_linear_unscaled(states, row) for row in residuals),
             dim=-1,
