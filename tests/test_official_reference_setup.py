@@ -14,6 +14,7 @@ def test_official_video_resize_once_and_image_policy_restored_after_each_request
         MiniMaxH3VideoReference,
     )
     from diffusers.modular_pipelines.minimax_h3.before_encoder import MiniMaxH3Ref2VASetupStep
+    from diffusers.modular_pipelines.modular_pipeline import PipelineState
     from PIL import Image
 
     from vflash.adapters.references import install_match_reference_setup_block
@@ -29,10 +30,6 @@ def test_official_video_resize_once_and_image_policy_restored_after_each_request
         )
     )
     block = install_match_reference_setup_block(pipe)
-    # Exercise the real pinned block while replacing only its state-container
-    # plumbing. No model component or fake spatial normalizer is involved.
-    monkeypatch.setattr(block, "get_block_state", lambda state: state)
-    monkeypatch.setattr(block, "set_block_state", lambda state, value: None)
     components = SimpleNamespace(
         canvas_multiple=32,
         vae_frames_per_chunk=17,
@@ -50,7 +47,9 @@ def test_official_video_resize_once_and_image_policy_restored_after_each_request
     assert original.shape == (48, 768, 1376, 3)
 
     def state(reference):
-        return SimpleNamespace(references=[reference], height=352, width=640, num_frames=124)
+        return PipelineState(
+            values={"references": [reference], "height": 352, "width": 640, "num_frames": 124}
+        )
 
     with Image.new("RGB", (232, 128), "white") as image:
         for reference in [
@@ -60,7 +59,7 @@ def test_official_video_resize_once_and_image_policy_restored_after_each_request
         ]:
             request = state(reference)
             block(components, request)
-            normalized = request.normalized_references[0]
+            normalized = request.get("normalized_references")[0]
             if reference.kind == "video":
                 assert block.last_metadata["policy"] == H3_VIDEO_REFERENCE_POLICY
                 assert np.array_equal(normalized.frames, original)
@@ -78,5 +77,5 @@ def test_official_video_resize_once_and_image_policy_restored_after_each_request
         request = state(MiniMaxH3ImageReference(image=image))
         block(components, request)
         assert block.last_metadata["policy"] == "match"
-        request.normalized_references[0].image.close()
+        request.get("normalized_references")[0].image.close()
     assert not torch.cuda.is_initialized()

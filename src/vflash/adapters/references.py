@@ -128,7 +128,9 @@ def install_match_reference_setup_block(pipe: Any) -> Any:
                 # In particular, do not downscale to the generated canvas or
                 # pre-normalize before the official non-idempotent rounding.
                 result = super().__call__(components, state)
-                normalized = self.get_block_state(result[1]).normalized_references[0]
+                # get_block_state projects inputs only; intermediate outputs
+                # are published to the returned PipelineState by the block.
+                normalized = result[1].get("normalized_references")[0]
                 if (
                     normalized.frames.shape
                     != (frames.shape[0], expected["height"], expected["width"], 3)
