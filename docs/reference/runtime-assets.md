@@ -47,3 +47,13 @@ Model and adapter files retain their own [licenses and terms](./license), indepe
 Turbo4 uses `minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors`; Turbo8 uses `minimax_h3_ref2v_turbo_8step_v1.0_768p_bf16.safetensors`. Their digests match the upstream repository checked on 2026-09-05 at revision `2f015e66b37c585cea9dc4ae6f1850ea8788e742`. This records a fixed-source check, not automatic compatibility with later revisions.
 
 The T2VA profile uses the separate Base4 v1.0 file at the revision above. Its SHA-256 is `1bdabc2e9fce20b1db563b96bcf6e46adcad4c1964f423676436bf266cc7416c`, with alpha 128 / rank 128. It is not interchangeable with Ref4 or newer Base4 releases.
+
+## Typed video conditioning {#video-conditioning}
+
+The development video adapter uses **bundle schema 2**, with a true `VideoReference` and `<Video 1>` in the encoded prompt. Existing image and T2VA bundles keep schema 1. Video frames are not separate picture references.
+
+The native reader accepts one visual-only reference, 2–5 seconds at a normalized 24 fps, for Ref4 on one SM89 GPU. Output is 5 seconds at 24 fps, within 928×512 total pixels. Source audio, mixed image/video inputs, Ref8 and SM86 video conditioning are outside this boundary. This is reference-guided regeneration; it does not promise exact editing or preservation of every source frame.
+
+The adapter must record the source file and decoded RGB hashes, source dimensions, normalized frame count, the actual official canvas, VAE input/latent frames and condition-video rows. The policy is `official-video-cfr24-v1`: decode at the source display size, then let the pinned official setup resize once. The final canvas has a maximum dimension of 1376, at most 1376×768 pixels and at most 33,024 condition-video rows. The VAE consumes complete temporal chunks; the text encoder samples the full normalized clip. These are different boundaries.
+
+`H3ConditioningCaptureSession.finish(..., schema_version=2)` seals this metadata and the same 14 captured tensors. Loading checks source identity, the exact Ref4 schedule, tensor widths, modality indices and temporal prefixes. A schema change does not convert an existing image capture into video conditioning. The complete `H3Pipeline`/`VideoRequest` interface remains image/T2VA only; integration owners must supply a real video capture before using the native bundle interface. The current video work is undergoing complete-worker qualification.

@@ -401,6 +401,14 @@ class H3NativeConditioningRuntime:
             raise H3NativeConditioningRuntimeError(
                 "the conditioning task differs from the loaded Base or Ref model"
             )
+        if bundle.schema_version == 2 and (
+            len(self.devices) != 1
+            or self.compute_capability != (8, 9)
+            or self.overlay.schedule.to_mapping() != bundle.schedule.to_mapping()
+        ):
+            raise H3NativeConditioningRuntimeError(
+                "video references require one SM89 GPU and their qualified Ref4 schedule"
+            )
         validate_conditioning_source(bundle.source, self.artifact.source)
         tensor_path = bundle.directory / "conditioning.safetensors"
         loaded = load_safetensor_tensors(

@@ -212,6 +212,7 @@ class H3ConditioningCaptureSession:
         video_sigmas: Sequence[float] | Any,
         audio_sigmas: Sequence[float] | Any,
         update_rule: str,
+        schema_version: int = 1,
     ) -> H3ConditioningBundle:
         if not self._captured or set(self._tensors) != _TENSORS:
             raise H3ConditioningBundleError("H3 conditioning capture is incomplete")
@@ -258,4 +259,5 @@ class H3ConditioningCaptureSession:
             profile=profile,
             request=request,
             source=source,
+            schema_version=schema_version,
         )

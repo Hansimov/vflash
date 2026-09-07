@@ -23,6 +23,8 @@ from vflash.native.h3_native_scheduler import H3NativeSchedule
 from vflash.native.h3_tensor_file import inspect_safetensors_header
 
 H3_CONDITIONING_BUNDLE_SCHEMA_VERSION = 1
+H3_VIDEO_CONDITIONING_BUNDLE_SCHEMA_VERSION = 2
+H3_VIDEO_REFERENCE_POLICY = "official-video-cfr24-v1"
 
 _BUNDLE_ID = re.compile(r"h3-conditioning-[a-z0-9][a-z0-9-]{0,95}")
 _IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,255}")
@@ -159,6 +161,7 @@ class H3ConditioningBundle:
     request: Mapping[str, Any]
     source: Mapping[str, str]
     files: tuple[H3ConditioningFile, ...]
+    schema_version: int = H3_CONDITIONING_BUNDLE_SCHEMA_VERSION
 
     @property
     def conditioning_sha256(self) -> str:
@@ -221,13 +224,92 @@ def _validate_source(value: Any) -> dict[str, str]:
     return {name: str(value[name]) for name in sorted(required)}
 
 
-def _validate_request(value: Any, *, task: str) -> dict[str, Any]:
+def _validate_video_reference(value: Any) -> dict[str, Any]:
+    required = {
+        "kind",
+        "index",
+        "role",
+        "size_bytes",
+        "sha256",
+        "source_width",
+        "source_height",
+        "duration_seconds",
+        "fps",
+        "frames",
+        "width",
+        "height",
+        "vae_input_frames",
+        "vae_latent_frames",
+        "condition_video_rows",
+        "audio_conditioning",
+        "decoded_rgb_sha256",
+    }
+    if not isinstance(value, dict) or set(value) != required:
+        raise H3ConditioningBundleError("video reference fields do not match schema v2")
+    integer_fields = required - {
+        "kind",
+        "role",
+        "sha256",
+        "duration_seconds",
+        "audio_conditioning",
+        "decoded_rgb_sha256",
+    }
+    if any(type(value[name]) is not int or value[name] <= 0 for name in integer_fields):
+        raise H3ConditioningBundleError("video reference dimensions or counts are invalid")
+    duration = value["duration_seconds"]
+    if (
+        value["kind"] != "video"
+        or value["index"] != 1
+        or value["role"] != "reference"
+        or value["audio_conditioning"] is not False
+        or value["fps"] != 24
+        or not 48 <= value["frames"] <= 120
+        or type(duration) not in {int, float}
+        or not math.isfinite(duration)
+        or not 2 <= duration <= 5
+        or abs(value["frames"] / 24 - duration) > 1 / 24 + 1e-9
+        or any(
+            not isinstance(value[name], str) or _SHA256.fullmatch(value[name]) is None
+            for name in ("sha256", "decoded_rgb_sha256")
+        )
+    ):
+        raise H3ConditioningBundleError("video references require one visual-only 2-5s input")
+    ratio = value["source_width"] / value["source_height"]
+    if not 0.25 <= ratio <= 4:
+        raise H3ConditioningBundleError(
+            "video reference aspect ratio must be between 1:4 and 4:1"
+        )
+    width, height = (768 * ratio, 768.0) if ratio >= 1 else (768.0, 768 / ratio)
+    scale = min(1.0, math.sqrt(768 * 1344 / (width * height)))
+    canvas = (max(32, round(width * scale / 32) * 32), max(32, round(height * scale / 32) * 32))
+    chunks = (value["frames"] - 5) // 17
+    latent_frames = chunks * 5 + 2
+    if (
+        (value["width"], value["height"]) != canvas
+        or max(canvas) > 1376
+        or canvas[0] * canvas[1] > 1376 * 768
+        or value["condition_video_rows"] > 33024
+        or value["vae_input_frames"] != chunks * 17 + 5
+        or value["vae_latent_frames"] != latent_frames
+        or value["condition_video_rows"]
+        != latent_frames * (canvas[0] // 32) * (canvas[1] // 32)
+    ):
+        raise H3ConditioningBundleError(
+            "video reference geometry differs from the official policy"
+        )
+    return dict(value)
+
+
+def _validate_request(value: Any, *, task: str, schema_version: int = 1) -> dict[str, Any]:
+    if type(schema_version) is not int or schema_version not in {1, 2}:
+        raise H3ConditioningBundleError("unsupported conditioning request schema")
+    policy_key = "reference_image_policy" if schema_version == 1 else "reference_video_policy"
     required = {
         "source_case_id",
         "prompt",
         "prompt_sha256",
         "seed",
-        "reference_image_policy",
+        policy_key,
         "delivery_profiles",
         "references",
     }
@@ -247,7 +329,8 @@ def _validate_request(value: Any, *, task: str) -> dict[str, Any]:
         or not isinstance(seed, int)
         or isinstance(seed, bool)
         or seed < 0
-        or value.get("reference_image_policy") not in {"diffusers", "match"}
+        or value.get(policy_key)
+        not in ({"diffusers", "match"} if schema_version == 1 else {H3_VIDEO_REFERENCE_POLICY})
     ):
         raise H3ConditioningBundleError("H3 conditioning request identity is invalid")
     deliveries = value.get("delivery_profiles")
@@ -289,6 +372,16 @@ def _validate_request(value: Any, *, task: str) -> dict[str, Any]:
             }
         )
     references = value.get("references")
+    if schema_version == 2:
+        if task != "ref2va" or not isinstance(references, list) or len(references) != 1:
+            raise H3ConditioningBundleError(
+                "schema v2 requires one video reference without images"
+            )
+        return {
+            **value,
+            "delivery_profiles": validated_deliveries,
+            "references": [_validate_video_reference(references[0])],
+        }
     if not isinstance(references, list) or (
         len(references) != 0 if task == "t2va" else not 1 <= len(references) <= 3
     ):
@@ -391,6 +484,100 @@ def _validate_tensor_contract(
         raise H3ConditioningBundleError("H3 conditioning video rows differ from the profile")
 
 
+def _validate_video_profile(profile: H3ConditioningProfile, request: Mapping[str, Any]) -> None:
+    reference = request["references"][0]
+    if (
+        profile.nfe != 4
+        or profile.frames != 124
+        or (profile.video_flow_shift, profile.audio_flow_shift) != (12, 3)
+        or profile.width * profile.height > 928 * 512
+        or profile.num_condition_audio_rows != 0
+        or profile.num_condition_video_rows != reference["condition_video_rows"]
+        or request["delivery_profiles"]
+        != [{"temporal_profile": "native-24fps-5s", "frames": 120, "fps": 24.0}]
+    ):
+        raise H3ConditioningBundleError(
+            "video conditioning requires Ref4 at 5s24 within its reference budget"
+        )
+
+
+def _validate_video_partitions(path: Path, profile: H3ConditioningProfile) -> None:
+    import torch
+
+    from vflash.native.h3_latent_layout import infer_h3_condition_prefix_counts
+    from vflash.native.h3_tensor_file import load_safetensor_tensors
+
+    header = inspect_safetensors_header(path)
+    if (
+        header["first_packed_input"]["shape"][-1] != 5376
+        or header["first_packed_input"]["dtype"] != "BF16"
+        or header["encoder_hidden_states"]["shape"][-1] != 5120
+        or header["initial_video_latents"]["shape"][-1] != 96
+        or tuple(header["initial_audio_latents"]["shape"][1:]) != (414, 32)
+        or any(
+            header[name]["dtype"] != "I64"
+            for name in (
+                "video_indices",
+                "audio_indices",
+                "text_indices",
+                "token_tags",
+                "first_timestep_indices",
+            )
+        )
+    ):
+        raise H3ConditioningBundleError(
+            "video conditioning has invalid modality widths or precision"
+        )
+    values = load_safetensor_tensors(
+        path,
+        (
+            "video_indices",
+            "audio_indices",
+            "text_indices",
+            "token_tags",
+            "first_timesteps",
+            "first_timestep_indices",
+        ),
+    )
+    tags = values["token_tags"]
+    indices = [
+        values[name].to(torch.int64)
+        for name in ("video_indices", "audio_indices", "text_indices")
+    ]
+    if not torch.equal(torch.cat(indices).sort().values, torch.arange(tags.numel())):
+        raise H3ConditioningBundleError(
+            "video conditioning indices are not a complete unique partition"
+        )
+    if not bool((tags.index_select(0, indices[0]) == 0).all()) or not bool(
+        (tags.index_select(0, indices[1]) == 2).all()
+    ):
+        raise H3ConditioningBundleError(
+            "video conditioning modality tags differ from its indices"
+        )
+    text_tags = tags.index_select(0, indices[2])
+    if not bool(((text_tags == 0) | (text_tags == 1)).all()):
+        raise H3ConditioningBundleError(
+            "video conditioning presentation has invalid token tags"
+        )
+    times = values["first_timesteps"]
+    try:
+        prefixes = infer_h3_condition_prefix_counts(
+            captured_timesteps=times.unsqueeze(0),
+            captured_timestep_counts=torch.tensor([times.numel()]),
+            captured_timestep_indices=values["first_timestep_indices"].unsqueeze(0),
+            video_indices=indices[0],
+            audio_indices=indices[1],
+        )
+    except (ValueError, RuntimeError, IndexError) as exc:
+        raise H3ConditioningBundleError(
+            "video conditioning timestep prefixes are invalid"
+        ) from exc
+    if prefixes != (profile.num_condition_video_rows, 0):
+        raise H3ConditioningBundleError(
+            "video conditioning timestep prefixes differ from metadata"
+        )
+
+
 def _files(directory: Path, profile: H3ConditioningProfile) -> tuple[H3ConditioningFile, ...]:
     rows = []
     for role, filename in _FILES.items():
@@ -419,6 +606,7 @@ def seal_h3_conditioning_bundle(
     profile: H3ConditioningProfile,
     request: Mapping[str, Any],
     source: Mapping[str, str],
+    schema_version: int = H3_CONDITIONING_BUNDLE_SCHEMA_VERSION,
 ) -> H3ConditioningBundle:
     """Validate and content-bind an already written conditioning directory."""
 
@@ -427,12 +615,16 @@ def seal_h3_conditioning_bundle(
     if directory.is_symlink() or not directory.is_dir():
         raise H3ConditioningBundleError("H3 conditioning directory must be a real directory")
     profile = H3ConditioningProfile.from_mapping(asdict(profile))
-    request_value = _validate_request(dict(request), task=profile.task)
+    request_value = _validate_request(
+        dict(request), task=profile.task, schema_version=schema_version
+    )
+    if schema_version == H3_VIDEO_CONDITIONING_BUNDLE_SCHEMA_VERSION:
+        _validate_video_profile(profile, request_value)
     source_value = _validate_source(dict(source))
     H3NativeSchedule.from_json(directory / _FILES["scheduler"], expected_nfe=profile.nfe)
     files = _files(directory, profile)
     payload = {
-        "schema_version": H3_CONDITIONING_BUNDLE_SCHEMA_VERSION,
+        "schema_version": schema_version,
         "bundle_id": bundle_id,
         "created_at": datetime.now(UTC).isoformat(),
         "profile": asdict(profile),
@@ -479,7 +671,8 @@ def load_h3_conditioning_bundle(directory: Path) -> H3ConditioningBundle:
     if (
         not isinstance(value, dict)
         or set(value) != expected
-        or value.get("schema_version") != H3_CONDITIONING_BUNDLE_SCHEMA_VERSION
+        or type(value.get("schema_version")) is not int
+        or value.get("schema_version") not in {1, 2}
         or not isinstance(value.get("bundle_id"), str)
         or _BUNDLE_ID.fullmatch(value["bundle_id"]) is None
         or not isinstance(value.get("created_at"), str)
@@ -488,7 +681,12 @@ def load_h3_conditioning_bundle(directory: Path) -> H3ConditioningBundle:
     ):
         raise H3ConditioningBundleError("H3 conditioning manifest fields are invalid")
     profile = H3ConditioningProfile.from_mapping(value["profile"])
-    request = _validate_request(value.get("request"), task=profile.task)
+    schema_version = value["schema_version"]
+    request = _validate_request(
+        value.get("request"), task=profile.task, schema_version=schema_version
+    )
+    if schema_version == 2:
+        _validate_video_profile(profile, request)
     source = _validate_source(value.get("source"))
     manifest_files = value.get("files")
     if not isinstance(manifest_files, list) or len(manifest_files) != len(_FILES):
@@ -520,6 +718,8 @@ def load_h3_conditioning_bundle(directory: Path) -> H3ConditioningBundle:
     if seen != set(_FILES):
         raise H3ConditioningBundleError("H3 conditioning file roles are incomplete")
     H3NativeSchedule.from_json(resolved / _FILES["scheduler"], expected_nfe=profile.nfe)
+    if schema_version == H3_VIDEO_CONDITIONING_BUNDLE_SCHEMA_VERSION:
+        _validate_video_partitions(resolved / _FILES["conditioning"], profile)
     return H3ConditioningBundle(
         directory=resolved,
         bundle_id=value["bundle_id"],
@@ -528,6 +728,7 @@ def load_h3_conditioning_bundle(directory: Path) -> H3ConditioningBundle:
         request=request,
         source=source,
         files=expected_files,
+        schema_version=schema_version,
     )
 
 

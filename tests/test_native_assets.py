@@ -182,7 +182,7 @@ def test_conditioning_capture_schedule_can_differ_from_execution(monkeypatch, tm
         {**conditioning_profile(), "nfe": 8, "video_flow_shift": 6.0}
     )
     bundle = SimpleNamespace(
-        directory=tmp_path, source=runtime.artifact.source, profile=capture
+        directory=tmp_path, source=runtime.artifact.source, profile=capture, schema_version=1
     )
     packed = torch.arange(6, dtype=torch.float32).reshape(1, 3, 2).to(torch.bfloat16)
     tensors = {

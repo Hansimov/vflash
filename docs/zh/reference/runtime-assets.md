@@ -47,3 +47,13 @@ latent 命令行输出包含音视频张量的 safetensors 文件；完整 Pytho
 Turbo4 使用 `minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors`，Turbo8 使用 `minimax_h3_ref2v_turbo_8step_v1.0_768p_bf16.safetensors`。这两个文件的摘要与 2026-09-05 核对的上游修订 `2f015e66b37c585cea9dc4ae6f1850ea8788e742` 一致。这是一次固定来源核对，不保证未来修订自动兼容。
 
 T2VA 配置使用独立的 Base4 v1.0 文件及上表对应修订。SHA-256 为 `1bdabc2e9fce20b1db563b96bcf6e46adcad4c1964f423676436bf266cc7416c`，alpha 128 / rank 128。不能与 Ref4 或更新的 Base4 版本互换。
+
+## 视频条件包 {#video-conditioning}
+
+开发中的视频 adapter 使用 **schema 2 条件包**，实际输入是 `VideoReference`，编码后的提示词使用 `<Video 1>`。已有图片和 T2VA 条件包保留 schema 1；不会把视频帧改名为多张参考图片。
+
+原生读取接口限定单段 2–5 秒视频，归一化为 24 fps，使用单张 SM89 显卡的 Ref4。输出为 5 秒、24 fps，总像素不超过 928×512。源音轨、图视频混合、Ref8 和 SM86 视频参考不在此范围内。这是依据参考重新生成，不保证精确编辑或保留每一源帧。
+
+adapter 必须记录源文件及解码 RGB 的摘要、源尺寸、归一化帧数、实际官方画布、VAE 输入与 latent 帧数及条件视频行数。`official-video-cfr24-v1` 规则要求先按源显示尺寸解码，再由固定官方 setup 缩放一次。最终画布长边不超过 1376、面积不超过 1376×768，条件视频行不超过 33,024。VAE 只消费完整时序块，文本编码器则从整段归一化视频采样，两者不能混称。
+
+`H3ConditioningCaptureSession.finish(..., schema_version=2)` 将这些元数据与真实捕获的 14 个张量绑定。读取时检查来源、精确 Ref4 调度、张量宽度、模态索引和时序前缀；修改 schema 不能把图片捕获转换成视频条件。完整 `H3Pipeline`/`VideoRequest` 接口仍只接受图片或纯文本；使用原生条件包接口的集成方需要先完成真实视频捕获。当前视频入口正在进行完整工作进程验收。
