@@ -3,7 +3,7 @@
 安装 Vflash 后，可以检查显卡并选择配置。需要在单张 RTX 4090 48 GB 上生成视频，或使用双张 RTX 3080 20 GB 生成参考图视频时，请接着阅读[完整链路](./complete-pipeline)和[官方权重准备流程](./compile-weights)。下文介绍原生条件包接口。
 
 ::: info 开始前请确认
-Python 链路和 `vflash generate` 在 SM89 上支持**纯文字或一至三张参考图 → 五秒 MP4**，双 SM86 也支持参考图完整生成。`denoise` 命令和 HTTP 服务使用**预编译条件包 → 音视频 latent**，包含已支持的 SM86 配置。模型需要明确下载和编译，不随软件包附带。
+Python 链路和 `vflash generate` 在 SM89 上支持**纯文字、一至三张图片，或一段短视频参考 → 五秒 MP4**，双 SM86 也支持参考图完整生成。`denoise` 命令和 HTTP 服务使用**预编译条件包 → 音视频 latent**，包含已支持的 SM86 配置。模型需要明确下载和编译，不随软件包附带。
 :::
 
 ## 安装命令行工具 {#install}
@@ -11,7 +11,7 @@ Python 链路和 `vflash generate` 在 SM89 上支持**纯文字或一至三张�
 需要 Python 3.11 或更新版本。基础安装很轻量，不会下载模型权重或 PyTorch。
 
 ```bash
-git clone --branch v0.2.2 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.3.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate

@@ -1,10 +1,10 @@
 # 完整模型配置
 
-每份准备记录固定模型、LoRA 与调度方式。Vflash 0.2.2 支持以下完整链路：
+每份准备记录固定模型、LoRA 与调度方式。Vflash 0.3.0 支持以下完整链路：
 
 | 配置 | 硬件 | 输入 | Transformer | LoRA | 视频/音频 shift |
 | --- | --- | --- | --- | --- | --- |
-| `ref2va-turbo4-exact-sm89` | 单张 RTX 4090 48 GB | 提示词加 1–3 张有序图片 | `transformer_ref` | Ref Turbo4 v0.1，alpha 8 / rank 128 | 12 / 3 |
+| `ref2va-turbo4-exact-sm89` | 单张 RTX 4090 48 GB | 提示词加 1–3 张有序图片，或一段 2–5 秒视频 | `transformer_ref` | Ref Turbo4 v0.1，alpha 8 / rank 128 | 12 / 3 |
 | `ref2va-turbo4-exact-sm86` | 双张 RTX 3080 20 GB，`sequence-head` | 提示词加 1–3 张有序图片 | `transformer_ref` | Ref Turbo4 v0.1，alpha 8 / rank 128 | 12 / 3 |
 | `t2va-turbo4-exact-sm89` | 单张 RTX 4090 48 GB | 纯文字提示词 | `transformer` | Base Turbo4 v1.0，alpha 128 / rank 128 | 6 / 3 |
 
@@ -62,6 +62,6 @@ Base LoRA 的上游文件名包含 `fl2v`，本版验证的是其 T2VA 用法，
 
 ## 资源生命周期
 
-文件放到最终位置后，进行一次准备和哈希校验；启动读取本地记录，不再完整重读模型。0.3.0 可通过 `H3Pipeline.prepare()` 显式预热，否则首次请求在 CPU 输入检查完成后加载模型，并保留以便复用；各阶段使用的显卡由上述配置决定。资产准备、模型加载、首次请求和热请求应分别计时。取消正在执行的请求会关闭实例；继续生成前需要新建实例。
+文件放到最终位置后，进行一次准备和哈希校验；启动读取本地记录，不再完整重读模型。0.3.0 可通过 `H3Pipeline.prepare()` 显式预加载，否则首次请求在 CPU 输入检查完成后加载模型，并保留以便复用；各阶段使用的显卡由上述配置决定。预加载不执行条件编码或准备所有输入形状。资产准备、模型加载、首次请求和重复请求应分别计时。取消正在执行的请求会关闭实例；继续生成前需要新建实例。
 
-开发中的[参考视频输入](../guide/complete-pipeline#reference-video)复用单 SM89 Ref4 资产，仍待完整流水线 GPU 验收；不会扩大 SM86 或 Turbo8 的输入范围。
+[参考视频输入](../guide/complete-pipeline#reference-video)复用单 SM89 Ref4 资产，已通过同一实例连续处理图片、视频、图片的完整验证。SM86 和 Turbo8 的视频参考仍不在支持范围内。

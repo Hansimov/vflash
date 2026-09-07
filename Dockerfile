@@ -10,7 +10,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN groupadd --gid 10001 vflash \
     && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin vflash \
     && install -d -o 10001 -g 10001 \
-        /cache/cuda /cache/torch /cache/torch-extensions /cache/triton /cache/inductor /outputs
+        /cache /cache/cuda /cache/torch /cache/torch-extensions /cache/triton /cache/inductor /outputs
 
 WORKDIR /opt/vflash
 COPY docker/requirements-api.txt /tmp/requirements-api.txt
@@ -47,6 +47,7 @@ ENV NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,utility \
     NVIDIA_REQUIRE_CUDA="cuda>=13.0" \
     CUDA_CACHE_PATH=/cache/cuda \
+    PYTORCH_KERNEL_CACHE_PATH=/cache \
     TORCH_EXTENSIONS_DIR=/cache/torch-extensions \
     TORCH_HOME=/cache/torch \
     TRITON_CACHE_DIR=/cache/triton \

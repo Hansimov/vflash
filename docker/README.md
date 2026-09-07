@@ -16,7 +16,7 @@ From the repository root:
 cp docker/.env.example docker/.env
 ```
 
-Edit `docker/.env` with your absolute asset paths and selected GPU. Use `VFLASH_IMAGE=hansimov/vflash:0.2.2` for the published image. Choose one of:
+Edit `docker/.env` with your absolute asset paths and selected GPU. Use `VFLASH_IMAGE=hansimov/vflash:0.3.0` for the published image. Choose one of:
 
 | GPU | `VFLASH_PROFILE_ID` |
 | --- | --- |

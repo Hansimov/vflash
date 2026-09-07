@@ -1,6 +1,20 @@
 # Release notes
 
-The current release is **0.2.2**. Generate a video from text alone or up to three ordered references on one RTX 4090 48 GB, or from references on two RTX 3080 20 GB GPUs. See [the complete profile table](./pipeline-profiles) for hardware and mode selection.
+The current release is **0.3.0**. Generate from text, images or one short reference video on an RTX 4090 48 GB. A pair of RTX 3080 20 GB GPUs retains complete image-reference generation. See [complete profiles](./pipeline-profiles).
+
+## 0.3.0 · generate from a reference video {#v0-3-0}
+
+[Source tag](https://github.com/Hansimov/vflash/tree/v0.3.0)
+
+`H3Pipeline` and `vflash generate --reference-video` now accept a local 2–5 second clip. On one SM89 48 GB GPU, the existing Ref4 model can process images, then video, then images again without reloading. Source audio is discarded; the result contains newly generated audio. Output remains five seconds at 24 fps. Mixed image/video inputs, video references on SM86, and Ref8 video references are outside this release. [Input limits and examples](../guide/complete-pipeline#reference-video).
+
+Construction and input validation run on the CPU before the first model load. Services can call `prepare()` to preload a fixed pipeline before accepting requests. This loads model stages, not every shape-specific operator. Repeated calls preserve ownership; invalid input leaves a healthy loaded instance usable. Timing separates input preparation, model loading, encoding, denoising and media delivery.
+
+An installed wheel completed one fixed image/video/image sequence. The video request used a five-second 928 × 512 reference: all 14 conditions and both final FP32 latents matched independent controls, and all 120 delivered RGB frames matched. The final image matched the first image's conditions, latents and decoded video. A subsequent first-evaluation cancellation published no partial video, removed temporary files, and released the three model owners. GPU resources were relinquished after process exit. Existing text and dual-SM86 image computations remain unchanged.
+
+Video references add substantial encoding and denoising work. The representative request recorded about 64 seconds encoding, 191 seconds native execution and 19 seconds media delivery, including diagnostic observers; model preload was measured separately. These single observations are not a latency promise or a speed comparison. Original-brief review supports a useful guided variation, with some timing and pose details partial. It does not qualify precise editing or general prompt adherence. Repeated official audio decoding differed slightly before encoding; audio bitwise reproducibility and subjective audio quality are not claimed.
+
+The containers provide writable Jiterator and Inductor caches, including for an arbitrary UID with an empty writable cache mount. [Image identities and installation checks](https://github.com/Hansimov/vflash/blob/v0.3.0/docker/images.json) bind the final package to the validated implementation.
 
 ## 0.2.2 · lower FFN memory on 4090 {#v0-2-2}
 

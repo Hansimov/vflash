@@ -1,10 +1,10 @@
 # Complete model profiles
 
-A prepared pipeline uses one fixed model, adapter and scheduler. Vflash 0.2.2 supports these complete pipelines:
+A prepared pipeline uses one fixed model, adapter and scheduler. Vflash 0.3.0 supports these complete pipelines:
 
 | Profile | Hardware | Input | Transformer | Adapter | Video/audio shifts |
 | --- | --- | --- | --- | --- | --- |
-| `ref2va-turbo4-exact-sm89` | One RTX 4090 48 GB | Prompt and 1–3 ordered images | `transformer_ref` | Ref Turbo4 v0.1, alpha 8 / rank 128 | 12 / 3 |
+| `ref2va-turbo4-exact-sm89` | One RTX 4090 48 GB | Prompt and 1–3 ordered images, or one 2–5 second video | `transformer_ref` | Ref Turbo4 v0.1, alpha 8 / rank 128 | 12 / 3 |
 | `ref2va-turbo4-exact-sm86` | Two RTX 3080 20 GB, `sequence-head` | Prompt and 1–3 ordered images | `transformer_ref` | Ref Turbo4 v0.1, alpha 8 / rank 128 | 12 / 3 |
 | `t2va-turbo4-exact-sm89` | One RTX 4090 48 GB | Prompt without images | `transformer` | Base Turbo4 v1.0, alpha 128 / rank 128 | 6 / 3 |
 
@@ -62,6 +62,6 @@ The Base adapter filename includes `fl2v`; this release qualifies it for T2VA, n
 
 ## Resource lifetime
 
-Prepare and hash files once in their final location. Startup checks the resulting local receipt without rereading all model payloads. In 0.3.0, `H3Pipeline.prepare()` explicitly prewarms the stages; otherwise the first request loads them after CPU input validation. Models remain owned for reuse. Stage placement follows the selected profile above. Report asset preparation, model loading, first request and warm request separately. Cancelling an active request retires the pipeline; create a new instance before further work.
+Prepare and hash files once in their final location. Startup checks the resulting local receipt without rereading all model payloads. In 0.3.0, `H3Pipeline.prepare()` explicitly preloads the stages; otherwise the first request loads them after CPU input validation. Models remain owned for reuse. Stage placement follows the selected profile above. Preloading does not run conditioning or prepare every input shape. Report asset preparation, model loading, first request and repeated requests separately. Cancelling an active request retires the pipeline; create a new instance before further work.
 
-The development [reference-video input](../guide/complete-pipeline#reference-video) uses the same single-SM89 Ref4 assets. Its complete pipeline GPU qualification is pending; it does not extend the SM86 or Turbo8 input boundary.
+The [reference-video input](../guide/complete-pipeline#reference-video) uses the same single-SM89 Ref4 assets. It passed a complete image/video/image sequence without model reload. SM86 and Turbo8 video references remain outside the supported boundary.
