@@ -2,6 +2,8 @@
 
 Vflash 0.2.2 generates a five-second MP4 from text alone, or from a prompt and one to three ordered reference images. Use the Python API for repeated requests or the container CLI for a single generation. The complete pipeline supports T2VA Base4 and Ref2VA Turbo4 on one RTX 4090 48 GB; Ref4 also runs on two RTX 3080 20 GB GPUs.
 
+The **0.3.0 development branch** adds the [reference-video input](#reference-video) and explicit prewarming described below. Its complete video-input GPU qualification is pending; 0.2.2 packages and images do not expose that input.
+
 ## What runs where
 
 Vflash owns the native four-step denoiser, stage lifetimes, local reference loading and MP4 delivery. The text encoder and reference encoder use pinned Diffusers, Transformers and PEFT adapters. Video and audio decoding use the official H3 VAE code. These adapters are explicit dependencies; they are not described as new native kernels. No LightX2V runtime or application server is needed.
@@ -83,6 +85,8 @@ with H3Pipeline(prepared, device=devices[0], trust_local_code=True) as pipeline:
 
 The original single-image `reference=Path(...)` argument remains supported. Use it or `references=(...)`, never both.
 
+In 0.3.0, construction checks the profile on the CPU. The first `generate` call reads and validates its inputs before loading any models. To warm a fixed pipeline before accepting requests, call `pipeline.prepare()` explicitly. Repeated `prepare()` calls reuse its stages. Invalid inputs leave a healthy prewarmed session available for the next request.
+
 For two RTX 3080 20 GB GPUs, prepare the [SM86 assets](../reference/pipeline-profiles#sm86) and pass `peer_device=devices[1], strategy="sequence-head"` to `H3Pipeline`, with exactly that pair visible. Encoding and decoding use `devices[0]`; native denoising uses both. Single-SM86 and `tensor` complete pipelines are rejected before model loading. The equivalent CLI options are `--gpu 0 --peer-gpu 1 --strategy sequence-head`.
 
 `trust_local_code=True` permits loading the official decoder Python files from the verified local snapshot. Review the [model and code licenses](../reference/license) first.
@@ -91,11 +95,30 @@ Reuse the same pipeline for sequential requests. Its native block ring leaves de
 
 The integration checks used a 240 GiB host-memory limit. This is a tested budget, not a measured minimum. The 64 GiB recommendation for the denoiser alone does not cover these additional encoders and decoders.
 
-`VideoResult.elapsed_seconds` covers the successful `generate` call from input validation through reference cleanup. `stages.input_preparation` includes asset checks and image loading; its `reference_loading_seconds` is nested inside that preparation duration. Model initialization is reported separately. Encoding and media stages report `weight_resume_seconds`, `suspend_seconds`, and `capture_call_seconds` or `decode_call_seconds`. Their outer durations also cover synchronous callbacks and other orchestration. These nested fields must not all be summed as independent costs.
+`VideoResult.elapsed_seconds` covers the successful `generate` call from input validation through reference cleanup, including a first model load. `stages.initialization_seconds` records loading during this call (zero after prewarming); `stages.request_elapsed_seconds` excludes only that load. `stages.session_initialization_seconds` records the session's original loading cost, also available as `pipeline.initialization_seconds`. `stages.input_preparation` includes asset checks and reference loading; its `reference_loading_seconds` is nested inside preparation. Encoding and media stages report `weight_resume_seconds`, `suspend_seconds`, and `capture_call_seconds` or `decode_call_seconds`. Their outer durations also cover synchronous callbacks and orchestration. Do not sum nested durations as independent costs.
 
 The output path must not already exist. A video is published only after encoding, media probing and GPU stage cleanup have succeeded. A failed execution retires the pipeline and removes temporary files. `close()` releases owned models and hooks after a CUDA completion fence; it never resets another owner's CUDA context. CUDA libraries may retain process-level workspaces after a model closes. Exit the dedicated process when the application needs to relinquish its entire CUDA context.
 
 When running in a read-only container, give Triton a writable cache directory that permits loading compiled shared libraries. A temporary filesystem mounted with `noexec` cannot serve as that cache.
+
+## Use a reference video {#reference-video}
+
+**Development API; full-pipeline GPU qualification pending.** Install this source branch with `.[pipeline]`. Use the same prepared `ref2va-turbo4-exact-sm89` assets as for images and one RTX 4090 48 GB. This input produces a new video guided by the source; it does not provide frame-accurate editing.
+
+```bash
+vflash generate \
+  --prepared-assets prepared-assets.json --prompt-file video-prompt.txt \
+  --reference-video reference.mp4 --gpu 0 --seed 1234 \
+  --output variation.mp4 --trust-local-code
+```
+
+In Python, use `VideoRequest(prompt=..., reference_video=Path("reference.mp4"))`. Refer to that clip as **`<Video 1>`**, including the space. A Ref4 session can process image requests, video requests, and then images again without swapping models or LoRAs. A previously generated local MP4 can be the next request's `reference_video`; the engine adds no conversation memory or automatic prompt rewriting.
+
+The boundary accepts one complete **2–5 second MP4, MOV or WebM**, at most **20 MiB** and **475,136 source pixels** (928×512 area). Source frame rates may be fractional and must be readable, positive and no higher than 240 fps. Only one video stream with square pixels and an unambiguous right-angle rotation is accepted. Existing source audio is discarded; it does not condition the new soundtrack. Mixed image/video inputs, audio inputs, SM86 and Ref8 video conditioning are not supported. Output remains five seconds at 24 fps, with the ordinary 32-aligned canvas limit above.
+
+The CPU decoder takes an immutable copy, checks the full clip and resamples it to 24 fps, retaining a final partial frame interval. It passes source-sized RGB to the official video setup, which resizes once. Video sizing is independent of the output canvas and does **not** use the downscale-only image `match` policy. Admission also bounds the resulting canvas to a 1376-pixel long edge, 1376×768 total pixels and 33,024 temporal reference rows; extreme aspect ratios may therefore be rejected even when source pixels fit. Those budgets are limits, not quality guarantees across every ratio. Temporary files and decoded RGB have request-scoped lifetimes.
+
+This is more expensive than a still image: the official VAE consumes complete temporal chunks and the text encoder samples the clip. Use the reported input, encoding, denoising and media durations to budget a deployment; no video-input latency guarantee is made. See the [typed conditioning contract](../reference/runtime-assets#video-conditioning) for the native interface and pending qualification boundaries.
 
 ## What a correctness result means
 

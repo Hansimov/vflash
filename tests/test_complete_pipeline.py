@@ -41,7 +41,9 @@ def test_complete_sm86_requires_a_cooperating_sequence_head_pair(
         trust_local_code=True,
     )
     if strategy == "sequence-head":
-        with H3Pipeline(prepared, **options):
+        with H3Pipeline(prepared, **options) as pipeline:
+            assert plans == []
+            pipeline.prepare()
             assert plans[0].gpu_uuids == (primary.uuid, peer.uuid)
     else:
         with pytest.raises(ContractError, match="two GPUs with sequence-head"):
@@ -121,6 +123,9 @@ def _pipeline(*, fail: str | None = None) -> tuple[H3Pipeline, list[str]]:
 
     pipeline.profile = model_profile()
     pipeline.initialization_seconds = 1.0
+    pipeline.initialization_stages = {}
+    pipeline._loaded = True
+    pipeline._plan = SimpleNamespace(parallel_strategy="single")
     pipeline.request_count = 0
     return pipeline, events
 
@@ -442,3 +447,173 @@ def test_text_only_request_reuses_all_stages_without_reference_loading(tmp_path,
     assert observed == [(), ()]
     assert events.count("native:generate") == 2 and events.count("media:generate") == 2
     assert events[-3:] == ["conditioning:close", "media:close", "native:close"]
+
+
+def test_image_video_image_share_stages_and_release_frames(
+    video_request, tmp_path, monkeypatch
+):
+    from vflash.adapters.video_references import DecodedVideoReference
+
+    pipeline, events = _pipeline()
+    reference = DecodedVideoReference(object(), {})
+    monkeypatch.setattr("vflash.pipeline.runtime.read_video_reference", lambda _: reference)
+    owners = (pipeline._core, pipeline._conditioner, pipeline._media)
+    modalities = []
+    original = pipeline._conditioner.capture
+
+    def capture(request, references, directory):
+        modalities.append(type(references[0]).__name__)
+        if request.reference_video:
+            assert references[0].require_frames() is not None
+        return original(request, references, directory)
+
+    pipeline._conditioner.capture = capture
+    pipeline.generate(video_request, tmp_path / "first.mp4")
+    pipeline.generate(
+        VideoRequest("<Video 1> moves", reference_video=Path("ref.mp4")),
+        tmp_path / "second.mp4",
+    )
+    assert reference.frames is None
+    pipeline.generate(video_request, tmp_path / "third.mp4")
+    assert (pipeline._core, pipeline._conditioner, pipeline._media) == owners
+    assert modalities == ["SimpleNamespace", "DecodedVideoReference", "SimpleNamespace"]
+    assert events.count("native:generate") == 3
+    pipeline.close()
+
+
+def test_invalid_video_never_loads_cuda_and_does_not_retire_warm_pipeline(
+    tmp_path, monkeypatch
+):
+    for loaded in (False, True):
+        pipeline, events = _pipeline()
+        pipeline._loaded = loaded
+        monkeypatch.setattr(
+            pipeline, "_load_stages", lambda _: pytest.fail("loaded invalid input")
+        )
+
+        def invalid(_):
+            raise ContractError("invalid reference video")
+
+        monkeypatch.setattr("vflash.pipeline.runtime.read_video_reference", invalid)
+        with pytest.raises(ContractError, match="invalid reference video"):
+            pipeline.generate(
+                VideoRequest("<Video 1>", reference_video=Path("bad.mp4")), tmp_path / "out.mp4"
+            )
+        assert not pipeline._closed and not events and not pipeline._lock.locked()
+
+
+def test_first_generate_validates_before_load_and_separates_cold_time(
+    video_request, tmp_path, monkeypatch
+):
+    pipeline, events = _pipeline()
+    pipeline._loaded = False
+    pipeline.initialization_seconds = 0
+    clock = [0.0]
+    monkeypatch.setattr("vflash.pipeline.runtime.time.monotonic", lambda: clock[0])
+
+    def read(_path):
+        events.append("input")
+        clock[0] += 3
+        return SimpleNamespace(close=lambda: None)
+
+    def load(_plan):
+        events.append("load")
+        clock[0] += 11
+
+    monkeypatch.setattr("vflash.pipeline.runtime.read_reference", read)
+    monkeypatch.setattr(pipeline, "_load_stages", load)
+    result = pipeline.generate(video_request, tmp_path / "first.mp4")
+    assert events[:2] == ["input", "load"]
+    assert result.elapsed_seconds == 14
+    assert result.stages["initialization_seconds"] == 11
+    assert result.stages["request_elapsed_seconds"] == 3
+    assert result.stages["input_preparation"]["reference_loading_seconds"] == 3
+    pipeline.prepare()
+    result = pipeline.generate(video_request, tmp_path / "second.mp4")
+    assert events.count("load") == 1
+    assert result.elapsed_seconds == 3
+    assert result.stages["initialization_seconds"] == 0
+    assert result.stages["session_initialization_seconds"] == 11
+
+
+def test_reference_close_failure_releases_siblings_and_session_lock(tmp_path, monkeypatch):
+    pipeline, _events = _pipeline()
+    closed = []
+
+    def read(path):
+        def close():
+            closed.append(path)
+            if path.name == "second":
+                raise RuntimeError("reference close failed")
+
+        return SimpleNamespace(close=close)
+
+    monkeypatch.setattr("vflash.pipeline.runtime.read_reference", read)
+    with pytest.raises(RuntimeError, match="reference close"):
+        pipeline.generate(
+            VideoRequest("Two pictures", references=(Path("first"), Path("second"))),
+            tmp_path / "video.mp4",
+        )
+    assert closed == [Path("second"), Path("first")]
+    assert not pipeline._lock.locked()
+    pipeline.close()
+
+
+def test_partial_initialization_releases_loaded_owners_and_reference(
+    video_request, tmp_path, monkeypatch
+):
+    pipeline, events = _pipeline()
+    pipeline._loaded = False
+    closed = []
+    monkeypatch.setattr(
+        "vflash.pipeline.runtime.read_reference",
+        lambda _: SimpleNamespace(close=lambda: closed.append(True)),
+    )
+
+    def partial(_plan):
+        raise RuntimeError("model initialization failed")
+
+    monkeypatch.setattr(pipeline, "_load_stages", partial)
+    with pytest.raises(RuntimeError, match="initialization failed"):
+        pipeline.generate(video_request, tmp_path / "out.mp4")
+    assert closed == [True]
+    assert events == ["conditioning:close", "media:close", "native:close"]
+    assert pipeline._released and not pipeline._lock.locked()
+    assert not (tmp_path / "out.mp4").exists()
+
+
+def test_stage_close_failure_does_not_skip_other_owners():
+    pipeline, events = _pipeline(fail="conditioning:close")
+    failed = pipeline._conditioner
+    with pytest.raises(RuntimeError, match="conditioning:close"):
+        pipeline.close()
+    assert events == ["conditioning:close", "media:close", "native:close"]
+    assert pipeline._conditioner is failed and not pipeline._released
+    assert pipeline._media is pipeline._core is None
+    failed.close = lambda: events.append("retry:close")
+    pipeline.close()
+    assert pipeline._released and events[-1] == "retry:close"
+
+
+@pytest.mark.parametrize(
+    "profile,strategy",
+    [
+        ("ref2va-turbo4-exact-sm86", "sequence-head"),
+        ("ref2va-turbo8-exact-sm89", "single"),
+        ("ref2va-turbo4-exact-sm89", "tensor"),
+    ],
+)
+def test_video_requires_single_sm89_ref4_before_decoding(
+    tmp_path, monkeypatch, profile, strategy
+):
+    pipeline, events = _pipeline()
+    pipeline.prepared.profile_id = profile
+    pipeline._plan.parallel_strategy = strategy
+    monkeypatch.setattr(
+        "vflash.pipeline.runtime.read_video_reference", lambda _: pytest.fail("decode")
+    )
+    with pytest.raises(ContractError, match="single-SM89 Ref4"):
+        pipeline.generate(
+            VideoRequest("<Video 1>", reference_video=Path("ref.mp4")), tmp_path / "out.mp4"
+        )
+    assert not events and not pipeline._closed

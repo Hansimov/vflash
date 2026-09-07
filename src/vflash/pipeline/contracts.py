@@ -50,13 +50,14 @@ class PipelineAssets:
 
 @dataclass(frozen=True)
 class VideoRequest:
-    """A text- or image-guided five-second video at the native 24 fps clock.
+    """A text-, image- or video-guided five-second video at the native 24 fps clock.
 
     The prompt is used verbatim; an application may format or polish it before
     this boundary. Images are ordered and labeled ``<Picture 1>`` through
     ``<Picture 3>``. ``reference`` preserves the original single-image API;
-    use ``references`` for an ordered tuple instead. Without images the request
-    is T2VA and requires a prepared T2VA pipeline. A session never swaps models.
+    use ``references`` for an ordered tuple instead. ``reference_video`` accepts
+    one visual-only local clip labeled ``<Video 1>``, without images. No references
+    means T2VA and requires a T2VA pipeline. A session never swaps models.
     """
 
     prompt: str
@@ -65,6 +66,7 @@ class VideoRequest:
     height: int = 512
     seed: int = 0
     references: tuple[Path, ...] = field(default=(), kw_only=True)
+    reference_video: Path | None = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
         if (
@@ -81,6 +83,11 @@ class VideoRequest:
             raise ContractError("references must be an ordered tuple of local pathlib.Paths")
         if self.reference is not None and self.references:
             raise ContractError("provide reference or references, not both")
+        if self.reference_video is not None:
+            if not isinstance(self.reference_video, Path):
+                raise ContractError("reference_video must be a local pathlib.Path")
+            if self.ordered_references:
+                raise ContractError("provide one reference video or image references, not both")
         if len(self.ordered_references) > 3:
             raise ContractError("Ref2VA supports at most three reference images")
         if any(
@@ -88,6 +95,11 @@ class VideoRequest:
             for index in re.findall(r"<Picture (\d+)>", self.prompt)
         ):
             raise ContractError("a prompt picture label has no corresponding reference image")
+        if any(
+            label != "<Video 1>" or self.reference_video is None
+            for label in re.findall(r"<Video\s*\d+>", self.prompt)
+        ):
+            raise ContractError("a prompt video label has no corresponding reference video")
         if any(
             type(value) is not int or value < 32 or value % 32
             for value in (self.width, self.height)
@@ -106,7 +118,9 @@ class VideoRequest:
 
     @property
     def mode(self) -> str:
-        return "ref2va" if self.ordered_references else "t2va"
+        return (
+            "ref2va" if self.ordered_references or self.reference_video is not None else "t2va"
+        )
 
     @property
     def model_frames(self) -> int:

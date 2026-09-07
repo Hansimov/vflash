@@ -4,6 +4,8 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
+此分支正在准备 **0.3.0**。[参考视频接口](docs/zh/guide/complete-pipeline.md#reference-video)已完成 CPU 验证，仍需完整流水线 GPU 验收。最新公开版本与镜像仍为 0.2.2。
+
 **0.2.2 正式版。** 支持纯文字生成，也支持提示词加一至三张有序参考图。通过 Python 或容器命令行的[完整链路](https://hansimov.github.io/vflash/zh/guide/complete-pipeline)生成五秒 MP4：Ref4 支持单张 RTX 4090 48 GB 或双张 RTX 3080 20 GB，纯文字 T2VA 使用单张 4090；运行资产可以[从固定官方权重直接编译](https://hansimov.github.io/vflash/zh/guide/compile-weights)。原生 Python、CLI 和 HTTP 接口也支持在下列显卡上接收条件包、输出音视频 latent。
 
 ## 检查运行环境

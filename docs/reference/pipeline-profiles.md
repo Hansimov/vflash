@@ -62,4 +62,6 @@ The Base adapter filename includes `fl2v`; this release qualifies it for T2VA, n
 
 ## Resource lifetime
 
-Prepare and hash files once in their final location. Startup checks the resulting local receipt without rereading all model payloads. A persistent pipeline initializes before requests and retains CPU model copies for reuse. Stage placement follows the selected profile above. Report preparation, construction, first request and warm request separately. Cancelling an active request retires the pipeline; create a new instance before further work.
+Prepare and hash files once in their final location. Startup checks the resulting local receipt without rereading all model payloads. In 0.3.0, `H3Pipeline.prepare()` explicitly prewarms the stages; otherwise the first request loads them after CPU input validation. Models remain owned for reuse. Stage placement follows the selected profile above. Report asset preparation, model loading, first request and warm request separately. Cancelling an active request retires the pipeline; create a new instance before further work.
+
+The development [reference-video input](../guide/complete-pipeline#reference-video) uses the same single-SM89 Ref4 assets. Its complete pipeline GPU qualification is pending; it does not extend the SM86 or Turbo8 input boundary.

@@ -22,7 +22,7 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
     prepare.add_argument("--assets", type=Path, required=True, help="six-path asset JSON")
     prepare.add_argument("--receipt", type=Path, required=True, help="new local receipt path")
     generate = commands.add_parser(
-        "generate", help="generate a complete MP4 from text or text and ordered images"
+        "generate", help="generate an MP4 from text, ordered images or one reference video"
     )
     generate.add_argument("--prepared-assets", type=Path, required=True)
     generate.add_argument("--prompt-file", type=Path, required=True, help="UTF-8 prompt file")
@@ -38,6 +38,11 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
     generate.add_argument("--seed", type=int, default=0)
     generate.add_argument("--output", type=Path, required=True, help="new MP4 output path")
     generate.add_argument("--gpu", type=int, required=True, help="physical nvidia-smi index")
+    generate.add_argument(
+        "--reference-video",
+        type=Path,
+        help="one local 2-5s MP4/MOV/WebM labeled <Video 1>; excludes --reference",
+    )
     generate.add_argument(
         "--peer-gpu", type=int, help="second SM86 GPU for cooperative denoising"
     )
@@ -75,19 +80,15 @@ def run_pipeline_command(args: argparse.Namespace) -> int:
     request = VideoRequest(
         prompt=prompt,
         references=tuple(args.reference),
+        reference_video=args.reference_video,
         width=args.width,
         height=args.height,
         seed=args.seed,
     )
     if args.output.exists() or args.output.is_symlink():
         raise ContractError("the output path already exists")
-    # Catch malformed or absent inputs before the costly model load. Generate
-    # binds its own decoded bytes again, so a changed file is never trusted here.
-    from vflash.adapters.references import read_reference
-
-    for path in request.ordered_references:
-        reference = read_reference(path)
-        reference.close()
+    # H3Pipeline now validates/decodes once, before its first CUDA load. Do not
+    # decode every video twice just to duplicate this same CPU input boundary.
     prepared = load_prepared_pipeline_assets(args.prepared_assets)
     if request.mode != model_profile(prepared.profile_id).definition.mode.value:
         raise ContractError("the request mode differs from the prepared pipeline profile")

@@ -1,4 +1,4 @@
-"""Minimal official VAE components for image-only H3 conditioning."""
+"""Minimal official VAE components for visual-only H3 conditioning."""
 
 from __future__ import annotations
 
@@ -61,9 +61,9 @@ def load_h3_image_conditioning_vae_components(
     torch_module: Any,
     init_empty_weights: Callable[[], AbstractContextManager[Any]],
 ) -> H3ConditioningVAEComponents:
-    """Load only the modules reached by image-reference encoding.
+    """Load only the modules reached by image or silent-video reference encoding.
 
-    Image-only Ref2VA calls ``video_vae.encode`` and reads normalization values
+    Visual-only Ref2VA calls ``video_vae.encode`` and reads normalization values
     from ``audio_vae.config``. The multi-gigabyte video decoder and every audio
     VAE parameter are downstream of the block-zero capture boundary.
     """

@@ -56,4 +56,4 @@ T2VA 配置使用独立的 Base4 v1.0 文件及上表对应修订。SHA-256 为 
 
 adapter 必须记录源文件及解码 RGB 的摘要、源尺寸、归一化帧数、实际官方画布、VAE 输入与 latent 帧数及条件视频行数。`official-video-cfr24-v1` 规则要求先按源显示尺寸解码，再由固定官方 setup 缩放一次。最终画布长边不超过 1376、面积不超过 1376×768，条件视频行不超过 33,024。VAE 只消费完整时序块，文本编码器则从整段归一化视频采样，两者不能混称。
 
-`H3ConditioningCaptureSession.finish(..., schema_version=2)` 将这些元数据与真实捕获的 14 个张量绑定。读取时检查来源、精确 Ref4 调度、张量宽度、模态索引和时序前缀；修改 schema 不能把图片捕获转换成视频条件。完整 `H3Pipeline`/`VideoRequest` 接口仍只接受图片或纯文本；使用原生条件包接口的集成方需要先完成真实视频捕获。当前视频入口正在进行完整工作进程验收。
+`H3ConditioningCaptureSession.finish(..., schema_version=2)` 将这些元数据与真实捕获的 14 个张量绑定。读取时检查来源、精确 Ref4 调度、张量宽度、模态索引和时序前缀；修改 schema 不能把图片捕获转换成视频条件。0.3.0 开发分支的 `H3Pipeline` 接受本地 `VideoRequest(reference_video=Path(...))`，通过官方视频 setup 完成捕获，见[输入限制与示例](../guide/complete-pipeline#reference-video)。CPU 输入、元数据及资源所有权检查已完成，公开完整流水线仍待 GPU 验收；仅条件包读取通过，不能证明文件到 MP4 的链路已合格。

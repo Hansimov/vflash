@@ -14,6 +14,7 @@ from typing import Any
 
 from vflash.adapters.diffusers_h3 import DiffusersConditioner, validate_adapter_dependencies
 from vflash.adapters.references import DecodedReference, read_reference
+from vflash.adapters.video_references import DecodedVideoReference, read_video_reference
 from vflash.catalog import ProfileCatalog
 from vflash.contracts import ContractError
 from vflash.hardware import NvidiaDevice
@@ -33,7 +34,10 @@ from vflash.planner import resolve_plan
 class H3Pipeline:
     """Serial, persistent H3 encoding, native inference, decoding and MP4.
 
-    Construct before CUDA initialization in a dedicated process. Native weights
+    Construct before CUDA initialization in a dedicated process. Construction
+    validates the fixed profile on the CPU. ``prepare()`` explicitly warms its
+    stages; otherwise the first valid request loads them after input decoding.
+    Native weights
     use the tested block ring so the official encoding and VAE stages can take
     turns on the same device. The object owns its stages and temporary files;
     the caller owns scheduling, requests, final MP4s and any account/storage data.
@@ -71,15 +75,23 @@ class H3Pipeline:
             )
         self.prepared = prepared
         self.profile = model_profile(prepared.profile_id)
+        self._plan = plan
         self._lock = threading.Lock()
         self._active_thread_id: int | None = None
         self._closed = self._released = False
         self._core = self._conditioner = self._media = None
         self.request_count = 0
         self.initialization_stages: dict[str, float] = {}
+        self.initialization_seconds = 0.0
+        self._loaded = False
+
+    def _ensure_prepared(self) -> float:
+        """Called with the session lock held; return only this call's cold load."""
+        if self._loaded:
+            return 0.0
         started = time.monotonic()
         try:
-            self._load_stages(plan)
+            self._load_stages(self._plan)
         except BaseException as exc:
             try:
                 self._close_owned()
@@ -89,6 +101,25 @@ class H3Pipeline:
                 clear_frames(exc.__traceback__)
             raise
         self.initialization_seconds = time.monotonic() - started
+        self._loaded = True
+        return self.initialization_seconds
+
+    def prepare(self) -> None:
+        """Explicitly preload this fixed pipeline before accepting requests.
+
+        Idempotent and serial; it does not require or decode a sample request.
+        The caller chooses to initialize CUDA here. Without this call, generate
+        validates and decodes its first input before touching model resources.
+        """
+        if not self._lock.acquire(blocking=False):
+            raise ContractError("this pipeline is busy")
+        try:
+            if self._closed:
+                raise ContractError("the pipeline is closed")
+            self.prepared.check_unchanged()
+            self._ensure_prepared()
+        finally:
+            self._lock.release()
 
     def _load_stages(self, plan: Any) -> None:
         import torch
@@ -134,13 +165,18 @@ class H3Pipeline:
             raise ContractError("generate requires a VideoRequest and pathlib.Path output")
         if request.mode != self.profile.definition.mode.value:
             raise ContractError("the request mode differs from the prepared pipeline profile")
+        if request.reference_video is not None and (
+            self.prepared.profile_id != "ref2va-turbo4-exact-sm89"
+            or self._plan.parallel_strategy != "single"
+        ):
+            raise ContractError("video references require the single-SM89 Ref4 pipeline")
         if output_path.exists() or output_path.is_symlink():
             raise ContractError("the output path already exists")
         if not self._lock.acquire(blocking=False):
             raise ContractError(
                 "this pipeline is busy; schedule the next request after completion"
             )
-        references: list[DecodedReference] = []
+        references: list[DecodedReference | DecodedVideoReference] = []
         self._active_thread_id = threading.get_ident()
         try:
             if self._closed:
@@ -148,12 +184,18 @@ class H3Pipeline:
             # Input errors are checked before stage activation and do not retire
             # an otherwise healthy session. Read/hash exactly the decoded bytes.
             self.prepared.check_unchanged()
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.TemporaryFile(dir=output_path.parent):
+                pass
             reference_started = time.monotonic()
             for path in request.ordered_references:
                 references.append(read_reference(path))
+            if request.reference_video is not None:
+                references.append(read_video_reference(request.reference_video))
             reference_loading_seconds = time.monotonic() - reference_started
             input_preparation_seconds = time.monotonic() - started
             try:
+                initialization_seconds = self._ensure_prepared()
                 result = self._generate_one(
                     request, tuple(references), output_path, progress=progress
                 )
@@ -166,19 +208,28 @@ class H3Pipeline:
                     clear_frames(exc.__traceback__)
                 raise
         finally:
-            for reference in reversed(references):
-                reference.close()
-            self._active_thread_id = None
-            self._lock.release()
+            try:
+                # Attempt every reference release even if one close raises.
+                from contextlib import ExitStack
+
+                with ExitStack() as cleanup:
+                    for reference in references:
+                        cleanup.callback(reference.close)
+            finally:
+                self._active_thread_id = None
+                self._lock.release()
         # Report the public call, including input checks, image decoding/hash,
-        # temporary-file cleanup and reference.close(). Model initialization is
-        # separate. Reference loading is nested inside preparation, not added
-        # a second time to an independently reported total.
+        # temporary-file cleanup and reference.close(). A first cold load is
+        # included, and separately identified. Reference loading is nested
+        # inside preparation, not added again to an independent total.
+        elapsed = time.monotonic() - started
         return replace(
             result,
-            elapsed_seconds=time.monotonic() - started,
+            elapsed_seconds=elapsed,
             stages={
                 **result.stages,
+                "initialization_seconds": initialization_seconds,
+                "request_elapsed_seconds": elapsed - initialization_seconds,
                 "input_preparation": {
                     "elapsed_seconds": input_preparation_seconds,
                     "reference_loading_seconds": reference_loading_seconds,
@@ -189,7 +240,7 @@ class H3Pipeline:
     def _generate_one(
         self,
         request: VideoRequest,
-        references: tuple[DecodedReference, ...],
+        references: tuple[DecodedReference | DecodedVideoReference, ...],
         output_path: Path,
         *,
         progress: Callable[[PipelineProgress], None] | None,
@@ -279,12 +330,24 @@ class H3Pipeline:
         if self._released:
             return
         self._closed = True
+        failures: list[BaseException] = []
         for name in ("_conditioner", "_media", "_core"):
             owner = getattr(self, name)
             if owner is not None:
-                owner.close()
-                setattr(self, name, None)
+                try:
+                    owner.close()
+                except BaseException as exc:
+                    failures.append(exc)
+                else:
+                    setattr(self, name, None)
+        if failures:
+            for additional in failures[1:]:
+                failures[0].add_note(
+                    f"Another stage failed to close: {type(additional).__name__}"
+                )
+            raise failures[0]
         self._released = True
+        self._loaded = False
 
     def close(self) -> None:
         if getattr(self, "_active_thread_id", None) == threading.get_ident():

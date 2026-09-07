@@ -84,8 +84,16 @@ def resolve_match_reference_image_size(
 
 
 def install_match_reference_setup_block(pipe: Any) -> Any:
-    """Use the verified target-area reference policy without patching Diffusers."""
-    from diffusers.modular_pipelines.minimax_h3 import MiniMaxH3ImageReference
+    """Dispatch image match sizing and the unmodified official video setup.
+
+    The modality is chosen from each request, never from persistent mutable
+    resize settings. A Ref session can alternate images and video without a
+    model reload or a policy left behind by a failed request.
+    """
+    from diffusers.modular_pipelines.minimax_h3 import (
+        MiniMaxH3ImageReference,
+        MiniMaxH3VideoReference,
+    )
     from diffusers.modular_pipelines.minimax_h3.before_encoder import (
         MiniMaxH3Ref2VASetupStep,
     )
@@ -94,12 +102,41 @@ def install_match_reference_setup_block(pipe: Any) -> Any:
     )
     from PIL import Image
 
+    from vflash.adapters.video_geometry import reference_video_geometry
+    from vflash.native.h3_conditioning_bundle import H3_VIDEO_REFERENCE_POLICY
+
     class MatchReferenceSetupStep(MiniMaxH3Ref2VASetupStep):
         resize_mode = "match"
         last_metadata: dict[str, Any] | None = None
 
         def __call__(self, components: Any, state: Any) -> Any:
+            self.last_metadata = None
             block_state = self.get_block_state(state)
+            entries = block_state.references
+            if entries and any(entry.kind == "video" for entry in entries):
+                if (
+                    len(entries) != 1
+                    or not isinstance(entries[0], MiniMaxH3VideoReference)
+                    or entries[0].has_audio
+                    or entries[0].fps != 24
+                ):
+                    raise ValueError("video setup requires one visual-only CFR24 video")
+                frames = entries[0].frames
+                expected = reference_video_geometry(
+                    frames.shape[2], frames.shape[1], frames.shape[0]
+                )
+                # In particular, do not downscale to the generated canvas or
+                # pre-normalize before the official non-idempotent rounding.
+                result = super().__call__(components, state)
+                normalized = self.get_block_state(result[1]).normalized_references[0]
+                if (
+                    normalized.frames.shape
+                    != (frames.shape[0], expected["height"], expected["width"], 3)
+                    or normalized.has_audio
+                ):
+                    raise ValueError("the official video setup geometry changed")
+                self.last_metadata = {"policy": H3_VIDEO_REFERENCE_POLICY, **expected}
+                return result
             if block_state.height is None or block_state.width is None:
                 raise ValueError("match reference sizing requires an explicit target canvas")
             multiple = int(components.canvas_multiple)

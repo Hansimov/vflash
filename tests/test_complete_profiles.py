@@ -149,6 +149,7 @@ def test_official_call_keeps_mode_specific_inputs_and_reference_order(monkeypatc
 
     module = ModuleType("diffusers.modular_pipelines.minimax_h3")
     module.MiniMaxH3ImageReference = lambda *, image: ("image", image)
+    module.MiniMaxH3VideoReference = lambda **kwargs: ("video", kwargs)
     monkeypatch.setitem(sys.modules, module.__name__, module)
     conditioner = DiffusersConditioner.__new__(DiffusersConditioner)
     conditioner.profile = model_profile(profile_id)
@@ -204,6 +205,8 @@ def test_complete_constructor_owns_one_explicit_device_group(monkeypatch, tmp_pa
         with pytest.raises(ContractError, match="request mode"):
             pipeline.generate(bad, tmp_path / "bad.mp4")
         assert not pipeline._closed
+        assert not plans
+        pipeline.prepare()
     assert plans[0].profile.id == profile_id
     assert plans[0].parallel_strategy == ("sequence-head" if peer else "single")
     assert plans[0].gpu_uuids == ((device.uuid, peer.uuid) if peer else (device.uuid,))

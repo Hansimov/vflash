@@ -29,6 +29,25 @@ def test_generate_parser_preserves_reference_order():
     assert args.reference == [Path("second.png"), Path("first.png")]
 
 
+def test_generate_parser_exposes_one_explicit_video_path():
+    args = build_parser().parse_args(
+        [
+            "generate",
+            "--prepared-assets",
+            "receipt.json",
+            "--prompt-file",
+            "prompt.txt",
+            "--reference-video",
+            "source.mp4",
+            "--gpu",
+            "0",
+            "--output",
+            "result.mp4",
+        ]
+    )
+    assert args.reference_video == Path("source.mp4") and args.reference == []
+
+
 def test_generate_cli_runs_one_owned_pipeline_and_keeps_progress_off_stdout(
     tmp_path, monkeypatch, capsys
 ):
@@ -94,7 +113,7 @@ def test_generate_cli_runs_one_owned_pipeline_and_keeps_progress_off_stdout(
     captured = capsys.readouterr()
     assert '"denoising"' in captured.err and '"elapsed_seconds": 1.5' in captured.out
     assert prompt.read_text() not in captured.out + captured.err
-    assert events == ["reference:close", "reference:close", "enter", "close"]
+    assert events == ["enter", "close"]
 
 
 def test_generate_cli_requires_explicit_official_code_consent(tmp_path):

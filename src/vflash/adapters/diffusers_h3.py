@@ -21,9 +21,14 @@ from vflash.adapters.conditioning_prefix import (
 from vflash.adapters.conditioning_vae import load_h3_image_conditioning_vae_components
 from vflash.adapters.modular_config import local_modular_config
 from vflash.adapters.references import DecodedReference, install_match_reference_setup_block
+from vflash.adapters.video_references import DecodedVideoReference
 from vflash.contracts import ContractError
 from vflash.model_assets import model_profile
-from vflash.native.h3_conditioning_bundle import H3ConditioningBundle, H3ConditioningProfile
+from vflash.native.h3_conditioning_bundle import (
+    H3_VIDEO_REFERENCE_POLICY,
+    H3ConditioningBundle,
+    H3ConditioningProfile,
+)
 from vflash.pipeline.assets import (
     PreparedPipelineAssets,
     canonical_sha256,
@@ -256,13 +261,23 @@ class DiffusersConditioner:
         self._torch.cuda.empty_cache()
         return time.monotonic() - started
 
-    def _invoke(self, request: VideoRequest, references: tuple[DecodedReference, ...]) -> None:
-        from diffusers.modular_pipelines.minimax_h3 import MiniMaxH3ImageReference
+    def _invoke(
+        self,
+        request: VideoRequest,
+        references: tuple[DecodedReference | DecodedVideoReference, ...],
+    ) -> None:
+        from diffusers.modular_pipelines.minimax_h3 import (
+            MiniMaxH3ImageReference,
+            MiniMaxH3VideoReference,
+        )
 
         options = {}
         if request.mode == "ref2va":
             options["references"] = [
-                MiniMaxH3ImageReference(image=reference.image) for reference in references
+                MiniMaxH3VideoReference(frames=reference.require_frames(), fps=24, audio=None)
+                if isinstance(reference, DecodedVideoReference)
+                else MiniMaxH3ImageReference(image=reference.image)
+                for reference in references
             ]
         self.pipe(
             prompt=request.prompt,
@@ -278,7 +293,7 @@ class DiffusersConditioner:
     def capture(
         self,
         request: VideoRequest,
-        references: tuple[DecodedReference, ...],
+        references: tuple[DecodedReference | DecodedVideoReference, ...],
         directory: Path,
     ) -> H3ConditioningBundle:
         self._require_open()
@@ -286,8 +301,15 @@ class DiffusersConditioner:
             raise ContractError("resume the conditioner before encoding a request")
         if request.mode != self.profile.definition.mode.value:
             raise ContractError("the request mode differs from the conditioner profile")
-        if len(references) != len(request.ordered_references):
+        is_video = request.reference_video is not None
+        if is_video and self.prepared.profile_id != "ref2va-turbo4-exact-sm89":
+            raise ContractError("video references require the single-SM89 Ref4 profile")
+        if len(references) != (1 if is_video else len(request.ordered_references)):
             raise ContractError("decoded reference count differs from the request")
+        if any(
+            isinstance(reference, DecodedVideoReference) != is_video for reference in references
+        ):
+            raise ContractError("decoded reference modality differs from the request")
         if directory.exists() and any(directory.iterdir()):
             raise ContractError("conditioning output must be a new or empty directory")
         capture = H3ConditioningCaptureSession(directory)
@@ -303,14 +325,15 @@ class DiffusersConditioner:
             capture.close()
             video_prefix, audio_prefix = capture.prefix_counts()
             source = conditioning_source(
-                profile_id=self.prepared.profile_id, runtime_versions=self.versions
+                profile_id=self.prepared.profile_id,
+                runtime_versions=self.versions,
+                reference_policy=H3_VIDEO_REFERENCE_POLICY if is_video else "match",
             )
             request_metadata = {
                 "source_case_id": "vflash-live",
                 "prompt": request.prompt,
                 "prompt_sha256": hashlib.sha256(request.prompt.encode()).hexdigest(),
                 "seed": request.seed,
-                "reference_image_policy": "match",
                 "delivery_profiles": [
                     {
                         "temporal_profile": "native-24fps-5s",
@@ -318,16 +341,33 @@ class DiffusersConditioner:
                         "fps": 24,
                     }
                 ],
-                "references": [
-                    {
-                        "picture_index": index,
-                        "role": "reference",
-                        "size_bytes": reference.size_bytes,
-                        "sha256": reference.sha256,
-                    }
-                    for index, reference in enumerate(references, 1)
-                ],
             }
+            if is_video:
+                reference_metadata = dict(references[0].metadata)
+                if (video_prefix, audio_prefix) != (
+                    reference_metadata["condition_video_rows"],
+                    0,
+                ):
+                    raise ContractError(
+                        "captured video prefix differs from the decoded reference"
+                    )
+                request_metadata.update(
+                    reference_video_policy=H3_VIDEO_REFERENCE_POLICY,
+                    references=[reference_metadata],
+                )
+            else:
+                request_metadata.update(
+                    reference_image_policy="match",
+                    references=[
+                        {
+                            "picture_index": index,
+                            "role": "reference",
+                            "size_bytes": reference.size_bytes,
+                            "sha256": reference.sha256,
+                        }
+                        for index, reference in enumerate(references, 1)
+                    ],
+                )
             profile = H3ConditioningProfile(
                 task=request.mode,
                 width=request.width,
@@ -361,6 +401,7 @@ class DiffusersConditioner:
                 video_sigmas=self.pipe.scheduler.sigmas,
                 audio_sigmas=self.pipe.audio_scheduler.sigmas,
                 update_rule="training_euler",
+                schema_version=2 if is_video else 1,
             )
         finally:
             capture.discard()
