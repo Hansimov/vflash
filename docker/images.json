@@ -1,51 +1,37 @@
 {
   "schema_version": 1,
-  "version": "0.3.0",
+  "version": "0.3.1",
   "platform": "linux/amd64",
-  "implementation_revision": "e0e319b7f379c6af904e17fbe92ddb9c24e55816",
-  "gpu_qualified_baseline_revision": "c1926e2d4fbe7e0d8d389de138abd159d1170072",
-  "wheel_sha256": "f71b382b9bbc37433d0b84d420d13caace16aaca3f4769e818b918595e0fb37b",
-  "gpu_qualified_wheel_sha256": "20d68f7c75efd9119c82a2ee3f0ff3c5288ea727457703285cb06d707d271c62",
-  "qualification_delta": "All 59 package files and numerical sources match the GPU-qualified c1926e2 implementation. The final wheel changes only METADATA and RECORD after documentation updates. The release tag adds this image inventory to the implementation revision; container source labels identify the implementation revision. No additional GPU execution is claimed for the final images.",
-  "build_recipe": "https://github.com/Hansimov/vflash/releases/download/v0.3.0/Dockerfile.release",
-  "build_recipe_sha256": "e703116c901b7b3eaf0c14fcbbd16a1ca7c3fbcf4416b9bd02169ae71b252128",
+  "implementation_revision": "8ad11bb0900c16a4c9a107d6ce4ac4f75592aa60",
+  "qualified_core_revision": "4bc7c554f1306fbaac6f97837a0b6b3ce33d60f0",
+  "wheel_sha256": "e3706ede5d329bf26f41f12de98856f58d7f88c8b0b2ed6f586639c1708b44cc",
+  "build_recipe": "https://github.com/Hansimov/vflash/releases/download/v0.3.1/Dockerfile.release",
+  "build_recipe_sha256": "ecef195f80ff5b255513efd2b09e3284529d166a281c3e04636eef6a12b1d047",
   "runtime_dependencies": {
+    "baseline_inventory": "https://github.com/Hansimov/vflash/blob/v0.3.0/docker/images.json",
+    "change": "Every dependency image layer and runtime environment variable is retained. Only the installed Vflash wheel and source/version labels change.",
     "torch": "2.11.0+cu130",
     "cuda": "13.0",
-    "triton": "3.6.0",
-    "ptxas_sha256": "c960a4f238b17d5c5d3c01ad2bbc1ebd2c5aecc459cb4d223bff10b45f9b8fca",
-    "gpu_runtime_binding": "Torch metadata, all 11 checked Torch/CUDA/cuBLAS library payloads, Triton NVIDIA compiler sources and packaged ptxas are byte-identical to the GPU qualification runtime. The pipeline image contains the same complete pinned Diffusers Python source tree.",
-    "retained_022_dependencies": "Both images retain every layer of their immutable 0.2.2 dependency image. Vflash is the only changed installed Python distribution.",
-    "differences_from_gpu_qualification_runtime": {
-      "host_c_compiler": "Released images retain GCC 14.2.0 from 0.2.2; GPU qualification used GCC 13.3.0. Packaged GPU compiler and mathematical libraries match separately.",
-      "ffmpeg": "Pipeline image retains FFmpeg 7.1.5 from 0.2.2; GPU qualification used 8.0. Actual reference decoding and full CPU media fixtures pass. Cross-version MP4/AAC byte equality is not claimed.",
-      "safetensors": "Released images retain 0.8.0; GPU qualification used 0.8.0rc0. Both versions read the saved 14 conditions, 2 final AV latents and 3 audio boundary tensors to identical CPU values."
-    }
+    "triton": "3.6.0"
   },
-  "quality_boundary": "Implementation and lifecycle qualification is separate from instruction quality. Original-brief review supports guided variation, with timing and pose details partial. Precise editing, general prompt adherence, audio bitwise reproducibility and subjective audio quality are not qualified by this release test. Stage observations include diagnostic overhead and are not latency promises.",
-  "cache_boundary": "The default image owns /cache as UID 10001. PYTORCH_KERNEL_CACHE_PATH points directly at /cache; arbitrary users must provide a writable mount. CPU checks exercise filesystem, Inductor, Triton and extension-cache access; they do not invoke the unexported Jiterator CUDA routine.",
+  "qualification": {
+    "package": "All 59 installed package files match the reviewed core revision. Both images pass CPU installation, native import, CLI, service-construction and writable-cache checks as UID 10001. Pipeline adapter dependencies and media executables remain valid.",
+    "qkv": "The automatic direct merge is limited to strict SM89 Ref4 v0.1. Its kernel and launch match the target-GPU-tested implementation, including identical compiled SM89 machine instructions. A complete 50-layer, four-step native trajectory with 200 direct merges preserved both final FP32 audio/video tensors bit-for-bit; CPU checks additionally cover the public dispatch and ownership.",
+    "reuse": "The 0.3.0 complete pipeline, media, T2VA and SM86 qualifications remain attached to their unchanged implementations. No additional whole-pipeline GPU execution is claimed for the final 0.3.1 images.",
+    "limits": "The QKV result is numerical and local temporary-memory evidence. It establishes neither a new prompt-to-MP4 latency figure nor broader semantic quality."
+  },
   "images": {
     "pipeline": {
-      "name": "hansimov/vflash:0.3.0-pipeline",
-      "digest": "sha256:82fa37cc291af8073fc8806d3a6cffe80dcc7ed8d279cee61370b54c5613f7fc",
-      "dependency_image": "hansimov/vflash@sha256:0370072751597fe51a75a4cea9c0fa7de4fad8554329cde97cef2fa981daf283",
-      "anonymous_pull": true,
-      "interface": "five-second MP4: T2VA, Ref4 with 1-3 ordered images, or Ref4 with one 2-5 second visual-only video on one SM89 48 GB; Ref4 images on two SM86 20 GB GPUs with sequence-head",
-      "gpu_qualification": "Installed 0.3.0 wheel: one SM89 Ref4 image/video/image sequence without model reload; video 14 conditions and final FP32 AV latents exact against fixed independent controls, all 120 delivered RGB frames exact; repeated image conditions/latents/RGB exact. NFE1 cancellation, temporary-output removal, three model owners released and process-exit GPU clearance. Prior T2VA and SM86 operators are preserved; no new whole-pipeline GPU run is claimed for the final container.",
-      "cpu_qualification": "Default UID 10001 and arbitrary UID 12345 without a passwd entry: empty writable cache bind, actual cache operations, 59 installed package files, CLI and dependency checks. Original 5-second reference RGB matches the qualified decoder; 2.1 seconds at 30 fps retains 51 normalized frames. Public encoder produces a fully decoded 120-frame, 5-second, 24-fps H.264/yuv420p and 32-kHz stereo AAC MP4; overwrite rejection and temporary-file cleanup pass.",
-      "official_diffusers_revision": "d035dcd7cc7c88e0a154609b62887d50bba9fdc2",
-      "ffmpeg": "7.1.5"
+      "name": "hansimov/vflash:0.3.1-pipeline",
+      "digest": "sha256:57203c20412872f54f442c3277db3e1a4c779fa2904e819097a355a540ba2780",
+      "dependency_image": "hansimov/vflash@sha256:82fa37cc291af8073fc8806d3a6cffe80dcc7ed8d279cee61370b54c5613f7fc",
+      "interface": "complete MP4 pipeline: SM89 T2VA; SM89 Ref4 with 1-3 images or one 2-5 second visual-only video; dual-SM86 Ref4 images"
     },
     "native": {
-      "name": "hansimov/vflash:0.3.0",
-      "digest": "sha256:ab8cc6a03f75642a04c3d2ca01fd0c1eb5278d20a4120773ae29fa0265d41662",
-      "dependency_image": "hansimov/vflash@sha256:cd7878b28d747ebdbc0836df0c256349583cffc85110fbdacc65858e83500e0e",
-      "anonymous_pull": true,
-      "interface": "compiled conditioning bundles to video and audio latents; typed schema-2 video conditioning is limited to single-SM89 Ref4",
-      "gpu_qualification": "The same native package files are covered by the installed-wheel Ref4 image/video/image qualification. Other supported latent profiles retain their previous mathematical operators and qualification.",
-      "cpu_qualification": "Default UID 10001 and arbitrary UID 12345 without a passwd entry: empty writable cache bind, actual cache operations, 59 installed package files, CLI and native service construction. No model weights or CUDA device used.",
-      "official_diffusers": "not applicable: native-only service",
-      "ffmpeg": "not applicable: native-only service"
+      "name": "hansimov/vflash:0.3.1",
+      "digest": "sha256:50fbce1efb87acf127868db618041e456302d9a61c78ff2e8dbf25fe42133505",
+      "dependency_image": "hansimov/vflash@sha256:ab8cc6a03f75642a04c3d2ca01fd0c1eb5278d20a4120773ae29fa0265d41662",
+      "interface": "compiled conditioning bundles to video/audio latents; single-SM89 Ref4 supports typed video conditioning"
     }
   }
 }
