@@ -241,7 +241,14 @@ class H3NativeConditioningRuntime:
             or not supported_weights
             or task not in {"ref2va", "t2va"}
             or (expected_task is not None and task != expected_task)
-            or (task == "t2va" and capability != (8, 9))
+            or (
+                task == "t2va"
+                and capability == (8, 6)
+                and (
+                    parallel_strategy != "sequence-head"
+                    or artifact.weight_profile != "lightx-turbo4-v1.0"
+                )
+            )
             or (
                 expected_weight_profile is not None
                 and artifact.weight_profile != expected_weight_profile

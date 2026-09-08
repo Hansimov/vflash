@@ -167,21 +167,38 @@ def test_failed_pair_execution_cannot_turn_abort_into_confirmed_cleanup(monkeypa
 
 
 @pytest.mark.parametrize("completion_available", [True, False])
+@pytest.mark.parametrize("t2_pair", [False, True])
 def test_failed_constructor_preserves_error_and_releases_only_after_completion(
-    monkeypatch, tmp_path, completion_available
+    monkeypatch, tmp_path, completion_available, t2_pair
 ):
     torch = pytest.importorskip("torch")
     artifact = SimpleNamespace(
         is_complete_block_stack=True,
-        weight_profile="lightx-ref-turbo4-v0.1",
+        weight_profile="lightx-turbo4-v1.0" if t2_pair else "lightx-ref-turbo4-v0.1",
         adapter_execution="runtime-residual",
-        source={"oracle_profile": "ref2va-adapter-bf16-torch-sdpa-sm89"},
+        source={
+            "oracle_profile": (
+                "t2va-adapter-bf16-torch-sdpa-sm86"
+                if t2_pair
+                else "ref2va-adapter-bf16-torch-sdpa-sm89"
+            )
+        },
         artifact_id="h3-test",
-        target=SimpleNamespace(compute_capability="sm89", target_id="test"),
+        target=SimpleNamespace(
+            compute_capability="sm86" if t2_pair else "sm89", target_id="test"
+        ),
     )
     overlay = SimpleNamespace(schedule=object(), target_id="test", base_artifact_id="h3-test")
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
-    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda *_: (8, 9))
+    monkeypatch.setattr(
+        torch.cuda, "get_device_capability", lambda *_: (8, 6) if t2_pair else (8, 9)
+    )
+    if t2_pair:
+        monkeypatch.setattr(torch.cuda, "device_count", lambda: 2)
+        monkeypatch.setattr(torch.cuda, "device", lambda *_: nullcontext())
+        monkeypatch.setattr(torch.cuda, "set_device", lambda *_: None)
+        original_zeros = torch.zeros
+        monkeypatch.setattr(torch, "zeros", lambda *a, **_kw: original_zeros(*a, device="cpu"))
 
     def synchronize(*_):
         if not completion_available:
@@ -207,6 +224,8 @@ def test_failed_constructor_preserves_error_and_releases_only_after_completion(
                 artifact_path=tmp_path,
                 schedule_overlay_path=tmp_path,
                 auxiliary_tensor_path=tmp_path,
+                expected_task="t2va" if t2_pair else "ref2va",
+                parallel_strategy="sequence-head" if t2_pair else "single",
             )
         gc.collect()
         assert failure.value.__traceback__ is not None

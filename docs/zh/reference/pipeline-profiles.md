@@ -36,6 +36,11 @@ vflash generate \
 
 ## 准备文生视频
 
+开发配置 `t2va-turbo4-exact-sm86` 为双 3080 的 `sequence-head` 路径固定了
+Base4 v1.0 原始模型与 LoRA。CPU 合同已实现，SM86 编译与完整生成仍待实测，
+尚不属于上表已发布 0.3.1 的合格链路。必须生成独立的 SM86 准备记录与编译表，
+不能修改 SM89 或 Ref 资产标签来替代。该候选不开放单卡、`tensor` 或八步执行。
+
 按[官方权重下载流程](../guide/compile-weights)选择 `t2va-turbo4-exact-sm89`，然后准备 Base 模型和明确固定的 LoRA：
 
 ```bash

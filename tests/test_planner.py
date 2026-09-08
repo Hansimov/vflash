@@ -68,15 +68,40 @@ def test_two_devices_resolve_an_explicit_strategy():
     assert default.parallel_strategy == "sequence-head"
 
 
-@pytest.mark.parametrize(
-    "failure", ["duplicate", "architecture", "memory", "missing", "strategy"]
-)
-def test_rejects_invalid_parallel_device_groups(failure):
+@pytest.mark.parametrize("strategy,peer", [(None, False), ("tensor", True)])
+def test_t2_sm86_requires_the_fixed_sequence_head_pair(strategy, peer):
     from dataclasses import replace
 
     first = device(capability="8.6", memory=20.0)
     second = replace(first, index=1, uuid="peer-device")
-    strategy = "tensor"
+    with pytest.raises(ContractError, match="sequence-head"):
+        resolve_plan(
+            ProfileCatalog.bundled(),
+            profile_id="t2va-turbo4-exact-sm86",
+            device=first,
+            peer_device=second if peer else None,
+            strategy=strategy,
+        )
+    plan = resolve_plan(
+        ProfileCatalog.bundled(),
+        profile_id="t2va-turbo4-exact-sm86",
+        device=first,
+        peer_device=second,
+    )
+    assert plan.parallel_strategy == "sequence-head"
+    assert plan.target.weight_residency == "block-ring"
+
+
+@pytest.mark.parametrize(
+    "failure", ["duplicate", "architecture", "memory", "missing", "strategy"]
+)
+@pytest.mark.parametrize("mode", ["ref2va", "t2va"])
+def test_rejects_invalid_parallel_device_groups(failure, mode):
+    from dataclasses import replace
+
+    first = device(capability="8.6", memory=20.0)
+    second = replace(first, index=1, uuid="peer-device")
+    strategy = "sequence-head"
     if failure == "duplicate":
         second = first
     elif failure == "architecture":
@@ -90,7 +115,7 @@ def test_rejects_invalid_parallel_device_groups(failure):
     with pytest.raises(ContractError):
         resolve_plan(
             ProfileCatalog.bundled(),
-            profile_id="ref2va-turbo4-exact-sm86",
+            profile_id=f"{mode}-turbo4-exact-sm86",
             device=first,
             peer_device=second,
             strategy=strategy,

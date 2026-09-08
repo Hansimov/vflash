@@ -13,6 +13,30 @@ from vflash.native.runner import NativeEngineSession
 from vflash.planner import resolve_plan
 
 
+@pytest.mark.parametrize("strategy", ["single", "tensor"])
+def test_tampered_t2_sm86_plan_rejected_before_runtime(monkeypatch, tmp_path, strategy):
+    monkeypatch.setitem(
+        sys.modules,
+        "torch",
+        SimpleNamespace(cuda=SimpleNamespace(is_initialized=lambda: False)),
+    )
+    plan = resolve_plan(
+        ProfileCatalog.bundled(),
+        profile_id="t2va-turbo4-exact-sm86",
+        device=NvidiaDevice(0, "primary", "3080", 20, "8.6", 320),
+        peer_device=NvidiaDevice(1, "peer", "3080", 20, "8.6", 320),
+    )
+    changed = replace(
+        plan,
+        parallel_strategy=strategy,
+        peer_device=None if strategy == "single" else plan.peer_device,
+    )
+    with pytest.raises(ContractError, match="invalid physical GPU group"):
+        NativeEngineSession(
+            changed, artifact=tmp_path, schedule_overlay=tmp_path, auxiliary_tensor=tmp_path
+        )
+
+
 @pytest.mark.parametrize(
     "profile_id,capability,memory,strategy,residency",
     [
@@ -22,6 +46,7 @@ from vflash.planner import resolve_plan
         ("ref2va-turbo4-exact-sm86", "8.6", 20.0, "single", "default"),
         ("ref2va-turbo4-exact-sm86", "8.6", 20.0, "tensor", "default"),
         ("ref2va-turbo4-exact-sm86", "8.6", 20.0, "sequence-head", "block-ring"),
+        ("t2va-turbo4-exact-sm86", "8.6", 20.0, "sequence-head", "block-ring"),
     ],
 )
 def test_session_loads_once_and_keeps_request_accounting_separate(

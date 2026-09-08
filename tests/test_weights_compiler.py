@@ -164,7 +164,12 @@ def test_adaln_padding_does_not_influence_real_rows():
 
 @pytest.mark.parametrize(
     "profile_id",
-    ["ref2va-turbo4-exact-sm89", "t2va-turbo4-exact-sm89", "ref2va-turbo4-exact-sm86"],
+    [
+        "ref2va-turbo4-exact-sm89",
+        "t2va-turbo4-exact-sm89",
+        "ref2va-turbo4-exact-sm86",
+        "t2va-turbo4-exact-sm86",
+    ],
 )
 def test_artifact_schema_five_loads_with_no_replay_and_keeps_schema_four(
     monkeypatch, tmp_path, profile_id

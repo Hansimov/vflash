@@ -491,6 +491,7 @@ def load_h3_runtime_artifact(
             "ref2va-adapter-bf16-torch-sdpa-sm89",
             "ref2va-adapter-bf16-torch-sdpa-sm86",
             "t2va-adapter-bf16-torch-sdpa-sm89",
+            "t2va-adapter-bf16-torch-sdpa-sm86",
         }
         or nfe
         != h3_distilled_lora_contract_for_profile(

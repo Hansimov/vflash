@@ -38,6 +38,29 @@ def test_released_model_identities_and_adapter_scaling_remain_distinct():
     )
 
 
+def test_t2_sm86_uses_base_weights_but_requires_its_own_compilation():
+    profile = model_profile("t2va-turbo4-exact-sm86")
+    sm89 = model_profile("t2va-turbo4-exact-sm89")
+    assert profile.transformer_component == "transformer"
+    assert profile.adapter == sm89.adapter and profile.adapter.scaling == 1.0
+    identity = transformer_identity(profile.definition.id)
+    other = transformer_identity(sm89.definition.id)
+    assert {k: v for k, v in identity.items() if k != "oracle_profile"} == {
+        k: v for k, v in other.items() if k != "oracle_profile"
+    }
+    source = weights_source(profile.definition.id)
+    assert source["oracle_profile"] == "t2va-adapter-bf16-torch-sdpa-sm86"
+    assert source["compile_recipe"] == "base4-bf16-runtime-residual-sm86-v1"
+    wrong_source = {
+        **source,
+        "oracle_profile": weights_source(sm89.definition.id)["oracle_profile"],
+    }
+    with pytest.raises(ValueError, match="fixed"):
+        _validate_source(
+            wrong_source, weight_profile=profile.adapter.profile_id, schema_version=5
+        )
+
+
 def test_unqualified_complete_profile_fails_before_asset_ingestion(tmp_path):
     adapter = tmp_path / "unread-adapter"
     adapter.write_bytes(b"not a model payload")
