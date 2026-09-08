@@ -21,6 +21,25 @@ class H3FusedOpsError(ValueError):
 _BLOCK_SIZES = frozenset({128, 256, 512, 1024})
 
 
+def _use_wide_index(*tensors: Any) -> bool:
+    """Select address width from validated shapes and strides, without reading data.
+
+    A strided modulation view can exceed signed 32-bit element offsets while its
+    logical element count still fits. Storage offsets are relative to each input
+    pointer; an unrelated prefix in its underlying allocation is not indexed here.
+    """
+    limit = 2**31 - 1
+    return any(
+        tensor.numel() > limit
+        or sum(
+            (size - 1) * stride
+            for size, stride in zip(tensor.shape, tensor.stride(), strict=True)
+        )
+        > limit
+        for tensor in tensors
+    )
+
+
 @cache
 def _strict_bf16_kernels() -> tuple[Any, Any, Any]:
     try:
@@ -43,8 +62,12 @@ def _strict_bf16_kernels() -> tuple[Any, Any, Any]:
         shift_token_stride,
         shift_hidden_stride,
         BLOCK_SIZE: tl.constexpr,
+        WIDE_INDEX: tl.constexpr,
     ):
-        offsets = tl.program_id(0) * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+        block = tl.program_id(0)
+        if WIDE_INDEX:
+            block = block.to(tl.int64)
+        offsets = block * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
         mask = offsets < elements
         hidden_offsets = offsets % hidden_size
         token_offsets = (offsets // hidden_size) % tokens
@@ -110,8 +133,12 @@ def _strict_bf16_kernels() -> tuple[Any, Any, Any]:
         gate_token_stride,
         gate_hidden_stride,
         BLOCK_SIZE: tl.constexpr,
+        WIDE_INDEX: tl.constexpr,
     ):
-        offsets = tl.program_id(0) * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+        block = tl.program_id(0)
+        if WIDE_INDEX:
+            block = block.to(tl.int64)
+        offsets = block * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
         mask = offsets < elements
         hidden_offsets = offsets % hidden_size
         token_offsets = (offsets // hidden_size) % tokens
@@ -161,15 +188,19 @@ def _strict_bf16_silu_mul_kernel() -> tuple[Any, Any]:
         elements,
         hidden_size,
         BLOCK_SIZE: tl.constexpr,
+        WIDE_INDEX: tl.constexpr,
     ):
-        offsets = tl.program_id(0) * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+        block = tl.program_id(0)
+        if WIDE_INDEX:
+            block = block.to(tl.int64)
+        offsets = block * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
         mask = offsets < elements
         hidden_offsets = offsets % hidden_size
         row_offsets = offsets // hidden_size
         input_offsets = row_offsets * hidden_size * 2 + hidden_offsets
         value = tl.load(packed_ptr + input_offsets, mask=mask, other=0.0).to(tl.float32)
         gate = tl.load(
-            packed_ptr + input_offsets + hidden_size,
+            packed_ptr + (input_offsets + hidden_size),
             mask=mask,
             other=0.0,
         ).to(tl.float32)
@@ -228,8 +259,12 @@ def _strict_bf16_ffn_adapter_silu_kernel() -> Any:
         hidden_size,
         scaling,
         BLOCK_SIZE: tl.constexpr,
+        WIDE_INDEX: tl.constexpr,
     ):
-        offsets = tl.program_id(0) * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+        block = tl.program_id(0)
+        if WIDE_INDEX:
+            block = block.to(tl.int64)
+        offsets = block * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
         mask = offsets < elements
         hidden_offsets = offsets % hidden_size
         rows = offsets // hidden_size
@@ -270,8 +305,12 @@ def _strict_bf16_adapter_kernels() -> tuple[Any, Any, Any]:
         scaling_1,
         scaling_2,
         BLOCK_SIZE: tl.constexpr,
+        WIDE_INDEX: tl.constexpr,
     ):
-        offsets = tl.program_id(0) * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+        block = tl.program_id(0)
+        if WIDE_INDEX:
+            block = block.to(tl.int64)
+        offsets = block * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
         mask = offsets < elements
         hidden_offsets = offsets % hidden_size
         branches = hidden_offsets // branch_size
@@ -312,8 +351,12 @@ def _strict_bf16_adapter_kernels() -> tuple[Any, Any, Any]:
         gate_hidden_stride,
         scaling,
         BLOCK_SIZE: tl.constexpr,
+        WIDE_INDEX: tl.constexpr,
     ):
-        offsets = tl.program_id(0) * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+        block = tl.program_id(0)
+        if WIDE_INDEX:
+            block = block.to(tl.int64)
+        offsets = block * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
         mask = offsets < elements
         hidden_offsets = offsets % hidden_size
         token_offsets = (offsets // hidden_size) % tokens
@@ -397,8 +440,12 @@ def _strict_bf16_rotary_kernel() -> tuple[Any, Any]:
         sin_token_stride,
         sin_hidden_stride,
         BLOCK_SIZE: tl.constexpr,
+        WIDE_INDEX: tl.constexpr,
     ):
-        offsets = tl.program_id(0) * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+        block = tl.program_id(0)
+        if WIDE_INDEX:
+            block = block.to(tl.int64)
+        offsets = block * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
         mask = offsets < elements
         hidden_offsets = offsets % head_dim
         token_offsets = (offsets // (heads * head_dim)) % tokens
@@ -557,6 +604,7 @@ def triton_strict_bf16_modulate(
         shift.stride(0),
         shift.stride(1),
         BLOCK_SIZE=block_size,
+        WIDE_INDEX=_use_wide_index(value, scale, shift),
         num_warps=min(8, block_size // 32),
     )
     return output
@@ -602,6 +650,7 @@ def triton_strict_bf16_gate_residual(
         gate.stride(0),
         gate.stride(1),
         BLOCK_SIZE=block_size,
+        WIDE_INDEX=_use_wide_index(residual, gate),
         num_warps=min(8, block_size // 32),
     )
     return output
@@ -644,6 +693,7 @@ def triton_strict_bf16_silu_mul(
         output.numel(),
         hidden_size,
         BLOCK_SIZE=block_size,
+        WIDE_INDEX=_use_wide_index(packed),
         num_warps=min(8, block_size // 32),
     )
     return output
@@ -674,7 +724,6 @@ def triton_strict_bf16_ffn_adapter_silu(
         or not adapter.is_contiguous()
         or any(size <= 0 for size in base.shape)
         or base.shape[-1] % 2
-        or base.numel() >= 2**31
     ):
         raise H3FusedOpsError("FFN fusion requires matching contiguous CUDA BF16 [B,S,2F]")
     if (
@@ -694,6 +743,7 @@ def triton_strict_bf16_ffn_adapter_silu(
         width,
         float(scaling),
         BLOCK_SIZE=block_size,
+        WIDE_INDEX=_use_wide_index(base),
         num_warps=8,
     )
     return output
@@ -730,6 +780,7 @@ def triton_strict_bf16_adapter_merge(
         scaling,
         scaling,
         BLOCK_SIZE=block_size,
+        WIDE_INDEX=_use_wide_index(base),
         num_warps=min(8, block_size // 32),
     )
     return output
@@ -768,6 +819,7 @@ def triton_strict_bf16_qkv_adapter_merge(
         scaling_1,
         scaling_2,
         BLOCK_SIZE=block_size,
+        WIDE_INDEX=_use_wide_index(base),
         num_warps=min(8, block_size // 32),
     )
     return output
@@ -794,7 +846,6 @@ def _validate_qkv_direct_merge(
         or any(size <= 0 for size in base.shape)
         or base.shape[-1] % 3
         or not base.is_contiguous()
-        or base.numel() >= 2**31
         or base.requires_grad
         or not isinstance(adapters, tuple)
         or len(adapters) != 3
@@ -845,9 +896,15 @@ def _strict_bf16_qkv_direct_merge_kernel() -> Any:
         scaling_1,
         scaling_2,
         BLOCK_SIZE: tl.constexpr,
+        WIDE_INDEX: tl.constexpr,
     ):
-        offsets = tl.program_id(0) * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+        block = tl.program_id(0)
+        if WIDE_INDEX:
+            block = block.to(tl.int64)
+        offsets = block * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
         branch = tl.program_id(1)
+        if WIDE_INDEX:
+            branch = branch.to(tl.int64)
         mask = offsets < branch_elements
         rows = offsets // branch_width
         columns = offsets % branch_width
@@ -903,6 +960,7 @@ def triton_strict_bf16_qkv_direct_merge(
         width,
         *scales,
         BLOCK_SIZE=block_size,
+        WIDE_INDEX=_use_wide_index(base),
         num_warps=8,
     )
     return base
@@ -951,6 +1009,7 @@ def triton_strict_bf16_adapter_gate_residual(
         gate.stride(1),
         scaling,
         BLOCK_SIZE=block_size,
+        WIDE_INDEX=_use_wide_index(residual, gate),
         num_warps=min(8, block_size // 32),
     )
     return output
@@ -1007,6 +1066,7 @@ def triton_strict_bf16_rotary(
         sin.stride(0),
         sin.stride(1),
         BLOCK_SIZE=block_size,
+        WIDE_INDEX=_use_wide_index(value, cos, sin),
         num_warps=min(8, block_size // 32),
     )
     return output

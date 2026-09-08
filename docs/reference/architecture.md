@@ -51,6 +51,8 @@ On a **3080 with 20 GB**, weights remain in pinned system memory and stream thro
 
 The two strategies share the same numerical execution interface. They do not promise equal performance or bitwise equality across GPU architectures.
 
+Fused elementwise kernels select 32-bit or 64-bit indices from the tensors' shapes and strides. The check covers strided AdaLN views and packed FFN/QKV inputs, whose addressed span can exceed the logical output size. Large offsets are widened before multiplication; smaller tensors retain the 32-bit specialization. This changes address calculation, not BF16 operations or rounding order. Safe indexing does not establish a workload's VRAM capacity or complete-pipeline support.
+
 ## Two 3080s for one request {#parallel}
 
 For a 3080 service focused on request latency, start with two GPUs using `sequence-head`. The caller selects the peer explicitly. A single-GPU session remains available; Vflash never acquires another GPU automatically.
