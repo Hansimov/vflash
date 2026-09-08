@@ -2,6 +2,16 @@
 
 The current release is **0.3.1**. Generate from text, images or one short reference video on an RTX 4090 48 GB. A pair of RTX 3080 20 GB GPUs retains complete image-reference generation. See [complete profiles](./pipeline-profiles).
 
+## 0.3.2 · release preparation {#v0-3-2}
+
+The next release adds the fixed `t2va-turbo4-exact-sm86` native profile for two RTX 3080 20 GB GPUs using `sequence-head` and block streaming. It uses the pinned Base4 v1.0 adapter, BF16 residual execution and four evaluations with video/audio shifts 6/3. Its SM86 compiler produces independent timestep and modulation tables; SM89 and Ref artifacts cannot be relabeled for this profile.
+
+The installed public native package completed two application-owned encoding → native session → media requests: 928 × 512 for five seconds and 640 × 352 for ten seconds, both at 24 fps. Both returned 14 finite conditioning tensors, final FP32 video/audio latents and fully decoded MP4s with the requested frame counts. Stages closed successfully. The compiler also passed 52 same-architecture official timestep/modulation comparisons. These checks establish the native integration at those two geometries. The standalone `H3Pipeline` wrapper was not rerun on this new profile, and its public temporal contract remains five seconds.
+
+Twelve sampled frames per output supported the fixed example's visible object/action requirements; audio semantics and unsampled motion remain unjudged. Thermal throttling occurred during the execution window, so these observations do not establish clean timing or broad quality. The new profile does not add single-SM86 T2VA, T2VA Turbo8, video references on SM86, or arbitrary long/high-resolution qualification.
+
+This section describes preparation, not an available tag or image. Final package/image identities and the long-tensor indexing fix require their own installation and target-device evidence before release. Existing published identities remain in [the image inventory](https://github.com/Hansimov/vflash/blob/v0.3.1/docker/images.json).
+
 ## 0.3.1 · lower QKV memory on 4090 {#v0-3-1}
 
 [Source tag](https://github.com/Hansimov/vflash/tree/v0.3.1)

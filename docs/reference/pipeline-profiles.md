@@ -36,12 +36,14 @@ The six fields in `ref4-sm86-assets.json` use the new SM86 artifact, schedule an
 
 ## Prepare T2VA
 
-The `t2va-turbo4-exact-sm86` development profile adds a fixed two-3080,
-`sequence-head` contract using the same Base4 v1.0 source files. Its CPU contracts
-are implemented; SM86 compilation and a complete generation are still pending.
-It is not a qualified pipeline in the released 0.3.1 table above. It requires new
-SM86 receipts and compiled tables; changing an SM89 or Ref artifact label is invalid.
-Single-card, `tensor`, and eight-step execution are outside this candidate.
+The next release's `t2va-turbo4-exact-sm86` profile uses the same Base4 v1.0 source
+files with two 3080s and `sequence-head`. SM86 compilation and the installed native
+session have completed application-owned encoding/core/media requests at five seconds
+928 × 512 and ten seconds 640 × 352, both 24 fps. This is the native integration boundary;
+the standalone `H3Pipeline` wrapper has not been rerun on the new profile and still has
+a five-second temporal contract. See [the evidence limits](./releases#v0-3-2).
+It requires independent SM86 receipts and compiled tables; changing an SM89 or Ref
+artifact label is invalid. Single-card, `tensor`, and eight-step T2VA are excluded.
 
 Follow the [official-weight download recipe](../guide/compile-weights), selecting `t2va-turbo4-exact-sm89`. Then prepare the Base checkpoint and its exact pinned adapter:
 
