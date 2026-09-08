@@ -6,7 +6,7 @@
 
 服务接收预编译条件包，返回视频和音频潜变量（latents，即解码前的张量）。它使用一张 GPU 或一组协作双卡，并在多个串行请求之间复用已加载的模型。
 
-需要 Linux AMD64、Docker Compose v2、NVIDIA Container Toolkit、兼容 CUDA 13.0 的驱动、受支持的显卡和匹配的编译资源。镜像不含模型权重，提供条件包到 latent 的接口。独立的[权重编译器](../docs/zh/guide/compile-weights.md)可以准备 SM86/SM89 的 Ref4 资产，以及 SM89 的 Base4 资产；[完整 MP4 生成](../docs/zh/guide/complete-pipeline.md)使用 pipeline 镜像或 Python 扩展。
+需要 Linux AMD64、Docker Compose v2、NVIDIA Container Toolkit、兼容 CUDA 13.0 的驱动、受支持的显卡和匹配的编译资源。镜像不含模型权重，提供条件包到 latent 的接口。独立的[权重编译器](../docs/zh/guide/compile-weights.md)可以准备 SM86/SM89 的 Ref4 资产，以及 SM86/SM89 的 Base4 资产；[完整 MP4 生成](../docs/zh/guide/complete-pipeline.md)使用 pipeline 镜像或 Python 扩展。
 
 ## 启动发布版
 
@@ -16,12 +16,13 @@
 cp docker/.env.example docker/.env
 ```
 
-编辑 `docker/.env`，填写资源的绝对路径并选择显卡。使用 `VFLASH_IMAGE=hansimov/vflash:0.3.1` 拉取已发布镜像。配置可选：
+编辑 `docker/.env`，填写资源的绝对路径并选择显卡。使用 `VFLASH_IMAGE=hansimov/vflash:0.3.2` 拉取已发布镜像。配置可选：
 
 | 显卡 | `VFLASH_PROFILE_ID` |
 | --- | --- |
 | RTX 4090 48 GB | `ref2va-turbo4-exact-sm89`、`ref2va-turbo8-exact-sm89` 或 `t2va-turbo4-exact-sm89` |
 | RTX 3080 20 GB | `ref2va-turbo4-exact-sm86` |
+| 双 RTX 3080 20 GB | `t2va-turbo4-exact-sm86`，使用 `sequence-head` |
 
 3080 需要为 SM86 编译的资源。对于已测负载，建议为**每个 worker 至少预留 64 GiB 可用系统内存**，并为其他进程保留额外余量；更大输入需要重新检查容量。
 

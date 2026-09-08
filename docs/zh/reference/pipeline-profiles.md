@@ -1,6 +1,6 @@
 # 完整模型配置
 
-每份准备记录固定模型、LoRA 与调度方式。Vflash 0.3.1 支持以下完整链路：
+每份准备记录固定模型、LoRA 与调度方式。Vflash 0.3.2 支持以下完整链路：
 
 | 配置 | 硬件 | 输入 | Transformer | LoRA | 视频/音频 shift |
 | --- | --- | --- | --- | --- | --- |
@@ -36,12 +36,26 @@ vflash generate \
 
 ## 准备文生视频
 
-下一版本的 `t2va-turbo4-exact-sm86` 为双 3080 的 `sequence-head` 路径固定了
+本版新增的 `t2va-turbo4-exact-sm86` 为双 3080 的 `sequence-head` 路径固定了
 同一 Base4 v1.0 原始模型与 LoRA。SM86 编译和实际安装的原生会话已在应用持有的
 编码/core/媒体链路完成五秒 928 × 512、十秒 640 × 352 两次请求，均为 24 fps。
 这是原生集成边界；新配置的独立 `H3Pipeline` 包装尚未重跑，公开时长合同仍是五秒。
 [发布说明](./releases#v0-3-2)保留证据局限。必须生成独立的 SM86 准备记录与编译表，
 不能修改 SM89 或 Ref 资产标签来替代。T2VA 不开放单卡、`tensor` 或八步执行。
+
+使用新原生 SM86 配置时，在下方编译准备命令中选择 `t2va-turbo4-exact-sm86`，并写到独立的 SM86 输出目录。准备匹配条件后可执行：
+
+```bash
+vflash denoise t2va-turbo4-exact-sm86 \
+  --artifact models/base4-sm86-native/artifact \
+  --schedule-overlay models/base4-sm86-native/schedule \
+  --auxiliary-tensor models/base4-sm86-native/auxiliary.safetensors \
+  --bundle inputs/t2-conditioning \
+  --gpu 0 --peer-gpu 1 --strategy sequence-head \
+  --output-latents output/latents.safetensors
+```
+
+应用提供匹配条件包并解码输出 latent；该命令不直接写 MP4。下方 SM89 示例继续使用完整包装接口。
 
 按[官方权重下载流程](../guide/compile-weights)选择 `t2va-turbo4-exact-sm89`，然后准备 Base 模型和明确固定的 LoRA：
 
@@ -69,6 +83,6 @@ Base LoRA 的上游文件名包含 `fl2v`，本版验证的是其 T2VA 用法，
 
 ## 资源生命周期
 
-文件放到最终位置后，进行一次准备和哈希校验；启动读取本地记录，不再完整重读模型。0.3.1 可通过 `H3Pipeline.prepare()` 显式预加载，否则首次请求在 CPU 输入检查完成后加载模型，并保留以便复用；各阶段使用的显卡由上述配置决定。预加载不执行条件编码或准备所有输入形状。资产准备、模型加载、首次请求和重复请求应分别计时。取消正在执行的请求会关闭实例；继续生成前需要新建实例。
+文件放到最终位置后，进行一次准备和哈希校验；启动读取本地记录，不再完整重读模型。0.3.2 可通过 `H3Pipeline.prepare()` 显式预加载，否则首次请求在 CPU 输入检查完成后加载模型，并保留以便复用；各阶段使用的显卡由上述配置决定。预加载不执行条件编码或准备所有输入形状。资产准备、模型加载、首次请求和重复请求应分别计时。取消正在执行的请求会关闭实例；继续生成前需要新建实例。
 
 [参考视频输入](../guide/complete-pipeline#reference-video)复用单 SM89 Ref4 资产，已通过同一实例连续处理图片、视频、图片的完整验证。SM86 和 Turbo8 的视频参考仍不在支持范围内。

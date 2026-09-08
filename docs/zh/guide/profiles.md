@@ -12,6 +12,7 @@ Ref2VA 基于参考素材生成视频和音频；T2VA 使用文本条件，不�
 | RTX 4090 48 GB | `ref2va-turbo8-exact-sm89` | 8 | 常驻显存 |
 | RTX 3080 20 GB | `ref2va-turbo4-exact-sm86` | 4 | 从系统内存分块加载 |
 | RTX 4090 48 GB | `t2va-turbo4-exact-sm89` | 4 | 常驻显存；见下方验证范围 |
+| 双 RTX 3080 20 GB | `t2va-turbo4-exact-sm86` | 4 | 分块加载；仅 `sequence-head` |
 
 HTTP 服务默认使用 4090 Turbo4。切换配置时，需要同时更换匹配的资源并重启服务。
 
@@ -26,7 +27,9 @@ vflash plan ref2va-turbo8-exact-sm89 --gpu 0
 
 需要 Base4 v1.0 权重工件、Base 辅助张量、video/audio shift 6/3 调度，以及没有参考图的 T2VA 条件包。Ref2VA 工件不能执行这个任务；切换模式需要建立独立会话并加载对应资源。
 
-实际 T2VA 容器重复执行同一个固定请求，全部 14 个官方条件张量和最终 FP32 音视频 latent 精确一致。两段五秒视频及音轨完整解码，重复请求的画面一致，取消后资源正确释放。官方音频 VAE 的原始输出可能存在微小浮点变化。这些是实现和生命周期验证，不代表广泛的指令遵循或音频质量资格。T2VA Turbo8、更新的 Base4 适配器和其他显卡仍不在此配置范围内。
+实际 SM89 T2VA 容器重复执行同一个固定请求，全部 14 个官方条件张量和最终 FP32 音视频 latent 精确一致。两段五秒视频及音轨完整解码，重复请求的画面一致，取消后资源正确释放。官方音频 VAE 的原始输出可能存在微小浮点变化。这些是实现和生命周期验证，不代表广泛的指令遵循或音频质量资格。T2VA Turbo8 和更新的 Base4 适配器仍不在此配置范围内。
+
+0.3.2 新增 `t2va-turbo4-exact-sm86`，仅使用双 3080 和 `sequence-head`。应编译独立的 Base SM86 资产，并向原生会话提供匹配的 T2 条件包。应用持有的阶段已完成五秒 928 × 512 和十秒 640 × 352 请求；新配置的独立五秒 `H3Pipeline` 包装尚未重跑，两个已测形状不能覆盖任意更大输入。详见[版本证据](../reference/releases#v0-3-2)。
 
 ## 内存与部署 {#memory}
 
@@ -42,7 +45,7 @@ CLI 使用 `--weight-residency block-ring`，Python 使用同名的[会话选项
 
 完整 Ref4 和 T2VA 链路还需保存编码器和 VAE 的 CPU 权重，采用原生分块加载，为这些阶段留出显存。完整链路验证使用 240 GiB 主机内存上限；这是已测预算，不是最低要求，不能套用去噪器的 64 GiB 建议。SM89 的各阶段轮流使用同一卡；双 SM86 由主卡执行编码和解码、两卡共同去噪。一个三参考图请求的主机 RSS 峰值为 114.67 GiB，整卡占用为 11.05/6.85 GiB；部署时仍须为其他开销留出余量。
 
-原生 latent 接口的双 3080 可选择 `sequence-head` 或 `tensor`；完整生成必须使用 `sequence-head`。第二张卡由调用方显式指定。已测拓扑为无 peer access 的 PCIe 3.0 x16 主机桥连接，不需要 NVLink。设置方法见[双卡执行](./getting-started#parallel)，对照范围见[实测数据](../reference/benchmarks#sm86-parallel)。
+原生 Ref4 latent 接口的双 3080 可选择 `sequence-head` 或 `tensor`；T2VA 和完整生成必须使用 `sequence-head`。第二张卡由调用方显式指定。已测拓扑为无 peer access 的 PCIe 3.0 x16 主机桥连接，不需要 NVLink。设置方法见[双卡执行](./getting-started#parallel)，对照范围见[实测数据](../reference/benchmarks#sm86-parallel)。
 
 上述支持范围只覆盖 20 GB 版 3080 和 48 GB 版 4090。其他显存容量、型号、更大的 GPU 组，以及任意分辨率或帧数组合尚未获得相同验证。
 
@@ -55,7 +58,7 @@ Vflash 可以直接执行固定版本的 [LightX2V H3 Turbo](https://huggingface
 | Turbo4 v0.1 | 单/双 3080、单 4090 | `minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors` |
 | Turbo8 v1.0 768p | 单 4090 | `minimax_h3_ref2v_turbo_8step_v1.0_768p_bf16.safetensors` |
 
-固定修订与来源见[运行资源](../reference/runtime-assets#versions)。T2VA 还支持用于 SM89 T2VA 的 `minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors`，alpha 128 / rank 128。仅支持明确列出的文件和修订；ComfyUI、FL2VA、任意自定义 LoRA 和未来上游版本需要单独适配。
+固定修订与来源见[运行资源](../reference/runtime-assets#versions)。T2VA 还支持用于 SM89 或双 SM86 T2VA 的 `minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors`，alpha 128 / rank 128。仅支持明确列出的文件和修订；ComfyUI、FL2VA、任意自定义 LoRA 和未来上游版本需要单独适配。
 
 Turbo4 和 Turbo8 都是蒸馏配置。减少步数可以降低计算量，但不代表输出质量与 50 步基础模型相同。名称中的 `exact` 描述所用注意力路径和指定 LoRA 的执行方式，不承诺不同 GPU 上的张量完全一致。
 

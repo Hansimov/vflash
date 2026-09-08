@@ -21,6 +21,9 @@ or a cooperating SM86 pair, and Base4 T2VA on one SM89 GPU. A single SM89 Ref4 p
 2–5 second visual-only video reference, without mixing images. Complete SM86 uses `sequence-head`; single-SM86
 and Turbo8 retain their latent interface. The current profile guide owns the supported boundary; archived release
 notes describe their original versions, not additional requirements for a new release.
+The dual-SM86 T2 Turbo4 native profile additionally requires `sequence-head` and Base-specific SM86 compilation.
+Its application-stage integration is qualified at two fixed geometries; the standalone five-second `H3Pipeline`
+wrapper has not been rerun on that new profile. Large-index kernel checks do not broaden the wrapper's duration API.
 
 Install development dependencies with `python -m pip install -e '.[dev,server]'`. Use focused tests during iteration;
 public commits must pass the existing privacy hook. Never commit model payloads, private cases, credentials or GPU

@@ -1,16 +1,22 @@
 # Release notes
 
-The current release is **0.3.1**. Generate from text, images or one short reference video on an RTX 4090 48 GB. A pair of RTX 3080 20 GB GPUs retains complete image-reference generation. See [complete profiles](./pipeline-profiles).
+The current release is **0.3.2**: large-tensor index safety and native T2VA Turbo4 on two RTX 3080 20 GB GPUs. The standalone complete pipeline remains five seconds at 24 fps; its existing profiles and the new native-only qualification are listed in [complete profiles](./pipeline-profiles).
 
-## 0.3.2 · release preparation {#v0-3-2}
+## 0.3.2 · wide tensor offsets and dual-SM86 T2VA {#v0-3-2}
 
-The next release adds the fixed `t2va-turbo4-exact-sm86` native profile for two RTX 3080 20 GB GPUs using `sequence-head` and block streaming. It uses the pinned Base4 v1.0 adapter, BF16 residual execution and four evaluations with video/audio shifts 6/3. Its SM86 compiler produces independent timestep and modulation tables; SM89 and Ref artifacts cannot be relabeled for this profile.
+[Source tag](https://github.com/Hansimov/vflash/tree/v0.3.2) · [Images and package identities](https://github.com/Hansimov/vflash/blob/v0.3.2/docker/images.json)
 
-The installed public native package completed two application-owned encoding → native session → media requests: 928 × 512 for five seconds and 640 × 352 for ten seconds, both at 24 fps. Both returned 14 finite conditioning tensors, final FP32 video/audio latents and fully decoded MP4s with the requested frame counts. Stages closed successfully. The compiler also passed 52 same-architecture official timestep/modulation comparisons. These checks establish the native integration at those two geometries. The standalone `H3Pipeline` wrapper was not rerun on this new profile, and its public temporal contract remains five seconds.
+Large token/stride products can exceed a signed 32-bit element offset. Eight fused kernels now select 64-bit address arithmetic when the actual shape and stride require it, casting before multiplication. Small inputs keep their 32-bit path; BF16 rounding, LoRA arithmetic and schedules are unchanged. This fixes an invalid-memory-access cause, not a new quality or speed feature.
 
-Twelve sampled frames per output supported the fixed example's visible object/action requirements; audio semantics and unsampled motion remain unjudged. Thermal throttling occurred during the execution window, so these observations do not establish clean timing or broad quality. The new profile does not add single-SM86 T2VA, T2VA Turbo8, video references on SM86, or arbitrary long/high-resolution qualification.
+Fifteen small/wide target-GPU operator checks matched bit-for-bit, including wide comparisons against safe chunks of the original arithmetic. Saved 243-frame conditioning then completed all eight Ref evaluations on one RTX 4090 48 GB, producing finite FP32 video/audio latents and fully decoded 1344 × 768 media: 240 frames at 24 fps, with stereo 32 kHz audio. Resource owners closed and the device was released. This was a native/core-and-media check using saved conditioning, not a newly encoded `H3Pipeline` request or a full-trajectory bitwise comparison. The application integration revision was `6310e023fc31caa4b70bf9a5c64a07c062a4c343`.
 
-This section describes preparation, not an available tag or image. Final package/image identities and the long-tensor indexing fix require their own installation and target-device evidence before release. Existing published identities remain in [the image inventory](https://github.com/Hansimov/vflash/blob/v0.3.1/docker/images.json).
+The new `t2va-turbo4-exact-sm86` native profile uses two RTX 3080 20 GB GPUs, `sequence-head` and block streaming. Its pinned Base4 v1.0 adapter uses four evaluations and video/audio shifts 6/3. The SM86 compiler passed 52 same-architecture official timestep/modulation comparisons and produced a complete 50-block artifact. SM89 or Ref artifacts cannot be relabeled for this profile.
+
+The installed public native session completed application-owned encoding→core→media requests at 928 × 512 for five seconds and 640 × 352 for ten seconds, both 24 fps. Each returned 14 finite conditions, FP32 audio/video outputs, a fully decoded MP4 and confirmed close. Twelve sampled frames per output supported the fixed example's visible object/action requirements; audio semantics and unsampled motion remain unjudged. Thermal throttling occurred, so these observations do not establish clean timing or broad quality.
+
+The new dual-SM86 T2 `H3Pipeline` wrapper was not rerun on GPU and its public temporal contract remains five seconds. The long Ref check also does not add a ten-second wrapper API. Single-SM86 T2VA, `tensor` T2VA, T2VA Turbo8, SM86 video references and arbitrary long/high-resolution combinations remain unqualified. Existing five-second pipeline evidence is retained at its original scope.
+
+Both images retain all 0.3.1 dependency layers and entrypoints. Their installed 59-file package, CLI, service construction, writable cache and pinned adapter/media imports passed CPU checks. The fused module matches the target-tested implementation exactly. The wheel and reproducible small-layer recipe are [release attachments](https://github.com/Hansimov/vflash/releases/tag/v0.3.2); model weights remain separate licensed inputs.
 
 ## 0.3.1 · lower QKV memory on 4090 {#v0-3-1}
 
@@ -142,6 +148,6 @@ Added explicit block streaming on a 4090 and completed-step callbacks for integr
 
 ## Availability {#availability}
 
-The package provides the listed **BF16 Ref2VA Turbo4/Turbo8 and SM89 T2VA Turbo4 denoisers**, plus the **Ref4 Python/container pipeline on SM89 or dual SM86, and T2VA on SM89**. The official-weight compiler creates Ref4 assets for SM86/SM89 and Base4 assets for SM89. Other native profiles require matching prepared assets. Published container images are available separately; model weights are not bundled.
+The package provides the listed **BF16 Ref2VA Turbo4/Turbo8, SM89 T2VA Turbo4 and dual-SM86 T2VA Turbo4 denoisers**, plus the **Ref4 Python/container pipeline on SM89 or dual SM86, and T2VA on SM89**. The official-weight compiler creates Ref4 assets for SM86/SM89 and Base4 assets for SM86/SM89. Other native profiles require matching prepared assets. Published container images are available separately; model weights are not bundled.
 
 New modes, adapters and hardware require their own installation, numerical and decoded-output checks before entering the support table.

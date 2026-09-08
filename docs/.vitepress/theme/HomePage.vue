@@ -26,10 +26,10 @@ const text = computed(() => zh.value ? {
   gpu: [
     { execution: '单卡 · 权重常驻', profiles: 'Turbo4 / Turbo8', note: '在连续请求中复用权重，也可分块加载，为较大输入留出显存。' },
     { execution: '单卡 · 分块加载', profiles: 'Turbo4', note: '权重从系统内存传入显卡。已测负载需预留至少 64 GiB 可用 RAM。' },
-    { execution: '双卡协作 · 分块加载', profiles: 'Turbo4', note: '两张卡共同处理一个请求；需要显式选择第二张卡，并预留系统内存。' },
+    { execution: '双卡协作 · 分块加载', profiles: 'Ref4 / T2VA Turbo4', note: '两张卡共同处理一个请求；T2VA 使用 sequence-head，需显式选择第二张卡并预留系统内存。' },
   ],
   boundary: '当前公开版的输入与输出',
-  boundaryText: '单 4090 支持文字、图片或一段短视频参考，生成五秒 MP4；双 3080 支持多参考图完整生成。提供 Python、容器命令和官方权重编译器；HTTP 服务使用条件包到 latent 的接口。',
+  boundaryText: '单 4090 支持文字、图片或一段短视频参考，生成五秒 MP4；双 3080 支持多参考图完整生成和原生 T2VA。0.3.2 修复大张量索引溢出。H3Pipeline 仍为五秒，新双卡 T2 的独立包装尚未重跑；原生接口接收条件包并返回 latent。',
   inputs: '了解运行前提',
   next: '按你的任务开始',
   guides: [
@@ -56,10 +56,10 @@ const text = computed(() => zh.value ? {
   gpu: [
     { execution: 'One GPU · resident', profiles: 'Turbo4 / Turbo8', note: 'Reuse weights across requests, or stream blocks to leave VRAM for larger inputs.' },
     { execution: 'One GPU · streamed', profiles: 'Turbo4', note: 'Weights stream from system memory. Allow 64 GiB+ available RAM for the tested workload.' },
-    { execution: 'Two GPUs · streamed', profiles: 'Turbo4', note: 'Both GPUs cooperate on one request. Select the peer explicitly and allow sufficient host RAM.' },
+    { execution: 'Two GPUs · streamed', profiles: 'Ref4 / T2VA Turbo4', note: 'Both GPUs cooperate on one request. T2VA uses sequence-head; select the peer explicitly and allow sufficient host RAM.' },
   ],
   boundary: 'The current public interface',
-  boundaryText: 'Generate a five-second MP4 from text, images or one short reference video on a 4090. A pair of 3080s also supports complete multi-reference generation through Python or Docker. The HTTP service uses conditioning bundles and returns latents.',
+  boundaryText: 'Generate five-second MP4s from text, images or a short reference video on a 4090. A 3080 pair supports complete image-reference generation and native T2VA. Version 0.3.2 fixes large-tensor offsets. H3Pipeline remains five seconds; the new dual-T2 wrapper has not been rerun. Native interfaces consume bundles and return latents.',
   inputs: 'Check the prerequisites',
   next: 'Start with what you need',
   guides: [

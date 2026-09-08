@@ -12,6 +12,7 @@ Ref2VA generates video and audio from reference conditioning. T2VA uses text con
 | RTX 4090 48 GB | `ref2va-turbo8-exact-sm89` | 8 | Resident in GPU memory |
 | RTX 3080 20 GB | `ref2va-turbo4-exact-sm86` | 4 | Streamed from host memory |
 | RTX 4090 48 GB | `t2va-turbo4-exact-sm89` | 4 | Resident; validation scope below |
+| Two RTX 3080 20 GB GPUs | `t2va-turbo4-exact-sm86` | 4 | Streamed; `sequence-head` only |
 
 The HTTP service defaults to Turbo4 on a 4090. To change profiles, restart the service with the selected profile and its matching assets.
 
@@ -26,7 +27,9 @@ Since **0.2.0**, Vflash supports complete T2VA generation with `t2va-turbo4-exac
 
 Use a Base4 v1.0 artifact, Base auxiliary tensors, a 6/3 video/audio schedule, and a T2VA bundle with no references. A Ref2VA artifact cannot process this task. Switching mode requires a separate session and matching assets.
 
-The actual T2VA container repeated one fixed request, matching all 14 official conditioning tensors and both final FP32 AV latents. Both five-second videos and audio tracks fully decoded; repeated video frames matched and cancellation released the owner. Raw official audio VAE output can vary slightly. These are implementation and lifetime checks, not broad instruction or audio-quality qualification. T2VA Turbo8, newer Base4 adapters and other GPU targets remain outside this profile.
+The actual SM89 T2VA container repeated one fixed request, matching all 14 official conditioning tensors and both final FP32 AV latents. Both five-second videos and audio tracks fully decoded; repeated video frames matched and cancellation released the owner. Raw official audio VAE output can vary slightly. These are implementation and lifetime checks, not broad instruction or audio-quality qualification. T2VA Turbo8 and newer Base4 adapters remain outside this profile.
+
+Version 0.3.2 adds `t2va-turbo4-exact-sm86` for exactly two 3080s and `sequence-head`. Compile Base-specific SM86 assets and provide a compatible T2 conditioning bundle to the native session. Application-owned stages completed five-second 928 × 512 and ten-second 640 × 352 requests, but the standalone five-second `H3Pipeline` wrapper has not been rerun for this profile. These two geometries do not qualify arbitrary larger inputs. See [the release evidence](../reference/releases#v0-3-2).
 
 ## Memory and deployment {#memory}
 
@@ -42,7 +45,7 @@ For the measured 928 × 512, 124-model-frame, four-step workload, allow **at lea
 
 That budget covers the native denoiser. Complete Ref4 and T2VA pipelines also own encoders and official VAEs; their integration checks used a 240 GiB host-memory limit. The native core uses block streaming. SM89 stages take turns on one GPU; dual-SM86 encoding and decoding use the primary while both GPUs denoise. The representative three-reference SM86 check reached 114.67 GiB host RSS and 11.05/6.85 GiB device-wide use; leave headroom beyond this one-request measurement.
 
-The native latent interface supports `sequence-head` or `tensor` on a 3080 pair; complete generation requires `sequence-head`. The caller selects the peer explicitly. The measured topology uses PCIe 3.0 x16 host-bridge links without peer access and does not require NVLink. See [dual-GPU setup](./getting-started#parallel) and the [measurement scope](../reference/benchmarks#sm86-parallel).
+The native Ref4 latent interface supports `sequence-head` or `tensor` on a 3080 pair; T2VA and complete generation require `sequence-head`. The caller selects the peer explicitly. The measured topology uses PCIe 3.0 x16 host-bridge links without peer access and does not require NVLink. See [dual-GPU setup](./getting-started#parallel) and the [measurement scope](../reference/benchmarks#sm86-parallel).
 
 This support scope covers the 20 GB 3080 and 48 GB 4090 variants. Other capacities, models, larger GPU groups and arbitrary resolutions or frame counts have not received the same validation.
 
@@ -55,7 +58,7 @@ Vflash runs the pinned [LightX2V H3 Turbo](https://huggingface.co/lightx2v/Minim
 | Ref Turbo4 v0.1 | One/two 3080s, one 4090 | `minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors` |
 | Ref Turbo8 v1.0 768p | One 4090 | `minimax_h3_ref2v_turbo_8step_v1.0_768p_bf16.safetensors` |
 
-Pinned revisions and sources are listed under [runtime assets](../reference/runtime-assets#versions). T2VA also supports `minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors` for T2VA on SM89, with alpha 128 / rank 128. Only the named files and revisions are supported. ComfyUI, FL2VA, custom LoRAs and future upstream revisions need separate integration.
+Pinned revisions and sources are listed under [runtime assets](../reference/runtime-assets#versions). T2VA also supports `minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors` for T2VA on SM89 or a cooperating SM86 pair, with alpha 128 / rank 128. Only the named files and revisions are supported. ComfyUI, FL2VA, custom LoRAs and future upstream revisions need separate integration.
 
 Turbo4 and Turbo8 are distilled configurations. Fewer steps reduce compute, but they are not a promise of the same output quality as the 50-step base model. The `exact` name refers to the attention path and the selected adapter's execution; it does not promise identical tensors across different GPUs.
 

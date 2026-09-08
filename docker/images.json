@@ -1,37 +1,39 @@
 {
   "schema_version": 1,
-  "version": "0.3.1",
+  "version": "0.3.2",
   "platform": "linux/amd64",
-  "implementation_revision": "8ad11bb0900c16a4c9a107d6ce4ac4f75592aa60",
-  "qualified_core_revision": "4bc7c554f1306fbaac6f97837a0b6b3ce33d60f0",
-  "wheel_sha256": "e3706ede5d329bf26f41f12de98856f58d7f88c8b0b2ed6f586639c1708b44cc",
-  "build_recipe": "https://github.com/Hansimov/vflash/releases/download/v0.3.1/Dockerfile.release",
-  "build_recipe_sha256": "ecef195f80ff5b255513efd2b09e3284529d166a281c3e04636eef6a12b1d047",
+  "implementation_revision": "7ddfeee22e005f8172751cf6dc044e43ca5e758b",
+  "qualified_core_revision": "eaee1a70fcac5b6f3b9b0bca3a32fb8f85d5a516",
+  "integration_revision": "6310e023fc31caa4b70bf9a5c64a07c062a4c343",
+  "wheel_sha256": "101017b5be5ed7254bf4522726a28883af0f523f7fad47e4ba08df8fb4aff181",
+  "build_recipe": "https://github.com/Hansimov/vflash/releases/download/v0.3.2/Dockerfile.release",
+  "build_recipe_sha256": "6b737e420276857569bf3a8846b2f276048fe5dfa9f62f4b81058c41a9b52e78",
   "runtime_dependencies": {
-    "baseline_inventory": "https://github.com/Hansimov/vflash/blob/v0.3.0/docker/images.json",
-    "change": "Every dependency image layer and runtime environment variable is retained. Only the installed Vflash wheel and source/version labels change.",
+    "baseline_inventory": "https://github.com/Hansimov/vflash/blob/v0.3.1/docker/images.json",
+    "change": "All dependency image layers, environment variables and entrypoints are retained. Only Vflash package/source layers and version labels change.",
     "torch": "2.11.0+cu130",
     "cuda": "13.0",
     "triton": "3.6.0"
   },
   "qualification": {
-    "package": "All 59 installed package files match the reviewed core revision. Both images pass CPU installation, native import, CLI, service-construction and writable-cache checks as UID 10001. Pipeline adapter dependencies and media executables remain valid.",
-    "qkv": "The automatic direct merge is limited to strict SM89 Ref4 v0.1. Its kernel and launch match the target-GPU-tested implementation, including identical compiled SM89 machine instructions. A complete 50-layer, four-step native trajectory with 200 direct merges preserved both final FP32 audio/video tensors bit-for-bit; CPU checks additionally cover the public dispatch and ownership.",
-    "reuse": "The 0.3.0 complete pipeline, media, T2VA and SM86 qualifications remain attached to their unchanged implementations. No additional whole-pipeline GPU execution is claimed for the final 0.3.1 images.",
-    "limits": "The QKV result is numerical and local temporary-memory evidence. It establishes neither a new prompt-to-MP4 latency figure nor broader semantic quality."
+    "package": "All 59 installed package files match the build revision in each image. CPU installation, CLI, native service construction, UID 10001 writable cache/dlopen and pipeline adapter/media imports pass without GPU access.",
+    "wide_index": "The installed fused module is byte-identical to the GPU-tested fix. Fifteen small/wide operator checks pass bit-for-bit, with safe chunks of the original arithmetic as the wide oracle. On one RTX 4090 48 GB, saved 243-frame conditioning completes eight Ref evaluations, finite FP32 audio/video latents, 240-frame 1344x768 media with stereo 32 kHz audio, and cleanup. This is not a full-trajectory bitwise comparison.",
+    "dual_sm86_t2": "The new fixed Base4 v1.0 native profile uses two RTX 3080 20 GB GPUs, sequence-head and block streaming. Its compiler passes 52 same-architecture timestep/modulation comparisons. The installed native session completes application-owned conditioning/core/media requests at 928x512 for 5 seconds and 640x352 for 10 seconds, both 24 fps, including 14 finite conditions, FP32 audio/video outputs and close.",
+    "reuse": "Existing five-second H3Pipeline qualifications remain attached to their original workloads. The new dual-SM86 T2 H3Pipeline wrapper was not rerun on GPU; long-duration checks use application-owned stages and saved conditioning where stated.",
+    "limits": "No new speedup, clean timing or broad semantic/audio quality claim. Dual-SM86 T2 measurements included thermal throttling. H3Pipeline remains five seconds at 24 fps. No single-SM86 T2, tensor-strategy T2, T2 Turbo8, SM86 reference video or arbitrary long/high-resolution qualification."
   },
   "images": {
     "pipeline": {
-      "name": "hansimov/vflash:0.3.1-pipeline",
-      "digest": "sha256:57203c20412872f54f442c3277db3e1a4c779fa2904e819097a355a540ba2780",
-      "dependency_image": "hansimov/vflash@sha256:82fa37cc291af8073fc8806d3a6cffe80dcc7ed8d279cee61370b54c5613f7fc",
-      "interface": "complete MP4 pipeline: SM89 T2VA; SM89 Ref4 with 1-3 images or one 2-5 second visual-only video; dual-SM86 Ref4 images"
+      "name": "hansimov/vflash:0.3.2-pipeline",
+      "digest": "sha256:cffde842dd49a1d847ad8d8e633feacb2825d295a4327a93caaac622a785b9c8",
+      "dependency_image": "hansimov/vflash@sha256:57203c20412872f54f442c3277db3e1a4c779fa2904e819097a355a540ba2780",
+      "interface": "five-second complete MP4 pipeline: SM89 T2VA; SM89 Ref4 images or one short visual-only video; dual-SM86 Ref4 images. New dual-SM86 T2 wrapper lacks a standalone GPU rerun."
     },
     "native": {
-      "name": "hansimov/vflash:0.3.1",
-      "digest": "sha256:50fbce1efb87acf127868db618041e456302d9a61c78ff2e8dbf25fe42133505",
-      "dependency_image": "hansimov/vflash@sha256:ab8cc6a03f75642a04c3d2ca01fd0c1eb5278d20a4120773ae29fa0265d41662",
-      "interface": "compiled conditioning bundles to video/audio latents; single-SM89 Ref4 supports typed video conditioning"
+      "name": "hansimov/vflash:0.3.2",
+      "digest": "sha256:65e4c5611f047a01dfe3caeb3ff9248ee6ae777f48e939dcc64b5f93a9819357",
+      "dependency_image": "hansimov/vflash@sha256:50fbce1efb87acf127868db618041e456302d9a61c78ff2e8dbf25fe42133505",
+      "interface": "compiled conditioning bundles to audio/video latents, including fixed dual-SM86 T2 Turbo4 via sequence-head"
     }
   }
 }

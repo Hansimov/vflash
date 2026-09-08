@@ -1,6 +1,6 @@
 # Complete model profiles
 
-A prepared pipeline uses one fixed model, adapter and scheduler. Vflash 0.3.1 supports these complete pipelines:
+A prepared pipeline uses one fixed model, adapter and scheduler. Vflash 0.3.2 supports these complete pipelines:
 
 | Profile | Hardware | Input | Transformer | Adapter | Video/audio shifts |
 | --- | --- | --- | --- | --- | --- |
@@ -36,7 +36,7 @@ The six fields in `ref4-sm86-assets.json` use the new SM86 artifact, schedule an
 
 ## Prepare T2VA
 
-The next release's `t2va-turbo4-exact-sm86` profile uses the same Base4 v1.0 source
+The released `t2va-turbo4-exact-sm86` profile uses the same Base4 v1.0 source
 files with two 3080s and `sequence-head`. SM86 compilation and the installed native
 session have completed application-owned encoding/core/media requests at five seconds
 928 × 512 and ten seconds 640 × 352, both 24 fps. This is the native integration boundary;
@@ -44,6 +44,20 @@ the standalone `H3Pipeline` wrapper has not been rerun on the new profile and st
 a five-second temporal contract. See [the evidence limits](./releases#v0-3-2).
 It requires independent SM86 receipts and compiled tables; changing an SM89 or Ref
 artifact label is invalid. Single-card, `tensor`, and eight-step T2VA are excluded.
+
+For the new native SM86 profile, use `t2va-turbo4-exact-sm86` in the compiler preparation below and write separate SM86 outputs. After preparing compatible conditioning, run:
+
+```bash
+vflash denoise t2va-turbo4-exact-sm86 \
+  --artifact models/base4-sm86-native/artifact \
+  --schedule-overlay models/base4-sm86-native/schedule \
+  --auxiliary-tensor models/base4-sm86-native/auxiliary.safetensors \
+  --bundle inputs/t2-conditioning \
+  --gpu 0 --peer-gpu 1 --strategy sequence-head \
+  --output-latents output/latents.safetensors
+```
+
+The application supplies the matching conditioning bundle and decodes these latents; this command does not write an MP4. The SM89 example below retains the complete wrapper interface.
 
 Follow the [official-weight download recipe](../guide/compile-weights), selecting `t2va-turbo4-exact-sm89`. Then prepare the Base checkpoint and its exact pinned adapter:
 
@@ -71,6 +85,6 @@ The Base adapter filename includes `fl2v`; this release qualifies it for T2VA, n
 
 ## Resource lifetime
 
-Prepare and hash files once in their final location. Startup checks the resulting local receipt without rereading all model payloads. In 0.3.1, `H3Pipeline.prepare()` explicitly preloads the stages; otherwise the first request loads them after CPU input validation. Models remain owned for reuse. Stage placement follows the selected profile above. Preloading does not run conditioning or prepare every input shape. Report asset preparation, model loading, first request and repeated requests separately. Cancelling an active request retires the pipeline; create a new instance before further work.
+Prepare and hash files once in their final location. Startup checks the resulting local receipt without rereading all model payloads. In 0.3.2, `H3Pipeline.prepare()` explicitly preloads the stages; otherwise the first request loads them after CPU input validation. Models remain owned for reuse. Stage placement follows the selected profile above. Preloading does not run conditioning or prepare every input shape. Report asset preparation, model loading, first request and repeated requests separately. Cancelling an active request retires the pipeline; create a new instance before further work.
 
 The [reference-video input](../guide/complete-pipeline#reference-video) uses the same single-SM89 Ref4 assets. It passed a complete image/video/image sequence without model reload. SM86 and Turbo8 video references remain outside the supported boundary.

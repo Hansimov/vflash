@@ -4,14 +4,16 @@ Native **MiniMax H3 inference** for RTX 3080 20 GB and RTX 4090 48 GB. Vflash us
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
-**0.3.1.** Generate five-second MP4s from text, one to three images, or [a short reference video](https://hansimov.github.io/vflash/guide/complete-pipeline#reference-video). One RTX 4090 48 GB supports all three inputs; two RTX 3080 20 GB GPUs support image references. Use the [Python or container pipeline](https://hansimov.github.io/vflash/guide/complete-pipeline), with [assets compiled from official weights](https://hansimov.github.io/vflash/guide/compile-weights). The native Python, CLI and HTTP interfaces accept conditioning bundles and return audio/video latents.
+**0.3.2.** Generate five-second MP4s from text, one to three images, or [a short reference video](https://hansimov.github.io/vflash/guide/complete-pipeline#reference-video). One RTX 4090 48 GB supports all three inputs; two RTX 3080 20 GB GPUs support image references. Use the [Python or container pipeline](https://hansimov.github.io/vflash/guide/complete-pipeline), with [assets compiled from official weights](https://hansimov.github.io/vflash/guide/compile-weights). The native Python, CLI and HTTP interfaces accept conditioning bundles and return audio/video latents.
+
+This release fixes integer-offset overflow in large fused tensors and adds native T2VA Turbo4 on two 3080s. Application-owned stages completed five- and ten-second T2 requests; the standalone `H3Pipeline` remains five seconds and has not been rerun on the new dual-SM86 T2 profile. See [the qualification boundary](https://hansimov.github.io/vflash/reference/releases#v0-3-2).
 
 ## Check your setup
 
 Python 3.11 or newer is required. The base install does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.3.1 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.3.2 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
@@ -26,9 +28,9 @@ vflash plan ref2va-turbo4-exact-sm89 --gpu 0
 | --- | --- | --- |
 | One RTX 4090 48 GB | Ref2VA Turbo4 / Turbo8; T2VA Turbo4 | Resident by default; optional block streaming |
 | One RTX 3080 20 GB | Ref2VA Turbo4 | Streamed from host RAM |
-| Two RTX 3080 20 GB GPUs | Ref2VA Turbo4 | Shared host weights; cooperative execution |
+| Two RTX 3080 20 GB GPUs | Ref2VA Turbo4; native T2VA Turbo4 | Shared host weights; cooperative execution |
 
-For a cooperating 3080 pair, select the peer explicitly with `--peer-gpu 1`. The default paired strategy is `sequence-head`; `tensor` is also available. The engine never selects another device automatically.
+For a cooperating 3080 pair, select the peer explicitly with `--peer-gpu 1`. T2VA requires `sequence-head`; native Ref4 also offers `tensor`. The engine never selects another device automatically.
 
 For the native denoiser, allow **64 GiB or more of available system memory per worker** for the tested workload, plus headroom. The complete pipeline also keeps encoders and decoders in host memory and needs a larger budget. Larger inputs need separate capacity checks. See [hardware, adapters and quality limits](https://hansimov.github.io/vflash/guide/profiles).
 

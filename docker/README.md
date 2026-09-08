@@ -6,7 +6,7 @@ Use the [pipeline image](https://hansimov.github.io/vflash/guide/docker#pipeline
 
 The service accepts compiled conditioning bundles and returns video and audio latents (tensors ready for decoding). It uses one GPU or a cooperating pair and reuses a loaded model across serial requests.
 
-You need Linux AMD64, Docker Compose v2, NVIDIA Container Toolkit, a CUDA 13.0-compatible driver, a supported GPU, and matching compiled runtime assets. The image does not contain model weights and serves the bundle-to-latent API. The separate [weights compiler](../docs/guide/compile-weights.md) prepares Ref4 assets for SM86/SM89 and Base4 assets for SM89; [complete MP4 generation](../docs/guide/complete-pipeline.md) uses the pipeline image or Python extra.
+You need Linux AMD64, Docker Compose v2, NVIDIA Container Toolkit, a CUDA 13.0-compatible driver, a supported GPU, and matching compiled runtime assets. The image does not contain model weights and serves the bundle-to-latent API. The separate [weights compiler](../docs/guide/compile-weights.md) prepares Ref4 assets for SM86/SM89 and Base4 assets for SM86/SM89; [complete MP4 generation](../docs/guide/complete-pipeline.md) uses the pipeline image or Python extra.
 
 ## Start the released image
 
@@ -16,12 +16,13 @@ From the repository root:
 cp docker/.env.example docker/.env
 ```
 
-Edit `docker/.env` with your absolute asset paths and selected GPU. Use `VFLASH_IMAGE=hansimov/vflash:0.3.1` for the published image. Choose one of:
+Edit `docker/.env` with your absolute asset paths and selected GPU. Use `VFLASH_IMAGE=hansimov/vflash:0.3.2` for the published image. Choose one of:
 
 | GPU | `VFLASH_PROFILE_ID` |
 | --- | --- |
 | RTX 4090 48 GB | `ref2va-turbo4-exact-sm89`, `ref2va-turbo8-exact-sm89` or `t2va-turbo4-exact-sm89` |
 | RTX 3080 20 GB | `ref2va-turbo4-exact-sm86` |
+| Two RTX 3080 20 GB GPUs | `t2va-turbo4-exact-sm86` with `sequence-head` |
 
 Use resources compiled for SM86 on the 3080. For the tested workload, we recommend **at least 64 GiB of available host RAM per worker**, plus headroom for other processes. Check capacity separately for larger inputs.
 

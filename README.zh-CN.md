@@ -4,14 +4,16 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
-**0.3.1 正式版。** 使用纯文字、一至三张图片，或[一段参考视频](https://hansimov.github.io/vflash/zh/guide/complete-pipeline#reference-video)生成五秒 MP4。单张 RTX 4090 48 GB 支持这三种输入；双张 RTX 3080 20 GB 支持参考图生成。通过 [Python 或容器完整链路](https://hansimov.github.io/vflash/zh/guide/complete-pipeline)接入，运行资产可[从官方权重编译](https://hansimov.github.io/vflash/zh/guide/compile-weights)。原生 Python、CLI 和 HTTP 接口接收条件包并输出音视频 latent。
+**0.3.2 正式版。** 使用纯文字、一至三张图片，或[一段参考视频](https://hansimov.github.io/vflash/zh/guide/complete-pipeline#reference-video)生成五秒 MP4。单张 RTX 4090 48 GB 支持这三种输入；双张 RTX 3080 20 GB 支持参考图生成。通过 [Python 或容器完整链路](https://hansimov.github.io/vflash/zh/guide/complete-pipeline)接入，运行资产可[从官方权重编译](https://hansimov.github.io/vflash/zh/guide/compile-weights)。原生 Python、CLI 和 HTTP 接口接收条件包并输出音视频 latent。
+
+本版修复大型融合张量的整数索引溢出，并新增双 3080 原生 T2VA Turbo4。应用持有的阶段已完成五秒与十秒文生请求；独立 `H3Pipeline` 仍为五秒，新双 SM86 T2 配置尚未重跑这一包装的 GPU 链路。详见[验证边界](https://hansimov.github.io/vflash/zh/reference/releases#v0-3-2)。
 
 ## 检查运行环境
 
 需要 Python 3.11 或更新版本。基础安装不会下载模型权重或 PyTorch。
 
 ```bash
-git clone --branch v0.3.1 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.3.2 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
@@ -26,9 +28,9 @@ vflash plan ref2va-turbo4-exact-sm89 --gpu 0
 | --- | --- | --- |
 | 单 RTX 4090 48 GB | Ref2VA Turbo4 / Turbo8；T2VA Turbo4 | 默认常驻显存，也可选择分块加载 |
 | 单 RTX 3080 20 GB | Ref2VA Turbo4 | 从系统内存分块加载 |
-| 双 RTX 3080 20 GB | Ref2VA Turbo4 | 共享主机权重，两卡协作执行 |
+| 双 RTX 3080 20 GB | Ref2VA Turbo4；原生 T2VA Turbo4 | 共享主机权重，两卡协作执行 |
 
-使用双 3080 时，通过 `--peer-gpu 1` 显式选择第二张卡。默认并行策略为 `sequence-head`，也可选择 `tensor`。引擎不会自动占用其他显卡。
+使用双 3080 时，通过 `--peer-gpu 1` 显式选择第二张卡。T2VA 必须使用 `sequence-head`；原生 Ref4 也可选择 `tensor`。引擎不会自动占用其他显卡。
 
 对于原生去噪器的已测负载，建议**每个 worker 预留至少 64 GiB 可用系统内存**，并保留额外余量。完整链路还需在主机上保存编码器和解码器，需要更大的内存预算。更大输入需要重新检查容量，详情见[硬件、LoRA 与质量限制](https://hansimov.github.io/vflash/zh/guide/profiles)。
 

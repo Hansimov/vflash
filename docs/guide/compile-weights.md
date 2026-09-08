@@ -1,6 +1,6 @@
 # Compile official weights
 
-The compiler reads fixed official H3 weights and the matching LoRA for Ref4 v0.1 on SM86/SM89 or T2VA Base4 v1.0 on SM89. It does not need a captured request, reference image or assets from another project. The original SM89 profiles passed exact checks of all 50 blocks, schedule and auxiliary tensors against fixed runtime controls. SM86 additionally passed its own official timestep and 50-block modulation arithmetic checks before complete generation.
+The compiler reads fixed official H3 weights and the matching LoRA for Ref4 v0.1 on SM86/SM89 or T2VA Base4 v1.0 on SM86/SM89. It does not need a captured request, reference image or assets from another project. The original SM89 profiles passed exact checks of all 50 blocks, schedule and auxiliary tensors against fixed runtime controls. SM86 additionally passed its own official timestep and 50-block modulation arithmetic checks before complete generation.
 
 The Ref4 bootstrap used freshly compiled assets with the fixed official encoders and VAEs to generate a complete 928 × 512, five-second, 24 fps MP4, then cancel a second request after one denoising step. All 14 conditioning tensors and both final latents matched the qualified control exactly; all 120 decoded video frames also matched. T2VA passed separate compilation, complete-container and cancellation checks in [0.2.0](../reference/releases#v0-2-0). These close the official-weights-to-video installation path for the measured workloads, not a broad quality or hardware qualification.
 
