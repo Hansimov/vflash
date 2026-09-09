@@ -48,6 +48,10 @@ Turbo4 使用 `minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors`，Turbo8 使�
 
 T2VA 配置使用独立的 Base4 v1.0 文件及上表对应修订。SHA-256 为 `1bdabc2e9fce20b1db563b96bcf6e46adcad4c1964f423676436bf266cc7416c`，alpha 128 / rank 128。不能与 Ref4 或更新的 Base4 版本互换。
 
+## 图片条件包读取上限 {#image-bundle-limits}
+
+底层 schema 1 读取接口接受一到九张有序图片身份，保留图片索引、唯一来源摘要和条件张量。这个模型级序列化上限与完整流水线资格分开：`H3Pipeline` / `VideoRequest` 仍最多接受三张图片。能读取四到九图条件包，并不代表该负载的生成显存、速度或画质已经验证。Schema 2 仍只接受一段视频参考。
+
 ## 视频条件包 {#video-conditioning}
 
 视频 adapter 使用 **schema 2 条件包**，实际输入是 `VideoReference`，编码后的提示词使用 `<Video 1>`。已有图片和 T2VA 条件包保留 schema 1；不会把视频帧改名为多张参考图片。

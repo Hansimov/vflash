@@ -48,6 +48,10 @@ Turbo4 uses `minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors`; Turbo8 uses `m
 
 The T2VA profile uses the separate Base4 v1.0 file at the revision above. Its SHA-256 is `1bdabc2e9fce20b1db563b96bcf6e46adcad4c1964f423676436bf266cc7416c`, with alpha 128 / rank 128. It is not interchangeable with Ref4 or newer Base4 releases.
 
+## Image bundle reader limits {#image-bundle-limits}
+
+The low-level schema 1 reader accepts one to nine ordered image identities, preserving their picture indices, unique source hashes and conditioning tensors. This model-level serialization limit is separate from complete-pipeline qualification: `H3Pipeline` / `VideoRequest` continue to accept at most three images. Reading a four-to-nine-image bundle does not establish generation memory, speed or quality for that workload. Schema 2 remains limited to one video reference.
+
 ## Typed video conditioning {#video-conditioning}
 
 The video adapter uses **bundle schema 2**, with a true `VideoReference` and `<Video 1>` in the encoded prompt. Existing image and T2VA bundles keep schema 1. Video frames are not separate picture references.

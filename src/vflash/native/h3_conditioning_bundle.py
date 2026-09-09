@@ -383,10 +383,10 @@ def _validate_request(value: Any, *, task: str, schema_version: int = 1) -> dict
             "references": [_validate_video_reference(references[0])],
         }
     if not isinstance(references, list) or (
-        len(references) != 0 if task == "t2va" else not 1 <= len(references) <= 3
+        len(references) != 0 if task == "t2va" else not 1 <= len(references) <= 9
     ):
         raise H3ConditioningBundleError(
-            "H3 T2VA conditioning requires no references; Ref2VA requires one to three"
+            "H3 T2VA conditioning requires no references; Ref2VA requires one to nine"
         )
     validated_references = []
     seen = set()
