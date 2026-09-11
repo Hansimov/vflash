@@ -25,6 +25,8 @@ from vflash.adapters.video_references import DecodedVideoReference
 from vflash.contracts import ContractError
 from vflash.model_assets import model_profile
 from vflash.native.h3_conditioning_bundle import (
+    H3_FIRST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION,
+    H3_FIRST_FRAME_POLICY,
     H3_VIDEO_REFERENCE_POLICY,
     H3ConditioningBundle,
     H3ConditioningProfile,
@@ -106,7 +108,7 @@ class DiffusersConditioner:
         component = self.profile.transformer_component
         self.pipe = MiniMaxH3ModularPipeline(
             pretrained_model_name_or_path=model,
-            workflow=definition.mode.value,
+            workflow=self.profile.workflow,
             modular_config_dict=local_modular_config(model, transformer_component=component),
         )
         prefix = load_h3_conditioning_transformer(
@@ -117,11 +119,14 @@ class DiffusersConditioner:
             init_empty_weights=init_empty_weights,
         )
         self.transformer = prefix.transformer
-        self.adapter_metadata = apply_h3_conditioning_adapter(
-            self.transformer,
-            self.prepared.assets.adapter_path,
-            profile_id=self.prepared.profile_id,
-        )
+        if self.profile.adapter is None:
+            self.adapter_metadata = {"adapter_execution": "none"}
+        else:
+            self.adapter_metadata = apply_h3_conditioning_adapter(
+                self.transformer,
+                self.prepared.assets.adapter_path,
+                profile_id=self.prepared.profile_id,
+            )
         encoder = Qwen3VLForConditionalGeneration.from_pretrained(
             str(model),
             subfolder="text_encoder",
@@ -279,6 +284,8 @@ class DiffusersConditioner:
                 else MiniMaxH3ImageReference(image=reference.image)
                 for reference in references
             ]
+        elif request.mode == "i2va":
+            options["image"] = references[0].image
         self.pipe(
             prompt=request.prompt,
             height=request.height,
@@ -302,9 +309,13 @@ class DiffusersConditioner:
         if request.mode != self.profile.definition.mode.value:
             raise ContractError("the request mode differs from the conditioner profile")
         is_video = request.reference_video is not None
+        is_first_frame = request.first_frame is not None
         if is_video and self.prepared.profile_id != "ref2va-turbo4-exact-sm89":
             raise ContractError("video references require the single-SM89 Ref4 profile")
-        if len(references) != (1 if is_video else len(request.ordered_references)):
+        expected_references = (
+            1 if is_video or is_first_frame else len(request.ordered_references)
+        )
+        if len(references) != expected_references:
             raise ContractError("decoded reference count differs from the request")
         if any(
             isinstance(reference, DecodedVideoReference) != is_video for reference in references
@@ -342,7 +353,17 @@ class DiffusersConditioner:
                     }
                 ],
             }
-            if is_video:
+            if is_first_frame:
+                first_frame = references[0]
+                request_metadata.update(
+                    first_frame_policy=H3_FIRST_FRAME_POLICY,
+                    first_frame={
+                        "role": "first_frame",
+                        "size_bytes": first_frame.size_bytes,
+                        "sha256": first_frame.sha256,
+                    },
+                )
+            elif is_video:
                 reference_metadata = dict(references[0].metadata)
                 if (video_prefix, audio_prefix) != (
                     reference_metadata["condition_video_rows"],
@@ -401,7 +422,13 @@ class DiffusersConditioner:
                 video_sigmas=self.pipe.scheduler.sigmas,
                 audio_sigmas=self.pipe.audio_scheduler.sigmas,
                 update_rule="training_euler",
-                schema_version=2 if is_video else 1,
+                schema_version=(
+                    H3_FIRST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION
+                    if is_first_frame
+                    else 2
+                    if is_video
+                    else 1
+                ),
             )
         finally:
             capture.discard()

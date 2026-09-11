@@ -161,7 +161,7 @@ class H3NativeConditioningRuntime:
             raise H3NativeConditioningRuntimeError(
                 "the native runtime requires Torch Flash attention"
             )
-        if expected_task not in {None, "ref2va", "t2va"}:
+        if expected_task not in {None, "ref2va", "t2va", "i2va"}:
             raise H3NativeConditioningRuntimeError("unsupported native generation task")
         started = time.monotonic()
         resolved_device = torch.device(device)
@@ -228,6 +228,7 @@ class H3NativeConditioningRuntime:
             ("lightx-turbo4-v1.0", "runtime-residual"),
             ("lightx-turbo8-v1.0", "runtime-residual"),
             ("lightx-ref-turbo4-v0.1", "runtime-residual"),
+            ("minimax-h3-base", "none"),
         }
         expected_source = {
             "model_repository": expected_model_repository,
@@ -235,11 +236,11 @@ class H3NativeConditioningRuntime:
             "adapter_repository": expected_adapter_repository,
             "adapter_revision": expected_adapter_revision,
         }
-        task = artifact.source.get("oracle_profile", "").partition("-adapter-")[0]
+        task = artifact.source.get("oracle_profile", "").partition("-")[0]
         if (
             not artifact.is_complete_block_stack
             or not supported_weights
-            or task not in {"ref2va", "t2va"}
+            or task not in {"ref2va", "t2va", "i2va"}
             or (expected_task is not None and task != expected_task)
             or (
                 task == "t2va"
@@ -403,7 +404,7 @@ class H3NativeConditioningRuntime:
     def _load_request_tensors(self, bundle_directory: Path) -> tuple[Any, dict[str, Any]]:
         torch = self._torch
         bundle = load_h3_conditioning_bundle(bundle_directory)
-        artifact_task = self.artifact.source.get("oracle_profile", "").partition("-adapter-")[0]
+        artifact_task = self.artifact.source.get("oracle_profile", "").partition("-")[0]
         if bundle.profile.task != artifact_task:
             raise H3NativeConditioningRuntimeError(
                 "the conditioning task differs from the loaded Base or Ref model"
@@ -415,6 +416,14 @@ class H3NativeConditioningRuntime:
         ):
             raise H3NativeConditioningRuntimeError(
                 "video references require one SM89 GPU and their qualified Ref4 schedule"
+            )
+        if bundle.schema_version == 3 and (
+            len(self.devices) != 1
+            or self.compute_capability != (8, 9)
+            or self.overlay.schedule.to_mapping() != bundle.schedule.to_mapping()
+        ):
+            raise H3NativeConditioningRuntimeError(
+                "I2VA first-frame bundles require one SM89 GPU and their Base16 schedule"
             )
         validate_conditioning_source(bundle.source, self.artifact.source)
         tensor_path = bundle.directory / "conditioning.safetensors"

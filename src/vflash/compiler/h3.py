@@ -84,7 +84,7 @@ class CompiledAssets:
     auxiliary_tensor: Path
 
 
-def _input_specs() -> tuple[
+def _input_specs(*, include_adapter: bool = True) -> tuple[
     dict[str, tuple[str, tuple[int, ...]]], dict[str, tuple[str, tuple[int, ...]]]
 ]:
     base = dict(H3_RUNTIME_AUXILIARY_SPECS)
@@ -107,8 +107,9 @@ def _input_specs() -> tuple[
             base[prefix + raw] = ("BF16", (size,))
         for raw, rows, columns in _LINEARS.values():
             base[prefix + raw + ".weight"] = ("BF16", (rows, columns))
-            adapter[prefix + raw + ".lora_A.default.weight"] = ("BF16", (128, columns))
-            adapter[prefix + raw + ".lora_B.default.weight"] = ("BF16", (rows, 128))
+            if include_adapter:
+                adapter[prefix + raw + ".lora_A.default.weight"] = ("BF16", (128, columns))
+                adapter[prefix + raw + ".lora_B.default.weight"] = ("BF16", (rows, 128))
     return base, adapter
 
 
@@ -119,7 +120,8 @@ def validate_weight_headers(prepared: PreparedWeights) -> dict[str, int]:
         raise ContractError("the weights receipt changed after preparation")
     checkpoint = IndexedCheckpoint(prepared.transformer_directory)
     headers = {}
-    required_base, required_adapter = _input_specs()
+    profile = model_profile(prepared.profile_id)
+    required_base, required_adapter = _input_specs(include_adapter=profile.adapter is not None)
     for name, (dtype, shape) in required_base.items():
         shard = checkpoint.weight_map.get(name)
         if shard is None:
@@ -131,11 +133,14 @@ def validate_weight_headers(prepared: PreparedWeights) -> dict[str, int]:
         row = headers[shard].get(name, {})
         if row.get("dtype") != dtype or tuple(row.get("shape", ())) != shape:
             raise ContractError(f"official checkpoint tensor shape or dtype differs: {name}")
-    header = inspect_safetensors_header(prepared.adapter_path)
-    for name, (dtype, shape) in required_adapter.items():
-        row = header.get(name, {})
-        if row.get("dtype") != dtype or tuple(row.get("shape", ())) != shape:
-            raise ContractError(f"official adapter tensor shape or dtype differs: {name}")
+    if required_adapter:
+        if prepared.adapter_path is None:
+            raise ContractError("the prepared compiler input is missing its adapter")
+        header = inspect_safetensors_header(prepared.adapter_path)
+        for name, (dtype, shape) in required_adapter.items():
+            row = header.get(name, {})
+            if row.get("dtype") != dtype or tuple(row.get("shape", ())) != shape:
+                raise ContractError(f"official adapter tensor shape or dtype differs: {name}")
     return {
         "base_tensors": len(required_base),
         "adapter_tensors": len(required_adapter),
@@ -177,7 +182,7 @@ def _publish_directory(staging: Path, destination: Path) -> None:
 def _compile_block(
     index: int,
     checkpoint: IndexedCheckpoint,
-    adapter: H3SingleTensorStore,
+    adapter: H3SingleTensorStore | None,
     timing: dict[str, Any],
     device: Any,
     counts: tuple[int, ...],
@@ -212,11 +217,12 @@ def _compile_block(
         )
     for name, (raw, _size) in _NORMS.items():
         output[name] = checkpoint.load(prefix + raw)
-    for name, (raw, _rows, _columns) in _LINEARS.items():
-        for output_suffix, raw_suffix in (("down", "A"), ("up", "B")):
-            output[f"adapter.{name}.{output_suffix}"] = adapter.load(
-                prefix + raw + f".lora_{raw_suffix}.default.weight"
-            )
+    if adapter is not None:
+        for name, (raw, _rows, _columns) in _LINEARS.items():
+            for output_suffix, raw_suffix in (("down", "A"), ("up", "B")):
+                output[f"adapter.{name}.{output_suffix}"] = adapter.load(
+                    prefix + raw + f".lora_{raw_suffix}.default.weight"
+                )
     return output
 
 
@@ -231,7 +237,13 @@ def _write_assets(
     profile = model_profile(prepared.profile_id)
     source = weights_source(prepared.profile_id)
     target = compile_target(prepared.profile_id)
-    family = "ref4" if profile.definition.mode.value == "ref2va" else "base4"
+    family = (
+        "ref4"
+        if profile.definition.mode.value == "ref2va"
+        else "base4"
+        if profile.definition.mode.value == "t2va"
+        else "base16-i2va"
+    )
     artifact_id = (
         f"h3-runtime-{family}-bf16-{profile.architecture}-" + canonical_sha256(source)[:12]
     )
@@ -240,7 +252,11 @@ def _write_assets(
     artifact_directory.mkdir()
     overlay_directory.mkdir()
     checkpoint = IndexedCheckpoint(prepared.transformer_directory)
-    adapter = H3SingleTensorStore(prepared.adapter_path)
+    adapter = (
+        H3SingleTensorStore(prepared.adapter_path)
+        if prepared.adapter_path is not None
+        else None
+    )
     timing = time_embeddings(checkpoint.load, device, profile_id=prepared.profile_id)
     counts = tuple(row.numel() for row in profile_timesteps(prepared.profile_id))
     timestep_rows = max(counts)
@@ -294,8 +310,8 @@ def _write_assets(
         "spec": asdict(SPEC),
         "nfe": profile.definition.nfe,
         "source": source,
-        "weight_profile": profile.adapter.profile_id,
-        "adapter_execution": "runtime-residual",
+        "weight_profile": profile.weight_profile,
+        "adapter_execution": profile.adapter_execution,
         "precision": {
             "attention_weight_bits": 16,
             "attention_activation": "bfloat16",
@@ -329,8 +345,8 @@ def _write_assets(
         "base_artifact": {
             "artifact_id": artifact_id,
             "target_id": target.target_id,
-            "weight_profile": profile.adapter.profile_id,
-            "adapter_execution": "runtime-residual",
+            "weight_profile": profile.weight_profile,
+            "adapter_execution": profile.adapter_execution,
         },
         "schedule": model_schedule(prepared.profile_id).to_mapping(),
         "source": {

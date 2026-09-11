@@ -166,9 +166,9 @@ def _validate_source(
             raise H3RuntimeArtifactError(
                 "weights-only artifact source differs from fixed Ref4 or Base4"
             ) from exc
-        if weight_profile != profile.adapter.profile_id:
+        if weight_profile != profile.weight_profile:
             raise H3RuntimeArtifactError(
-                "weights-only artifact source differs from fixed Ref4 or Base4"
+                "weights-only artifact source differs from its fixed complete profile"
             )
         return dict(value)
     base_fields = {
@@ -439,10 +439,21 @@ def load_h3_runtime_artifact(
         or layout != H3_RUNTIME_ARTIFACT_LAYOUT
         or not isinstance(nfe, int)
         or isinstance(nfe, bool)
-        or nfe not in {4, 8}
+        or nfe not in {4, 8, 16}
         or weight_profile
-        not in {"lightx-turbo8-v1.0", "lightx-ref-turbo4-v0.1", "lightx-turbo4-v1.0"}
-        or adapter_execution != "runtime-residual"
+        not in {
+            "lightx-turbo8-v1.0",
+            "lightx-ref-turbo4-v0.1",
+            "lightx-turbo4-v1.0",
+            "minimax-h3-base",
+        }
+        or (weight_profile, adapter_execution)
+        not in {
+            ("lightx-turbo8-v1.0", "runtime-residual"),
+            ("lightx-ref-turbo4-v0.1", "runtime-residual"),
+            ("lightx-turbo4-v1.0", "runtime-residual"),
+            ("minimax-h3-base", "none"),
+        }
     ):
         raise H3RuntimeArtifactError("H3 RuntimeArtifact top-level contract is invalid")
     target_value = value.get("target")

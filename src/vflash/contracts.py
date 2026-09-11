@@ -15,6 +15,7 @@ class ContractError(ValueError):
 class GenerationMode(StrEnum):
     REF2VA = "ref2va"
     T2VA = "t2va"
+    I2VA = "i2va"
 
 
 class Availability(StrEnum):
@@ -92,8 +93,8 @@ class Profile:
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> Profile:
         nfe = _required_int(value, "nfe")
-        if nfe not in {4, 8}:
-            raise ContractError("released Ref2VA profiles use 4 or 8 evaluations")
+        if nfe not in {4, 8, 16}:
+            raise ContractError("released H3 profiles use 4, 8, or 16 evaluations")
         adapter = value.get("adapter")
         adapter_revision = value.get("adapter_revision")
         if adapter is not None and (not isinstance(adapter, str) or not adapter):

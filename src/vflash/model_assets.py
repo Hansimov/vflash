@@ -53,6 +53,7 @@ COMPLETE_MODEL_PROFILES = (
     "t2va-turbo4-exact-sm89",
     "ref2va-turbo4-exact-sm86",
     "t2va-turbo4-exact-sm86",
+    "i2va-base16-bf16-sm89",
 )
 
 
@@ -62,11 +63,24 @@ class H3ModelProfile:
 
     definition: Profile
     hardware: HardwareTarget
-    adapter: H3DistilledLoraContract
+    adapter: H3DistilledLoraContract | None
 
     @property
     def transformer_component(self) -> str:
         return "transformer_ref" if self.definition.mode.value == "ref2va" else "transformer"
+
+    @property
+    def workflow(self) -> str:
+        """The official Diffusers workflow implementing this public request mode."""
+        return "fl2va" if self.definition.mode.value == "i2va" else self.definition.mode.value
+
+    @property
+    def weight_profile(self) -> str:
+        return self.adapter.profile_id if self.adapter is not None else "minimax-h3-base"
+
+    @property
+    def adapter_execution(self) -> str:
+        return "runtime-residual" if self.adapter is not None else "none"
 
     @property
     def architecture(self) -> str:
@@ -74,8 +88,13 @@ class H3ModelProfile:
 
     @property
     def recipe(self) -> str:
-        family = "ref4" if self.definition.mode.value == "ref2va" else "base4"
-        return f"{family}-bf16-runtime-residual-{self.architecture}-v1"
+        if self.definition.mode.value == "ref2va":
+            family = "ref4"
+        elif self.definition.mode.value == "t2va":
+            family = "base4"
+        else:
+            family = "base16-i2va"
+        return f"{family}-bf16-{self.adapter_execution}-{self.architecture}-v1"
 
 
 def model_profile(profile_id: str = DEFAULT_MODEL_PROFILE) -> H3ModelProfile:
@@ -83,16 +102,30 @@ def model_profile(profile_id: str = DEFAULT_MODEL_PROFILE) -> H3ModelProfile:
         raise ContractError("unsupported complete-pipeline model profile")
     catalog = ProfileCatalog.bundled()
     definition = catalog.profile(profile_id)
-    adapter_id = (
-        "lightx-ref-turbo4-v0.1" if definition.mode.value == "ref2va" else "lightx-turbo4-v1.0"
-    )
-    adapter = h3_distilled_lora_contract_for_profile(adapter_id, workflow=definition.mode.value)
-    if (definition.adapter, definition.adapter_revision, definition.nfe) != (
-        adapter.repository,
-        adapter.revision,
-        adapter.nfe,
-    ) or len(definition.target_ids) != 1:
-        raise ContractError("the complete profile differs from its pinned adapter contract")
+    adapter = None
+    if definition.adapter is not None:
+        adapter_id = (
+            "lightx-ref-turbo4-v0.1"
+            if definition.mode.value == "ref2va"
+            else "lightx-turbo4-v1.0"
+        )
+        adapter = h3_distilled_lora_contract_for_profile(
+            adapter_id, workflow=definition.mode.value
+        )
+        if (definition.adapter, definition.adapter_revision, definition.nfe) != (
+            adapter.repository,
+            adapter.revision,
+            adapter.nfe,
+        ):
+            raise ContractError("the complete profile differs from its pinned adapter contract")
+    elif (
+        definition.mode.value != "i2va"
+        or definition.nfe != 16
+        or definition.precision != "bf16-no-adapter"
+    ):
+        raise ContractError("the complete Base profile differs from its pinned contract")
+    if len(definition.target_ids) != 1:
+        raise ContractError("the complete profile must bind exactly one hardware target")
     return H3ModelProfile(definition, catalog.target(definition.target_ids[0]), adapter)
 
 
@@ -114,7 +147,9 @@ def _base_inventory(profile: H3ModelProfile) -> dict[str, Any]:
 
 def transformer_identity(profile_id: str = DEFAULT_MODEL_PROFILE) -> dict[str, str]:
     profile = model_profile(profile_id)
-    identity = {**_base_inventory(profile), "adapter_sha256": profile.adapter.sha256}
+    identity = dict(_base_inventory(profile))
+    if profile.adapter is not None:
+        identity["adapter_sha256"] = profile.adapter.sha256
     return {
         "model_repository": "MiniMaxAI/MiniMax-H3",
         "model_revision": MODEL_REVISION,
@@ -122,7 +157,9 @@ def transformer_identity(profile_id: str = DEFAULT_MODEL_PROFILE) -> dict[str, s
         "oracle": "diffusers",
         "oracle_revision": DIFFUSERS_REVISION,
         "oracle_profile": (
-            f"{profile.definition.mode.value}-adapter-bf16-torch-sdpa-{profile.architecture}"
+            f"{profile.definition.mode.value}-"
+            f"{'adapter' if profile.adapter is not None else 'base'}-bf16-torch-sdpa-"
+            f"{profile.architecture}"
         ),
     }
 
@@ -130,19 +167,22 @@ def transformer_identity(profile_id: str = DEFAULT_MODEL_PROFILE) -> dict[str, s
 def weights_source(profile_id: str = DEFAULT_MODEL_PROFILE) -> dict[str, str]:
     """Request-independent provenance for one fixed compiler contract."""
     profile = model_profile(profile_id)
-    contract = profile.adapter
-    return {
+    source = {
         **transformer_identity(profile_id),
         "source_kind": "official-weights-v1",
         "compile_recipe": profile.recipe,
         "base_transformer_sha256": canonical_sha256(_base_inventory(profile)),
-        "adapter_repository": contract.repository,
-        "adapter_revision": contract.revision,
-        "adapter_sha256": contract.sha256,
-        "adapter_rank": str(contract.rank),
-        "adapter_alpha": format(contract.alpha, "g"),
-        "adapter_strength": format(contract.strength, "g"),
     }
+    if profile.adapter is not None:
+        source.update(
+            adapter_repository=profile.adapter.repository,
+            adapter_revision=profile.adapter.revision,
+            adapter_sha256=profile.adapter.sha256,
+            adapter_rank=str(profile.adapter.rank),
+            adapter_alpha=format(profile.adapter.alpha, "g"),
+            adapter_strength=format(profile.adapter.strength, "g"),
+        )
+    return source
 
 
 def weights_source_profile(source: Any) -> H3ModelProfile:
@@ -150,7 +190,7 @@ def weights_source_profile(source: Any) -> H3ModelProfile:
     for profile_id in COMPLETE_MODEL_PROFILES:
         if source == weights_source(profile_id):
             return model_profile(profile_id)
-    raise ContractError("weights-only source differs from the fixed Ref4 or Base4 contract")
+    raise ContractError("weights-only source differs from a fixed complete-pipeline contract")
 
 
 def ref4_transformer_identity() -> dict[str, str]:

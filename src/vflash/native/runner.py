@@ -18,6 +18,7 @@ WEIGHT_PROFILES = {
     "ref2va-turbo4-exact-sm86": "lightx-ref-turbo4-v0.1",
     "ref2va-turbo4-exact-sm89": "lightx-ref-turbo4-v0.1",
     "ref2va-turbo8-exact-sm89": "lightx-turbo8-v1.0",
+    "i2va-base16-bf16-sm89": "minimax-h3-base",
 }
 
 
@@ -44,17 +45,18 @@ class NativeEngineSession:
         ):
             raise ContractError("unsupported native weight residency")
         if (
-            profile.mode not in {GenerationMode.REF2VA, GenerationMode.T2VA}
+            profile.mode
+            not in {GenerationMode.REF2VA, GenerationMode.T2VA, GenerationMode.I2VA}
             or profile.id not in WEIGHT_PROFILES
-            or profile.nfe not in {4, 8}
+            or profile.nfe not in {4, 8, 16}
             or not profile.attention.exact
             or plan.target.id not in profile.target_ids
             or (plan.target.compute_capability, plan.target.weight_residency)
             not in {("8.6", "block-ring"), ("8.9", "resident")}
         ):
             raise ContractError(
-                "the public denoiser supports exact Ref2VA/T2VA Turbo4 on SM86 "
-                "and Ref2VA Turbo4/Turbo8 or T2VA Turbo4 on SM89"
+                "the public denoiser supports exact Ref2VA/T2VA Turbo4 on SM86, "
+                "and Ref2VA Turbo4/Turbo8, T2VA Turbo4, or I2VA Base16 on SM89"
             )
         if "torch" in sys.modules and sys.modules["torch"].cuda.is_initialized():
             raise ContractError("select the Vflash GPU before initializing CUDA")

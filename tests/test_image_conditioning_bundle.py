@@ -7,6 +7,8 @@ from copy import deepcopy
 import pytest
 
 from vflash.native.h3_conditioning_bundle import (
+    H3_FIRST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION,
+    H3_FIRST_FRAME_POLICY,
     H3ConditioningBundleError,
     H3ConditioningProfile,
     h3_target_video_tokens,
@@ -16,12 +18,12 @@ from vflash.native.h3_conditioning_bundle import (
 from vflash.native.h3_native_scheduler import H3NativeSchedule
 
 
-def write_bundle(directory, count):
+def write_bundle(directory, count, *, task="ref2va", frames=5, nfe=4):
     torch = pytest.importorskip("torch")
     save_file = pytest.importorskip("safetensors.torch").save_file
-    profile = H3ConditioningProfile("ref2va", 32, 32, 5, 4, 12, 3, count, count, 0)
-    video = h3_target_video_tokens(width=32, height=32, frames=5) + count
-    audio, text = 1, 2
+    profile = H3ConditioningProfile(task, 32, 32, frames, nfe, 12, 3, count, count, 0)
+    video = h3_target_video_tokens(width=32, height=32, frames=frames) + count
+    audio, text = (414 if task == "i2va" else 1), 2
     sequence = video + audio + text
     values = {
         "initial_video_latents": torch.zeros(1, video, 96),
@@ -34,13 +36,13 @@ def write_bundle(directory, count):
         "video_indices": torch.arange(video),
         "audio_indices": torch.arange(video, video + audio),
         "text_indices": torch.arange(video + audio, sequence),
-        "first_timesteps": torch.tensor([0.5, 0.995]),
+        "first_timesteps": torch.tensor([0.5, 0.999]),
         "first_timestep_indices": torch.tensor([1] * count + [0] * (sequence - count)),
         "first_time_embeddings": torch.zeros(2, 5376),
         "first_packed_input": torch.zeros(1, sequence, 5376, dtype=torch.bfloat16),
     }
     save_file(values, directory / "conditioning.safetensors")
-    schedule = H3NativeSchedule.shifted_linear(4)
+    schedule = H3NativeSchedule.shifted_linear(nfe)
     (directory / "scheduler.json").write_text(json.dumps(schedule.to_mapping()))
     prompt = "A scene with ordered reference images."
     request = {
@@ -72,6 +74,44 @@ def write_bundle(directory, count):
         "oracle_runtime_sha256": "c" * 64,
     }
     return profile, request, source
+
+
+def test_native_first_frame_bundle_is_distinct_from_ref2va(tmp_path):
+    profile, _request, source = write_bundle(
+        tmp_path,
+        1,
+        task="i2va",
+        frames=124,
+        nfe=16,
+    )
+    prompt = "Motion begins from the supplied frame."
+    request = {
+        "source_case_id": "synthetic-first-frame-bundle",
+        "prompt": prompt,
+        "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
+        "seed": 97,
+        "first_frame_policy": H3_FIRST_FRAME_POLICY,
+        "delivery_profiles": [
+            {"temporal_profile": "native-24fps-5s", "frames": 120, "fps": 24}
+        ],
+        "first_frame": {
+            "role": "first_frame",
+            "size_bytes": 100,
+            "sha256": "d" * 64,
+        },
+    }
+    sealed = seal_h3_conditioning_bundle(
+        tmp_path,
+        bundle_id="h3-conditioning-first-frame",
+        profile=profile,
+        request=request,
+        source=source,
+        schema_version=H3_FIRST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION,
+    )
+    assert sealed.schema_version == 3
+    assert sealed.profile.task == "i2va" and sealed.schedule.nfe == 16
+    assert sealed.request["first_frame"]["role"] == "first_frame"
+    assert "references" not in sealed.request
 
 
 @pytest.mark.parametrize("count", [1, 3, 4, 9])

@@ -22,7 +22,7 @@ from vflash.model_assets import (
 
 
 def _required_files(
-    transformer: Path, adapter: Path, profile_id: str = DEFAULT_MODEL_PROFILE
+    transformer: Path, adapter: Path | None, profile_id: str = DEFAULT_MODEL_PROFILE
 ) -> dict[str, tuple[Path, dict[str, Any]]]:
     profile = model_profile(profile_id)
     prefix = profile.transformer_component + "/"
@@ -32,14 +32,19 @@ def _required_files(
         if name.startswith(prefix)
     }
     contract = profile.adapter
-    rows["adapter"] = (adapter, {"size": contract.size_bytes, "sha256": contract.sha256})
+    if contract is not None:
+        if adapter is None:
+            raise ContractError("this compiler profile requires its pinned adapter")
+        rows["adapter"] = (adapter, {"size": contract.size_bytes, "sha256": contract.sha256})
+    elif adapter is not None:
+        raise ContractError("the Base compiler profile does not accept an adapter")
     return rows
 
 
 @dataclass(frozen=True)
 class PreparedWeights:
     transformer_directory: Path
-    adapter_path: Path
+    adapter_path: Path | None
     receipt: Path
     receipt_sha256: str
     inventory: tuple[dict[str, Any], ...]
@@ -53,7 +58,7 @@ class PreparedWeights:
 
 def prepare_weights(
     transformer_directory: Path,
-    adapter_path: Path,
+    adapter_path: Path | None,
     receipt: Path,
     *,
     profile_id: str = DEFAULT_MODEL_PROFILE,
@@ -63,7 +68,7 @@ def prepare_weights(
     if receipt.exists() or receipt.is_symlink():
         raise ContractError("the weights receipt already exists")
     transformer_directory = transformer_directory.resolve(strict=True)
-    adapter_path = adapter_path.resolve(strict=True)
+    adapter_path = adapter_path.resolve(strict=True) if adapter_path is not None else None
     required = _required_files(transformer_directory, adapter_path, profile_id)
     rows = []
     for index, (role, (path, expected)) in enumerate(sorted(required.items()), 1):
@@ -88,7 +93,7 @@ def prepare_weights(
         "profile_id": profile_id,
         "source": weights_source(profile_id),
         "transformer_directory": str(transformer_directory),
-        "adapter_path": str(adapter_path),
+        "adapter_path": str(adapter_path) if adapter_path is not None else None,
         "files": rows,
     }
     receipt.parent.mkdir(parents=True, exist_ok=True)
@@ -128,10 +133,17 @@ def load_prepared_weights(receipt: Path) -> PreparedWeights:
         or not isinstance(value["files"], list)
     ):
         raise ContractError("raw-weights receipt differs from the fixed compiler contract")
-    for name in ("transformer_directory", "adapter_path"):
-        if not isinstance(value[name], str) or not Path(value[name]).is_absolute():
-            raise ContractError("raw-weights receipt requires absolute local paths")
-    transformer, adapter = Path(value["transformer_directory"]), Path(value["adapter_path"])
+    if not isinstance(value["transformer_directory"], str) or not Path(
+        value["transformer_directory"]
+    ).is_absolute():
+        raise ContractError("raw-weights receipt requires an absolute transformer path")
+    adapter_value = value["adapter_path"]
+    if adapter_value is not None and (
+        not isinstance(adapter_value, str) or not Path(adapter_value).is_absolute()
+    ):
+        raise ContractError("raw-weights receipt adapter path must be absolute or null")
+    transformer = Path(value["transformer_directory"])
+    adapter = Path(adapter_value) if adapter_value is not None else None
     required = _required_files(transformer, adapter, profile_id)
     seen = set()
     for row in value["files"]:

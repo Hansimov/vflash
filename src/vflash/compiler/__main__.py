@@ -21,7 +21,9 @@ def main() -> None:
         "--profile", choices=COMPLETE_MODEL_PROFILES, default=DEFAULT_MODEL_PROFILE
     )
     prepare.add_argument("--transformer", required=True, type=Path)
-    prepare.add_argument("--adapter", required=True, type=Path)
+    prepare.add_argument(
+        "--adapter", type=Path, help="pinned LoRA path; omit for an adapter-free Base profile"
+    )
     prepare.add_argument("--receipt", required=True, type=Path)
     check = commands.add_parser(
         "check", help="check an existing receipt and tensor headers on CPU"

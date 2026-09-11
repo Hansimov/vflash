@@ -24,7 +24,9 @@ from vflash.native.h3_tensor_file import inspect_safetensors_header
 
 H3_CONDITIONING_BUNDLE_SCHEMA_VERSION = 1
 H3_VIDEO_CONDITIONING_BUNDLE_SCHEMA_VERSION = 2
+H3_FIRST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION = 3
 H3_VIDEO_REFERENCE_POLICY = "official-video-cfr24-v1"
+H3_FIRST_FRAME_POLICY = "official-fl2va-first-frame-stretch-v1"
 
 _BUNDLE_ID = re.compile(r"h3-conditioning-[a-z0-9][a-z0-9-]{0,95}")
 _IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,255}")
@@ -78,8 +80,10 @@ class H3ConditioningProfile:
                 "H3 conditioning profile fields do not match schema v1"
             )
         task = value.get("task")
-        if not isinstance(task, str) or task not in {"ref2va", "t2va"}:
-            raise H3ConditioningBundleError("H3 conditioning task must be Ref2VA or T2VA")
+        if not isinstance(task, str) or task not in {"ref2va", "t2va", "i2va"}:
+            raise H3ConditioningBundleError(
+                "H3 conditioning task must be Ref2VA, T2VA, or I2VA"
+            )
         integers = ("width", "height", "frames", "nfe", "reference_token_budget")
         if any(
             not isinstance(value.get(name), int) or isinstance(value.get(name), bool)
@@ -103,9 +107,9 @@ class H3ConditioningProfile:
             )
         if nfe <= 0 or reference_token_budget < 0:
             raise H3ConditioningBundleError("H3 conditioning NFE/token budget is invalid")
-        if task == "ref2va" and reference_token_budget == 0:
+        if task in {"ref2va", "i2va"} and reference_token_budget == 0:
             raise H3ConditioningBundleError(
-                "H3 Ref2VA conditioning requires condition-video rows"
+                "H3 image-conditioned generation requires condition-video rows"
             )
         shifts: list[float] = []
         for name in ("video_flow_shift", "audio_flow_shift"):
@@ -129,6 +133,8 @@ class H3ConditioningProfile:
             raise H3ConditioningBundleError(
                 "H3 T2VA conditioning cannot have reference prefixes"
             )
+        if task == "i2va" and counts[1] != 0:
+            raise H3ConditioningBundleError("H3 I2VA does not accept audio conditioning rows")
         return cls(
             task=str(task),
             width=width,
@@ -301,9 +307,14 @@ def _validate_video_reference(value: Any) -> dict[str, Any]:
 
 
 def _validate_request(value: Any, *, task: str, schema_version: int = 1) -> dict[str, Any]:
-    if type(schema_version) is not int or schema_version not in {1, 2}:
+    if type(schema_version) is not int or schema_version not in {1, 2, 3}:
         raise H3ConditioningBundleError("unsupported conditioning request schema")
-    policy_key = "reference_image_policy" if schema_version == 1 else "reference_video_policy"
+    policy_key = {
+        1: "reference_image_policy",
+        2: "reference_video_policy",
+        3: "first_frame_policy",
+    }[schema_version]
+    input_key = "first_frame" if schema_version == 3 else "references"
     required = {
         "source_case_id",
         "prompt",
@@ -311,7 +322,7 @@ def _validate_request(value: Any, *, task: str, schema_version: int = 1) -> dict
         "seed",
         policy_key,
         "delivery_profiles",
-        "references",
+        input_key,
     }
     if not isinstance(value, dict) or set(value) != required:
         raise H3ConditioningBundleError("H3 conditioning request fields do not match schema v1")
@@ -330,7 +341,13 @@ def _validate_request(value: Any, *, task: str, schema_version: int = 1) -> dict
         or isinstance(seed, bool)
         or seed < 0
         or value.get(policy_key)
-        not in ({"diffusers", "match"} if schema_version == 1 else {H3_VIDEO_REFERENCE_POLICY})
+        not in (
+            {"diffusers", "match"}
+            if schema_version == 1
+            else {H3_VIDEO_REFERENCE_POLICY}
+            if schema_version == 2
+            else {H3_FIRST_FRAME_POLICY}
+        )
     ):
         raise H3ConditioningBundleError("H3 conditioning request identity is invalid")
     deliveries = value.get("delivery_profiles")
@@ -371,6 +388,27 @@ def _validate_request(value: Any, *, task: str, schema_version: int = 1) -> dict
                 "fps": float(fps),
             }
         )
+    if schema_version == 3:
+        first_frame = value.get("first_frame")
+        if (
+            task != "i2va"
+            or not isinstance(first_frame, dict)
+            or set(first_frame) != {"role", "size_bytes", "sha256"}
+            or first_frame.get("role") != "first_frame"
+            or not isinstance(first_frame.get("size_bytes"), int)
+            or isinstance(first_frame.get("size_bytes"), bool)
+            or first_frame["size_bytes"] <= 0
+            or not isinstance(first_frame.get("sha256"), str)
+            or _SHA256.fullmatch(first_frame["sha256"]) is None
+        ):
+            raise H3ConditioningBundleError(
+                "schema v3 requires one explicit first frame for I2VA"
+            )
+        return {
+            **value,
+            "delivery_profiles": validated_deliveries,
+            "first_frame": dict(first_frame),
+        }
     references = value.get("references")
     if schema_version == 2:
         if task != "ref2va" or not isinstance(references, list) or len(references) != 1:
@@ -501,6 +539,26 @@ def _validate_video_profile(profile: H3ConditioningProfile, request: Mapping[str
         )
 
 
+def _validate_first_frame_profile(
+    profile: H3ConditioningProfile, request: Mapping[str, Any]
+) -> None:
+    expected_rows = (profile.width // 32) * (profile.height // 32)
+    if (
+        profile.task != "i2va"
+        or profile.nfe != 16
+        or profile.frames != 124
+        or (profile.video_flow_shift, profile.audio_flow_shift) != (12, 3)
+        or profile.width * profile.height > 928 * 512
+        or profile.num_condition_audio_rows != 0
+        or profile.num_condition_video_rows != expected_rows
+        or request["delivery_profiles"]
+        != [{"temporal_profile": "native-24fps-5s", "frames": 120, "fps": 24.0}]
+    ):
+        raise H3ConditioningBundleError(
+            "first-frame conditioning requires Base16 I2VA at 5s24 within its canvas budget"
+        )
+
+
 def _validate_video_partitions(path: Path, profile: H3ConditioningProfile) -> None:
     import torch
 
@@ -620,6 +678,8 @@ def seal_h3_conditioning_bundle(
     )
     if schema_version == H3_VIDEO_CONDITIONING_BUNDLE_SCHEMA_VERSION:
         _validate_video_profile(profile, request_value)
+    elif schema_version == H3_FIRST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION:
+        _validate_first_frame_profile(profile, request_value)
     source_value = _validate_source(dict(source))
     H3NativeSchedule.from_json(directory / _FILES["scheduler"], expected_nfe=profile.nfe)
     files = _files(directory, profile)
@@ -672,7 +732,7 @@ def load_h3_conditioning_bundle(directory: Path) -> H3ConditioningBundle:
         not isinstance(value, dict)
         or set(value) != expected
         or type(value.get("schema_version")) is not int
-        or value.get("schema_version") not in {1, 2}
+        or value.get("schema_version") not in {1, 2, 3}
         or not isinstance(value.get("bundle_id"), str)
         or _BUNDLE_ID.fullmatch(value["bundle_id"]) is None
         or not isinstance(value.get("created_at"), str)
@@ -687,6 +747,8 @@ def load_h3_conditioning_bundle(directory: Path) -> H3ConditioningBundle:
     )
     if schema_version == 2:
         _validate_video_profile(profile, request)
+    elif schema_version == 3:
+        _validate_first_frame_profile(profile, request)
     source = _validate_source(value.get("source"))
     manifest_files = value.get("files")
     if not isinstance(manifest_files, list) or len(manifest_files) != len(_FILES):
@@ -718,7 +780,10 @@ def load_h3_conditioning_bundle(directory: Path) -> H3ConditioningBundle:
     if seen != set(_FILES):
         raise H3ConditioningBundleError("H3 conditioning file roles are incomplete")
     H3NativeSchedule.from_json(resolved / _FILES["scheduler"], expected_nfe=profile.nfe)
-    if schema_version == H3_VIDEO_CONDITIONING_BUNDLE_SCHEMA_VERSION:
+    if schema_version in {
+        H3_VIDEO_CONDITIONING_BUNDLE_SCHEMA_VERSION,
+        H3_FIRST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION,
+    }:
         _validate_video_partitions(resolved / _FILES["conditioning"], profile)
     return H3ConditioningBundle(
         directory=resolved,

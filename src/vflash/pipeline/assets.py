@@ -21,7 +21,10 @@ from vflash.model_assets import (
 from vflash.model_assets import (
     file_identity as _stamp,
 )
-from vflash.native.h3_conditioning_bundle import H3_VIDEO_REFERENCE_POLICY
+from vflash.native.h3_conditioning_bundle import (
+    H3_FIRST_FRAME_POLICY,
+    H3_VIDEO_REFERENCE_POLICY,
+)
 from vflash.native.h3_runtime_artifact import load_h3_runtime_artifact
 from vflash.native.h3_schedule_overlay import load_h3_schedule_overlay
 from vflash.pipeline.contracts import (
@@ -44,21 +47,27 @@ def conditioning_source(
         raise ContractError("conditioning reference policy differs from the fixed profile")
     configuration = {
         "profile_id": profile_id,
-        "reference_image_policy": "match",
         "reference_policy_revision": 3,
         "text_precision": "bf16",
         "text_execution": "full",
+        "diffusers_workflow": profile.workflow,
         "video_flow_shift": profile.definition.video_flow_shift,
         "audio_flow_shift": profile.definition.audio_flow_shift,
         "scheduler": "training_euler",
         "nfe": profile.definition.nfe,
     }
-    if reference_policy == H3_VIDEO_REFERENCE_POLICY:
+    if profile.definition.mode.value == "i2va":
+        if reference_policy != "match":
+            raise ContractError("I2VA accepts one first frame, not a reference policy")
+        configuration["first_frame_policy"] = H3_FIRST_FRAME_POLICY
+        configuration["reference_policy_revision"] = 1
+    elif reference_policy == H3_VIDEO_REFERENCE_POLICY:
         # Preserve the released image/T2 identity, but never claim a video
         # capture used image-only match preprocessing.
-        del configuration["reference_image_policy"]
         configuration["reference_video_policy"] = reference_policy
         configuration["reference_policy_revision"] = 1
+    else:
+        configuration["reference_image_policy"] = "match"
     return {
         **transformer_identity(profile_id),
         "oracle_config_sha256": canonical_sha256(configuration),
@@ -138,16 +147,19 @@ def _planned_files(
         for name, path in _consumed_official_files(assets, profile_id)
     ]
     contract = profile.adapter
-    planned.append(
-        (
-            "adapter",
-            assets.adapter_path,
-            {
-                "size": contract.size_bytes,
-                "sha256": contract.sha256,
-            },
+    if (contract is None) != (assets.adapter_path is None):
+        raise ContractError("the adapter asset differs from the complete pipeline profile")
+    if contract is not None:
+        planned.append(
+            (
+                "adapter",
+                assets.adapter_path,
+                {
+                    "size": contract.size_bytes,
+                    "sha256": contract.sha256,
+                },
+            )
         )
-    )
     artifact = load_h3_runtime_artifact(assets.artifact, verify_content_hashes=False)
     overlay = load_h3_schedule_overlay(assets.schedule_overlay, artifact=artifact)
     source = conditioning_source(profile_id=profile_id)
@@ -159,13 +171,16 @@ def _planned_files(
         "oracle_revision",
     )
     if (
-        artifact.weight_profile != contract.profile_id
-        or artifact.nfe != 4
-        or artifact.adapter_execution != "runtime-residual"
+        artifact.weight_profile != profile.weight_profile
+        or artifact.nfe != profile.definition.nfe
+        or artifact.adapter_execution != profile.adapter_execution
         or not artifact.is_complete_block_stack
         or profile.architecture != artifact.target.compute_capability
         or any(artifact.source.get(key) != source[key] for key in identity_keys)
-        or artifact.source.get("adapter_revision") != contract.revision
+        or (
+            contract is not None
+            and artifact.source.get("adapter_revision") != contract.revision
+        )
         or artifact.source.get("oracle_profile", "").removesuffix("-sm89").removesuffix("-sm86")
         != source["oracle_profile"].removesuffix("-sm89").removesuffix("-sm86")
     ):
@@ -178,7 +193,7 @@ def _planned_files(
     try:
         validate_declared_schedule(
             overlay.schedule,
-            expected_nfe=4,
+            expected_nfe=profile.definition.nfe,
             expected_scheduler="h3-training-euler",
             expected_video_flow_shift=profile.definition.video_flow_shift,
             expected_audio_flow_shift=profile.definition.audio_flow_shift,
@@ -286,7 +301,7 @@ def load_prepared_pipeline_assets(receipt: Path) -> PreparedPipelineAssets:
     profile_id = value["profile_id"]
     model_profile(profile_id)
     assets = PipelineAssets.from_mapping(value["assets"])
-    if any(not path.is_absolute() for path in vars(assets).values()):
+    if any(path is not None and not path.is_absolute() for path in vars(assets).values()):
         raise ContractError("prepared asset paths must be absolute")
     planned = {
         role: (path.resolve(strict=True), expected)

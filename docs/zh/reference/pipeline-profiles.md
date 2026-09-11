@@ -7,8 +7,31 @@
 | `ref2va-turbo4-exact-sm89` | 单张 RTX 4090 48 GB | 提示词加 1–3 张有序图片，或一段 2–5 秒视频 | `transformer_ref` | Ref Turbo4 v0.1，alpha 8 / rank 128 | 12 / 3 |
 | `ref2va-turbo4-exact-sm86` | 双张 RTX 3080 20 GB，`sequence-head` | 提示词加 1–3 张有序图片 | `transformer_ref` | Ref Turbo4 v0.1，alpha 8 / rank 128 | 12 / 3 |
 | `t2va-turbo4-exact-sm89` | 单张 RTX 4090 48 GB | 纯文字提示词 | `transformer` | Base Turbo4 v1.0，alpha 128 / rank 128 | 6 / 3 |
+| `i2va-base16-bf16-sm89`（预览） | 单张 RTX 4090 48 GB | 提示词加一张明确的首帧 | `transformer` | 无 | 12 / 3 |
 
-所有配置都使用四次计算、BF16 权重和独立的 LoRA 残差，输出五秒、24 fps 视频。默认为 SM89 Ref4。实例运行中不会切换 Base 与 Ref 权重；应用需要两种模式时，应分别准备资产和常驻实例。原生单 SM86 与 Turbo8 接口具有不同的[验证范围](../guide/profiles)。
+已发布的 Turbo 配置使用四次计算、BF16 权重和独立的 LoRA 残差；预览 I2VA 配置使用官方 Base Transformer，以 BF16、无 LoRA 执行 16 次计算。所有配置均输出五秒、24 fps 视频。默认仍为 SM89 Ref4。实例运行中不会切换权重或配置；应用需要多种模式时，应分别准备资产和常驻实例。原生单 SM86 与 Turbo8 接口具有不同的[验证范围](../guide/profiles)。
+
+## 准备预览版 Base16 I2VA
+
+使用固定版本的官方 Base Transformer，省略 `--adapter` 来准备和编译权重，再创建通常的六字段完整链路记录。资产 JSON 中的 `adapter_path` 为 `null`，其余字段填写官方模型与解码器目录以及三项编译输出。
+
+```bash
+python -m vflash.compiler prepare \
+  --profile i2va-base16-bf16-sm89 \
+  --transformer models/minimax-h3/transformer \
+  --receipt base16-i2va-weights.json
+python -m vflash.compiler compile \
+  --receipt base16-i2va-weights.json --output models/base16-i2va-native --gpu 0
+vflash prepare-pipeline \
+  --profile i2va-base16-bf16-sm89 \
+  --assets base16-i2va-assets.json --receipt base16-i2va-pipeline.json
+vflash generate \
+  --prepared-assets base16-i2va-pipeline.json --prompt-file prompt.txt \
+  --first-frame first-frame.png --gpu 0 --seed 1234 \
+  --output video.mp4 --trust-local-code
+```
+
+`--first-frame` 表示第零帧锚点，与 Ref2VA 的 `--reference` 输入相互独立；Python 接口为 `VideoRequest(first_frame=Path(...))`。提示词可以将该图标记为 `<Picture 1>`，超出这一张已提供图片的标签会被拒绝。内部调用官方编码器的单帧 FL2VA 条件路径，对外请求类型仍明确为 I2VA。
 
 ## 准备双 3080 生成 {#sm86}
 

@@ -190,6 +190,8 @@ class H3Pipeline:
             reference_started = time.monotonic()
             for path in request.ordered_references:
                 references.append(read_reference(path))
+            if request.first_frame is not None:
+                references.append(read_reference(request.first_frame))
             if request.reference_video is not None:
                 references.append(read_video_reference(request.reference_video))
             reference_loading_seconds = time.monotonic() - reference_started
@@ -277,7 +279,7 @@ class H3Pipeline:
                 "source": dict(bundle.source),
                 "bundle_id": bundle.bundle_id,
             }
-            report("denoising", 0, 4)
+            report("denoising", 0, self.profile.definition.nfe)
             native = self._core.generate(
                 bundle.directory,
                 directory / "latents.safetensors",

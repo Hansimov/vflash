@@ -73,6 +73,19 @@ def test_t2va_requires_an_empty_reference_prefix():
         H3ConditioningProfile.from_mapping({**profile, "task": "ref2va"})
 
 
+def test_i2va_requires_one_video_prefix_and_no_audio_prefix():
+    profile = {
+        **conditioning_profile(),
+        "task": "i2va",
+        "nfe": 16,
+        "reference_token_budget": 464,
+        "num_condition_video_rows": 464,
+    }
+    assert H3ConditioningProfile.from_mapping(profile).task == "i2va"
+    with pytest.raises(H3ConditioningBundleError, match="does not accept audio"):
+        H3ConditioningProfile.from_mapping({**profile, "num_condition_audio_rows": 1})
+
+
 def test_t2va_lora_identity_has_its_own_scale():
     from vflash.native.h3_distilled_lora import (
         H3DistilledLoraError,

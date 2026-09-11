@@ -21,7 +21,7 @@ class PipelineAssets:
     """Local immutable assets; no component path is inferred from environment variables."""
 
     model_directory: Path
-    adapter_path: Path
+    adapter_path: Path | None
     decoder_directory: Path
     artifact: Path
     schedule_overlay: Path
@@ -29,19 +29,34 @@ class PipelineAssets:
 
     def __post_init__(self) -> None:
         for name in self.__dataclass_fields__:
-            if not isinstance(getattr(self, name), Path):
+            value = getattr(self, name)
+            if not isinstance(value, Path) and not (name == "adapter_path" and value is None):
                 raise ContractError(f"{name} must be a pathlib.Path")
 
-    def to_mapping(self) -> dict[str, str]:
-        return {name: str(value.resolve(strict=True)) for name, value in asdict(self).items()}
+    def to_mapping(self) -> dict[str, str | None]:
+        return {
+            name: str(value.resolve(strict=True)) if value is not None else None
+            for name, value in asdict(self).items()
+        }
 
     @classmethod
     def from_mapping(cls, value: Any) -> PipelineAssets:
         if not isinstance(value, dict) or set(value) != set(cls.__dataclass_fields__):
             raise ContractError("pipeline asset fields do not match the supported schema")
-        if any(not isinstance(path, str) or not path for path in value.values()):
-            raise ContractError("pipeline asset paths must be nonempty strings")
-        return cls(**{name: Path(path) for name, path in value.items()})
+        if any(
+            (path is not None and (not isinstance(path, str) or not path))
+            or (path is None and name != "adapter_path")
+            for name, path in value.items()
+        ):
+            raise ContractError(
+                "pipeline asset paths must be nonempty strings or a null adapter"
+            )
+        return cls(
+            **{
+                name: Path(path) if path is not None else None
+                for name, path in value.items()
+            }
+        )
 
     @classmethod
     def from_json(cls, path: Path) -> PipelineAssets:
@@ -57,7 +72,9 @@ class VideoRequest:
     ``<Picture 3>``. ``reference`` preserves the original single-image API;
     use ``references`` for an ordered tuple instead. ``reference_video`` accepts
     one visual-only local clip labeled ``<Video 1>``, without images. No references
-    means T2VA and requires a T2VA pipeline. A session never swaps models.
+    means T2VA and requires a T2VA pipeline. ``first_frame`` is a separate
+    I2VA input and is never interpreted as a Ref2VA content reference. A session
+    never swaps models.
     """
 
     prompt: str
@@ -67,6 +84,7 @@ class VideoRequest:
     seed: int = 0
     references: tuple[Path, ...] = field(default=(), kw_only=True)
     reference_video: Path | None = field(default=None, kw_only=True)
+    first_frame: Path | None = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
         if (
@@ -88,10 +106,16 @@ class VideoRequest:
                 raise ContractError("reference_video must be a local pathlib.Path")
             if self.ordered_references:
                 raise ContractError("provide one reference video or image references, not both")
+        if self.first_frame is not None:
+            if not isinstance(self.first_frame, Path):
+                raise ContractError("first_frame must be a local pathlib.Path")
+            if self.ordered_references or self.reference_video is not None:
+                raise ContractError("provide one first frame or Ref2VA references, not both")
         if len(self.ordered_references) > 3:
             raise ContractError("Ref2VA supports at most three reference images")
+        picture_count = 1 if self.first_frame is not None else len(self.ordered_references)
         if any(
-            index not in {str(value) for value in range(1, len(self.ordered_references) + 1)}
+            index not in {str(value) for value in range(1, picture_count + 1)}
             for index in re.findall(r"<Picture (\d+)>", self.prompt)
         ):
             raise ContractError("a prompt picture label has no corresponding reference image")
@@ -118,8 +142,12 @@ class VideoRequest:
 
     @property
     def mode(self) -> str:
+        if self.first_frame is not None:
+            return "i2va"
         return (
-            "ref2va" if self.ordered_references or self.reference_video is not None else "t2va"
+            "ref2va"
+            if self.ordered_references or self.reference_video is not None
+            else "t2va"
         )
 
     @property

@@ -7,8 +7,31 @@ A prepared pipeline uses one fixed model, adapter and scheduler. Vflash 0.3.2 su
 | `ref2va-turbo4-exact-sm89` | One RTX 4090 48 GB | Prompt and 1–3 ordered images, or one 2–5 second video | `transformer_ref` | Ref Turbo4 v0.1, alpha 8 / rank 128 | 12 / 3 |
 | `ref2va-turbo4-exact-sm86` | Two RTX 3080 20 GB, `sequence-head` | Prompt and 1–3 ordered images | `transformer_ref` | Ref Turbo4 v0.1, alpha 8 / rank 128 | 12 / 3 |
 | `t2va-turbo4-exact-sm89` | One RTX 4090 48 GB | Prompt without images | `transformer` | Base Turbo4 v1.0, alpha 128 / rank 128 | 6 / 3 |
+| `i2va-base16-bf16-sm89` (preview) | One RTX 4090 48 GB | Prompt and one explicit first frame | `transformer` | None | 12 / 3 |
 
-All use four evaluations, BF16 weights and separate adapter residuals, producing five seconds at 24 fps. The default is SM89 Ref4. A running pipeline does not switch between Base and Ref weights. Prepare separate assets and sessions when an application needs both modes. Native single-SM86 and Turbo8 interfaces have a different [validation scope](../guide/profiles).
+The released Turbo profiles use four evaluations, BF16 weights and separate adapter residuals. The preview I2VA profile uses the official Base transformer for 16 evaluations in BF16 without an adapter. All produce five seconds at 24 fps. The default remains SM89 Ref4. A running pipeline does not switch weights or profiles. Prepare separate assets and sessions when an application needs multiple modes. Native single-SM86 and Turbo8 interfaces have a different [validation scope](../guide/profiles).
+
+## Prepare preview Base16 I2VA
+
+Prepare and compile the pinned official Base transformer without `--adapter`, then build the ordinary six-field pipeline receipt. Its asset JSON sets `adapter_path` to `null` and supplies the official model and decoder directories plus the three compiled outputs.
+
+```bash
+python -m vflash.compiler prepare \
+  --profile i2va-base16-bf16-sm89 \
+  --transformer models/minimax-h3/transformer \
+  --receipt base16-i2va-weights.json
+python -m vflash.compiler compile \
+  --receipt base16-i2va-weights.json --output models/base16-i2va-native --gpu 0
+vflash prepare-pipeline \
+  --profile i2va-base16-bf16-sm89 \
+  --assets base16-i2va-assets.json --receipt base16-i2va-pipeline.json
+vflash generate \
+  --prepared-assets base16-i2va-pipeline.json --prompt-file prompt.txt \
+  --first-frame first-frame.png --gpu 0 --seed 1234 \
+  --output video.mp4 --trust-local-code
+```
+
+`--first-frame` is a frame-zero anchor, distinct from Ref2VA `--reference` inputs, and is exposed as `VideoRequest(first_frame=Path(...))` in Python. The prompt can label this image as `<Picture 1>`; labels beyond that single supplied image are rejected. Internally the official encoder uses its one-frame FL2VA conditioning path while the public request remains typed as I2VA.
 
 ## Prepare dual 3080 generation {#sm86}
 

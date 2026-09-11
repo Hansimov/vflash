@@ -33,6 +33,11 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
         default=[],
         help="local image; repeat in <Picture N> order up to three times; omit for T2VA",
     )
+    generate.add_argument(
+        "--first-frame",
+        type=Path,
+        help="one local image that explicitly anchors frame zero for I2VA",
+    )
     generate.add_argument("--width", type=int, default=928)
     generate.add_argument("--height", type=int, default=512)
     generate.add_argument("--seed", type=int, default=0)
@@ -81,6 +86,7 @@ def run_pipeline_command(args: argparse.Namespace) -> int:
         prompt=prompt,
         references=tuple(args.reference),
         reference_video=args.reference_video,
+        first_frame=args.first_frame,
         width=args.width,
         height=args.height,
         seed=args.seed,

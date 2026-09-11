@@ -36,6 +36,14 @@ def test_released_model_identities_and_adapter_scaling_remain_distinct():
     assert transformer_identity(base.definition.id)["transformer_sha256"] == (
         "b63ed7be75bb888ac4c46355c12f6273791f26c06773162c0e51152cd94ee05e"
     )
+    i2va = model_profile("i2va-base16-bf16-sm89")
+    assert i2va.transformer_component == "transformer"
+    assert i2va.workflow == "fl2va"
+    assert i2va.adapter is None
+    assert i2va.weight_profile == "minimax-h3-base"
+    assert transformer_identity(i2va.definition.id)["transformer_sha256"] != (
+        transformer_identity(base.definition.id)["transformer_sha256"]
+    )
 
 
 def test_t2_sm86_uses_base_weights_but_requires_its_own_compilation():
@@ -79,12 +87,12 @@ def test_weights_source_rejects_cross_adapter_and_partial_profile_changes(profil
     source = weights_source(profile_id)
     profile = model_profile(profile_id)
     assert (
-        _validate_source(source, weight_profile=profile.adapter.profile_id, schema_version=5)
+        _validate_source(source, weight_profile=profile.weight_profile, schema_version=5)
         == source
     )
     other = (
         "lightx-ref-turbo4-v0.1"
-        if profile.definition.mode.value == "t2va"
+        if profile.definition.mode.value in {"t2va", "i2va"}
         else "lightx-turbo4-v1.0"
     )
     with pytest.raises(ValueError, match="fixed"):
@@ -97,7 +105,7 @@ def test_weights_source_rejects_cross_adapter_and_partial_profile_changes(profil
         with pytest.raises(ValueError, match="fixed"):
             _validate_source(
                 {**source, **change},
-                weight_profile=profile.adapter.profile_id,
+                weight_profile=profile.weight_profile,
                 schema_version=5,
             )
 
@@ -119,7 +127,12 @@ def test_compiler_timesteps_match_the_native_request_scheduler(profile_id, video
         device="cpu",
     )
     rows = profile_timesteps(profile_id)
-    assert tuple(row.numel() for row in rows) == ((1, 2, 2, 2) if ref == 0 else (2, 3, 3, 3))
+    expected_counts = (
+        (1, 2, 2, 2)
+        if ref == 0
+        else (2,) + (3,) * (model_profile(profile_id).definition.nfe - 1)
+    )
+    assert tuple(row.numel() for row in rows) == expected_counts
     assert all(torch.equal(row, step.timesteps) for row, step in zip(rows, plan, strict=True))
     assert not torch.cuda.is_initialized()
 
@@ -159,6 +172,17 @@ def test_weights_receipt_is_profile_bound_and_legacy_ref4_still_loads(
         raw_assets.load_prepared_weights(receipt)
 
 
+def test_base16_raw_assets_omit_the_adapter_contract(tmp_path):
+    rows = raw_assets._required_files(tmp_path, None, "i2va-base16-bf16-sm89")
+    assert "adapter" not in rows
+    with pytest.raises(ContractError, match="does not accept an adapter"):
+        raw_assets._required_files(
+            tmp_path,
+            tmp_path / "unrequested-lora.safetensors",
+            "i2va-base16-bf16-sm89",
+        )
+
+
 def test_t2va_request_cannot_contain_an_unbound_picture_label():
     assert VideoRequest("A scene.").mode == "t2va"
     assert VideoRequest("A scene.", Path("reference.png")).mode == "ref2va"
@@ -180,19 +204,34 @@ def test_official_call_keeps_mode_specific_inputs_and_reference_order(monkeypatc
     conditioner._torch = SimpleNamespace(Generator=lambda: generator)
     calls = []
     conditioner.pipe = lambda **kwargs: calls.append(kwargs)
-    refs = (
-        (Path("first"), Path("second"))
-        if conditioner.profile.definition.mode.value == "ref2va"
-        else ()
-    )
-    request = VideoRequest("A scene.", references=refs, seed=97)
-    conditioner._invoke(request, tuple(SimpleNamespace(image=p) for p in refs))
-    assert calls[0]["num_inference_steps"] == 5
+    mode = conditioner.profile.definition.mode.value
+    refs = (Path("first"), Path("second")) if mode == "ref2va" else ()
+    first_frame = Path("frame-zero") if mode == "i2va" else None
+    request = VideoRequest("A scene.", references=refs, first_frame=first_frame, seed=97)
+    decoded = refs or ((first_frame,) if first_frame is not None else ())
+    conditioner._invoke(request, tuple(SimpleNamespace(image=p) for p in decoded))
+    assert calls[0]["num_inference_steps"] == conditioner.profile.definition.nfe + 1
     assert calls[0]["generator"] == ("generator", 97)
     if refs:
         assert calls[0]["references"] == [("image", p) for p in refs]
+    elif first_frame is not None:
+        assert calls[0]["image"] == first_frame and "references" not in calls[0]
     else:
         assert "references" not in calls[0]
+
+
+def test_i2va_request_owns_one_explicit_first_frame():
+    frame = Path("frame-zero.png")
+    request = VideoRequest(
+        "<Picture 1> is the first frame. Motion begins from it.", first_frame=frame
+    )
+    assert request.mode == "i2va"
+    assert request.first_frame == frame
+    assert request.ordered_references == ()
+    with pytest.raises(ContractError, match="first frame or Ref2VA"):
+        VideoRequest("A scene.", references=(Path("ref.png"),), first_frame=frame)
+    with pytest.raises(ContractError, match="picture label"):
+        VideoRequest("Continue from <Picture 2>.", first_frame=frame)
 
 
 @pytest.mark.parametrize("profile_id", COMPLETE_MODEL_PROFILES)
