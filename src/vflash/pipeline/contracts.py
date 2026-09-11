@@ -73,8 +73,9 @@ class VideoRequest:
     use ``references`` for an ordered tuple instead. ``reference_video`` accepts
     one visual-only local clip labeled ``<Video 1>``, without images. No references
     means T2VA and requires a T2VA pipeline. ``first_frame`` is a separate
-    I2VA input and is never interpreted as a Ref2VA content reference. A session
-    never swaps models.
+    I2VA input and is never interpreted as a Ref2VA content reference. Supplying
+    both ``first_frame`` and ``last_frame`` is a true FL2VA request with two
+    temporal anchors. A session never swaps models.
     """
 
     prompt: str
@@ -85,6 +86,7 @@ class VideoRequest:
     references: tuple[Path, ...] = field(default=(), kw_only=True)
     reference_video: Path | None = field(default=None, kw_only=True)
     first_frame: Path | None = field(default=None, kw_only=True)
+    last_frame: Path | None = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
         if (
@@ -111,9 +113,22 @@ class VideoRequest:
                 raise ContractError("first_frame must be a local pathlib.Path")
             if self.ordered_references or self.reference_video is not None:
                 raise ContractError("provide one first frame or Ref2VA references, not both")
+        if self.last_frame is not None:
+            if not isinstance(self.last_frame, Path):
+                raise ContractError("last_frame must be a local pathlib.Path")
+            if self.first_frame is None:
+                raise ContractError("last_frame requires a first_frame for FL2VA")
+            if self.ordered_references or self.reference_video is not None:
+                raise ContractError("provide keyframes or Ref2VA references, not both")
         if len(self.ordered_references) > 3:
             raise ContractError("Ref2VA supports at most three reference images")
-        picture_count = 1 if self.first_frame is not None else len(self.ordered_references)
+        picture_count = (
+            2
+            if self.last_frame is not None
+            else 1
+            if self.first_frame is not None
+            else len(self.ordered_references)
+        )
         if any(
             index not in {str(value) for value in range(1, picture_count + 1)}
             for index in re.findall(r"<Picture (\d+)>", self.prompt)
@@ -142,6 +157,8 @@ class VideoRequest:
 
     @property
     def mode(self) -> str:
+        if self.last_frame is not None:
+            return "fl2va"
         if self.first_frame is not None:
             return "i2va"
         return (

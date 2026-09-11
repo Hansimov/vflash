@@ -1,6 +1,6 @@
 # 生成视频
 
-Vflash 0.3.2 支持纯文字生成，也支持提示词加一至三张有序参考图，输出五秒 MP4。当前 main 还提供预览版官方 Base16 I2VA 链路，输入一张明确的首帧。连续请求使用 Python 接口，单次生成也可以使用容器命令行。完整链路支持单张 RTX 4090 48 GB 上的 T2VA Base4 和 Ref2VA Turbo4；Ref4 也支持双张 RTX 3080 20 GB。预览版 Base16 I2VA 使用单张 RTX 4090 48 GB。
+Vflash 0.3.2 支持纯文字生成，也支持提示词加一至三张有序参考图，输出五秒 MP4。当前 main 还提供预览版官方 Base16 I2VA 和 FL2VA 链路，分别输入一张明确的首帧，或同时输入首帧和尾帧。连续请求使用 Python 接口，单次生成也可以使用容器命令行。完整链路支持单张 RTX 4090 48 GB 上的 T2VA Base4 和 Ref2VA Turbo4；Ref4 也支持双张 RTX 3080 20 GB。Base16 关键帧配置支持单张 RTX 4090 48 GB 或协作的双张 RTX 3080 20 GB。
 
 单张 4090 的 Ref4 还支持[短视频参考](#reference-video)，同一实例可以交替处理图片和视频，无需切换权重。
 
@@ -8,9 +8,9 @@ Vflash 0.3.2 支持纯文字生成，也支持提示词加一至三张有序参�
 
 Vflash 负责原生去噪、模型生命周期、本地图像读取和 MP4 输出。文本和图像编码采用固定版本的 Diffusers 与 Transformers；Turbo 配置还使用 PEFT 适配器。音视频解码采用 H3 官方 VAE。它们是明确列出的依赖，不会被描述成新实现的原生内核。运行时不依赖 LightX2V 或业务服务。
 
-Turbo 请求使用四次去噪计算；预览版 Base16 I2VA 使用 16 次。两者都输出五秒视频并采用原生 24 fps 时钟。宽高必须是 32 的整数倍，总像素不超过 `928 × 512`，宽高比在 1:4 至 4:1 之间。模型生成 124 帧，交付前 120 帧。提示词原样传入。Ref2VA 的一至三张图片按照传入顺序编号为 `<Picture 1>`、`<Picture 2>`、`<Picture 3>`，请在提示词中说明每张图的主体和用途。这些是视觉参考，不代表视频中的帧位置，也不是严格的关键帧约束。I2VA 输入一张独立的第零帧锚点，提示词可将其称为 `<Picture 1>`。
+Turbo 请求使用四次去噪计算；预览版 Base16 I2VA 和 FL2VA 使用 16 次。两者都输出五秒视频并采用原生 24 fps 时钟。宽高必须是 32 的整数倍，总像素不超过 `928 × 512`，宽高比在 1:4 至 4:1 之间。模型生成 124 帧，交付前 120 帧。提示词原样传入。Ref2VA 的一至三张图片按照传入顺序编号为 `<Picture 1>`、`<Picture 2>`、`<Picture 3>`，请在提示词中说明每张图的主体和用途。这些是视觉参考，不代表视频中的帧位置，也不是严格的关键帧约束。I2VA 输入一张独立的第零帧锚点，提示词可将其称为 `<Picture 1>`。真正的 FL2VA 同时输入首尾锚点，提示词按时间顺序将其称为 `<Picture 1>` 和 `<Picture 2>`。
 
-准备资产前先选择[固定模型配置](../reference/pipeline-profiles)。Ref2VA 使用 `transformer_ref` 与 Ref4 v0.1；T2VA 使用 `transformer` 与 Base4 v1.0；预览版 I2VA 使用官方 `transformer`，无 LoRA 执行 16 次计算。不同配置分别持有已准备的资产和常驻实例；模式不匹配的请求会在执行前拒绝。
+准备资产前先选择[固定模型配置](../reference/pipeline-profiles)。Ref2VA 使用 `transformer_ref` 与 Ref4 v0.1；T2VA 使用 `transformer` 与 Base4 v1.0；预览版 I2VA 和 FL2VA 使用官方 `transformer`，无 LoRA 执行 16 次计算。不同配置分别持有已准备的资产和常驻实例；模式不匹配的请求会在执行前拒绝。
 
 ## 安装和模型资产
 
@@ -27,10 +27,10 @@ python -m pip install '.[pipeline]'
 | 字段 | 内容 |
 | --- | --- |
 | `model_directory` | `MiniMaxAI/MiniMax-H3` 在 `42ed227ee7df40d41602854ae760620d6eb651fe` 版本的官方 Diffusers 组件，包含所选模式的 `transformer_ref` 或 `transformer` |
-| `adapter_path` | Turbo 配置使用[运行资产](../reference/runtime-assets)中的固定 BF16 LoRA；两种 Base16 I2VA 配置均填 `null` |
+| `adapter_path` | Turbo 配置使用[运行资产](../reference/runtime-assets)中的固定 BF16 LoRA；Base16 I2VA 和 FL2VA 配置均填 `null` |
 | `decoder_directory` | 同一官方 H3 版本的 `FL2VA` 目录，包含 `video_vae` 和 `audio_vae` |
 | `artifact` | 所选配置的完整 BF16 原生资产；只有 Turbo 配置包含运行时 LoRA 残差 |
-| `schedule_overlay` | 对应的 training-Euler 调度：Turbo 为四次计算，Base16 I2VA 为 16 次且视频/音频 shift 为 12/3 |
+| `schedule_overlay` | 对应的 training-Euler 调度：Turbo 为四次计算，Base16 I2VA/FL2VA 为 16 次且视频/音频 shift 为 12/3 |
 | `auxiliary_tensor` | 与上述资产匹配的原生输入、输出权重 |
 
 后三项是准备好的原生资产，不能直接填入任意官方 checkpoint。可以按[官方权重编译流程](./compile-weights)创建；使用已有资产前，请核对[资产合同](../reference/runtime-assets)。目前尚未发布可直接下载的原生模型包。
@@ -55,7 +55,7 @@ vflash generate \
   --output video.mp4 --trust-local-code
 ```
 
-Ref2VA 的 `--reference` 可以出现一至三次。T2VA 在准备时指定 `--profile t2va-turbo4-exact-sm89`，生成时不传图像参数。预览版 I2VA 使用与硬件匹配的 SM89 或 SM86 Base16 配置，生成时传入且只传一个 `--first-frame first-frame.png`，不可与 `--reference` 混用；SM86 配置还须传入 `--peer-gpu 1 --strategy sequence-head`。对应的 Python 请求是 `VideoRequest(prompt=..., first_frame=Path("first-frame.png"), seed=...)`。进度以 JSON 行写入 stderr，stdout 输出最终结果。每次命令独立加载并释放模型。预装环境及完整挂载示例见 [Docker 生成](./docker#pipeline)。
+Ref2VA 的 `--reference` 可以出现一至三次。T2VA 在准备时指定 `--profile t2va-turbo4-exact-sm89`，生成时不传图像参数。预览版 I2VA 使用与硬件匹配的 SM89 或 SM86 Base16 配置，生成时只传 `--first-frame first-frame.png`。真正的 FL2VA 使用 `fl2va-base16-bf16-sm89` 或 `fl2va-base16-bf16-sm86`，同时传 `--first-frame first-frame.png --last-frame last-frame.png`。关键帧不可与 `--reference` 混用；SM86 配置还须传入 `--peer-gpu 1 --strategy sequence-head`。对应的 Python FL2VA 请求是 `VideoRequest(prompt=..., first_frame=Path("first-frame.png"), last_frame=Path("last-frame.png"), seed=...)`。进度以 JSON 行写入 stderr，stdout 输出最终结果。每次命令独立加载并释放模型。预装环境及完整挂载示例见 [Docker 生成](./docker#pipeline)。
 
 ## 一个明确拥有资源的实例
 

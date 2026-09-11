@@ -44,6 +44,10 @@ def test_released_model_identities_and_adapter_scaling_remain_distinct():
     assert transformer_identity(i2va.definition.id)["transformer_sha256"] != (
         transformer_identity(base.definition.id)["transformer_sha256"]
     )
+    fl2va = model_profile("fl2va-base16-bf16-sm89")
+    assert fl2va.definition.mode.value == "fl2va"
+    assert fl2va.workflow == "fl2va" and fl2va.adapter is None
+    assert fl2va.definition.nfe == 16 and fl2va.weight_profile == "minimax-h3-base"
 
 
 def test_t2_sm86_uses_base_weights_but_requires_its_own_compilation():
@@ -206,14 +210,25 @@ def test_official_call_keeps_mode_specific_inputs_and_reference_order(monkeypatc
     conditioner.pipe = lambda **kwargs: calls.append(kwargs)
     mode = conditioner.profile.definition.mode.value
     refs = (Path("first"), Path("second")) if mode == "ref2va" else ()
-    first_frame = Path("frame-zero") if mode == "i2va" else None
-    request = VideoRequest("A scene.", references=refs, first_frame=first_frame, seed=97)
-    decoded = refs or ((first_frame,) if first_frame is not None else ())
+    first_frame = Path("frame-zero") if mode in {"i2va", "fl2va"} else None
+    last_frame = Path("frame-last") if mode == "fl2va" else None
+    request = VideoRequest(
+        "A scene.",
+        references=refs,
+        first_frame=first_frame,
+        last_frame=last_frame,
+        seed=97,
+    )
+    decoded = refs or tuple(frame for frame in (first_frame, last_frame) if frame is not None)
     conditioner._invoke(request, tuple(SimpleNamespace(image=p) for p in decoded))
     assert calls[0]["num_inference_steps"] == conditioner.profile.definition.nfe + 1
     assert calls[0]["generator"] == ("generator", 97)
     if refs:
         assert calls[0]["references"] == [("image", p) for p in refs]
+    elif last_frame is not None:
+        assert calls[0]["image"] == first_frame
+        assert calls[0]["last_image"] == last_frame
+        assert "references" not in calls[0]
     elif first_frame is not None:
         assert calls[0]["image"] == first_frame and "references" not in calls[0]
     else:
@@ -232,6 +247,33 @@ def test_i2va_request_owns_one_explicit_first_frame():
         VideoRequest("A scene.", references=(Path("ref.png"),), first_frame=frame)
     with pytest.raises(ContractError, match="picture label"):
         VideoRequest("Continue from <Picture 2>.", first_frame=frame)
+
+
+def test_fl2va_request_requires_two_explicit_temporal_anchors():
+    first, last = Path("frame-zero.png"), Path("frame-last.png")
+    request = VideoRequest(
+        "Move from <Picture 1> to <Picture 2>.",
+        first_frame=first,
+        last_frame=last,
+    )
+    assert request.mode == "fl2va"
+    assert (request.first_frame, request.last_frame) == (first, last)
+    assert request.ordered_references == ()
+    with pytest.raises(ContractError, match="requires a first_frame"):
+        VideoRequest("A scene.", last_frame=last)
+    with pytest.raises(ContractError, match="picture label"):
+        VideoRequest(
+            "Move from <Picture 1> through <Picture 3>.",
+            first_frame=first,
+            last_frame=last,
+        )
+    with pytest.raises(ContractError, match="first frame or Ref2VA"):
+        VideoRequest(
+            "A scene.",
+            references=(Path("ref.png"),),
+            first_frame=first,
+            last_frame=last,
+        )
 
 
 @pytest.mark.parametrize("profile_id", COMPLETE_MODEL_PROFILES)

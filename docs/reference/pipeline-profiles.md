@@ -9,8 +9,10 @@ A prepared pipeline uses one fixed model, adapter and scheduler. The current sou
 | `t2va-turbo4-exact-sm89` | One RTX 4090 48 GB | Prompt without images | `transformer` | Base Turbo4 v1.0, alpha 128 / rank 128 | 6 / 3 |
 | `i2va-base16-bf16-sm89` (preview) | One RTX 4090 48 GB | Prompt and one explicit first frame | `transformer` | None | 12 / 3 |
 | `i2va-base16-bf16-sm86` (preview) | Two RTX 3080 20 GB, `sequence-head` | Prompt and one explicit first frame | `transformer` | None | 12 / 3 |
+| `fl2va-base16-bf16-sm89` (preview) | One RTX 4090 48 GB | Prompt and explicit first and last frames | `transformer` | None | 12 / 3 |
+| `fl2va-base16-bf16-sm86` (preview) | Two RTX 3080 20 GB, `sequence-head` | Prompt and explicit first and last frames | `transformer` | None | 12 / 3 |
 
-The released Turbo profiles use four evaluations, BF16 weights and separate adapter residuals. The preview I2VA profile uses the official Base transformer for 16 evaluations in BF16 without an adapter. All produce five seconds at 24 fps. The default remains SM89 Ref4. A running pipeline does not switch weights or profiles. Prepare separate assets and sessions when an application needs multiple modes. Native single-SM86 and Turbo8 interfaces have a different [validation scope](../guide/profiles).
+The released Turbo profiles use four evaluations, BF16 weights and separate adapter residuals. The preview I2VA and FL2VA profiles use the official Base transformer for 16 evaluations in BF16 without an adapter. All produce five seconds at 24 fps. The default remains SM89 Ref4. A running pipeline does not switch weights or profiles. Prepare separate assets and sessions when an application needs multiple modes. Native single-SM86 and Turbo8 interfaces have a different [validation scope](../guide/profiles).
 
 ## Prepare preview Base16 I2VA
 
@@ -34,6 +36,17 @@ vflash generate \
 
 `--first-frame` is a frame-zero anchor, distinct from Ref2VA `--reference` inputs, and is exposed as `VideoRequest(first_frame=Path(...))` in Python. The prompt can label this image as `<Picture 1>`; labels beyond that single supplied image are rejected. Internally the official encoder uses its one-frame FL2VA conditioning path while the public request remains typed as I2VA. For two SM86 GPUs, use `i2va-base16-bf16-sm86` for both preparation commands and pass `--peer-gpu 1 --strategy sequence-head` when generating. One 928 × 512, 120-frame request completed in 281.2 seconds excluding cold initialization; one card entered software thermal slowdown, so this is feasibility and sustained-capacity evidence rather than a clean latency or quality claim.
 
+For a true two-anchor FL2VA request, compile and prepare the matching `fl2va-base16-bf16-sm89` or `fl2va-base16-bf16-sm86` profile, then pass both keyframes:
+
+```bash
+vflash generate \
+  --prepared-assets base16-fl2va-pipeline.json --prompt-file prompt.txt \
+  --first-frame first-frame.png --last-frame last-frame.png \
+  --gpu 0 --seed 1234 --output video.mp4 --trust-local-code
+```
+
+The Python form is `VideoRequest(first_frame=Path(...), last_frame=Path(...))`. The official FL2VA workflow receives the first image as `image` and the final image as `last_image`; the prompt labels them `<Picture 1>` and `<Picture 2>` in that temporal order. A last frame without a first frame is rejected by this deliberately narrow contract. The schema and CPU contract checks are complete, while target-GPU latency and output quality remain unqualified. The SM86 FL2VA profile has the same two-GPU `sequence-head` requirement as I2VA.
+
 ## Prepare dual 3080 generation {#sm86}
 
 Use the same official Ref4 files as in the [compiler recipe](../guide/compile-weights), but select `ref2va-turbo4-exact-sm86` when creating both receipts. Compile on one SM86 GPU; its timestep and modulation tables are specific to that target. Do not reuse a compiled SM89 pack.
@@ -56,7 +69,7 @@ vflash generate \
   --output video.mp4 --seed 1234 --trust-local-code
 ```
 
-The six fields in `ref4-sm86-assets.json` use the new SM86 artifact, schedule and auxiliary paths. Encoders, decoders and source LoRA can share the same immutable files as SM89. Encoding and decoding run on the primary GPU; both GPUs cooperate in native denoising. The same topology rule applies to `i2va-base16-bf16-sm86`. The complete pipeline rejects single-SM86 and `tensor` execution before loading models. The native latent API retains both parallel strategies.
+The six fields in `ref4-sm86-assets.json` use the new SM86 artifact, schedule and auxiliary paths. Encoders, decoders and source LoRA can share the same immutable files as SM89. Encoding and decoding run on the primary GPU; both GPUs cooperate in native denoising. The same topology rule applies to `i2va-base16-bf16-sm86` and `fl2va-base16-bf16-sm86`. The complete pipeline rejects single-SM86 and `tensor` execution before loading models. The native latent API retains both parallel strategies.
 
 ## Prepare T2VA
 

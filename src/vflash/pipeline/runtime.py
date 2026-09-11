@@ -192,6 +192,8 @@ class H3Pipeline:
                 references.append(read_reference(path))
             if request.first_frame is not None:
                 references.append(read_reference(request.first_frame))
+            if request.last_frame is not None:
+                references.append(read_reference(request.last_frame))
             if request.reference_video is not None:
                 references.append(read_video_reference(request.reference_video))
             reference_loading_seconds = time.monotonic() - reference_started

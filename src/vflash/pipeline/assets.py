@@ -23,6 +23,7 @@ from vflash.model_assets import (
 )
 from vflash.native.h3_conditioning_bundle import (
     H3_FIRST_FRAME_POLICY,
+    H3_FL2VA_KEYFRAME_POLICY,
     H3_VIDEO_REFERENCE_POLICY,
 )
 from vflash.native.h3_runtime_artifact import load_h3_runtime_artifact
@@ -60,6 +61,11 @@ def conditioning_source(
         if reference_policy != "match":
             raise ContractError("I2VA accepts one first frame, not a reference policy")
         configuration["first_frame_policy"] = H3_FIRST_FRAME_POLICY
+        configuration["reference_policy_revision"] = 1
+    elif profile.definition.mode.value == "fl2va":
+        if reference_policy != "match":
+            raise ContractError("FL2VA accepts first and last frames, not a reference policy")
+        configuration["keyframe_policy"] = H3_FL2VA_KEYFRAME_POLICY
         configuration["reference_policy_revision"] = 1
     elif reference_policy == H3_VIDEO_REFERENCE_POLICY:
         # Preserve the released image/T2 identity, but never claim a video

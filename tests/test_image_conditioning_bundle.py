@@ -9,8 +9,11 @@ import pytest
 from vflash.native.h3_conditioning_bundle import (
     H3_FIRST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION,
     H3_FIRST_FRAME_POLICY,
+    H3_FL2VA_CONDITIONING_BUNDLE_SCHEMA_VERSION,
+    H3_FL2VA_KEYFRAME_POLICY,
     H3ConditioningBundleError,
     H3ConditioningProfile,
+    _validate_request,
     h3_target_video_tokens,
     load_h3_conditioning_bundle,
     seal_h3_conditioning_bundle,
@@ -27,7 +30,7 @@ def write_bundle(directory, count, *, task="ref2va", frames=5, nfe=4):
     save_file = pytest.importorskip("safetensors.torch").save_file
     profile = H3ConditioningProfile(task, 32, 32, frames, nfe, 12, 3, count, count, 0)
     video = h3_target_video_tokens(width=32, height=32, frames=frames) + count
-    audio, text = (414 if task == "i2va" else 1), 2
+    audio, text = (414 if task in {"i2va", "fl2va"} else 1), 2
     sequence = video + audio + text
     values = {
         "initial_video_latents": torch.zeros(1, video, 96),
@@ -118,6 +121,55 @@ def test_native_first_frame_bundle_is_distinct_from_ref2va(tmp_path):
     assert "references" not in sealed.request
 
 
+def test_native_fl2va_bundle_binds_both_temporal_anchors(tmp_path):
+    profile, _request, source = write_bundle(
+        tmp_path,
+        2,
+        task="fl2va",
+        frames=124,
+        nfe=16,
+    )
+    prompt = "Move from <Picture 1> to <Picture 2>."
+    request = {
+        "source_case_id": "synthetic-first-last-frame-bundle",
+        "prompt": prompt,
+        "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
+        "seed": 97,
+        "keyframe_policy": H3_FL2VA_KEYFRAME_POLICY,
+        "delivery_profiles": [
+            {"temporal_profile": "native-24fps-5s", "frames": 120, "fps": 24}
+        ],
+        "first_frame": {
+            "role": "first_frame",
+            "size_bytes": 100,
+            "sha256": "d" * 64,
+        },
+        "last_frame": {
+            "role": "last_frame",
+            "size_bytes": 101,
+            "sha256": "e" * 64,
+        },
+    }
+    sealed = seal_h3_conditioning_bundle(
+        tmp_path,
+        bundle_id="h3-conditioning-first-last-frame",
+        profile=profile,
+        request=request,
+        source=source,
+        schema_version=H3_FL2VA_CONDITIONING_BUNDLE_SCHEMA_VERSION,
+    )
+    assert sealed.schema_version == 4
+    assert sealed.profile.task == "fl2va" and sealed.schedule.nfe == 16
+    assert [sealed.request[name]["role"] for name in ("first_frame", "last_frame")] == [
+        "first_frame",
+        "last_frame",
+    ]
+    with pytest.raises(H3ConditioningBundleError, match="FL2VA"):
+        _validate_request(request, task="i2va", schema_version=4)
+    with pytest.raises(H3ConditioningBundleError, match="schema v1"):
+        _validate_request(_request, task="fl2va")
+
+
 @pytest.mark.parametrize(
     "capability,count,strategy,accepted",
     [
@@ -128,8 +180,9 @@ def test_native_first_frame_bundle_is_distinct_from_ref2va(tmp_path):
         ((8, 9), 2, "sequence-head", False),
     ],
 )
-def test_native_first_frame_reader_accepts_only_released_topologies(
-    monkeypatch, tmp_path, capability, count, strategy, accepted
+@pytest.mark.parametrize("schema_version,task", [(3, "i2va"), (4, "fl2va")])
+def test_native_keyframe_reader_accepts_only_released_topologies(
+    monkeypatch, tmp_path, capability, count, strategy, accepted, schema_version, task
 ):
     from types import SimpleNamespace
 
@@ -141,14 +194,14 @@ def test_native_first_frame_reader_accepts_only_released_topologies(
     runtime = H3NativeConditioningRuntime.__new__(H3NativeConditioningRuntime)
     runtime._torch = object()
     runtime.artifact = SimpleNamespace(
-        source={"oracle_profile": "i2va-base-bf16-torch-sdpa-sm86"}
+        source={"oracle_profile": f"{task}-base-bf16-torch-sdpa-sm86"}
     )
     runtime.devices, runtime.compute_capability = [None] * count, capability
     runtime.parallel_strategy = strategy
     runtime.overlay = SimpleNamespace(schedule=SimpleNamespace(to_mapping=lambda: {}))
     bundle = SimpleNamespace(
-        profile=SimpleNamespace(task="i2va"),
-        schema_version=3,
+        profile=SimpleNamespace(task=task),
+        schema_version=schema_version,
         schedule=SimpleNamespace(to_mapping=lambda: {}),
         source={},
     )

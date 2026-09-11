@@ -47,6 +47,10 @@ def test_tampered_t2_sm86_plan_rejected_before_runtime(monkeypatch, tmp_path, st
         ("ref2va-turbo4-exact-sm86", "8.6", 20.0, "tensor", "default"),
         ("ref2va-turbo4-exact-sm86", "8.6", 20.0, "sequence-head", "block-ring"),
         ("t2va-turbo4-exact-sm86", "8.6", 20.0, "sequence-head", "block-ring"),
+        ("i2va-base16-bf16-sm89", "8.9", 48.0, "single", "default"),
+        ("i2va-base16-bf16-sm86", "8.6", 20.0, "sequence-head", "block-ring"),
+        ("fl2va-base16-bf16-sm89", "8.9", 48.0, "single", "default"),
+        ("fl2va-base16-bf16-sm86", "8.6", 20.0, "sequence-head", "block-ring"),
     ],
 )
 def test_session_loads_once_and_keeps_request_accounting_separate(
@@ -64,13 +68,14 @@ def test_session_loads_once_and_keeps_request_accounting_separate(
     class Runtime:
         def __init__(self, **options):
             loads.append(options)
+            self.nfe = options["expected_nfe"]
 
         def generate_latents(self, bundle, output, *, progress_callback=None):
             calls.append((bundle, output))
             if progress_callback is not None:
-                for completed in range(1, 5):
-                    progress_callback(completed, 4)
-            return Result(output)
+                for completed in range(1, self.nfe + 1):
+                    progress_callback(completed, self.nfe)
+            return Result(output, self.nfe)
 
         def metadata(self):
             return {"initialization_seconds": 12.0}
@@ -112,7 +117,10 @@ def test_session_loads_once_and_keeps_request_accounting_separate(
         tmp_path / "second",
         progress_callback=lambda completed, total: progress.append((completed, total)),
     )
-    assert progress == [(completed, 4) for completed in range(1, 5)]
+    expected_nfe = plan.profile.nfe
+    assert progress == [
+        (completed, expected_nfe) for completed in range(1, expected_nfe + 1)
+    ]
 
     assert len(loads) == 1
     assert calls == [

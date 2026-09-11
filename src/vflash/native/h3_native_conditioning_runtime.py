@@ -161,7 +161,7 @@ class H3NativeConditioningRuntime:
             raise H3NativeConditioningRuntimeError(
                 "the native runtime requires Torch Flash attention"
             )
-        if expected_task not in {None, "ref2va", "t2va", "i2va"}:
+        if expected_task not in {None, "ref2va", "t2va", "i2va", "fl2va"}:
             raise H3NativeConditioningRuntimeError("unsupported native generation task")
         started = time.monotonic()
         resolved_device = torch.device(device)
@@ -240,10 +240,10 @@ class H3NativeConditioningRuntime:
         if (
             not artifact.is_complete_block_stack
             or not supported_weights
-            or task not in {"ref2va", "t2va", "i2va"}
+            or task not in {"ref2va", "t2va", "i2va", "fl2va"}
             or (expected_task is not None and task != expected_task)
             or (
-                task in {"t2va", "i2va"}
+                task in {"t2va", "i2va", "fl2va"}
                 and capability == (8, 6)
                 and (
                     parallel_strategy != "sequence-head"
@@ -418,23 +418,29 @@ class H3NativeConditioningRuntime:
             raise H3NativeConditioningRuntimeError(
                 "video references require one SM89 GPU and their qualified Ref4 schedule"
             )
-        first_frame_topology = (
-            len(self.devices) == 1
-            and self.compute_capability == (8, 9)
-            and self.parallel_strategy == "single"
-        ) or (
-            len(self.devices) == 2
-            and self.compute_capability == (8, 6)
-            and self.parallel_strategy == "sequence-head"
-        )
-        if bundle.schema_version == 3 and (
-            not first_frame_topology
-            or self.overlay.schedule.to_mapping() != bundle.schedule.to_mapping()
-        ):
-            raise H3NativeConditioningRuntimeError(
-                "I2VA first-frame bundles require a qualified SM89 single or SM86 pair "
-                "and their Base16 schedule"
+        if bundle.schema_version in {3, 4}:
+            keyframe_topology = (
+                len(self.devices) == 1
+                and self.compute_capability == (8, 9)
+                and self.parallel_strategy == "single"
+            ) or (
+                len(self.devices) == 2
+                and self.compute_capability == (8, 6)
+                and self.parallel_strategy == "sequence-head"
             )
+            if (
+                not keyframe_topology
+                or self.overlay.schedule.to_mapping() != bundle.schedule.to_mapping()
+            ):
+                mode = (
+                    "I2VA first-frame"
+                    if bundle.schema_version == 3
+                    else "FL2VA first-last-frame"
+                )
+                raise H3NativeConditioningRuntimeError(
+                    f"{mode} bundles require a qualified SM89 single or SM86 pair and "
+                    "their Base16 schedule"
+                )
         validate_conditioning_source(bundle.source, self.artifact.source)
         tensor_path = bundle.directory / "conditioning.safetensors"
         loaded = load_safetensor_tensors(

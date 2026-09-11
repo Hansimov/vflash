@@ -9,8 +9,10 @@
 | `t2va-turbo4-exact-sm89` | 单张 RTX 4090 48 GB | 纯文字提示词 | `transformer` | Base Turbo4 v1.0，alpha 128 / rank 128 | 6 / 3 |
 | `i2va-base16-bf16-sm89`（预览） | 单张 RTX 4090 48 GB | 提示词加一张明确的首帧 | `transformer` | 无 | 12 / 3 |
 | `i2va-base16-bf16-sm86`（预览） | 双张 RTX 3080 20 GB，`sequence-head` | 提示词加一张明确的首帧 | `transformer` | 无 | 12 / 3 |
+| `fl2va-base16-bf16-sm89`（预览） | 单张 RTX 4090 48 GB | 提示词加明确的首帧和尾帧 | `transformer` | 无 | 12 / 3 |
+| `fl2va-base16-bf16-sm86`（预览） | 双张 RTX 3080 20 GB，`sequence-head` | 提示词加明确的首帧和尾帧 | `transformer` | 无 | 12 / 3 |
 
-已发布的 Turbo 配置使用四次计算、BF16 权重和独立的 LoRA 残差；预览 I2VA 配置使用官方 Base Transformer，以 BF16、无 LoRA 执行 16 次计算。所有配置均输出五秒、24 fps 视频。默认仍为 SM89 Ref4。实例运行中不会切换权重或配置；应用需要多种模式时，应分别准备资产和常驻实例。原生单 SM86 与 Turbo8 接口具有不同的[验证范围](../guide/profiles)。
+已发布的 Turbo 配置使用四次计算、BF16 权重和独立的 LoRA 残差；预览 I2VA 和 FL2VA 配置使用官方 Base Transformer，以 BF16、无 LoRA 执行 16 次计算。所有配置均输出五秒、24 fps 视频。默认仍为 SM89 Ref4。实例运行中不会切换权重或配置；应用需要多种模式时，应分别准备资产和常驻实例。原生单 SM86 与 Turbo8 接口具有不同的[验证范围](../guide/profiles)。
 
 ## 准备预览版 Base16 I2VA
 
@@ -34,6 +36,17 @@ vflash generate \
 
 `--first-frame` 表示第零帧锚点，与 Ref2VA 的 `--reference` 输入相互独立；Python 接口为 `VideoRequest(first_frame=Path(...))`。提示词可以将该图标记为 `<Picture 1>`，超出这一张已提供图片的标签会被拒绝。内部调用官方编码器的单帧 FL2VA 条件路径，对外请求类型仍明确为 I2VA。双 SM86 准备阶段使用 `i2va-base16-bf16-sm86`，生成时增加 `--peer-gpu 1 --strategy sequence-head`。一条 928 × 512、120 帧请求在不计冷启动时耗时 281.2 秒；其中一张卡触发软件热降频，因此该结果只证明可行性和持续产能，不作为无热降频延迟或质量结论。
 
+真正的双锚 FL2VA 请求应当单独编译并准备 `fl2va-base16-bf16-sm89` 或 `fl2va-base16-bf16-sm86`，然后同时传入首尾帧：
+
+```bash
+vflash generate \
+  --prepared-assets base16-fl2va-pipeline.json --prompt-file prompt.txt \
+  --first-frame first-frame.png --last-frame last-frame.png \
+  --gpu 0 --seed 1234 --output video.mp4 --trust-local-code
+```
+
+Python 接口为 `VideoRequest(first_frame=Path(...), last_frame=Path(...))`。官方 FL2VA workflow 会分别收到 `image` 和 `last_image`；提示词中的 `<Picture 1>` 与 `<Picture 2>` 按时间顺序表示首帧与尾帧。当前窄合同会拒绝只有尾帧而没有首帧的请求。schema 与 CPU 合同检查已经完成，目标显卡上的延迟和成片质量尚未资格化。SM86 FL2VA 与 I2VA 一样要求双卡 `sequence-head`。
+
 ## 准备双 3080 生成 {#sm86}
 
 使用[编译流程](../guide/compile-weights)中的官方 Ref4 文件，但创建两份准备记录时都指定 `ref2va-turbo4-exact-sm86`。编译只需一张 SM86 显卡；生成的时间和调制张量绑定该架构，不能复用已编译的 SM89 资产。
@@ -56,7 +69,7 @@ vflash generate \
   --output video.mp4 --seed 1234 --trust-local-code
 ```
 
-`ref4-sm86-assets.json` 的六个字段应填写新生成的 SM86 权重、调度和辅助张量路径。编码器、解码器和原始 LoRA 可以与 SM89 共享同一份只读文件。编码和解码使用主卡，两卡共同执行原生去噪；`i2va-base16-bf16-sm86` 遵循相同的拓扑要求。完整链路会在加载模型前拒绝单 SM86 或 `tensor` 策略；原生 latent 接口继续保留两种并行策略。
+`ref4-sm86-assets.json` 的六个字段应填写新生成的 SM86 权重、调度和辅助张量路径。编码器、解码器和原始 LoRA 可以与 SM89 共享同一份只读文件。编码和解码使用主卡，两卡共同执行原生去噪；`i2va-base16-bf16-sm86` 和 `fl2va-base16-bf16-sm86` 遵循相同的拓扑要求。完整链路会在加载模型前拒绝单 SM86 或 `tensor` 策略；原生 latent 接口继续保留两种并行策略。
 
 ## 准备文生视频
 

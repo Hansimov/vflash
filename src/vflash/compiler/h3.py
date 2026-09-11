@@ -243,6 +243,8 @@ def _write_assets(
         else "base4"
         if profile.definition.mode.value == "t2va"
         else "base16-i2va"
+        if profile.definition.mode.value == "i2va"
+        else "base16-fl2va"
     )
     artifact_id = (
         f"h3-runtime-{family}-bf16-{profile.architecture}-" + canonical_sha256(source)[:12]

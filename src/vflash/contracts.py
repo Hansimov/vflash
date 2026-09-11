@@ -16,6 +16,7 @@ class GenerationMode(StrEnum):
     REF2VA = "ref2va"
     T2VA = "t2va"
     I2VA = "i2va"
+    FL2VA = "fl2va"
 
 
 class Availability(StrEnum):

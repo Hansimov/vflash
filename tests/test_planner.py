@@ -68,7 +68,14 @@ def test_two_devices_resolve_an_explicit_strategy():
     assert default.parallel_strategy == "sequence-head"
 
 
-@pytest.mark.parametrize("profile_id", ["t2va-turbo4-exact-sm86", "i2va-base16-bf16-sm86"])
+@pytest.mark.parametrize(
+    "profile_id",
+    [
+        "t2va-turbo4-exact-sm86",
+        "i2va-base16-bf16-sm86",
+        "fl2va-base16-bf16-sm86",
+    ],
+)
 @pytest.mark.parametrize("strategy,peer", [(None, False), ("tensor", True)])
 def test_fixed_sm86_profiles_require_the_sequence_head_pair(profile_id, strategy, peer):
     from dataclasses import replace

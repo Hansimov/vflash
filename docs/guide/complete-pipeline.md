@@ -1,6 +1,6 @@
 # Generate a video
 
-Vflash 0.3.2 generates a five-second MP4 from text alone, or from a prompt and one to three ordered reference images. Current main also provides a preview official Base16 I2VA pipeline with one explicit first frame. Use the Python API for repeated requests or the container CLI for a single generation. The complete pipeline supports T2VA Base4 and Ref2VA Turbo4 on one RTX 4090 48 GB; Ref4 also runs on two RTX 3080 20 GB GPUs. Preview Base16 I2VA runs on one RTX 4090 48 GB.
+Vflash 0.3.2 generates a five-second MP4 from text alone, or from a prompt and one to three ordered reference images. Current main also provides preview official Base16 I2VA and FL2VA pipelines with one first-frame anchor or explicit first and last anchors. Use the Python API for repeated requests or the container CLI for a single generation. The complete pipeline supports T2VA Base4 and Ref2VA Turbo4 on one RTX 4090 48 GB; Ref4 also runs on two RTX 3080 20 GB GPUs. The Base16 keyframe profiles target one RTX 4090 48 GB or a cooperating pair of RTX 3080 20 GB GPUs.
 
 On one 4090, Ref4 also accepts [a short reference video](#reference-video). The same instance can alternate images and video without switching weights.
 
@@ -8,9 +8,9 @@ On one 4090, Ref4 also accepts [a short reference video](#reference-video). The 
 
 Vflash owns the native denoiser, stage lifetimes, local image loading and MP4 delivery. The text and image encoders use pinned Diffusers and Transformers code; Turbo profiles additionally use PEFT adapters. Video and audio decoding use the official H3 VAE code. These components are explicit dependencies; they are not described as new native kernels. No LightX2V runtime or application server is needed.
 
-Turbo requests use four denoising evaluations; the preview Base16 I2VA profile uses 16. Both produce a five-second result on the native 24 fps clock. Width and height must be multiples of 32, with at most `928 × 512` pixels and an aspect ratio between 1:4 and 4:1. The model generates 124 frames and delivery takes the first 120. The prompt is used verbatim. For Ref2VA, the one to three images are numbered in the order supplied: `<Picture 1>`, `<Picture 2>` and `<Picture 3>`. Describe each image’s subject and role in your prompt. These are visual references, not frame positions or guaranteed keyframes. I2VA takes one distinct frame-zero anchor, which the prompt may call `<Picture 1>`.
+Turbo requests use four denoising evaluations; the preview Base16 I2VA and FL2VA profiles use 16. Both produce a five-second result on the native 24 fps clock. Width and height must be multiples of 32, with at most `928 × 512` pixels and an aspect ratio between 1:4 and 4:1. The model generates 124 frames and delivery takes the first 120. The prompt is used verbatim. For Ref2VA, the one to three images are numbered in the order supplied: `<Picture 1>`, `<Picture 2>` and `<Picture 3>`. Describe each image’s subject and role in your prompt. These are visual references, not frame positions or guaranteed keyframes. I2VA takes one distinct frame-zero anchor, which the prompt may call `<Picture 1>`. True FL2VA takes both a first and final anchor, exposed to the prompt as `<Picture 1>` and `<Picture 2>` in temporal order.
 
-Choose the [fixed model profile](../reference/pipeline-profiles) before preparing assets. Ref2VA uses `transformer_ref` and Ref4 v0.1; T2VA uses `transformer` and Base4 v1.0; preview I2VA uses the official `transformer` at 16 evaluations without an adapter. Each profile has its own prepared assets and persistent pipeline. A request of another mode is rejected before execution.
+Choose the [fixed model profile](../reference/pipeline-profiles) before preparing assets. Ref2VA uses `transformer_ref` and Ref4 v0.1; T2VA uses `transformer` and Base4 v1.0; preview I2VA and FL2VA use the official `transformer` at 16 evaluations without an adapter. Each profile has its own prepared assets and persistent pipeline. A request of another mode is rejected before execution.
 
 ## Installation and assets
 
@@ -27,10 +27,10 @@ Prepare a local asset configuration with six explicit paths:
 | Field | Contents |
 | --- | --- |
 | `model_directory` | The official Diffusers components from `MiniMaxAI/MiniMax-H3` at `42ed227ee7df40d41602854ae760620d6eb651fe`, with the selected `transformer_ref` or `transformer` component |
-| `adapter_path` | The selected Turbo profile's pinned BF16 adapter from [runtime assets](../reference/runtime-assets), or `null` for either Base16 I2VA profile |
+| `adapter_path` | The selected Turbo profile's pinned BF16 adapter from [runtime assets](../reference/runtime-assets), or `null` for Base16 I2VA and FL2VA profiles |
 | `decoder_directory` | The `FL2VA` directory from that same official H3 revision, containing `video_vae` and `audio_vae` |
 | `artifact` | The selected profile's complete BF16 native artifact, with runtime LoRA residuals only for Turbo profiles |
-| `schedule_overlay` | Matching training-Euler schedule: four evaluations for Turbo profiles or 16 for Base16 I2VA; Base16 I2VA uses video/audio shifts 12/3 |
+| `schedule_overlay` | Matching training-Euler schedule: four evaluations for Turbo profiles or 16 for Base16 I2VA/FL2VA; Base16 uses video/audio shifts 12/3 |
 | `auxiliary_tensor` | Its matching native input and output tensors |
 
 The last three are prepared native assets, not arbitrary upstream checkpoint files. Follow the [official-weight compiler recipe](./compile-weights) to create them, or check the [asset contracts](../reference/runtime-assets) before supplying an existing artifact. A ready-made model package is not currently published.
@@ -55,7 +55,7 @@ vflash generate \
   --output video.mp4 --trust-local-code
 ```
 
-Supply one, two or three `--reference` arguments for Ref2VA. For T2VA, prepare with `--profile t2va-turbo4-exact-sm89` and omit all image arguments. For preview I2VA, prepare with the matching SM89 or SM86 Base16 profile and pass exactly one `--first-frame first-frame.png`; do not mix it with `--reference`. The SM86 profile also requires `--peer-gpu 1 --strategy sequence-head`. The corresponding Python request is `VideoRequest(prompt=..., first_frame=Path("first-frame.png"), seed=...)`. Progress is emitted as JSON lines on stderr; stdout contains the final result. Each command starts and closes its own models. For a ready-made environment and complete mounting example, see [Docker generation](./docker#pipeline).
+Supply one, two or three `--reference` arguments for Ref2VA. For T2VA, prepare with `--profile t2va-turbo4-exact-sm89` and omit all image arguments. For preview I2VA, prepare with the matching SM89 or SM86 Base16 profile and pass exactly one `--first-frame first-frame.png`. For true FL2VA, prepare `fl2va-base16-bf16-sm89` or `fl2va-base16-bf16-sm86` and pass both `--first-frame first-frame.png --last-frame last-frame.png`. Do not mix keyframes with `--reference`. The SM86 profiles also require `--peer-gpu 1 --strategy sequence-head`. The corresponding Python FL2VA request is `VideoRequest(prompt=..., first_frame=Path("first-frame.png"), last_frame=Path("last-frame.png"), seed=...)`. Progress is emitted as JSON lines on stderr; stdout contains the final result. Each command starts and closes its own models. For a ready-made environment and complete mounting example, see [Docker generation](./docker#pipeline).
 
 ## One owned pipeline
 

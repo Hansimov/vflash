@@ -24,7 +24,7 @@ def profile_timesteps(profile_id: str = DEFAULT_MODEL_PROFILE) -> tuple[Any, ...
         schedule.video_sigmas[:-1], schedule.audio_sigmas[:-1], strict=True
     ):
         values = [1.0 - video, 1.0 - audio]
-        if profile.definition.mode.value in {"ref2va", "i2va"}:
+        if profile.definition.mode.value in {"ref2va", "i2va", "fl2va"}:
             values.append(max(1.0 - video, schedule.keyframe_noise_aug))
         rows.append(torch.tensor(values, dtype=torch.float32).unique(sorted=True))
     return tuple(rows)

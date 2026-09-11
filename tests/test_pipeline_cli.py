@@ -68,6 +68,30 @@ def test_generate_parser_exposes_first_frame_separately_from_references():
     assert args.reference == [] and args.reference_video is None
 
 
+def test_generate_parser_exposes_first_and_last_frames_for_fl2va():
+    args = build_parser().parse_args(
+        [
+            "generate",
+            "--prepared-assets",
+            "receipt.json",
+            "--prompt-file",
+            "prompt.txt",
+            "--first-frame",
+            "frame-zero.png",
+            "--last-frame",
+            "frame-last.png",
+            "--gpu",
+            "0",
+            "--output",
+            "result.mp4",
+        ]
+    )
+    assert (args.first_frame, args.last_frame) == (
+        Path("frame-zero.png"),
+        Path("frame-last.png"),
+    )
+
+
 def test_generate_cli_runs_one_owned_pipeline_and_keeps_progress_off_stdout(
     tmp_path, monkeypatch, capsys
 ):

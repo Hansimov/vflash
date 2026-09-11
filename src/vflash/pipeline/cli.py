@@ -22,7 +22,8 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
     prepare.add_argument("--assets", type=Path, required=True, help="six-path asset JSON")
     prepare.add_argument("--receipt", type=Path, required=True, help="new local receipt path")
     generate = commands.add_parser(
-        "generate", help="generate an MP4 from text, ordered images or one reference video"
+        "generate",
+        help="generate an MP4 from text, ordered references, or temporal keyframes",
     )
     generate.add_argument("--prepared-assets", type=Path, required=True)
     generate.add_argument("--prompt-file", type=Path, required=True, help="UTF-8 prompt file")
@@ -36,7 +37,12 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
     generate.add_argument(
         "--first-frame",
         type=Path,
-        help="one local image that explicitly anchors frame zero for I2VA",
+        help="one local image that explicitly anchors frame zero for I2VA or FL2VA",
+    )
+    generate.add_argument(
+        "--last-frame",
+        type=Path,
+        help="one local image that anchors the final frame; requires --first-frame for FL2VA",
     )
     generate.add_argument("--width", type=int, default=928)
     generate.add_argument("--height", type=int, default=512)
@@ -87,6 +93,7 @@ def run_pipeline_command(args: argparse.Namespace) -> int:
         references=tuple(args.reference),
         reference_video=args.reference_video,
         first_frame=args.first_frame,
+        last_frame=args.last_frame,
         width=args.width,
         height=args.height,
         seed=args.seed,

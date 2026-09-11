@@ -55,6 +55,8 @@ COMPLETE_MODEL_PROFILES = (
     "t2va-turbo4-exact-sm86",
     "i2va-base16-bf16-sm89",
     "i2va-base16-bf16-sm86",
+    "fl2va-base16-bf16-sm89",
+    "fl2va-base16-bf16-sm86",
 )
 
 
@@ -73,7 +75,11 @@ class H3ModelProfile:
     @property
     def workflow(self) -> str:
         """The official Diffusers workflow implementing this public request mode."""
-        return "fl2va" if self.definition.mode.value == "i2va" else self.definition.mode.value
+        return (
+            "fl2va"
+            if self.definition.mode.value in {"i2va", "fl2va"}
+            else self.definition.mode.value
+        )
 
     @property
     def weight_profile(self) -> str:
@@ -93,8 +99,10 @@ class H3ModelProfile:
             family = "ref4"
         elif self.definition.mode.value == "t2va":
             family = "base4"
-        else:
+        elif self.definition.mode.value == "i2va":
             family = "base16-i2va"
+        else:
+            family = "base16-fl2va"
         return f"{family}-bf16-{self.adapter_execution}-{self.architecture}-v1"
 
 
@@ -120,7 +128,7 @@ def model_profile(profile_id: str = DEFAULT_MODEL_PROFILE) -> H3ModelProfile:
         ):
             raise ContractError("the complete profile differs from its pinned adapter contract")
     elif (
-        definition.mode.value != "i2va"
+        definition.mode.value not in {"i2va", "fl2va"}
         or definition.nfe != 16
         or definition.precision != "bf16-no-adapter"
     ):

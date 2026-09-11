@@ -4,7 +4,7 @@
 
 ## 可用配置 {#available}
 
-Ref2VA 基于参考素材生成视频和音频；T2VA 使用文本条件，不需要参考图片。Base 与 Ref 权重相互独立。单 4090 的[完整链路](./complete-pipeline)接受纯文字，或提示词加一至三张有序参考图；双张 RTX 3080 20 GB 也支持完整 Ref4 生成。下列原生接口接收预编译条件包，其默认驻留策略与完整链路不同。
+Ref2VA 基于参考素材生成视频和音频；T2VA 使用文本条件，不需要参考图片；I2VA 锚定第零帧，FL2VA 同时锚定片段两端。Base 与 Ref 权重相互独立。[完整链路](./complete-pipeline)通过相互匹配的固定配置接收这些输入。下列原生接口接收预编译条件包，其默认驻留策略与完整链路不同。
 
 | 显卡 | 配置 | 步数 | 权重加载方式 |
 | --- | --- | ---: | --- |
@@ -13,6 +13,10 @@ Ref2VA 基于参考素材生成视频和音频；T2VA 使用文本条件，不�
 | RTX 3080 20 GB | `ref2va-turbo4-exact-sm86` | 4 | 从系统内存分块加载 |
 | RTX 4090 48 GB | `t2va-turbo4-exact-sm89` | 4 | 常驻显存；见下方验证范围 |
 | 双 RTX 3080 20 GB | `t2va-turbo4-exact-sm86` | 4 | 分块加载；仅 `sequence-head` |
+| RTX 4090 48 GB | `i2va-base16-bf16-sm89` | 16 | 常驻显存；预览 |
+| 双 RTX 3080 20 GB | `i2va-base16-bf16-sm86` | 16 | 分块加载；`sequence-head` 预览 |
+| RTX 4090 48 GB | `fl2va-base16-bf16-sm89` | 16 | 常驻显存；合同预览 |
+| 双 RTX 3080 20 GB | `fl2va-base16-bf16-sm86` | 16 | 分块加载；`sequence-head` 合同预览 |
 
 HTTP 服务默认使用 4090 Turbo4。切换配置时，需要同时更换匹配的资源并重启服务。
 
@@ -58,7 +62,7 @@ Vflash 可以直接执行固定版本的 [LightX2V H3 Turbo](https://huggingface
 | Turbo4 v0.1 | 单/双 3080、单 4090 | `minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors` |
 | Turbo8 v1.0 768p | 单 4090 | `minimax_h3_ref2v_turbo_8step_v1.0_768p_bf16.safetensors` |
 
-固定修订与来源见[运行资源](../reference/runtime-assets#versions)。T2VA 还支持用于 SM89 或双 SM86 T2VA 的 `minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors`，alpha 128 / rank 128。仅支持明确列出的文件和修订；ComfyUI、FL2VA、任意自定义 LoRA 和未来上游版本需要单独适配。
+固定修订与来源见[运行资源](../reference/runtime-assets#versions)。T2VA 还支持用于 SM89 或双 SM86 T2VA 的 `minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors`，alpha 128 / rank 128；FL2VA 配置使用不带该适配器的官方 Base 权重。仅支持明确列出的文件和修订；ComfyUI、任意自定义 LoRA 和未来上游版本需要单独适配。
 
 Turbo4 和 Turbo8 都是蒸馏配置。减少步数可以降低计算量，但不代表输出质量与 50 步基础模型相同。名称中的 `exact` 描述所用注意力路径和指定 LoRA 的执行方式，不承诺不同 GPU 上的张量完全一致。
 
@@ -68,4 +72,4 @@ Turbo4 和 Turbo8 都是蒸馏配置。减少步数可以降低计算量，但�
 
 ## 当前版本的边界 {#scope}
 
-[完整配置表](../reference/pipeline-profiles)涵盖单 SM89 或双 SM86 的 Ref4，以及单 SM89 的 T2VA Base4。单 SM86 和 Turbo8 保留条件包到 latent 的接口。未列出的模式、LoRA、量化和时长帧率组合不在这些已验证配置中。HTTP 接口一次串行执行一个任务；账号、计费和分布式 GPU 调度由接入 Vflash 的应用负责。
+[完整配置表](../reference/pipeline-profiles)列出已发布链路和当前 Base16 关键帧预览。FL2VA 的 schema 和引擎合同已经实现，但目标显卡延迟和成片质量尚未资格化。单 SM86 和 Turbo8 保留条件包到 latent 的接口。未列出的模式、LoRA、量化和时长帧率组合不在这些配置中。HTTP 接口一次串行执行一个任务；账号、计费和分布式 GPU 调度由接入 Vflash 的应用负责。
