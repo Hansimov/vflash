@@ -23,7 +23,7 @@ from vflash.adapters.modular_config import local_modular_config
 from vflash.adapters.references import DecodedReference, install_match_reference_setup_block
 from vflash.adapters.video_references import DecodedVideoReference
 from vflash.contracts import ContractError
-from vflash.model_assets import model_profile
+from vflash.model_assets import model_profile, supported_request_modes
 from vflash.native.h3_conditioning_bundle import (
     H3_FIRST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION,
     H3_FIRST_FRAME_POLICY,
@@ -310,7 +310,7 @@ class DiffusersConditioner:
         self._require_open()
         if not self._cuda_active:
             raise ContractError("resume the conditioner before encoding a request")
-        if request.mode != self.profile.definition.mode.value:
+        if request.mode not in supported_request_modes(self.prepared.profile_id):
             raise ContractError("the request mode differs from the conditioner profile")
         is_video = request.reference_video is not None
         is_first_frame = request.first_frame is not None
@@ -346,6 +346,7 @@ class DiffusersConditioner:
             video_prefix, audio_prefix = capture.prefix_counts()
             source = conditioning_source(
                 profile_id=self.prepared.profile_id,
+                request_mode=request.mode,
                 runtime_versions=self.versions,
                 reference_policy=H3_VIDEO_REFERENCE_POLICY if is_video else "match",
             )

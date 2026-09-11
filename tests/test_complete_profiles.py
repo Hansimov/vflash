@@ -16,8 +16,10 @@ from vflash.contracts import ContractError
 from vflash.model_assets import (
     COMPLETE_MODEL_PROFILES,
     DEFAULT_MODEL_PROFILE,
+    conditioning_profile_for_request,
     model_profile,
     model_schedule,
+    supported_request_modes,
     transformer_identity,
     weights_source,
 )
@@ -48,6 +50,64 @@ def test_released_model_identities_and_adapter_scaling_remain_distinct():
     assert fl2va.definition.mode.value == "fl2va"
     assert fl2va.workflow == "fl2va" and fl2va.adapter is None
     assert fl2va.definition.nfe == 16 and fl2va.weight_profile == "minimax-h3-base"
+
+
+@pytest.mark.parametrize("hardware", ["sm89", "sm86"])
+def test_base16_resident_profiles_accept_both_keyframe_conditioning_modes(hardware):
+    i2va = f"i2va-base16-bf16-{hardware}"
+    fl2va = f"fl2va-base16-bf16-{hardware}"
+    i2va_profile, fl2va_profile = model_profile(i2va), model_profile(fl2va)
+    for resident in (i2va, fl2va):
+        assert supported_request_modes(resident) == ("i2va", "fl2va")
+        assert conditioning_profile_for_request(resident, "i2va") == i2va
+        assert conditioning_profile_for_request(resident, "fl2va") == fl2va
+    assert i2va_profile.hardware == fl2va_profile.hardware
+    assert i2va_profile.workflow == fl2va_profile.workflow == "fl2va"
+    assert i2va_profile.adapter is fl2va_profile.adapter is None
+    assert (
+        i2va_profile.definition.nfe,
+        i2va_profile.definition.scheduler,
+        i2va_profile.definition.video_flow_shift,
+        i2va_profile.definition.audio_flow_shift,
+        i2va_profile.definition.precision,
+        i2va_profile.definition.attention,
+    ) == (
+        fl2va_profile.definition.nfe,
+        fl2va_profile.definition.scheduler,
+        fl2va_profile.definition.video_flow_shift,
+        fl2va_profile.definition.audio_flow_shift,
+        fl2va_profile.definition.precision,
+        fl2va_profile.definition.attention,
+    )
+    assert model_schedule(i2va).to_mapping() == model_schedule(fl2va).to_mapping()
+    assert {
+        key: value
+        for key, value in transformer_identity(i2va).items()
+        if key != "oracle_profile"
+    } == {
+        key: value
+        for key, value in transformer_identity(fl2va).items()
+        if key != "oracle_profile"
+    }
+    assert weights_source(i2va)["base_transformer_sha256"] == weights_source(fl2va)[
+        "base_transformer_sha256"
+    ]
+    with pytest.raises(ContractError, match="request mode"):
+        conditioning_profile_for_request(i2va, "t2va")
+
+
+def test_turbo_and_reference_profiles_remain_single_mode():
+    paired = {
+        "i2va-base16-bf16-sm89",
+        "i2va-base16-bf16-sm86",
+        "fl2va-base16-bf16-sm89",
+        "fl2va-base16-bf16-sm86",
+    }
+    for profile_id in COMPLETE_MODEL_PROFILES:
+        if profile_id not in paired:
+            assert supported_request_modes(profile_id) == (
+                model_profile(profile_id).definition.mode.value,
+            )
 
 
 def test_t2_sm86_uses_base_weights_but_requires_its_own_compilation():

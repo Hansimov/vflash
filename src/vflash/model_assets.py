@@ -59,6 +59,77 @@ COMPLETE_MODEL_PROFILES = (
     "fl2va-base16-bf16-sm86",
 )
 
+_BASE16_KEYFRAME_PROFILE_BY_MODE = {
+    "i2va-base16-bf16-sm89": {
+        "i2va": "i2va-base16-bf16-sm89",
+        "fl2va": "fl2va-base16-bf16-sm89",
+    },
+    "fl2va-base16-bf16-sm89": {
+        "i2va": "i2va-base16-bf16-sm89",
+        "fl2va": "fl2va-base16-bf16-sm89",
+    },
+    "i2va-base16-bf16-sm86": {
+        "i2va": "i2va-base16-bf16-sm86",
+        "fl2va": "fl2va-base16-bf16-sm86",
+    },
+    "fl2va-base16-bf16-sm86": {
+        "i2va": "i2va-base16-bf16-sm86",
+        "fl2va": "fl2va-base16-bf16-sm86",
+    },
+}
+
+
+def supported_request_modes(profile_id: str) -> tuple[str, ...]:
+    """Return request modes that reuse this profile's exact loaded model."""
+
+    profile = model_profile(profile_id)
+    paired = _BASE16_KEYFRAME_PROFILE_BY_MODE.get(profile_id)
+    if paired is not None:
+        candidates = tuple(model_profile(paired[mode]) for mode in ("i2va", "fl2va"))
+        invariant = tuple(
+            (
+                candidate.definition.model,
+                candidate.definition.model_revision,
+                candidate.definition.nfe,
+                candidate.definition.scheduler,
+                candidate.definition.video_flow_shift,
+                candidate.definition.audio_flow_shift,
+                candidate.definition.precision,
+                candidate.definition.attention,
+                candidate.definition.target_ids,
+                candidate.hardware,
+                candidate.transformer_component,
+                candidate.workflow,
+                candidate.adapter,
+                candidate.weight_profile,
+                candidate.adapter_execution,
+                {
+                    key: value
+                    for key, value in transformer_identity(candidate.definition.id).items()
+                    if key != "oracle_profile"
+                },
+            )
+            for candidate in candidates
+        )
+        if candidates[0].definition.mode.value != "i2va" or (
+            candidates[1].definition.mode.value != "fl2va"
+            or invariant[0] != invariant[1]
+        ):
+            raise ContractError("paired Base16 keyframe profiles differ")
+        return ("i2va", "fl2va")
+    return (profile.definition.mode.value,)
+
+
+def conditioning_profile_for_request(profile_id: str, request_mode: str) -> str:
+    """Select mode-specific conditioning metadata without changing the loaded model."""
+
+    modes = supported_request_modes(profile_id)
+    if request_mode not in modes:
+        raise ContractError("the request mode differs from the prepared pipeline profile")
+    return _BASE16_KEYFRAME_PROFILE_BY_MODE.get(profile_id, {}).get(
+        request_mode, profile_id
+    )
+
 
 @dataclass(frozen=True)
 class H3ModelProfile:

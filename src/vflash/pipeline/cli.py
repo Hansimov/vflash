@@ -9,7 +9,11 @@ from dataclasses import asdict
 from pathlib import Path
 
 from vflash.contracts import ContractError
-from vflash.model_assets import COMPLETE_MODEL_PROFILES, DEFAULT_MODEL_PROFILE, model_profile
+from vflash.model_assets import (
+    COMPLETE_MODEL_PROFILES,
+    DEFAULT_MODEL_PROFILE,
+    supported_request_modes,
+)
 
 
 def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
@@ -103,7 +107,7 @@ def run_pipeline_command(args: argparse.Namespace) -> int:
     # H3Pipeline now validates/decodes once, before its first CUDA load. Do not
     # decode every video twice just to duplicate this same CPU input boundary.
     prepared = load_prepared_pipeline_assets(args.prepared_assets)
-    if request.mode != model_profile(prepared.profile_id).definition.mode.value:
+    if request.mode not in supported_request_modes(prepared.profile_id):
         raise ContractError("the request mode differs from the prepared pipeline profile")
     if args.strategy is not None and args.peer_gpu is None:
         raise ContractError("a parallel strategy requires --peer-gpu")

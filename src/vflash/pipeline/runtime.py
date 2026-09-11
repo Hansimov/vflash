@@ -20,7 +20,7 @@ from vflash.contracts import ContractError
 from vflash.hardware import NvidiaDevice
 from vflash.media.encoding import media_executables
 from vflash.media.runtime import OfficialMediaDecoder
-from vflash.model_assets import model_profile
+from vflash.model_assets import model_profile, supported_request_modes
 from vflash.native.runner import NativeEngineSession
 from vflash.pipeline.assets import PreparedPipelineAssets
 from vflash.pipeline.contracts import (
@@ -163,7 +163,7 @@ class H3Pipeline:
             raise ContractError("the pipeline is closed")
         if not isinstance(request, VideoRequest) or not isinstance(output_path, Path):
             raise ContractError("generate requires a VideoRequest and pathlib.Path output")
-        if request.mode != self.profile.definition.mode.value:
+        if request.mode not in supported_request_modes(self.profile.definition.id):
             raise ContractError("the request mode differs from the prepared pipeline profile")
         if request.reference_video is not None and (
             self.prepared.profile_id != "ref2va-turbo4-exact-sm89"
@@ -328,6 +328,7 @@ class H3Pipeline:
             time.monotonic() - started,
             stages,
             media.media,
+            request_mode=request.mode,
         )
 
     def _close_owned(self) -> None:

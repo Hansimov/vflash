@@ -14,6 +14,7 @@ from vflash.adapters.checkpoints import read_weight_map
 from vflash.contracts import ContractError
 from vflash.model_assets import (
     canonical_sha256,
+    conditioning_profile_for_request,
     model_profile,
     transformer_identity,
     upstream_inventory,
@@ -37,17 +38,23 @@ from vflash.pipeline.contracts import (
 def conditioning_source(
     *,
     profile_id: str = PIPELINE_PROFILE,
+    request_mode: str | None = None,
     runtime_versions: dict[str, str] | None = None,
     reference_policy: str = "match",
 ) -> dict[str, str]:
-    profile = model_profile(profile_id)
+    source_profile_id = (
+        profile_id
+        if request_mode is None
+        else conditioning_profile_for_request(profile_id, request_mode)
+    )
+    profile = model_profile(source_profile_id)
     if reference_policy not in {"match", H3_VIDEO_REFERENCE_POLICY} or (
         reference_policy == H3_VIDEO_REFERENCE_POLICY
         and profile_id != "ref2va-turbo4-exact-sm89"
     ):
         raise ContractError("conditioning reference policy differs from the fixed profile")
     configuration = {
-        "profile_id": profile_id,
+        "profile_id": source_profile_id,
         "reference_policy_revision": 3,
         "text_precision": "bf16",
         "text_execution": "full",
@@ -75,7 +82,7 @@ def conditioning_source(
     else:
         configuration["reference_image_policy"] = "match"
     return {
-        **transformer_identity(profile_id),
+        **transformer_identity(source_profile_id),
         "oracle_config_sha256": canonical_sha256(configuration),
         "oracle_hardware": f"{profile.architecture}-single",
         "oracle_runtime_sha256": canonical_sha256(runtime_versions or {}),

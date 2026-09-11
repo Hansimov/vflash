@@ -20,6 +20,8 @@ Ref2VA generates video and audio from reference conditioning. T2VA uses text con
 
 The HTTP service defaults to Turbo4 on a 4090. To change profiles, restart the service with the selected profile and its matching assets.
 
+The complete-pipeline Base16 I2VA and FL2VA profiles are a paired exception: on the same hardware they use the exact same model artifact and schedule, so one loaded `H3Pipeline` can accept both keyframe request modes serially without a profile restart. The prepared profile ID remains its provenance identity. This exception does not apply to Turbo, Ref2VA or T2VA.
+
 ```bash
 vflash profiles
 vflash plan ref2va-turbo8-exact-sm89 --gpu 0

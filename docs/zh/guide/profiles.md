@@ -20,6 +20,8 @@ Ref2VA 基于参考素材生成视频和音频；T2VA 使用文本条件，不�
 
 HTTP 服务默认使用 4090 Turbo4。切换配置时，需要同时更换匹配的资源并重启服务。
 
+完整 pipeline 的 Base16 I2VA 与 FL2VA 是一个成对例外：同一硬件上的两者使用完全相同的模型工件和调度，因此一个已经加载的 `H3Pipeline` 可以串行接收两种关键帧请求，而无需重启 profile；已准备的 profile ID 继续作为来源身份。该例外不适用于 Turbo、Ref2VA 或 T2VA。
+
 ```bash
 vflash profiles
 vflash plan ref2va-turbo8-exact-sm89 --gpu 0

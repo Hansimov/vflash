@@ -106,6 +106,12 @@ def validate_conditioning_source(source: dict, artifact_source: dict) -> None:
     for suffix in ("-sm86", "-sm89"):
         expected_profile = expected_profile.removesuffix(suffix)
         profile = profile.removesuffix(suffix)
+    keyframe_profiles = {
+        "i2va-base-bf16-torch-sdpa",
+        "fl2va-base-bf16-torch-sdpa",
+    }
+    if expected_profile in keyframe_profiles and profile in keyframe_profiles:
+        expected_profile = profile = "keyframe-base-bf16-torch-sdpa"
     if (
         any(source.get(key) != artifact_source.get(key) for key in identity)
         or profile != expected_profile
@@ -113,6 +119,17 @@ def validate_conditioning_source(source: dict, artifact_source: dict) -> None:
         raise H3NativeConditioningRuntimeError(
             "the conditioning bundle and native Transformer are not the same H3 model"
         )
+
+
+def _conditioning_task_matches(bundle_task: str, artifact: Any) -> bool:
+    artifact_task = artifact.source.get("oracle_profile", "").partition("-")[0]
+    if bundle_task == artifact_task:
+        return True
+    return bool(
+        {bundle_task, artifact_task} <= {"i2va", "fl2va"}
+        and artifact.weight_profile == "minimax-h3-base"
+        and artifact.adapter_execution == "none"
+    )
 
 
 @dataclass(frozen=True)
@@ -405,8 +422,7 @@ class H3NativeConditioningRuntime:
     def _load_request_tensors(self, bundle_directory: Path) -> tuple[Any, dict[str, Any]]:
         torch = self._torch
         bundle = load_h3_conditioning_bundle(bundle_directory)
-        artifact_task = self.artifact.source.get("oracle_profile", "").partition("-")[0]
-        if bundle.profile.task != artifact_task:
+        if not _conditioning_task_matches(bundle.profile.task, self.artifact):
             raise H3NativeConditioningRuntimeError(
                 "the conditioning task differs from the loaded Base or Ref model"
             )

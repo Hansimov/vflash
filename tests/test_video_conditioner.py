@@ -143,7 +143,13 @@ def test_capture_emits_schema2_with_complete_identity_and_always_discards(
     decoded.close()
 
 
-def test_capture_passes_both_keyframes_and_emits_fl2va_schema4(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    "resident_profile",
+    ["i2va-base16-bf16-sm89", "fl2va-base16-bf16-sm89"],
+)
+def test_capture_passes_both_keyframes_and_emits_fl2va_schema4(
+    tmp_path, monkeypatch, resident_profile
+):
     events = []
     first = SimpleNamespace(image="first-rgb", size_bytes=100, sha256="a" * 64)
     last = SimpleNamespace(image="last-rgb", size_bytes=101, sha256="b" * 64)
@@ -152,7 +158,7 @@ def test_capture_passes_both_keyframes_and_emits_fl2va_schema4(tmp_path, monkeyp
     module.MiniMaxH3VideoReference = lambda **kwargs: kwargs
     monkeypatch.setitem(sys.modules, module.__name__, module)
     owner = DiffusersConditioner.__new__(DiffusersConditioner)
-    owner.profile = model_profile("fl2va-base16-bf16-sm89")
+    owner.profile = model_profile(resident_profile)
     owner.prepared = SimpleNamespace(profile_id=owner.profile.definition.id)
     owner._closed, owner._cuda_active = False, True
     owner.versions = {"diffusers": "0.40.0", "torch": "2.11.0"}
@@ -204,6 +210,11 @@ def test_capture_passes_both_keyframes_and_emits_fl2va_schema4(tmp_path, monkeyp
             ]
             assert _validate_request(request, task="fl2va", schema_version=4) == request
             _validate_fl2va_profile(kwargs["profile"], request)
+            assert kwargs["source"] == conditioning_source(
+                profile_id=resident_profile,
+                request_mode="fl2va",
+                runtime_versions=owner.versions,
+            )
             return kwargs
 
     monkeypatch.setattr("vflash.adapters.diffusers_h3.H3ConditioningCaptureSession", Capture)

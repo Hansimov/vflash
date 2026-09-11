@@ -11,6 +11,7 @@ from vflash.native.h3_conditioning_bundle import (
 from vflash.native.h3_native_conditioning_runtime import (
     H3NativeConditioningRuntime,
     H3NativeConditioningRuntimeError,
+    _conditioning_task_matches,
     validate_conditioning_source,
     validate_declared_schedule,
 )
@@ -41,6 +42,36 @@ def test_conditioning_hardware_is_provenance_but_model_identity_is_bound():
     ):
         with pytest.raises(H3NativeConditioningRuntimeError, match="same H3 model"):
             validate_conditioning_source({**capture, field: value}, artifact)
+
+
+def test_official_base16_i2va_and_fl2va_conditioning_share_one_weight_runtime():
+    common = {
+        "model_repository": "MiniMaxAI/MiniMax-H3",
+        "model_revision": "revision",
+        "transformer_sha256": "a" * 64,
+        "oracle": "diffusers",
+        "oracle_revision": "encoder",
+    }
+    artifact_source = {
+        **common,
+        "oracle_profile": "i2va-base-bf16-torch-sdpa-sm89",
+    }
+    capture_source = {
+        **common,
+        "oracle_profile": "fl2va-base-bf16-torch-sdpa-sm89",
+    }
+    validate_conditioning_source(capture_source, artifact_source)
+    artifact = SimpleNamespace(
+        source=artifact_source,
+        weight_profile="minimax-h3-base",
+        adapter_execution="none",
+    )
+    assert _conditioning_task_matches("i2va", artifact)
+    assert _conditioning_task_matches("fl2va", artifact)
+    assert not _conditioning_task_matches("t2va", artifact)
+    assert not _conditioning_task_matches("ref2va", artifact)
+    artifact.adapter_execution = "runtime-residual"
+    assert not _conditioning_task_matches("fl2va", artifact)
 
 
 def conditioning_profile():

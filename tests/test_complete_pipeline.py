@@ -449,6 +449,53 @@ def test_text_only_request_reuses_all_stages_without_reference_loading(tmp_path,
     assert events[-3:] == ["conditioning:close", "media:close", "native:close"]
 
 
+@pytest.mark.parametrize(
+    "resident_profile",
+    ["i2va-base16-bf16-sm89", "fl2va-base16-bf16-sm89"],
+)
+def test_one_base16_resident_serves_fl2va_then_i2va_without_reloading(
+    tmp_path, monkeypatch, resident_profile
+):
+    from vflash.model_assets import model_profile
+
+    pipeline, events = _pipeline()
+    pipeline.profile = model_profile(resident_profile)
+    pipeline.prepared.profile_id = pipeline.profile.definition.id
+    loaded = []
+    monkeypatch.setattr(
+        "vflash.pipeline.runtime.read_reference",
+        lambda path: SimpleNamespace(
+            image=path, close=lambda: loaded.append(("closed", path))
+        ),
+    )
+    observed = []
+    original = pipeline._conditioner.capture
+
+    def capture(request, references, directory):
+        observed.append((request.mode, tuple(reference.image for reference in references)))
+        return original(request, references, directory)
+
+    pipeline._conditioner.capture = capture
+    first, last = tmp_path / "first.png", tmp_path / "last.png"
+    fl2va = pipeline.generate(
+        VideoRequest(
+            "Move from <Picture 1> to <Picture 2>.",
+            first_frame=first,
+            last_frame=last,
+        ),
+        tmp_path / "fl2va.mp4",
+    )
+    i2va = pipeline.generate(
+        VideoRequest("Continue from <Picture 1>.", first_frame=first),
+        tmp_path / "i2va.mp4",
+    )
+    assert i2va.profile_id == fl2va.profile_id == resident_profile
+    assert fl2va.request_mode == "fl2va" and i2va.request_mode == "i2va"
+    assert observed == [("fl2va", (first, last)), ("i2va", (first,))]
+    assert events.count("native:generate") == 2
+    assert pipeline.request_count == 2
+
+
 def test_image_video_image_share_stages_and_release_frames(
     video_request, tmp_path, monkeypatch
 ):

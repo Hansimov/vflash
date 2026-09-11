@@ -191,3 +191,4 @@ class VideoResult:
     elapsed_seconds: float
     stages: dict[str, Any]
     media: dict[str, Any]
+    request_mode: str | None = None

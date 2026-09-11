@@ -12,7 +12,7 @@
 | `fl2va-base16-bf16-sm89`（预览） | 单张 RTX 4090 48 GB | 提示词加明确的首帧和尾帧 | `transformer` | 无 | 12 / 3 |
 | `fl2va-base16-bf16-sm86`（预览） | 双张 RTX 3080 20 GB，`sequence-head` | 提示词加明确的首帧和尾帧 | `transformer` | 无 | 12 / 3 |
 
-已发布的 Turbo 配置使用四次计算、BF16 权重和独立的 LoRA 残差；预览 I2VA 和 FL2VA 配置使用官方 Base Transformer，以 BF16、无 LoRA 执行 16 次计算。所有配置均输出五秒、24 fps 视频。默认仍为 SM89 Ref4。实例运行中不会切换权重或配置；应用需要多种模式时，应分别准备资产和常驻实例。原生单 SM86 与 Turbo8 接口具有不同的[验证范围](../guide/profiles)。
+已发布的 Turbo 配置使用四次计算、BF16 权重和独立的 LoRA 残差；预览 I2VA 和 FL2VA 配置使用官方 Base Transformer，以 BF16、无 LoRA 执行 16 次计算。所有配置均输出五秒、24 fps 视频。默认仍为 SM89 Ref4。同一硬件目标上的成对 Base16 I2VA/FL2VA 配置具有完全相同的模型工件、调度和官方 FL2VA 条件工作流，因此一个已准备的 Base16 关键帧 pipeline 可串行接受 I2VA 与 FL2VA 请求，无需重启 profile 或执行冷初始化；每个请求仍生成与实际模式一致的条件 schema 和来源信息，已准备的 profile ID 继续作为 pipeline 与结果身份。每次请求的阶段驻留仍遵循完整 pipeline 选择的内存策略。Turbo、Ref2VA 和 T2VA 配置仍只接受各自模式。原生单 SM86 与 Turbo8 接口具有不同的[验证范围](../guide/profiles)。
 
 ## 准备预览版 Base16 I2VA
 
@@ -36,7 +36,7 @@ vflash generate \
 
 `--first-frame` 表示第零帧锚点，与 Ref2VA 的 `--reference` 输入相互独立；Python 接口为 `VideoRequest(first_frame=Path(...))`。提示词可以将该图标记为 `<Picture 1>`，超出这一张已提供图片的标签会被拒绝。内部调用官方编码器的单帧 FL2VA 条件路径，对外请求类型仍明确为 I2VA。双 SM86 准备阶段使用 `i2va-base16-bf16-sm86`，生成时增加 `--peer-gpu 1 --strategy sequence-head`。一条 928 × 512、120 帧请求在不计冷启动时耗时 281.2 秒；其中一张卡触发软件热降频，因此该结果只证明可行性和持续产能，不作为无热降频延迟或质量结论。
 
-真正的双锚 FL2VA 请求应当单独编译并准备 `fl2va-base16-bf16-sm89` 或 `fl2va-base16-bf16-sm86`，然后同时传入首尾帧：
+真正的双锚 FL2VA 请求既可以复用同一硬件上已经准备好的 Base16 I2VA 关键帧 pipeline，也可以编译并准备显式的 `fl2va-base16-bf16-sm89` 或 `fl2va-base16-bf16-sm86` 身份，然后同时传入首尾帧：
 
 ```bash
 vflash generate \
@@ -45,7 +45,7 @@ vflash generate \
   --gpu 0 --seed 1234 --output video.mp4 --trust-local-code
 ```
 
-Python 接口为 `VideoRequest(first_frame=Path(...), last_frame=Path(...))`。官方 FL2VA workflow 会分别收到 `image` 和 `last_image`；提示词中的 `<Picture 1>` 与 `<Picture 2>` 按时间顺序表示首帧与尾帧。当前窄合同会拒绝只有尾帧而没有首帧的请求。schema 与 CPU 合同检查已经完成，目标显卡上的延迟和成片质量尚未资格化。SM86 FL2VA 与 I2VA 一样要求双卡 `sequence-head`。
+Python 接口为 `VideoRequest(first_frame=Path(...), last_frame=Path(...))`。官方 FL2VA workflow 会分别收到 `image` 和 `last_image`；提示词中的 `<Picture 1>` 与 `<Picture 2>` 按时间顺序表示首帧与尾帧。当前窄合同会拒绝只有尾帧而没有首帧的请求。复用成对配置不会改变已加载工件或已准备的 profile ID，只会按当前请求选择对应的 I2VA/FL2VA 条件合同。同进程跨模式路径已有 CPU 合同覆盖，目标显卡上的同一会话验证仍待完成。SM86 FL2VA 请求与 I2VA 一样要求双卡 `sequence-head`。
 
 ## 准备双 3080 生成 {#sm86}
 
