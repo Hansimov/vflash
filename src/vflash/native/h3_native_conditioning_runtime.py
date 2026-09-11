@@ -243,11 +243,12 @@ class H3NativeConditioningRuntime:
             or task not in {"ref2va", "t2va", "i2va"}
             or (expected_task is not None and task != expected_task)
             or (
-                task == "t2va"
+                task in {"t2va", "i2va"}
                 and capability == (8, 6)
                 and (
                     parallel_strategy != "sequence-head"
-                    or artifact.weight_profile != "lightx-turbo4-v1.0"
+                    or artifact.weight_profile
+                    not in {"lightx-turbo4-v1.0", "minimax-h3-base"}
                 )
             )
             or (
@@ -417,13 +418,22 @@ class H3NativeConditioningRuntime:
             raise H3NativeConditioningRuntimeError(
                 "video references require one SM89 GPU and their qualified Ref4 schedule"
             )
+        first_frame_topology = (
+            len(self.devices) == 1
+            and self.compute_capability == (8, 9)
+            and self.parallel_strategy == "single"
+        ) or (
+            len(self.devices) == 2
+            and self.compute_capability == (8, 6)
+            and self.parallel_strategy == "sequence-head"
+        )
         if bundle.schema_version == 3 and (
-            len(self.devices) != 1
-            or self.compute_capability != (8, 9)
+            not first_frame_topology
             or self.overlay.schedule.to_mapping() != bundle.schedule.to_mapping()
         ):
             raise H3NativeConditioningRuntimeError(
-                "I2VA first-frame bundles require one SM89 GPU and their Base16 schedule"
+                "I2VA first-frame bundles require a qualified SM89 single or SM86 pair "
+                "and their Base16 schedule"
             )
         validate_conditioning_source(bundle.source, self.artifact.source)
         tensor_path = bundle.directory / "conditioning.safetensors"

@@ -27,7 +27,7 @@ python -m pip install '.[pipeline]'
 | 字段 | 内容 |
 | --- | --- |
 | `model_directory` | `MiniMaxAI/MiniMax-H3` 在 `42ed227ee7df40d41602854ae760620d6eb651fe` 版本的官方 Diffusers 组件，包含所选模式的 `transformer_ref` 或 `transformer` |
-| `adapter_path` | Turbo 配置使用[运行资产](../reference/runtime-assets)中的固定 BF16 LoRA；`i2va-base16-bf16-sm89` 填 `null` |
+| `adapter_path` | Turbo 配置使用[运行资产](../reference/runtime-assets)中的固定 BF16 LoRA；两种 Base16 I2VA 配置均填 `null` |
 | `decoder_directory` | 同一官方 H3 版本的 `FL2VA` 目录，包含 `video_vae` 和 `audio_vae` |
 | `artifact` | 所选配置的完整 BF16 原生资产；只有 Turbo 配置包含运行时 LoRA 残差 |
 | `schedule_overlay` | 对应的 training-Euler 调度：Turbo 为四次计算，Base16 I2VA 为 16 次且视频/音频 shift 为 12/3 |
@@ -55,7 +55,7 @@ vflash generate \
   --output video.mp4 --trust-local-code
 ```
 
-Ref2VA 的 `--reference` 可以出现一至三次。T2VA 在准备时指定 `--profile t2va-turbo4-exact-sm89`，生成时不传图像参数。预览版 I2VA 在准备时指定 `--profile i2va-base16-bf16-sm89`，生成时传入且只传一个 `--first-frame first-frame.png`，不可与 `--reference` 混用；对应的 Python 请求是 `VideoRequest(prompt=..., first_frame=Path("first-frame.png"), seed=...)`。进度以 JSON 行写入 stderr，stdout 输出最终结果。每次命令独立加载并释放模型。预装环境及完整挂载示例见 [Docker 生成](./docker#pipeline)。
+Ref2VA 的 `--reference` 可以出现一至三次。T2VA 在准备时指定 `--profile t2va-turbo4-exact-sm89`，生成时不传图像参数。预览版 I2VA 使用与硬件匹配的 SM89 或 SM86 Base16 配置，生成时传入且只传一个 `--first-frame first-frame.png`，不可与 `--reference` 混用；SM86 配置还须传入 `--peer-gpu 1 --strategy sequence-head`。对应的 Python 请求是 `VideoRequest(prompt=..., first_frame=Path("first-frame.png"), seed=...)`。进度以 JSON 行写入 stderr，stdout 输出最终结果。每次命令独立加载并释放模型。预装环境及完整挂载示例见 [Docker 生成](./docker#pipeline)。
 
 ## 一个明确拥有资源的实例
 

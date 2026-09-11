@@ -1,6 +1,6 @@
 # 完整模型配置
 
-每份准备记录固定模型、LoRA 与调度方式。Vflash 0.3.2 支持以下完整链路：
+每份准备记录固定模型、LoRA 与调度方式。当前源码支持以下完整链路：
 
 | 配置 | 硬件 | 输入 | Transformer | LoRA | 视频/音频 shift |
 | --- | --- | --- | --- | --- | --- |
@@ -8,6 +8,7 @@
 | `ref2va-turbo4-exact-sm86` | 双张 RTX 3080 20 GB，`sequence-head` | 提示词加 1–3 张有序图片 | `transformer_ref` | Ref Turbo4 v0.1，alpha 8 / rank 128 | 12 / 3 |
 | `t2va-turbo4-exact-sm89` | 单张 RTX 4090 48 GB | 纯文字提示词 | `transformer` | Base Turbo4 v1.0，alpha 128 / rank 128 | 6 / 3 |
 | `i2va-base16-bf16-sm89`（预览） | 单张 RTX 4090 48 GB | 提示词加一张明确的首帧 | `transformer` | 无 | 12 / 3 |
+| `i2va-base16-bf16-sm86`（预览） | 双张 RTX 3080 20 GB，`sequence-head` | 提示词加一张明确的首帧 | `transformer` | 无 | 12 / 3 |
 
 已发布的 Turbo 配置使用四次计算、BF16 权重和独立的 LoRA 残差；预览 I2VA 配置使用官方 Base Transformer，以 BF16、无 LoRA 执行 16 次计算。所有配置均输出五秒、24 fps 视频。默认仍为 SM89 Ref4。实例运行中不会切换权重或配置；应用需要多种模式时，应分别准备资产和常驻实例。原生单 SM86 与 Turbo8 接口具有不同的[验证范围](../guide/profiles)。
 
@@ -31,7 +32,7 @@ vflash generate \
   --output video.mp4 --trust-local-code
 ```
 
-`--first-frame` 表示第零帧锚点，与 Ref2VA 的 `--reference` 输入相互独立；Python 接口为 `VideoRequest(first_frame=Path(...))`。提示词可以将该图标记为 `<Picture 1>`，超出这一张已提供图片的标签会被拒绝。内部调用官方编码器的单帧 FL2VA 条件路径，对外请求类型仍明确为 I2VA。
+`--first-frame` 表示第零帧锚点，与 Ref2VA 的 `--reference` 输入相互独立；Python 接口为 `VideoRequest(first_frame=Path(...))`。提示词可以将该图标记为 `<Picture 1>`，超出这一张已提供图片的标签会被拒绝。内部调用官方编码器的单帧 FL2VA 条件路径，对外请求类型仍明确为 I2VA。双 SM86 准备阶段使用 `i2va-base16-bf16-sm86`，生成时增加 `--peer-gpu 1 --strategy sequence-head`。一条 928 × 512、120 帧请求在不计冷启动时耗时 281.2 秒；其中一张卡触发软件热降频，因此该结果只证明可行性和持续产能，不作为无热降频延迟或质量结论。
 
 ## 准备双 3080 生成 {#sm86}
 
@@ -55,7 +56,7 @@ vflash generate \
   --output video.mp4 --seed 1234 --trust-local-code
 ```
 
-`ref4-sm86-assets.json` 的六个字段应填写新生成的 SM86 权重、调度和辅助张量路径。编码器、解码器和原始 LoRA 可以与 SM89 共享同一份只读文件。编码和解码使用主卡，两卡共同执行原生去噪。完整链路会在加载模型前拒绝单 SM86 或 `tensor` 策略；原生 latent 接口继续保留两种并行策略。
+`ref4-sm86-assets.json` 的六个字段应填写新生成的 SM86 权重、调度和辅助张量路径。编码器、解码器和原始 LoRA 可以与 SM89 共享同一份只读文件。编码和解码使用主卡，两卡共同执行原生去噪；`i2va-base16-bf16-sm86` 遵循相同的拓扑要求。完整链路会在加载模型前拒绝单 SM86 或 `tensor` 策略；原生 latent 接口继续保留两种并行策略。
 
 ## 准备文生视频
 

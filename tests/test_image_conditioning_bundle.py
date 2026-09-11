@@ -18,6 +18,10 @@ from vflash.native.h3_conditioning_bundle import (
 from vflash.native.h3_native_scheduler import H3NativeSchedule
 
 
+class ReachedSourceValidation(RuntimeError):
+    pass
+
+
 def write_bundle(directory, count, *, task="ref2va", frames=5, nfe=4):
     torch = pytest.importorskip("torch")
     save_file = pytest.importorskip("safetensors.torch").save_file
@@ -112,6 +116,56 @@ def test_native_first_frame_bundle_is_distinct_from_ref2va(tmp_path):
     assert sealed.profile.task == "i2va" and sealed.schedule.nfe == 16
     assert sealed.request["first_frame"]["role"] == "first_frame"
     assert "references" not in sealed.request
+
+
+@pytest.mark.parametrize(
+    "capability,count,strategy,accepted",
+    [
+        ((8, 9), 1, "single", True),
+        ((8, 6), 2, "sequence-head", True),
+        ((8, 6), 1, "single", False),
+        ((8, 6), 2, "tensor", False),
+        ((8, 9), 2, "sequence-head", False),
+    ],
+)
+def test_native_first_frame_reader_accepts_only_released_topologies(
+    monkeypatch, tmp_path, capability, count, strategy, accepted
+):
+    from types import SimpleNamespace
+
+    from vflash.native.h3_native_conditioning_runtime import (
+        H3NativeConditioningRuntime,
+        H3NativeConditioningRuntimeError,
+    )
+
+    runtime = H3NativeConditioningRuntime.__new__(H3NativeConditioningRuntime)
+    runtime._torch = object()
+    runtime.artifact = SimpleNamespace(
+        source={"oracle_profile": "i2va-base-bf16-torch-sdpa-sm86"}
+    )
+    runtime.devices, runtime.compute_capability = [None] * count, capability
+    runtime.parallel_strategy = strategy
+    runtime.overlay = SimpleNamespace(schedule=SimpleNamespace(to_mapping=lambda: {}))
+    bundle = SimpleNamespace(
+        profile=SimpleNamespace(task="i2va"),
+        schema_version=3,
+        schedule=SimpleNamespace(to_mapping=lambda: {}),
+        source={},
+    )
+    monkeypatch.setattr(
+        "vflash.native.h3_native_conditioning_runtime.load_h3_conditioning_bundle",
+        lambda _: bundle,
+    )
+    monkeypatch.setattr(
+        "vflash.native.h3_native_conditioning_runtime.validate_conditioning_source",
+        lambda *_: (_ for _ in ()).throw(ReachedSourceValidation()),
+    )
+    if accepted:
+        with pytest.raises(ReachedSourceValidation):
+            runtime._load_request_tensors(tmp_path)
+    else:
+        with pytest.raises(H3NativeConditioningRuntimeError, match="qualified"):
+            runtime._load_request_tensors(tmp_path)
 
 
 @pytest.mark.parametrize("count", [1, 3, 4, 9])

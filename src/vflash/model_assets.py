@@ -54,6 +54,7 @@ COMPLETE_MODEL_PROFILES = (
     "ref2va-turbo4-exact-sm86",
     "t2va-turbo4-exact-sm86",
     "i2va-base16-bf16-sm89",
+    "i2va-base16-bf16-sm86",
 )
 
 

@@ -21,8 +21,10 @@ def resolve_plan(
     if (strategy == "single") != (peer_device is None):
         raise ContractError("a parallel strategy requires exactly two selected GPUs")
     profile = catalog.profile(profile_id)
-    if profile.id == "t2va-turbo4-exact-sm86" and strategy != "sequence-head":
-        raise ContractError("T2VA SM86 requires two GPUs with sequence-head execution")
+    if profile.id in {"t2va-turbo4-exact-sm86", "i2va-base16-bf16-sm86"} and (
+        strategy != "sequence-head"
+    ):
+        raise ContractError("this SM86 profile requires two GPUs with sequence-head execution")
     candidates = [
         catalog.target(target_id)
         for target_id in profile.target_ids

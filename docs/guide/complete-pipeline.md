@@ -27,7 +27,7 @@ Prepare a local asset configuration with six explicit paths:
 | Field | Contents |
 | --- | --- |
 | `model_directory` | The official Diffusers components from `MiniMaxAI/MiniMax-H3` at `42ed227ee7df40d41602854ae760620d6eb651fe`, with the selected `transformer_ref` or `transformer` component |
-| `adapter_path` | The selected Turbo profile's pinned BF16 adapter from [runtime assets](../reference/runtime-assets), or `null` for `i2va-base16-bf16-sm89` |
+| `adapter_path` | The selected Turbo profile's pinned BF16 adapter from [runtime assets](../reference/runtime-assets), or `null` for either Base16 I2VA profile |
 | `decoder_directory` | The `FL2VA` directory from that same official H3 revision, containing `video_vae` and `audio_vae` |
 | `artifact` | The selected profile's complete BF16 native artifact, with runtime LoRA residuals only for Turbo profiles |
 | `schedule_overlay` | Matching training-Euler schedule: four evaluations for Turbo profiles or 16 for Base16 I2VA; Base16 I2VA uses video/audio shifts 12/3 |
@@ -55,7 +55,7 @@ vflash generate \
   --output video.mp4 --trust-local-code
 ```
 
-Supply one, two or three `--reference` arguments for Ref2VA. For T2VA, prepare with `--profile t2va-turbo4-exact-sm89` and omit all image arguments. For preview I2VA, prepare with `--profile i2va-base16-bf16-sm89` and pass exactly one `--first-frame first-frame.png`; do not mix it with `--reference`. The corresponding Python request is `VideoRequest(prompt=..., first_frame=Path("first-frame.png"), seed=...)`. Progress is emitted as JSON lines on stderr; stdout contains the final result. Each command starts and closes its own models. For a ready-made environment and complete mounting example, see [Docker generation](./docker#pipeline).
+Supply one, two or three `--reference` arguments for Ref2VA. For T2VA, prepare with `--profile t2va-turbo4-exact-sm89` and omit all image arguments. For preview I2VA, prepare with the matching SM89 or SM86 Base16 profile and pass exactly one `--first-frame first-frame.png`; do not mix it with `--reference`. The SM86 profile also requires `--peer-gpu 1 --strategy sequence-head`. The corresponding Python request is `VideoRequest(prompt=..., first_frame=Path("first-frame.png"), seed=...)`. Progress is emitted as JSON lines on stderr; stdout contains the final result. Each command starts and closes its own models. For a ready-made environment and complete mounting example, see [Docker generation](./docker#pipeline).
 
 ## One owned pipeline
 

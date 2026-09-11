@@ -19,6 +19,7 @@ WEIGHT_PROFILES = {
     "ref2va-turbo4-exact-sm89": "lightx-ref-turbo4-v0.1",
     "ref2va-turbo8-exact-sm89": "lightx-turbo8-v1.0",
     "i2va-base16-bf16-sm89": "minimax-h3-base",
+    "i2va-base16-bf16-sm86": "minimax-h3-base",
 }
 
 
@@ -56,14 +57,15 @@ class NativeEngineSession:
         ):
             raise ContractError(
                 "the public denoiser supports exact Ref2VA/T2VA Turbo4 on SM86, "
-                "and Ref2VA Turbo4/Turbo8, T2VA Turbo4, or I2VA Base16 on SM89"
+                "I2VA Base16 on paired SM86, and Ref2VA Turbo4/Turbo8, "
+                "T2VA Turbo4, or I2VA Base16 on SM89"
             )
         if "torch" in sys.modules and sys.modules["torch"].cuda.is_initialized():
             raise ContractError("select the Vflash GPU before initializing CUDA")
         if (
             plan.parallel_strategy not in {"single", "tensor", "sequence-head"}
             or (
-                profile.id == "t2va-turbo4-exact-sm86"
+                profile.id in {"t2va-turbo4-exact-sm86", "i2va-base16-bf16-sm86"}
                 and plan.parallel_strategy != "sequence-head"
             )
             or (plan.parallel_strategy == "single") != (plan.peer_device is None)
