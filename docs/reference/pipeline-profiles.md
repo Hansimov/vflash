@@ -12,7 +12,7 @@ A prepared pipeline uses one fixed model, adapter and scheduler. The current sou
 | `fl2va-base16-bf16-sm89` (preview) | One RTX 4090 48 GB | Prompt and explicit first and last frames | `transformer` | None | 12 / 3 |
 | `fl2va-base16-bf16-sm86` (preview) | Two RTX 3080 20 GB, `sequence-head` | Prompt and explicit first and last frames | `transformer` | None | 12 / 3 |
 
-The released Turbo profiles use four evaluations, BF16 weights and separate adapter residuals. The preview I2VA and FL2VA profiles use the official Base transformer for 16 evaluations in BF16 without an adapter. All produce five seconds at 24 fps. The default remains SM89 Ref4. The paired Base16 I2VA and FL2VA profiles for one hardware target have identical model artifacts, scheduler and official FL2VA conditioning workflow. A prepared Base16 keyframe pipeline can therefore accept I2VA and FL2VA requests serially without a profile restart or cold initialization; each request still emits its mode-specific conditioning schema and provenance. The prepared profile ID remains the pipeline and result identity. Per-request stage residency still follows the complete pipeline's selected memory strategy. Turbo, Ref2VA and T2VA profiles remain single-mode. Native single-SM86 and Turbo8 interfaces have a different [validation scope](../guide/profiles).
+The released Turbo profiles use four evaluations, BF16 weights and separate adapter residuals and retain their five-second contract. The preview I2VA and FL2VA profiles use the official Base transformer for 16 evaluations in BF16 without an adapter and accept five seconds (`124 → 120` frames) or ten seconds (`243 → 240` frames), both at 24 fps. The default remains SM89 Ref4. The paired Base16 I2VA and FL2VA profiles for one hardware target have identical model artifacts, scheduler and official FL2VA conditioning workflow. A prepared Base16 keyframe pipeline can therefore accept I2VA and FL2VA requests serially without a profile restart or cold initialization; each request still emits its mode-specific conditioning schema and provenance. The prepared profile ID remains the pipeline and result identity. Per-request stage residency still follows the complete pipeline's selected memory strategy. Turbo, Ref2VA and T2VA profiles remain single-mode. Native single-SM86 and Turbo8 interfaces have a different [validation scope](../guide/profiles).
 
 ## Prepare preview Base16 I2VA
 
@@ -30,7 +30,7 @@ vflash prepare-pipeline \
   --assets base16-i2va-assets.json --receipt base16-i2va-pipeline.json
 vflash generate \
   --prepared-assets base16-i2va-pipeline.json --prompt-file prompt.txt \
-  --first-frame first-frame.png --gpu 0 --seed 1234 \
+  --first-frame first-frame.png --duration 10 --gpu 0 --seed 1234 \
   --output video.mp4 --trust-local-code
 ```
 
@@ -42,10 +42,10 @@ For a true two-anchor FL2VA request, either reuse a prepared Base16 I2VA keyfram
 vflash generate \
   --prepared-assets base16-fl2va-pipeline.json --prompt-file prompt.txt \
   --first-frame first-frame.png --last-frame last-frame.png \
-  --gpu 0 --seed 1234 --output video.mp4 --trust-local-code
+  --duration 10 --gpu 0 --seed 1234 --output video.mp4 --trust-local-code
 ```
 
-The Python form is `VideoRequest(first_frame=Path(...), last_frame=Path(...))`. The official FL2VA workflow receives the first image as `image` and the final image as `last_image`; the prompt labels them `<Picture 1>` and `<Picture 2>` in that temporal order. A last frame without a first frame is rejected by this deliberately narrow contract. Reusing the paired profile changes neither the loaded artifact nor the prepared profile ID; it only selects the matching I2VA or FL2VA conditioning contract for that request. The same-process cross-mode path has CPU contract coverage, while target-GPU same-session qualification remains pending. The SM86 FL2VA request has the same two-GPU `sequence-head` requirement as I2VA.
+The Python form is `VideoRequest(first_frame=Path(...), last_frame=Path(...), duration_seconds=10)`. The official FL2VA workflow receives the first image as `image` and the final image as `last_image`; the prompt labels them `<Picture 1>` and `<Picture 2>` in that temporal order. A last frame without a first frame is rejected by this deliberately narrow contract. Reusing the paired profile changes neither the loaded artifact nor the prepared profile ID; it only selects the matching I2VA or FL2VA conditioning contract for that request. One SM89 pipeline completed a same-process ten-second I2VA-to-FL2VA sequence at 640 × 352: both outputs decoded to 240 frames with ten-second stereo audio and the second request performed no repeated initialization. That bounded proof does not qualify ten seconds at 928 × 512 or the SM86 pair. The SM86 FL2VA request has the same two-GPU `sequence-head` requirement as I2VA.
 
 ## Prepare dual 3080 generation {#sm86}
 

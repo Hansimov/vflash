@@ -8,7 +8,7 @@ Vflash 0.3.2 支持纯文字生成，也支持提示词加一至三张有序参�
 
 Vflash 负责原生去噪、模型生命周期、本地图像读取和 MP4 输出。文本和图像编码采用固定版本的 Diffusers 与 Transformers；Turbo 配置还使用 PEFT 适配器。音视频解码采用 H3 官方 VAE。它们是明确列出的依赖，不会被描述成新实现的原生内核。运行时不依赖 LightX2V 或业务服务。
 
-Turbo 请求使用四次去噪计算；预览版 Base16 I2VA 和 FL2VA 使用 16 次。两者都输出五秒视频并采用原生 24 fps 时钟。宽高必须是 32 的整数倍，总像素不超过 `928 × 512`，宽高比在 1:4 至 4:1 之间。模型生成 124 帧，交付前 120 帧。提示词原样传入。Ref2VA 的一至三张图片按照传入顺序编号为 `<Picture 1>`、`<Picture 2>`、`<Picture 3>`，请在提示词中说明每张图的主体和用途。这些是视觉参考，不代表视频中的帧位置，也不是严格的关键帧约束。I2VA 输入一张独立的第零帧锚点，提示词可将其称为 `<Picture 1>`。真正的 FL2VA 同时输入首尾锚点，提示词按时间顺序将其称为 `<Picture 1>` 和 `<Picture 2>`。
+Turbo 请求使用四次去噪计算，并保留五秒合同；预览版 Base16 I2VA 和 FL2VA 使用 16 次，可选择五秒或十秒并采用原生 24 fps 时钟。五秒生成 124 个模型帧并交付 120 帧；十秒生成 243 帧并交付 240 帧。宽高必须是 32 的整数倍，总像素不超过 `928 × 512`，宽高比在 1:4 至 4:1 之间；更大的时长与画布组合仍需单独做容量资格验证。提示词原样传入。Ref2VA 的一至三张图片按照传入顺序编号为 `<Picture 1>`、`<Picture 2>`、`<Picture 3>`，请在提示词中说明每张图的主体和用途。这些是视觉参考，不代表视频中的帧位置，也不是严格的关键帧约束。I2VA 输入一张独立的第零帧锚点，提示词可将其称为 `<Picture 1>`。真正的 FL2VA 同时输入首尾锚点，提示词按时间顺序将其称为 `<Picture 1>` 和 `<Picture 2>`。
 
 准备资产前先选择[固定模型配置](../reference/pipeline-profiles)。Ref2VA 使用 `transformer_ref` 与 Ref4 v0.1；T2VA 使用 `transformer` 与 Base4 v1.0；预览版 I2VA 和 FL2VA 使用官方 `transformer`，无 LoRA 执行 16 次计算。同一硬件上的成对 Base16 I2VA/FL2VA 配置具有完全相同的模型工件和调度，因此任一已准备的关键帧 pipeline 都能串行处理这两种请求，无需重启 profile 或执行冷初始化。条件信息仍按实际请求模式生成；结果以 `profile_id` 保留已准备身份，并以 `request_mode` 记录实际输入类型。每次请求的阶段驻留仍遵循所选内存策略。其他配置会在执行前拒绝模式切换。
 
@@ -55,7 +55,7 @@ vflash generate \
   --output video.mp4 --trust-local-code
 ```
 
-Ref2VA 的 `--reference` 可以出现一至三次。T2VA 在准备时指定 `--profile t2va-turbo4-exact-sm89`，生成时不传图像参数。一个已准备的 SM89 或 SM86 Base16 关键帧配置既可只传 `--first-frame first-frame.png` 生成 I2VA，也可同时传 `--first-frame first-frame.png --last-frame last-frame.png` 生成 FL2VA；显式的 `i2va-*` 与 `fl2va-*` profile ID 继续用于稳定的准备和来源记录。关键帧不可与 `--reference` 混用；SM86 配置还须传入 `--peer-gpu 1 --strategy sequence-head`。对应的 Python FL2VA 请求是 `VideoRequest(prompt=..., first_frame=Path("first-frame.png"), last_frame=Path("last-frame.png"), seed=...)`。进度以 JSON 行写入 stderr，stdout 输出最终结果。每次命令独立加载并释放模型；要在多次请求间实现跨模式常驻，应复用同一个 Python `H3Pipeline` 实例。预装环境及完整挂载示例见 [Docker 生成](./docker#pipeline)。
+Ref2VA 的 `--reference` 可以出现一至三次。T2VA 在准备时指定 `--profile t2va-turbo4-exact-sm89`，生成时不传图像参数。一个已准备的 SM89 或 SM86 Base16 关键帧配置既可只传 `--first-frame first-frame.png` 生成 I2VA，也可同时传 `--first-frame first-frame.png --last-frame last-frame.png` 生成 FL2VA；加入 `--duration 10` 使用原生十秒合同，省略时仍为五秒。显式的 `i2va-*` 与 `fl2va-*` profile ID 继续用于稳定的准备和来源记录。关键帧不可与 `--reference` 混用；SM86 配置还须传入 `--peer-gpu 1 --strategy sequence-head`。对应的 Python FL2VA 请求是 `VideoRequest(prompt=..., first_frame=Path("first-frame.png"), last_frame=Path("last-frame.png"), duration_seconds=10, seed=...)`。进度以 JSON 行写入 stderr，stdout 输出最终结果。每次命令独立加载并释放模型；要在多次请求间实现跨模式常驻，应复用同一个 Python `H3Pipeline` 实例。预装环境及完整挂载示例见 [Docker 生成](./docker#pipeline)。
 
 ## 一个明确拥有资源的实例
 
