@@ -37,6 +37,12 @@ _FILES = {
     "conditioning": "conditioning.safetensors",
     "scheduler": "scheduler.json",
 }
+# Complete-pipeline duration support is deliberately discrete. Values are the
+# matching temporal profile and delivery frames at the native 24 fps clock.
+_COMPLETE_TEMPORAL_PROFILES = {
+    124: ("native-24fps-5s", 120),
+    243: ("native-24fps-10s", 240),
+}
 _TENSORS = frozenset(
     {
         "initial_video_latents",
@@ -588,44 +594,57 @@ def _validate_video_profile(profile: H3ConditioningProfile, request: Mapping[str
         )
 
 
+def _complete_delivery_profile(model_frames: int) -> list[dict[str, str | int | float]] | None:
+    temporal = _COMPLETE_TEMPORAL_PROFILES.get(model_frames)
+    if temporal is None:
+        return None
+    temporal_profile, delivery_frames = temporal
+    return [
+        {
+            "temporal_profile": temporal_profile,
+            "frames": delivery_frames,
+            "fps": 24.0,
+        }
+    ]
+
+
 def _validate_first_frame_profile(
     profile: H3ConditioningProfile, request: Mapping[str, Any]
 ) -> None:
     expected_rows = (profile.width // 32) * (profile.height // 32)
+    delivery_profile = _complete_delivery_profile(profile.frames)
     if (
         profile.task != "i2va"
         or profile.nfe != 16
-        or profile.frames != 124
+        or delivery_profile is None
         or (profile.video_flow_shift, profile.audio_flow_shift) != (12, 3)
         or profile.width * profile.height > 928 * 512
         or profile.num_condition_audio_rows != 0
         or profile.num_condition_video_rows != expected_rows
-        or request["delivery_profiles"]
-        != [{"temporal_profile": "native-24fps-5s", "frames": 120, "fps": 24.0}]
+        or request["delivery_profiles"] != delivery_profile
     ):
         raise H3ConditioningBundleError(
-            "first-frame conditioning requires Base16 I2VA at 5s24 within its canvas budget"
+            "first-frame conditioning requires Base16 I2VA at 5s24 or 10s24 "
+            "within its canvas budget"
         )
 
 
-def _validate_fl2va_profile(
-    profile: H3ConditioningProfile, request: Mapping[str, Any]
-) -> None:
+def _validate_fl2va_profile(profile: H3ConditioningProfile, request: Mapping[str, Any]) -> None:
     expected_rows = 2 * (profile.width // 32) * (profile.height // 32)
+    delivery_profile = _complete_delivery_profile(profile.frames)
     if (
         profile.task != "fl2va"
         or profile.nfe != 16
-        or profile.frames != 124
+        or delivery_profile is None
         or (profile.video_flow_shift, profile.audio_flow_shift) != (12, 3)
         or profile.width * profile.height > 928 * 512
         or profile.num_condition_audio_rows != 0
         or profile.num_condition_video_rows != expected_rows
-        or request["delivery_profiles"]
-        != [{"temporal_profile": "native-24fps-5s", "frames": 120, "fps": 24.0}]
+        or request["delivery_profiles"] != delivery_profile
     ):
         raise H3ConditioningBundleError(
-            "first-last-frame conditioning requires Base16 FL2VA at 5s24 within "
-            "its canvas budget"
+            "first-last-frame conditioning requires Base16 FL2VA at 5s24 or 10s24 "
+            "within its canvas budget"
         )
 
 
@@ -636,12 +655,18 @@ def _validate_video_partitions(path: Path, profile: H3ConditioningProfile) -> No
     from vflash.native.h3_tensor_file import load_safetensor_tensors
 
     header = inspect_safetensors_header(path)
+    expected_audio_rows = (
+        h3_target_audio_tokens(frames=profile.frames)
+        if profile.frames in _COMPLETE_TEMPORAL_PROFILES
+        else None
+    )
     if (
-        header["first_packed_input"]["shape"][-1] != 5376
+        expected_audio_rows is None
+        or header["first_packed_input"]["shape"][-1] != 5376
         or header["first_packed_input"]["dtype"] != "BF16"
         or header["encoder_hidden_states"]["shape"][-1] != 5120
         or header["initial_video_latents"]["shape"][-1] != 96
-        or tuple(header["initial_audio_latents"]["shape"][1:]) != (414, 32)
+        or tuple(header["initial_audio_latents"]["shape"][1:]) != (expected_audio_rows, 32)
         or any(
             header[name]["dtype"] != "I64"
             for name in (
@@ -870,6 +895,15 @@ def load_h3_conditioning_bundle(directory: Path) -> H3ConditioningBundle:
         files=expected_files,
         schema_version=schema_version,
     )
+
+
+def h3_target_audio_tokens(*, frames: int) -> int:
+    """Return packed stereo audio rows at H3's native 40 latent frames/second."""
+
+    if frames < 5 or (frames - 5) % 17:
+        raise ValueError("H3 target frames must follow the 17k+5 contract")
+    latent_frames = round(frames / 24 * 40)
+    return 2 * latent_frames
 
 
 def h3_target_video_tokens(*, width: int, height: int, frames: int) -> int:

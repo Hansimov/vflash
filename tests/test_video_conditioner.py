@@ -147,8 +147,17 @@ def test_capture_emits_schema2_with_complete_identity_and_always_discards(
     "resident_profile",
     ["i2va-base16-bf16-sm89", "fl2va-base16-bf16-sm89"],
 )
+@pytest.mark.parametrize(
+    ("duration_seconds", "model_frames", "delivery_frames"),
+    [(5, 124, 120), (10, 243, 240)],
+)
 def test_capture_passes_both_keyframes_and_emits_fl2va_schema4(
-    tmp_path, monkeypatch, resident_profile
+    tmp_path,
+    monkeypatch,
+    resident_profile,
+    duration_seconds,
+    model_frames,
+    delivery_frames,
 ):
     events = []
     first = SimpleNamespace(image="first-rgb", size_bytes=100, sha256="a" * 64)
@@ -176,6 +185,7 @@ def test_capture_passes_both_keyframes_and_emits_fl2va_schema4(
             assert kwargs["image"] == first.image
             assert kwargs["last_image"] == last.image
             assert "references" not in kwargs
+            assert kwargs["num_frames"] == model_frames
             assert kwargs["num_inference_steps"] == 17
             raise H3ConditioningCaptureComplete
 
@@ -204,6 +214,13 @@ def test_capture_passes_both_keyframes_and_emits_fl2va_schema4(
             assert kwargs["schema_version"] == H3_FL2VA_CONDITIONING_BUNDLE_SCHEMA_VERSION
             request = kwargs["request"]
             assert request["keyframe_policy"] == H3_FL2VA_KEYFRAME_POLICY
+            assert request["delivery_profiles"] == [
+                {
+                    "temporal_profile": f"native-24fps-{duration_seconds}s",
+                    "frames": delivery_frames,
+                    "fps": 24,
+                }
+            ]
             assert [request[name]["sha256"] for name in ("first_frame", "last_frame")] == [
                 first.sha256,
                 last.sha256,
@@ -225,6 +242,7 @@ def test_capture_passes_both_keyframes_and_emits_fl2va_schema4(
         width=32,
         height=32,
         seed=7,
+        duration_seconds=duration_seconds,
     )
     result = owner.capture(request, (first, last), tmp_path / "conditioning")
     assert result["profile"].task == "fl2va"

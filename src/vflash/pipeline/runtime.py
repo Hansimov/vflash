@@ -303,7 +303,7 @@ class H3Pipeline:
                 directory / "video.mp4",
                 height=request.height,
                 width=request.width,
-                duration_seconds=5,
+                duration_seconds=request.duration_seconds,
                 fps=24,
             )
             decode_call_seconds = time.monotonic() - call_started

@@ -146,7 +146,7 @@ def test_video_prefix_uses_real_timestep_partition_and_visual_presentation(
     monkeypatch.setattr(
         "vflash.native.h3_tensor_file.load_safetensor_tensors", lambda *_: values
     )
-    profile = SimpleNamespace(num_condition_video_rows=2)
+    profile = SimpleNamespace(frames=124, num_condition_video_rows=2)
     _validate_video_partitions(tmp_path / "unused", profile)
     values["first_timestep_indices"][1] = 0
     with pytest.raises(H3ConditioningBundleError, match="prefix"):

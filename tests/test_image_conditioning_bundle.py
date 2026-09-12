@@ -14,6 +14,7 @@ from vflash.native.h3_conditioning_bundle import (
     H3ConditioningBundleError,
     H3ConditioningProfile,
     _validate_request,
+    h3_target_audio_tokens,
     h3_target_video_tokens,
     load_h3_conditioning_bundle,
     seal_h3_conditioning_bundle,
@@ -30,7 +31,8 @@ def write_bundle(directory, count, *, task="ref2va", frames=5, nfe=4):
     save_file = pytest.importorskip("safetensors.torch").save_file
     profile = H3ConditioningProfile(task, 32, 32, frames, nfe, 12, 3, count, count, 0)
     video = h3_target_video_tokens(width=32, height=32, frames=frames) + count
-    audio, text = (414 if task in {"i2va", "fl2va"} else 1), 2
+    audio = h3_target_audio_tokens(frames=frames) if task in {"i2va", "fl2va"} else 1
+    text = 2
     sequence = video + audio + text
     values = {
         "initial_video_latents": torch.zeros(1, video, 96),
@@ -83,12 +85,18 @@ def write_bundle(directory, count, *, task="ref2va", frames=5, nfe=4):
     return profile, request, source
 
 
-def test_native_first_frame_bundle_is_distinct_from_ref2va(tmp_path):
+@pytest.mark.parametrize(
+    ("duration_seconds", "model_frames", "delivery_frames", "audio_rows"),
+    [(5, 124, 120, 414), (10, 243, 240, 810)],
+)
+def test_native_first_frame_bundle_is_distinct_from_ref2va(
+    tmp_path, duration_seconds, model_frames, delivery_frames, audio_rows
+):
     profile, _request, source = write_bundle(
         tmp_path,
         1,
         task="i2va",
-        frames=124,
+        frames=model_frames,
         nfe=16,
     )
     prompt = "Motion begins from the supplied frame."
@@ -99,7 +107,11 @@ def test_native_first_frame_bundle_is_distinct_from_ref2va(tmp_path):
         "seed": 97,
         "first_frame_policy": H3_FIRST_FRAME_POLICY,
         "delivery_profiles": [
-            {"temporal_profile": "native-24fps-5s", "frames": 120, "fps": 24}
+            {
+                "temporal_profile": f"native-24fps-{duration_seconds}s",
+                "frames": delivery_frames,
+                "fps": 24,
+            }
         ],
         "first_frame": {
             "role": "first_frame",
@@ -117,16 +129,23 @@ def test_native_first_frame_bundle_is_distinct_from_ref2va(tmp_path):
     )
     assert sealed.schema_version == 3
     assert sealed.profile.task == "i2va" and sealed.schedule.nfe == 16
+    assert h3_target_audio_tokens(frames=model_frames) == audio_rows
     assert sealed.request["first_frame"]["role"] == "first_frame"
     assert "references" not in sealed.request
 
 
-def test_native_fl2va_bundle_binds_both_temporal_anchors(tmp_path):
+@pytest.mark.parametrize(
+    ("duration_seconds", "model_frames", "delivery_frames"),
+    [(5, 124, 120), (10, 243, 240)],
+)
+def test_native_fl2va_bundle_binds_both_temporal_anchors(
+    tmp_path, duration_seconds, model_frames, delivery_frames
+):
     profile, _request, source = write_bundle(
         tmp_path,
         2,
         task="fl2va",
-        frames=124,
+        frames=model_frames,
         nfe=16,
     )
     prompt = "Move from <Picture 1> to <Picture 2>."
@@ -137,7 +156,11 @@ def test_native_fl2va_bundle_binds_both_temporal_anchors(tmp_path):
         "seed": 97,
         "keyframe_policy": H3_FL2VA_KEYFRAME_POLICY,
         "delivery_profiles": [
-            {"temporal_profile": "native-24fps-5s", "frames": 120, "fps": 24}
+            {
+                "temporal_profile": f"native-24fps-{duration_seconds}s",
+                "frames": delivery_frames,
+                "fps": 24,
+            }
         ],
         "first_frame": {
             "role": "first_frame",

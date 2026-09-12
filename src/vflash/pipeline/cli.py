@@ -50,6 +50,13 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
     )
     generate.add_argument("--width", type=int, default=928)
     generate.add_argument("--height", type=int, default=512)
+    generate.add_argument(
+        "--duration",
+        type=int,
+        choices=(5, 10),
+        default=5,
+        help="native delivery duration in seconds; 10 requires I2VA or FL2VA",
+    )
     generate.add_argument("--seed", type=int, default=0)
     generate.add_argument("--output", type=Path, required=True, help="new MP4 output path")
     generate.add_argument("--gpu", type=int, required=True, help="physical nvidia-smi index")
@@ -101,6 +108,7 @@ def run_pipeline_command(args: argparse.Namespace) -> int:
         width=args.width,
         height=args.height,
         seed=args.seed,
+        duration_seconds=args.duration,
     )
     if args.output.exists() or args.output.is_symlink():
         raise ContractError("the output path already exists")

@@ -142,3 +142,53 @@ def test_close_fences_resources_before_retirement_and_can_retry() -> None:
     decoder.close()
     assert calls == ["cuda:0", "cuda:0"]
     assert decoder._released and decoder.video is None and decoder._video_master is None
+
+
+def test_media_decoder_delivers_the_exact_ten_second_audio_video_window(
+    tmp_path, monkeypatch
+) -> None:
+    decoder = OfficialMediaDecoder.__new__(OfficialMediaDecoder)
+    decoder._closed = False
+    decoder._cuda_active = True
+    decoder.device = "cuda:0"
+    decoder.audio_sample_rate = 32000
+    decoder._torch = SimpleNamespace(
+        cuda=SimpleNamespace(
+            reset_peak_memory_stats=lambda _device: None,
+            max_memory_allocated=lambda _device: 123,
+        )
+    )
+    decoded_video = torch.zeros(1, 3, 243, 2, 2)
+    decoded_audio = torch.zeros(1, 2, 320512)
+    decoder._decode_cpu = lambda *_args, **_kwargs: (
+        decoded_video,
+        decoded_audio,
+        {"decode": 1.0},
+    )
+    observed = {}
+
+    def encode(video, audio, output, **kwargs):
+        observed.update(
+            video_frames=int(video.shape[2]),
+            audio_samples=int(audio.shape[2]),
+            output=output,
+            **kwargs,
+        )
+        return {"frames": int(video.shape[2]), "audio_samples": int(audio.shape[2])}
+
+    monkeypatch.setattr("vflash.media.runtime.encode_mp4", encode)
+    result = decoder.generate_mp4(
+        tmp_path / "latents.safetensors",
+        tmp_path / "ten-seconds.mp4",
+        height=32,
+        width=32,
+        duration_seconds=10,
+    )
+    assert observed == {
+        "video_frames": 240,
+        "audio_samples": 320000,
+        "output": tmp_path / "ten-seconds.mp4",
+        "fps": 24,
+        "audio_sample_rate": 32000,
+    }
+    assert result.peak_allocated_bytes == 123

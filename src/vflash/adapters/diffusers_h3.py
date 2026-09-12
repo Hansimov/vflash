@@ -357,8 +357,8 @@ class DiffusersConditioner:
                 "seed": request.seed,
                 "delivery_profiles": [
                     {
-                        "temporal_profile": "native-24fps-5s",
-                        "frames": 120,
+                        "temporal_profile": f"native-24fps-{request.duration_seconds}s",
+                        "frames": request.delivery_frames,
                         "fps": 24,
                     }
                 ],

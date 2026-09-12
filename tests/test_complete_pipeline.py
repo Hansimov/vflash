@@ -179,6 +179,28 @@ def test_two_requests_reuse_the_session_and_retire_each_stage(video_request, tmp
     assert events[-3:] == ["conditioning:close", "media:close", "native:close"]
 
 
+def test_ten_second_keyframe_request_passes_exact_media_contract(video_request, tmp_path):
+    from vflash.model_assets import model_profile
+
+    pipeline, _events = _pipeline()
+    pipeline.profile = model_profile("i2va-base16-bf16-sm89")
+    pipeline.prepared.profile_id = pipeline.profile.definition.id
+    request = replace(
+        video_request,
+        reference=None,
+        first_frame=video_request.reference,
+        duration_seconds=10,
+    )
+    result = pipeline.generate(request, tmp_path / "ten-seconds.mp4")
+    assert (request.model_frames, request.delivery_frames) == (243, 240)
+    assert result.media == {
+        "height": request.height,
+        "width": request.width,
+        "duration_seconds": 10,
+        "fps": 24,
+    }
+
+
 def test_total_time_covers_input_loading_and_reference_cleanup(
     video_request, tmp_path, monkeypatch
 ):
@@ -346,6 +368,26 @@ def test_request_limits_are_cpu_contracts(tmp_path, changes):
         VideoRequest(**values)
 
 
+def test_request_duration_is_discrete_and_defaults_to_five_seconds():
+    short = VideoRequest("Continue.", first_frame=Path("first.png"))
+    long = VideoRequest(
+        "Continue longer.",
+        first_frame=Path("first.png"),
+        duration_seconds=10,
+    )
+    assert (short.duration_seconds, short.model_frames, short.delivery_frames) == (5, 124, 120)
+    assert (long.duration_seconds, long.model_frames, long.delivery_frames) == (10, 243, 240)
+    for invalid in (True, 5.0, 8, 15):
+        with pytest.raises(ContractError, match="exactly 5 or 10"):
+            VideoRequest("Continue.", first_frame=Path("first.png"), duration_seconds=invalid)
+    for values in (
+        {},
+        {"reference": Path("reference.png")},
+    ):
+        with pytest.raises(ContractError, match="require I2VA or FL2VA"):
+            VideoRequest("A scene.", duration_seconds=10, **values)
+
+
 def test_ordered_multi_reference_request_keeps_labels_and_seed_replacement(tmp_path):
     images = tuple(tmp_path / f"image-{index}.png" for index in range(3))
     request = VideoRequest(
@@ -464,9 +506,7 @@ def test_one_base16_resident_serves_fl2va_then_i2va_without_reloading(
     loaded = []
     monkeypatch.setattr(
         "vflash.pipeline.runtime.read_reference",
-        lambda path: SimpleNamespace(
-            image=path, close=lambda: loaded.append(("closed", path))
-        ),
+        lambda path: SimpleNamespace(image=path, close=lambda: loaded.append(("closed", path))),
     )
     observed = []
     original = pipeline._conditioner.capture

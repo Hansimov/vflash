@@ -181,8 +181,8 @@ class OfficialMediaDecoder:
             raise MediaError("the H3 canvas must be positive and divisible by 32")
         if fps != 24 or type(fps) is not int:
             raise MediaError("this adapter preserves the native 24 fps model clock")
-        if isinstance(duration_seconds, bool) or duration_seconds not in {5, 8}:
-            raise MediaError("this preview supports five- and eight-second delivery")
+        if isinstance(duration_seconds, bool) or duration_seconds not in {5, 8, 10}:
+            raise MediaError("this preview supports five-, eight-, and ten-second delivery")
         if output_path.exists() or output_path.is_symlink():
             raise MediaError("the output path already exists")
         started = time.monotonic()

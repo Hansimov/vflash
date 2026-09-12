@@ -6,7 +6,7 @@ import json
 import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from vflash.contracts import ContractError
 from vflash.model_assets import DEFAULT_MODEL_PROFILE
@@ -52,10 +52,7 @@ class PipelineAssets:
                 "pipeline asset paths must be nonempty strings or a null adapter"
             )
         return cls(
-            **{
-                name: Path(path) if path is not None else None
-                for name, path in value.items()
-            }
+            **{name: Path(path) if path is not None else None for name, path in value.items()}
         )
 
     @classmethod
@@ -65,7 +62,7 @@ class PipelineAssets:
 
 @dataclass(frozen=True)
 class VideoRequest:
-    """A text-, image- or video-guided five-second video at the native 24 fps clock.
+    """A text-, image- or video-guided 5- or 10-second video at the native 24 fps clock.
 
     The prompt is used verbatim; an application may format or polish it before
     this boundary. Images are ordered and labeled ``<Picture 1>`` through
@@ -87,6 +84,7 @@ class VideoRequest:
     reference_video: Path | None = field(default=None, kw_only=True)
     first_frame: Path | None = field(default=None, kw_only=True)
     last_frame: Path | None = field(default=None, kw_only=True)
+    duration_seconds: Literal[5, 10] = field(default=5, kw_only=True)
 
     def __post_init__(self) -> None:
         if (
@@ -150,6 +148,10 @@ class VideoRequest:
             )
         if type(self.seed) is not int or not 0 <= self.seed < 2**63:
             raise ContractError("seed must be an integer between 0 and 2^63-1")
+        if type(self.duration_seconds) is not int or self.duration_seconds not in {5, 10}:
+            raise ContractError("duration_seconds must be exactly 5 or 10")
+        if self.duration_seconds == 10 and self.mode not in {"i2va", "fl2va"}:
+            raise ContractError("ten-second complete requests require I2VA or FL2VA")
 
     @property
     def ordered_references(self) -> tuple[Path, ...]:
@@ -162,18 +164,16 @@ class VideoRequest:
         if self.first_frame is not None:
             return "i2va"
         return (
-            "ref2va"
-            if self.ordered_references or self.reference_video is not None
-            else "t2va"
+            "ref2va" if self.ordered_references or self.reference_video is not None else "t2va"
         )
 
     @property
     def model_frames(self) -> int:
-        return 124
+        return {5: 124, 10: 243}[self.duration_seconds]
 
     @property
     def delivery_frames(self) -> int:
-        return 120
+        return {5: 120, 10: 240}[self.duration_seconds]
 
 
 @dataclass(frozen=True)
