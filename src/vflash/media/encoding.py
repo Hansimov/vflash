@@ -12,6 +12,11 @@ import wave
 from pathlib import Path
 from typing import Any
 
+from vflash.media.audio_delivery import (
+    AUDIO_DELIVERY_PROFILES,
+    WEB_AUDIO_PROFILE,
+    web_loudness_filter,
+)
 from vflash.native.errors import VflashNativeError
 
 
@@ -77,6 +82,7 @@ def encode_mp4(
     preset: str = "medium",
     crf: int = 18,
     timeout_seconds: float = 600,
+    audio_delivery_profile: str = "unchanged",
 ) -> dict[str, Any]:
     """Encode CPU ``[1,3,F,H,W]`` RGB and ``[1,2,S]`` stereo without overwriting.
 
@@ -102,6 +108,8 @@ def encode_mp4(
         raise MediaError("audio_sample_rate must be a positive integer")
     if type(crf) is not int or not 0 <= crf <= 51:
         raise MediaError("crf must be an integer between 0 and 51")
+    if audio_delivery_profile not in AUDIO_DELIVERY_PROFILES:
+        raise MediaError("unknown audio delivery profile")
     if preset not in {
         "ultrafast",
         "superfast",
@@ -142,12 +150,41 @@ def encode_mp4(
                 rgb.numpy().tofile(destination)
         if not torch.isfinite(audio).all().item():
             raise MediaError("decoded audio contains nonfinite values")
-        pcm = audio[0].T.float().clamp(-1, 1).mul(32767).round().to(torch.int16).contiguous()
-        with wave.open(str(audio_path), "wb") as destination:
-            destination.setnchannels(2)
-            destination.setsampwidth(2)
-            destination.setframerate(audio_sample_rate)
-            destination.writeframes(pcm.numpy().tobytes())
+        audio_filters: list[str] = []
+        audio_delivery = None
+        if audio_delivery_profile == WEB_AUDIO_PROFILE:
+            audio_path = directory / "audio.f32le"
+            pcm = audio[0].T.float().contiguous()
+            pcm.numpy().astype("<f4", copy=False).tofile(audio_path)
+            audio_input = [
+                "-f",
+                "f32le",
+                "-ar",
+                str(audio_sample_rate),
+                "-ac",
+                "2",
+                "-i",
+                str(audio_path),
+            ]
+            normalization, audio_delivery = web_loudness_filter(ffmpeg, audio_input)
+            if normalization:
+                audio_filters.append(normalization)
+        else:
+            pcm = (
+                audio[0]
+                .T.float()
+                .clamp(-1, 1)
+                .mul(32767)
+                .round()
+                .to(torch.int16)
+                .contiguous()
+            )
+            with wave.open(str(audio_path), "wb") as destination:
+                destination.setnchannels(2)
+                destination.setsampwidth(2)
+                destination.setframerate(audio_sample_rate)
+                destination.writeframes(pcm.numpy().tobytes())
+            audio_input = ["-i", str(audio_path)]
         command = [
             ffmpeg,
             "-hide_banner",
@@ -165,8 +202,7 @@ def encode_mp4(
             str(fps),
             "-i",
             str(video_path),
-            "-i",
-            str(audio_path),
+            *audio_input,
             "-map",
             "0:v:0",
             "-map",
@@ -181,6 +217,12 @@ def encode_mp4(
             "yuv420p",
             "-c:a",
             "aac",
+            *(["-af", ",".join(audio_filters)] if audio_filters else []),
+            *(
+                ["-ar", str(audio_sample_rate)]
+                if audio_delivery_profile == WEB_AUDIO_PROFILE
+                else []
+            ),
             "-movflags",
             "+faststart",
             str(encoded_path),
@@ -215,7 +257,7 @@ def encode_mp4(
             os.link(encoded_path, output_path)
         except FileExistsError as exc:
             raise MediaError("the output path already exists") from exc
-    return {
+    result = {
         "frames": frames,
         "width": width,
         "height": height,
@@ -228,3 +270,6 @@ def encode_mp4(
         "size_bytes": output_path.stat().st_size,
         "probe": probe,
     }
+    if audio_delivery is not None:
+        result["audio_delivery"] = audio_delivery
+    return result

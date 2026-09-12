@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from vflash.contracts import ContractError
+from vflash.media.audio_delivery import AUDIO_DELIVERY_PROFILES
 from vflash.model_assets import DEFAULT_MODEL_PROFILE
 from vflash.model_assets import DIFFUSERS_REVISION as DIFFUSERS_REVISION
 from vflash.model_assets import MODEL_REVISION as MODEL_REVISION
@@ -73,6 +74,8 @@ class VideoRequest:
     I2VA input and is never interpreted as a Ref2VA content reference. Supplying
     both ``first_frame`` and ``last_frame`` is a true FL2VA request with two
     temporal anchors. A session never swaps models.
+    ``audio_delivery_profile='web-v1'`` applies bounded delivery gain after
+    decoding; the default ``unchanged`` profile preserves the decoded waveform.
     """
 
     prompt: str
@@ -85,6 +88,9 @@ class VideoRequest:
     first_frame: Path | None = field(default=None, kw_only=True)
     last_frame: Path | None = field(default=None, kw_only=True)
     duration_seconds: Literal[5, 10] = field(default=5, kw_only=True)
+    audio_delivery_profile: Literal["unchanged", "web-v1"] = field(
+        default="unchanged", kw_only=True
+    )
 
     def __post_init__(self) -> None:
         if (
@@ -152,6 +158,8 @@ class VideoRequest:
             raise ContractError("duration_seconds must be exactly 5 or 10")
         if self.duration_seconds == 10 and self.mode not in {"i2va", "fl2va"}:
             raise ContractError("ten-second complete requests require I2VA or FL2VA")
+        if self.audio_delivery_profile not in AUDIO_DELIVERY_PROFILES:
+            raise ContractError("unknown audio delivery profile")
 
     @property
     def ordered_references(self) -> tuple[Path, ...]:

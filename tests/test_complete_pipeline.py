@@ -190,6 +190,7 @@ def test_ten_second_keyframe_request_passes_exact_media_contract(video_request, 
         reference=None,
         first_frame=video_request.reference,
         duration_seconds=10,
+        audio_delivery_profile="web-v1",
     )
     result = pipeline.generate(request, tmp_path / "ten-seconds.mp4")
     assert (request.model_frames, request.delivery_frames) == (243, 240)
@@ -198,6 +199,7 @@ def test_ten_second_keyframe_request_passes_exact_media_contract(video_request, 
         "width": request.width,
         "duration_seconds": 10,
         "fps": 24,
+        "audio_delivery_profile": "web-v1",
     }
 
 

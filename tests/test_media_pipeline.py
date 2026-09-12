@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import shutil
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,6 +15,7 @@ from vflash.adapters.official_vae import (  # noqa: E402
     load_h3_vae_config,
     load_official_h3_vae_component,
 )
+from vflash.media.audio_delivery import _loudness_measurement  # noqa: E402
 from vflash.media.encoding import MediaError, encode_mp4  # noqa: E402
 from vflash.media.runtime import OfficialMediaDecoder  # noqa: E402
 from vflash.pipeline.residency import capture_cpu_master, restore_cpu_master  # noqa: E402
@@ -91,6 +93,16 @@ def _media() -> tuple[object, object]:
     return video, audio
 
 
+def _delivery_media(*, peaked: bool = False) -> tuple[object, object]:
+    seconds, sample_rate = 3, 32000
+    video = torch.zeros(1, 3, seconds * 24, 16, 32)
+    clock = torch.arange(seconds * sample_rate) / sample_rate
+    audio = (0.03 * torch.sin(2 * math.pi * 440 * clock)).repeat(2, 1).unsqueeze(0)
+    if peaked:
+        audio[:, :, 8000::16000] = 1.25
+    return video, audio
+
+
 @pytest.mark.skipif(not shutil.which("ffmpeg") or not shutil.which("ffprobe"), reason="FFmpeg")
 def test_real_mp4_has_expected_clocks_and_preserves_existing_output(tmp_path: Path) -> None:
     video, audio = _media()
@@ -104,6 +116,74 @@ def test_real_mp4_has_expected_clocks_and_preserves_existing_output(tmp_path: Pa
         encode_mp4(video, audio, target)
     assert target.read_bytes() == before
     assert sorted(p.name for p in tmp_path.iterdir()) == ["output.mp4"]
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg") or not shutil.which("ffprobe"), reason="FFmpeg")
+def test_default_audio_delivery_does_not_invoke_web_processing(
+    tmp_path: Path, monkeypatch
+) -> None:
+    video, audio = _media()
+
+    def unexpected(*_args, **_kwargs):
+        raise AssertionError("default delivery invoked web processing")
+
+    monkeypatch.setattr("vflash.media.encoding.web_loudness_filter", unexpected)
+    default_path = tmp_path / "default.mp4"
+    explicit_path = tmp_path / "unchanged.mp4"
+    result = encode_mp4(video, audio, default_path, preset="ultrafast")
+    encode_mp4(
+        video,
+        audio,
+        explicit_path,
+        preset="ultrafast",
+        audio_delivery_profile="unchanged",
+    )
+    assert "audio_delivery" not in result
+    assert default_path.read_bytes() == explicit_path.read_bytes()
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg") or not shutil.which("ffprobe"), reason="FFmpeg")
+@pytest.mark.parametrize("peaked,expected_mode", [(False, "linear"), (True, "limited")])
+def test_web_audio_delivery_applies_bounded_gain_and_peak_control(
+    tmp_path: Path, peaked: bool, expected_mode: str
+) -> None:
+    video, audio = _delivery_media(peaked=peaked)
+    output = tmp_path / f"web-{expected_mode}.mp4"
+    result = encode_mp4(
+        video,
+        audio,
+        output,
+        preset="ultrafast",
+        audio_delivery_profile="web-v1",
+    )
+    processing = result["audio_delivery"]
+    assert processing["status"] == "normalized"
+    assert processing["mode"] == expected_mode
+    assert processing["gain_db"] <= 18
+    measured, _ = _loudness_measurement("ffmpeg", ["-i", str(output)])
+    if expected_mode == "linear":
+        assert measured["input_i"] == pytest.approx(-18, abs=1.2)
+    else:
+        assert processing["input_true_peak_dbtp"] > 0
+        # AAC can introduce a small inter-sample overshoot after limiting.
+        assert measured["input_tp"] <= processing["true_peak_limit_dbtp"] + 1
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg") or not shutil.which("ffprobe"), reason="FFmpeg")
+def test_web_audio_delivery_bypasses_audio_below_the_quiet_floor(tmp_path: Path) -> None:
+    video, audio = _delivery_media()
+    audio.mul_(1e-4)
+    output = tmp_path / "quiet.mp4"
+    result = encode_mp4(
+        video,
+        audio,
+        output,
+        preset="ultrafast",
+        audio_delivery_profile="web-v1",
+    )
+    assert result["audio_delivery"]["status"] == "quiet_bypass"
+    measured, _ = _loudness_measurement("ffmpeg", ["-i", str(output)])
+    assert measured["input_i"] < -55
 
 
 def test_failed_encoding_leaves_no_partial_output(tmp_path: Path) -> None:
@@ -192,3 +272,14 @@ def test_media_decoder_delivers_the_exact_ten_second_audio_video_window(
         "audio_sample_rate": 32000,
     }
     assert result.peak_allocated_bytes == 123
+
+    observed.clear()
+    decoder.generate_mp4(
+        tmp_path / "latents.safetensors",
+        tmp_path / "ten-seconds-web.mp4",
+        height=32,
+        width=32,
+        duration_seconds=10,
+        audio_delivery_profile="web-v1",
+    )
+    assert observed["audio_delivery_profile"] == "web-v1"

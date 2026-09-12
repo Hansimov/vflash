@@ -15,6 +15,7 @@ from vflash.adapters.official_vae import (
     prepare_official_h3_audio_decoder,
     prepare_official_h3_video_decoder,
 )
+from vflash.media.audio_delivery import AUDIO_DELIVERY_PROFILES
 from vflash.media.encoding import MediaError, encode_mp4, media_executables
 from vflash.native.h3_tensor_file import load_safetensor_tensors
 from vflash.pipeline.residency import capture_cpu_master, restore_cpu_master
@@ -173,6 +174,7 @@ class OfficialMediaDecoder:
         width: int,
         duration_seconds: float,
         fps: int = 24,
+        audio_delivery_profile: str = "unchanged",
     ) -> MediaResult:
         self._require_open()
         if not self._cuda_active:
@@ -183,6 +185,8 @@ class OfficialMediaDecoder:
             raise MediaError("this adapter preserves the native 24 fps model clock")
         if isinstance(duration_seconds, bool) or duration_seconds not in {5, 8, 10}:
             raise MediaError("this preview supports five-, eight-, and ten-second delivery")
+        if audio_delivery_profile not in AUDIO_DELIVERY_PROFILES:
+            raise MediaError("unknown audio delivery profile")
         if output_path.exists() or output_path.is_symlink():
             raise MediaError("the output path already exists")
         started = time.monotonic()
@@ -205,12 +209,18 @@ class OfficialMediaDecoder:
             raise MediaError("decoded media is shorter than the requested delivery")
         peak = int(self._torch.cuda.max_memory_allocated(self.device))
         encode_started = time.monotonic()
+        encode_options = (
+            {"audio_delivery_profile": audio_delivery_profile}
+            if audio_delivery_profile != "unchanged"
+            else {}
+        )
         media = encode_mp4(
             video[:, :, :frames],
             audio[:, :, :samples],
             output_path,
             fps=fps,
             audio_sample_rate=self.audio_sample_rate,
+            **encode_options,
         )
         stages["media_encode"] = time.monotonic() - encode_started
         return MediaResult(output_path, time.monotonic() - started, stages, peak, media)

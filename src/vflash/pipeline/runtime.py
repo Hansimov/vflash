@@ -298,6 +298,11 @@ class H3Pipeline:
             report("decoding", 0, 1)
             weight_resume_seconds = self._media.resume_cuda()
             call_started = time.monotonic()
+            media_options = (
+                {"audio_delivery_profile": request.audio_delivery_profile}
+                if request.audio_delivery_profile != "unchanged"
+                else {}
+            )
             media = self._media.generate_mp4(
                 directory / "latents.safetensors",
                 directory / "video.mp4",
@@ -305,6 +310,7 @@ class H3Pipeline:
                 width=request.width,
                 duration_seconds=request.duration_seconds,
                 fps=24,
+                **media_options,
             )
             decode_call_seconds = time.monotonic() - call_started
             suspend_seconds = self._media.suspend_cuda()

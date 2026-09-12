@@ -28,6 +28,7 @@ def test_generate_parser_preserves_reference_order():
     )
     assert args.reference == [Path("second.png"), Path("first.png")]
     assert args.duration == 5
+    assert args.audio_delivery_profile == "unchanged"
 
 
 def test_generate_parser_exposes_one_explicit_video_path():
@@ -133,6 +134,7 @@ def test_generate_cli_runs_one_owned_pipeline_and_keeps_progress_off_stdout(
             assert request.ordered_references == (Path("one.png"), Path("two.png"))
             assert request.prompt == prompt.read_text()
             assert request.duration_seconds == 5
+            assert request.audio_delivery_profile == "web-v1"
             assert path == output
             progress(PipelineProgress("denoising", 1, 4))
             return VideoResult(path, "ref2va-turbo4-exact-sm89", request.seed, 1.5, {}, {})
@@ -152,6 +154,8 @@ def test_generate_cli_runs_one_owned_pipeline_and_keeps_progress_off_stdout(
                 "two.png",
                 "--gpu",
                 "4",
+                "--audio-delivery-profile",
+                "web-v1",
                 "--output",
                 str(output),
                 "--trust-local-code",
