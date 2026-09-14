@@ -41,6 +41,10 @@ _FILES = {
 # matching temporal profile and delivery frames at the native 24 fps clock.
 _COMPLETE_TEMPORAL_PROFILES = {
     124: ("native-24fps-5s", 120),
+    158: ("native-24fps-6s", 144),
+    175: ("native-24fps-7s", 168),
+    192: ("native-24fps-8s", 192),
+    226: ("native-24fps-9s", 216),
     243: ("native-24fps-10s", 240),
 }
 _TENSORS = frozenset(
@@ -624,7 +628,7 @@ def _validate_first_frame_profile(
         or request["delivery_profiles"] != delivery_profile
     ):
         raise H3ConditioningBundleError(
-            "first-frame conditioning requires Base16 I2VA at 5s24 or 10s24 "
+            "first-frame conditioning requires Base16 I2VA at 5-10s24 "
             "within its canvas budget"
         )
 
@@ -643,7 +647,7 @@ def _validate_fl2va_profile(profile: H3ConditioningProfile, request: Mapping[str
         or request["delivery_profiles"] != delivery_profile
     ):
         raise H3ConditioningBundleError(
-            "first-last-frame conditioning requires Base16 FL2VA at 5s24 or 10s24 "
+            "first-last-frame conditioning requires Base16 FL2VA at 5-10s24 "
             "within its canvas budget"
         )
 

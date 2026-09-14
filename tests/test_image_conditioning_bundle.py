@@ -87,7 +87,14 @@ def write_bundle(directory, count, *, task="ref2va", frames=5, nfe=4):
 
 @pytest.mark.parametrize(
     ("duration_seconds", "model_frames", "delivery_frames", "audio_rows"),
-    [(5, 124, 120, 414), (10, 243, 240, 810)],
+    [
+        (5, 124, 120, 414),
+        (6, 158, 144, 526),
+        (7, 175, 168, 584),
+        (8, 192, 192, 640),
+        (9, 226, 216, 754),
+        (10, 243, 240, 810),
+    ],
 )
 def test_native_first_frame_bundle_is_distinct_from_ref2va(
     tmp_path, duration_seconds, model_frames, delivery_frames, audio_rows
@@ -136,7 +143,14 @@ def test_native_first_frame_bundle_is_distinct_from_ref2va(
 
 @pytest.mark.parametrize(
     ("duration_seconds", "model_frames", "delivery_frames"),
-    [(5, 124, 120), (10, 243, 240)],
+    [
+        (5, 124, 120),
+        (6, 158, 144),
+        (7, 175, 168),
+        (8, 192, 192),
+        (9, 226, 216),
+        (10, 243, 240),
+    ],
 )
 def test_native_fl2va_bundle_binds_both_temporal_anchors(
     tmp_path, duration_seconds, model_frames, delivery_frames
