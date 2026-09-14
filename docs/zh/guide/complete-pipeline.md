@@ -55,7 +55,7 @@ vflash generate \
   --output video.mp4 --trust-local-code
 ```
 
-Ref2VA 的 `--reference` 可以出现一至三次。T2VA 在准备时指定 `--profile t2va-turbo4-exact-sm89`，生成时不传图像参数。一个已准备的 SM89 或 SM86 Base16 关键帧配置既可只传 `--first-frame first-frame.png` 生成 I2VA，也可同时传 `--first-frame first-frame.png --last-frame last-frame.png` 生成 FL2VA；加入 `--duration 10` 使用原生十秒合同，省略时仍为五秒。显式的 `i2va-*` 与 `fl2va-*` profile ID 继续用于稳定的准备和来源记录。关键帧不可与 `--reference` 混用；SM86 配置还须传入 `--peer-gpu 1 --strategy sequence-head`。对应的 Python FL2VA 请求是 `VideoRequest(prompt=..., first_frame=Path("first-frame.png"), last_frame=Path("last-frame.png"), duration_seconds=10, seed=...)`。进度以 JSON 行写入 stderr，stdout 输出最终结果。每次命令独立加载并释放模型；要在多次请求间实现跨模式常驻，应复用同一个 Python `H3Pipeline` 实例。预装环境及完整挂载示例见 [Docker 生成](./docker#pipeline)。
+Ref2VA 的 `--reference` 可以出现一至三次。T2VA 在准备时指定 `--profile t2va-turbo4-exact-sm89`，生成时不传图像参数。一个已准备的 SM89 或 SM86 Base16 关键帧配置既可只传 `--first-frame first-frame.png` 生成 I2VA，也可同时传 `--first-frame first-frame.png --last-frame last-frame.png` 生成 FL2VA；`--duration` 接受 5–10 的整数秒，省略时仍为五秒。目前公开的硬件实测仅覆盖五秒和十秒，中间时长仍需逐项端到端验收。显式的 `i2va-*` 与 `fl2va-*` profile ID 继续用于稳定的准备和来源记录。关键帧不可与 `--reference` 混用；SM86 配置还须传入 `--peer-gpu 1 --strategy sequence-head`。对应的 Python FL2VA 请求是 `VideoRequest(prompt=..., first_frame=Path("first-frame.png"), last_frame=Path("last-frame.png"), duration_seconds=10, seed=...)`。进度以 JSON 行写入 stderr，stdout 输出最终结果。每次命令独立加载并释放模型；要在多次请求间实现跨模式常驻，应复用同一个 Python `H3Pipeline` 实例。预装环境及完整挂载示例见 [Docker 生成](./docker#pipeline)。
 
 ## 一个明确拥有资源的实例
 

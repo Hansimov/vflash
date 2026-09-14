@@ -53,9 +53,9 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
     generate.add_argument(
         "--duration",
         type=int,
-        choices=(5, 10),
+        choices=range(5, 11),
         default=5,
-        help="native delivery duration in seconds; 10 requires I2VA or FL2VA",
+        help="native delivery duration in seconds; 6-10 requires I2VA or FL2VA",
     )
     generate.add_argument("--seed", type=int, default=0)
     generate.add_argument(

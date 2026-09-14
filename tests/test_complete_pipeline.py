@@ -379,15 +379,20 @@ def test_request_duration_is_discrete_and_defaults_to_five_seconds():
     )
     assert (short.duration_seconds, short.model_frames, short.delivery_frames) == (5, 124, 120)
     assert (long.duration_seconds, long.model_frames, long.delivery_frames) == (10, 243, 240)
-    for invalid in (True, 5.0, 8, 15):
-        with pytest.raises(ContractError, match="exactly 5 or 10"):
+    for duration, model_frames in ((6, 158), (7, 175), (8, 192), (9, 226)):
+        middle = VideoRequest(
+            "Continue.", first_frame=Path("first.png"), duration_seconds=duration
+        )
+        assert (middle.model_frames, middle.delivery_frames) == (model_frames, duration * 24)
+    for invalid in (True, 5.0, 4, 11, 15):
+        with pytest.raises(ContractError, match="integer from 5 to 10"):
             VideoRequest("Continue.", first_frame=Path("first.png"), duration_seconds=invalid)
     for values in (
         {},
         {"reference": Path("reference.png")},
     ):
         with pytest.raises(ContractError, match="require I2VA or FL2VA"):
-            VideoRequest("A scene.", duration_seconds=10, **values)
+            VideoRequest("A scene.", duration_seconds=6, **values)
 
 
 def test_ordered_multi_reference_request_keeps_labels_and_seed_replacement(tmp_path):

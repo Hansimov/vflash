@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -63,7 +64,7 @@ class PipelineAssets:
 
 @dataclass(frozen=True)
 class VideoRequest:
-    """A text-, image- or video-guided 5- or 10-second video at the native 24 fps clock.
+    """A text-, image- or video-guided 5-10-second video at the native 24 fps clock.
 
     The prompt is used verbatim; an application may format or polish it before
     this boundary. Images are ordered and labeled ``<Picture 1>`` through
@@ -87,7 +88,7 @@ class VideoRequest:
     reference_video: Path | None = field(default=None, kw_only=True)
     first_frame: Path | None = field(default=None, kw_only=True)
     last_frame: Path | None = field(default=None, kw_only=True)
-    duration_seconds: Literal[5, 10] = field(default=5, kw_only=True)
+    duration_seconds: int = field(default=5, kw_only=True)
     audio_delivery_profile: Literal["unchanged", "web-v1"] = field(
         default="unchanged", kw_only=True
     )
@@ -154,10 +155,10 @@ class VideoRequest:
             )
         if type(self.seed) is not int or not 0 <= self.seed < 2**63:
             raise ContractError("seed must be an integer between 0 and 2^63-1")
-        if type(self.duration_seconds) is not int or self.duration_seconds not in {5, 10}:
-            raise ContractError("duration_seconds must be exactly 5 or 10")
-        if self.duration_seconds == 10 and self.mode not in {"i2va", "fl2va"}:
-            raise ContractError("ten-second complete requests require I2VA or FL2VA")
+        if type(self.duration_seconds) is not int or not 5 <= self.duration_seconds <= 10:
+            raise ContractError("duration_seconds must be an integer from 5 to 10")
+        if self.duration_seconds > 5 and self.mode not in {"i2va", "fl2va"}:
+            raise ContractError("complete requests over five seconds require I2VA or FL2VA")
         if self.audio_delivery_profile not in AUDIO_DELIVERY_PROFILES:
             raise ContractError("unknown audio delivery profile")
 
@@ -177,11 +178,12 @@ class VideoRequest:
 
     @property
     def model_frames(self) -> int:
-        return {5: 124, 10: 243}[self.duration_seconds]
+        requested = self.duration_seconds * 24
+        return math.ceil((requested - 5) / 17) * 17 + 5
 
     @property
     def delivery_frames(self) -> int:
-        return {5: 120, 10: 240}[self.duration_seconds]
+        return self.duration_seconds * 24
 
 
 @dataclass(frozen=True)
