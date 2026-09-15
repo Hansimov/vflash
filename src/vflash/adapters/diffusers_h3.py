@@ -32,6 +32,7 @@ from vflash.native.h3_conditioning_bundle import (
     H3_VIDEO_REFERENCE_POLICY,
     H3ConditioningBundle,
     H3ConditioningProfile,
+    H3InMemoryConditioning,
 )
 from vflash.pipeline.assets import (
     PreparedPipelineAssets,
@@ -307,6 +308,28 @@ class DiffusersConditioner:
         references: tuple[DecodedReference | DecodedVideoReference, ...],
         directory: Path,
     ) -> H3ConditioningBundle:
+        """Materialize a content-bound bundle for an external or persisted boundary."""
+
+        return self._capture(request, references, directory, in_memory=False)
+
+    def capture_in_memory(
+        self,
+        request: VideoRequest,
+        references: tuple[DecodedReference | DecodedVideoReference, ...],
+        directory: Path,
+    ) -> H3InMemoryConditioning:
+        """Capture a one-shot same-process payload for the complete pipeline."""
+
+        return self._capture(request, references, directory, in_memory=True)
+
+    def _capture(
+        self,
+        request: VideoRequest,
+        references: tuple[DecodedReference | DecodedVideoReference, ...],
+        directory: Path,
+        *,
+        in_memory: bool,
+    ) -> H3ConditioningBundle | H3InMemoryConditioning:
         self._require_open()
         if not self._cuda_active:
             raise ContractError("resume the conditioner before encoding a request")
@@ -439,7 +462,8 @@ class DiffusersConditioner:
                     "source": source,
                 }
             )
-            return capture.finish(
+            finish = capture.finish_in_memory if in_memory else capture.finish
+            return finish(
                 bundle_id=f"h3-conditioning-{identity[:32]}",
                 profile=profile,
                 request=request_metadata,

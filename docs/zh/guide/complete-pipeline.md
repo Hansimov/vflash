@@ -93,9 +93,11 @@ with H3Pipeline(prepared, device=devices[0], trust_local_code=True) as pipeline:
 
 同一实例可以连续处理多个请求。原生权重采用 block ring，为轮流使用显卡的编码器与 VAE 留出空间；CPU 模型副本由实例持有以便复用，因此也需要足够的主机内存。进度回调同步执行，抛出异常可取消请求；不要在回调内部调用 `close`。任务队列、账号、存储及多进程调度由应用负责。
 
+在 `H3Pipeline` 内部，官方编码器现在将刚捕获的张量作为经过校验、仅可消费一次的内存载荷直接交给原生去噪阶段，避免写入、哈希并重新读取请求级条件张量文件。这个优化不会放宽外部边界：独立原生调用、CLI/服务任务以及显式持久化的捕获仍使用内容绑定的 bundle 目录；内存载荷被原生阶段消费后不能复用。
+
 集成验证使用了 240 GiB 主机内存上限。这是已测预算，不是测得的最低要求；去噪器单独运行时的 64 GiB 建议不包含这些编码器和解码器。
 
-`VideoResult.elapsed_seconds` 覆盖成功 `generate` 从输入校验到参考素材清理的完整耗时，包括首次模型加载。`stages.initialization_seconds` 是本次调用中的加载耗时，显式预加载后为零；`stages.request_elapsed_seconds` 仅扣除这部分加载，便于比较请求。`stages.session_initialization_seconds` 保留实例最初的加载成本，也可读取 `pipeline.initialization_seconds`。`stages.input_preparation` 包含资产检查和素材加载，其中 `reference_loading_seconds` 已计入准备耗时。编码和媒体阶段还分别记录 `weight_resume_seconds`、`suspend_seconds`，以及 `capture_call_seconds` 或 `decode_call_seconds`；外层阶段同时包含同步回调和协调开销。这些明细存在包含关系，不能全部视作独立耗时相加。
+`VideoResult.elapsed_seconds` 覆盖成功 `generate` 从输入校验到参考素材清理的完整耗时，包括首次模型加载。`stages.initialization_seconds` 是本次调用中的加载耗时，显式预加载后为零；`stages.request_elapsed_seconds` 仅扣除这部分加载，便于比较请求。`stages.session_initialization_seconds` 保留实例最初的加载成本，也可读取 `pipeline.initialization_seconds`。`stages.input_preparation` 包含资产检查和素材加载，其中 `reference_loading_seconds` 已计入准备耗时。编码和媒体阶段还分别记录 `weight_resume_seconds`、`suspend_seconds`，以及 `capture_call_seconds` 或 `decode_call_seconds`；编码阶段也会记录 `conditioning_transport` 和捕获的 `conditioning_tensor_bytes`。外层阶段同时包含同步回调和协调开销。这些明细存在包含关系，不能全部视作独立耗时相加。
 
 输出路径不能已经存在。编码、媒体核验以及 GPU 阶段清理成功后才发布视频。执行失败会关闭此实例并移除临时文件。`close()` 在等待 CUDA 完成后释放持有的模型与 hook，不会重置其他调用方的 CUDA 上下文。模型关闭后，CUDA 库仍可能保留进程级工作缓冲；需要释放整个 CUDA 上下文时，应退出该独立进程。
 

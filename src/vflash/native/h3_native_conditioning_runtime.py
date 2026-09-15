@@ -16,7 +16,11 @@ from pathlib import Path
 from traceback import clear_frames
 from typing import Any
 
-from vflash.native.h3_conditioning_bundle import load_h3_conditioning_bundle
+from vflash.native.h3_conditioning_bundle import (
+    H3InMemoryConditioning,
+    consume_h3_in_memory_conditioning,
+    load_h3_conditioning_bundle,
+)
 from vflash.native.h3_latent_layout import (
     h3_video_latent_frame_count,
     unpack_h3_audio_rows,
@@ -264,8 +268,7 @@ class H3NativeConditioningRuntime:
                 and capability == (8, 6)
                 and (
                     parallel_strategy != "sequence-head"
-                    or artifact.weight_profile
-                    not in {"lightx-turbo4-v1.0", "minimax-h3-base"}
+                    or artifact.weight_profile not in {"lightx-turbo4-v1.0", "minimax-h3-base"}
                 )
             )
             or (
@@ -419,9 +422,16 @@ class H3NativeConditioningRuntime:
             "attention_policy": _attention_policy(),
         }
 
-    def _load_request_tensors(self, bundle_directory: Path) -> tuple[Any, dict[str, Any]]:
+    def _load_request_tensors(
+        self,
+        conditioning: Path | H3InMemoryConditioning,
+    ) -> tuple[Any, dict[str, Any]]:
         torch = self._torch
-        bundle = load_h3_conditioning_bundle(bundle_directory)
+        bundle = (
+            conditioning
+            if isinstance(conditioning, H3InMemoryConditioning)
+            else load_h3_conditioning_bundle(conditioning)
+        )
         if not _conditioning_task_matches(bundle.profile.task, self.artifact):
             raise H3NativeConditioningRuntimeError(
                 "the conditioning task differs from the loaded Base or Ref model"
@@ -458,20 +468,23 @@ class H3NativeConditioningRuntime:
                     "their Base16 schedule"
                 )
         validate_conditioning_source(bundle.source, self.artifact.source)
-        tensor_path = bundle.directory / "conditioning.safetensors"
-        loaded = load_safetensor_tensors(
-            tensor_path,
-            (
-                "video_indices",
-                "audio_indices",
-                "text_indices",
-                "first_packed_input",
-                "initial_video_latents",
-                "initial_audio_latents",
-                "token_tags",
-                "rotary_cos",
-                "rotary_sin",
-            ),
+        loaded = (
+            consume_h3_in_memory_conditioning(bundle)
+            if isinstance(bundle, H3InMemoryConditioning)
+            else load_safetensor_tensors(
+                bundle.directory / "conditioning.safetensors",
+                (
+                    "video_indices",
+                    "audio_indices",
+                    "text_indices",
+                    "first_packed_input",
+                    "initial_video_latents",
+                    "initial_audio_latents",
+                    "token_tags",
+                    "rotary_cos",
+                    "rotary_sin",
+                ),
+            )
         )
         video_indices = loaded["video_indices"]
         audio_indices = loaded["audio_indices"]
@@ -493,7 +506,7 @@ class H3NativeConditioningRuntime:
 
     def generate_latents(
         self,
-        bundle_directory: Path,
+        conditioning: Path | H3InMemoryConditioning,
         output_path: Path,
         *,
         progress_callback: Callable[[int, int], None] | None = None,
@@ -506,7 +519,7 @@ class H3NativeConditioningRuntime:
             raise H3NativeConditioningRuntimeError("native latent output already exists")
         total_started = time.monotonic()
         prepare_started = time.monotonic()
-        bundle, tensors = self._load_request_tensors(bundle_directory)
+        bundle, tensors = self._load_request_tensors(conditioning)
         device = self.device
         state = H3NativeLatentState(
             self.overlay.schedule,

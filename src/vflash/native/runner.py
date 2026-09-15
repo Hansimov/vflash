@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from vflash.contracts import ContractError, ExecutionPlan, GenerationMode
+from vflash.native.h3_conditioning_bundle import H3InMemoryConditioning
 
 WEIGHT_PROFILES = {
     "t2va-turbo4-exact-sm89": "lightx-turbo4-v1.0",
@@ -120,7 +121,7 @@ class NativeEngineSession:
 
     def generate(
         self,
-        bundle: Path,
+        bundle: Path | H3InMemoryConditioning,
         output_latents: Path,
         *,
         progress_callback: Callable[[int, int], None] | None = None,

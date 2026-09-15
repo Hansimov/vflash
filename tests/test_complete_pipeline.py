@@ -8,7 +8,11 @@ from types import SimpleNamespace
 import pytest
 
 from vflash.contracts import ContractError
-from vflash.native.h3_conditioning_bundle import H3ConditioningProfile
+from vflash.native.h3_conditioning_bundle import (
+    H3ConditioningProfile,
+    H3InMemoryConditioning,
+)
+from vflash.native.h3_native_scheduler import H3NativeSchedule
 from vflash.pipeline.contracts import VideoRequest
 from vflash.pipeline.runtime import H3Pipeline
 
@@ -96,6 +100,9 @@ def _pipeline(*, fail: str | None = None) -> tuple[H3Pipeline, list[str]]:
                 ),
             )
 
+        def capture_in_memory(self, request, reference, directory):
+            return self.capture(request, reference, directory)
+
         def generate(self, bundle, output, *, progress_callback):
             self._event("generate")
             output.write_bytes(b"owned latent test placeholder")
@@ -177,6 +184,41 @@ def test_two_requests_reuse_the_session_and_retire_each_stage(video_request, tmp
     pipeline.close()
     pipeline.close()
     assert events[-3:] == ["conditioning:close", "media:close", "native:close"]
+
+
+def test_complete_pipeline_prefers_file_free_conditioning_handoff(video_request, tmp_path):
+    pipeline, _events = _pipeline()
+    live = H3InMemoryConditioning(
+        bundle_id="h3-conditioning-test",
+        created_at="test",
+        profile=H3ConditioningProfile(
+            "ref2va", video_request.width, video_request.height, 124, 4, 12, 3, 2, 2, 0
+        ),
+        request={},
+        source={},
+        schedule=H3NativeSchedule.shifted_linear(4),
+        tensor_bytes=427_000_000,
+        schema_version=1,
+        _tensors={},
+    )
+    observed = []
+
+    def capture_in_memory(_request, _references, directory):
+        assert not directory.exists()
+        return live
+
+    original_generate = pipeline._core.generate
+
+    def generate(conditioning, output, *, progress_callback):
+        observed.append(conditioning)
+        return original_generate(conditioning, output, progress_callback=progress_callback)
+
+    pipeline._conditioner.capture_in_memory = capture_in_memory
+    pipeline._core.generate = generate
+    result = pipeline.generate(video_request, tmp_path / "in-memory.mp4")
+    assert observed == [live]
+    assert result.stages["encoding"]["conditioning_transport"] == "in-memory"
+    assert result.stages["encoding"]["conditioning_tensor_bytes"] == 427_000_000
 
 
 def test_ten_second_keyframe_request_passes_exact_media_contract(video_request, tmp_path):

@@ -10,9 +10,10 @@ import re
 import stat
 import uuid
 from collections.abc import Mapping
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 from vflash.native.errors import VflashNativeError
@@ -20,7 +21,7 @@ from vflash.native.h3_latent_layout import (
     h3_video_latent_frame_count,
 )
 from vflash.native.h3_native_scheduler import H3NativeSchedule
-from vflash.native.h3_tensor_file import inspect_safetensors_header
+from vflash.native.h3_tensor_file import _safetensors_dtypes, inspect_safetensors_header
 
 H3_CONDITIONING_BUNDLE_SCHEMA_VERSION = 1
 H3_VIDEO_CONDITIONING_BUNDLE_SCHEMA_VERSION = 2
@@ -62,6 +63,19 @@ _TENSORS = frozenset(
         "first_timesteps",
         "first_timestep_indices",
         "first_time_embeddings",
+        "first_packed_input",
+    }
+)
+_NATIVE_REQUEST_TENSORS = frozenset(
+    {
+        "initial_video_latents",
+        "initial_audio_latents",
+        "token_tags",
+        "rotary_cos",
+        "rotary_sin",
+        "video_indices",
+        "audio_indices",
+        "text_indices",
         "first_packed_input",
     }
 )
@@ -198,6 +212,28 @@ class H3ConditioningBundle:
             self.directory / _FILES["scheduler"],
             expected_nfe=self.profile.nfe,
         )
+
+
+@dataclass(frozen=True)
+class H3InMemoryConditioning:
+    """One-shot trusted handoff from the official encoder to native denoising.
+
+    This object is only for the serial, same-process complete pipeline. Persisted,
+    cross-process, CLI, and service boundaries continue to use content-bound
+    :class:`H3ConditioningBundle` directories. The tensor payload is consumed once
+    so unused capture tensors are released before denoising begins.
+    """
+
+    bundle_id: str
+    created_at: str
+    profile: H3ConditioningProfile
+    request: Mapping[str, Any]
+    source: Mapping[str, str]
+    schedule: H3NativeSchedule
+    tensor_bytes: int
+    schema_version: int
+    _tensors: dict[str, Any] = field(repr=False, compare=False)
+    _consumed: bool = field(default=False, init=False, repr=False, compare=False)
 
 
 def _sha256(path: Path) -> str:
@@ -520,12 +556,11 @@ def _validate_request(value: Any, *, task: str, schema_version: int = 1) -> dict
     }
 
 
-def _validate_tensor_contract(
-    path: Path,
+def _validate_tensor_header_contract(
+    header: Mapping[str, Mapping[str, Any]],
     *,
     profile: H3ConditioningProfile,
 ) -> None:
-    header = inspect_safetensors_header(path)
     if set(header) != _TENSORS:
         raise H3ConditioningBundleError("H3 conditioning tensor names differ from schema v1")
 
@@ -581,6 +616,43 @@ def _validate_tensor_contract(
         raise H3ConditioningBundleError("H3 conditioning video rows differ from the profile")
 
 
+def _validate_tensor_contract(
+    path: Path,
+    *,
+    profile: H3ConditioningProfile,
+) -> None:
+    _validate_tensor_header_contract(
+        inspect_safetensors_header(path),
+        profile=profile,
+    )
+
+
+def _tensor_mapping_header(tensors: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    import torch
+
+    if set(tensors) != _TENSORS:
+        raise H3ConditioningBundleError("H3 conditioning tensor names differ from schema v1")
+    dtype_names = _safetensors_dtypes()
+    header: dict[str, dict[str, Any]] = {}
+    for name, tensor in tensors.items():
+        if (
+            not isinstance(tensor, torch.Tensor)
+            or tensor.device.type != "cpu"
+            or tensor.layout != torch.strided
+            or not tensor.is_contiguous()
+            or tensor.requires_grad
+            or tensor.dtype not in dtype_names
+        ):
+            raise H3ConditioningBundleError(
+                f"in-memory H3 conditioning tensor is not owned contiguous CPU storage: {name}"
+            )
+        header[name] = {
+            "dtype": dtype_names[tensor.dtype],
+            "shape": list(tensor.shape),
+        }
+    return header
+
+
 def _validate_video_profile(profile: H3ConditioningProfile, request: Mapping[str, Any]) -> None:
     reference = request["references"][0]
     if (
@@ -628,8 +700,7 @@ def _validate_first_frame_profile(
         or request["delivery_profiles"] != delivery_profile
     ):
         raise H3ConditioningBundleError(
-            "first-frame conditioning requires Base16 I2VA at 5-10s24 "
-            "within its canvas budget"
+            "first-frame conditioning requires Base16 I2VA at 5-10s24 within its canvas budget"
         )
 
 
@@ -652,13 +723,10 @@ def _validate_fl2va_profile(profile: H3ConditioningProfile, request: Mapping[str
         )
 
 
-def _validate_video_partitions(path: Path, profile: H3ConditioningProfile) -> None:
-    import torch
-
-    from vflash.native.h3_latent_layout import infer_h3_condition_prefix_counts
-    from vflash.native.h3_tensor_file import load_safetensor_tensors
-
-    header = inspect_safetensors_header(path)
+def _validate_video_partition_header(
+    header: Mapping[str, Mapping[str, Any]],
+    profile: H3ConditioningProfile,
+) -> None:
     expected_audio_rows = (
         h3_target_audio_tokens(frames=profile.frames)
         if profile.frames in _COMPLETE_TEMPORAL_PROFILES
@@ -685,17 +753,16 @@ def _validate_video_partitions(path: Path, profile: H3ConditioningProfile) -> No
         raise H3ConditioningBundleError(
             "video conditioning has invalid modality widths or precision"
         )
-    values = load_safetensor_tensors(
-        path,
-        (
-            "video_indices",
-            "audio_indices",
-            "text_indices",
-            "token_tags",
-            "first_timesteps",
-            "first_timestep_indices",
-        ),
-    )
+
+
+def _validate_video_partition_values(
+    values: Mapping[str, Any],
+    profile: H3ConditioningProfile,
+) -> None:
+    import torch
+
+    from vflash.native.h3_latent_layout import infer_h3_condition_prefix_counts
+
     tags = values["token_tags"]
     indices = [
         values[name].to(torch.int64)
@@ -735,6 +802,150 @@ def _validate_video_partitions(path: Path, profile: H3ConditioningProfile) -> No
         )
 
 
+def _validate_video_partitions(path: Path, profile: H3ConditioningProfile) -> None:
+    from vflash.native.h3_tensor_file import load_safetensor_tensors
+
+    _validate_video_partition_header(inspect_safetensors_header(path), profile)
+    values = load_safetensor_tensors(
+        path,
+        (
+            "video_indices",
+            "audio_indices",
+            "text_indices",
+            "token_tags",
+            "first_timesteps",
+            "first_timestep_indices",
+        ),
+    )
+    _validate_video_partition_values(values, profile)
+
+
+def _validate_conditioning_metadata(
+    *,
+    bundle_id: str,
+    profile: H3ConditioningProfile,
+    request: Mapping[str, Any],
+    source: Mapping[str, str],
+    schema_version: int,
+) -> tuple[H3ConditioningProfile, dict[str, Any], dict[str, str]]:
+    if not isinstance(bundle_id, str) or _BUNDLE_ID.fullmatch(bundle_id) is None:
+        raise H3ConditioningBundleError("H3 conditioning bundle_id is invalid")
+    try:
+        profile_value = H3ConditioningProfile.from_mapping(asdict(profile))
+    except TypeError as exc:
+        raise H3ConditioningBundleError("H3 conditioning profile is invalid") from exc
+    request_value = _validate_request(
+        dict(request), task=profile_value.task, schema_version=schema_version
+    )
+    if schema_version == H3_VIDEO_CONDITIONING_BUNDLE_SCHEMA_VERSION:
+        _validate_video_profile(profile_value, request_value)
+    elif schema_version == H3_FIRST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION:
+        _validate_first_frame_profile(profile_value, request_value)
+    elif schema_version == H3_FL2VA_CONDITIONING_BUNDLE_SCHEMA_VERSION:
+        _validate_fl2va_profile(profile_value, request_value)
+    source_value = _validate_source(dict(source))
+    return profile_value, request_value, source_value
+
+
+def _validate_in_memory_tensors(
+    tensors: Mapping[str, Any],
+    *,
+    profile: H3ConditioningProfile,
+    schema_version: int,
+) -> int:
+    header = _tensor_mapping_header(tensors)
+    _validate_tensor_header_contract(header, profile=profile)
+    if schema_version in {
+        H3_VIDEO_CONDITIONING_BUNDLE_SCHEMA_VERSION,
+        H3_FIRST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION,
+        H3_FL2VA_CONDITIONING_BUNDLE_SCHEMA_VERSION,
+    }:
+        _validate_video_partition_header(header, profile)
+        _validate_video_partition_values(tensors, profile)
+    return sum(tensor.numel() * tensor.element_size() for tensor in tensors.values())
+
+
+def build_h3_in_memory_conditioning(
+    *,
+    bundle_id: str,
+    profile: H3ConditioningProfile,
+    request: Mapping[str, Any],
+    source: Mapping[str, str],
+    schedule: H3NativeSchedule,
+    tensors: Mapping[str, Any],
+    schema_version: int = H3_CONDITIONING_BUNDLE_SCHEMA_VERSION,
+) -> H3InMemoryConditioning:
+    """Build a validated one-shot conditioning handoff without file I/O or hashing."""
+
+    profile_value, request_value, source_value = _validate_conditioning_metadata(
+        bundle_id=bundle_id,
+        profile=profile,
+        request=request,
+        source=source,
+        schema_version=schema_version,
+    )
+    if not isinstance(schedule, H3NativeSchedule):
+        raise H3ConditioningBundleError("in-memory H3 conditioning schedule is invalid")
+    schedule_value = H3NativeSchedule.from_mapping(
+        schedule.to_mapping(), expected_nfe=profile_value.nfe
+    )
+    owned_tensors = dict(tensors)
+    tensor_bytes = _validate_in_memory_tensors(
+        owned_tensors,
+        profile=profile_value,
+        schema_version=schema_version,
+    )
+    return H3InMemoryConditioning(
+        bundle_id=bundle_id,
+        created_at=datetime.now(UTC).isoformat(),
+        profile=profile_value,
+        request=MappingProxyType(request_value),
+        source=MappingProxyType(source_value),
+        schedule=schedule_value,
+        tensor_bytes=tensor_bytes,
+        schema_version=schema_version,
+        _tensors=owned_tensors,
+    )
+
+
+def consume_h3_in_memory_conditioning(
+    value: H3InMemoryConditioning,
+) -> dict[str, Any]:
+    """Revalidate and transfer native request tensors from a one-shot handoff."""
+
+    if not isinstance(value, H3InMemoryConditioning) or value._consumed:
+        raise H3ConditioningBundleError("in-memory H3 conditioning was already consumed")
+    if not isinstance(value.created_at, str) or not value.created_at:
+        raise H3ConditioningBundleError("in-memory H3 conditioning timestamp is invalid")
+    profile, request, source = _validate_conditioning_metadata(
+        bundle_id=value.bundle_id,
+        profile=value.profile,
+        request=value.request,
+        source=value.source,
+        schema_version=value.schema_version,
+    )
+    if (
+        profile != value.profile
+        or request != dict(value.request)
+        or source != dict(value.source)
+        or not isinstance(value.schedule, H3NativeSchedule)
+        or H3NativeSchedule.from_mapping(value.schedule.to_mapping(), expected_nfe=profile.nfe)
+        != value.schedule
+    ):
+        raise H3ConditioningBundleError("in-memory H3 conditioning metadata changed")
+    observed_bytes = _validate_in_memory_tensors(
+        value._tensors,
+        profile=profile,
+        schema_version=value.schema_version,
+    )
+    if observed_bytes != value.tensor_bytes:
+        raise H3ConditioningBundleError("in-memory H3 conditioning tensor size changed")
+    selected = {name: value._tensors[name] for name in _NATIVE_REQUEST_TENSORS}
+    value._tensors.clear()
+    object.__setattr__(value, "_consumed", True)
+    return selected
+
+
 def _files(directory: Path, profile: H3ConditioningProfile) -> tuple[H3ConditioningFile, ...]:
     rows = []
     for role, filename in _FILES.items():
@@ -767,21 +978,15 @@ def seal_h3_conditioning_bundle(
 ) -> H3ConditioningBundle:
     """Validate and content-bind an already written conditioning directory."""
 
-    if _BUNDLE_ID.fullmatch(bundle_id) is None:
-        raise H3ConditioningBundleError("H3 conditioning bundle_id is invalid")
     if directory.is_symlink() or not directory.is_dir():
         raise H3ConditioningBundleError("H3 conditioning directory must be a real directory")
-    profile = H3ConditioningProfile.from_mapping(asdict(profile))
-    request_value = _validate_request(
-        dict(request), task=profile.task, schema_version=schema_version
+    profile, request_value, source_value = _validate_conditioning_metadata(
+        bundle_id=bundle_id,
+        profile=profile,
+        request=request,
+        source=source,
+        schema_version=schema_version,
     )
-    if schema_version == H3_VIDEO_CONDITIONING_BUNDLE_SCHEMA_VERSION:
-        _validate_video_profile(profile, request_value)
-    elif schema_version == H3_FIRST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION:
-        _validate_first_frame_profile(profile, request_value)
-    elif schema_version == H3_FL2VA_CONDITIONING_BUNDLE_SCHEMA_VERSION:
-        _validate_fl2va_profile(profile, request_value)
-    source_value = _validate_source(dict(source))
     H3NativeSchedule.from_json(directory / _FILES["scheduler"], expected_nfe=profile.nfe)
     files = _files(directory, profile)
     payload = {

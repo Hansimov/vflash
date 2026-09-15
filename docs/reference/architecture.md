@@ -41,6 +41,8 @@ A tensor store indexes an immutable safetensors file without retaining an open f
 
 Block streaming uses a different, scoped path: a temporary memory map supplies the compiled block, then tensors are copied into a shared segmented pinned-memory arena before the map closes. The arena spans blocks, reducing allocation padding. Large payload hashes are checked when assets are published; workers retain format, identity and size checks without rehashing the entire model on every request.
 
+The complete pipeline has a narrower trusted boundary between its official encoder and native denoiser. Because both stages are serial owners in the same process, a newly captured request uses a validated one-shot tensor handoff instead of a temporary conditioning file. The handoff is revalidated before consumption and releases tensors that the native stage does not need. Persisted and cross-process conditioning still uses manifests and content hashes.
+
 ## Choosing memory placement {#memory-strategies}
 
 On a **4090 with 48 GB**, the default is resident weights. Python integrations can select `weight_residency="block-ring"` to leave more VRAM for activations. Extra resident memory is useful only when it improves your workload; measure the first request and repeated requests separately.

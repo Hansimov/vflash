@@ -13,6 +13,8 @@ from vflash.native.h3_conditioning_bundle import (
     H3ConditioningBundle,
     H3ConditioningBundleError,
     H3ConditioningProfile,
+    H3InMemoryConditioning,
+    build_h3_in_memory_conditioning,
     h3_target_video_tokens,
     seal_h3_conditioning_bundle,
 )
@@ -202,18 +204,7 @@ class H3ConditioningCaptureSession:
             )
         return budget
 
-    def finish(
-        self,
-        *,
-        bundle_id: str,
-        profile: H3ConditioningProfile,
-        request: Mapping[str, Any],
-        source: Mapping[str, str],
-        video_sigmas: Sequence[float] | Any,
-        audio_sigmas: Sequence[float] | Any,
-        update_rule: str,
-        schema_version: int = 1,
-    ) -> H3ConditioningBundle:
+    def _validate_finish(self, profile: H3ConditioningProfile) -> None:
         if not self._captured or set(self._tensors) != _TENSORS:
             raise H3ConditioningBundleError("H3 conditioning capture is incomplete")
         observed_budget = self.reference_token_budget(
@@ -230,11 +221,15 @@ class H3ConditioningCaptureSession:
             raise H3ConditioningBundleError(
                 "H3 conditioning observed prefixes differ from the profile"
             )
-        if self.directory.exists() and any(self.directory.iterdir()):
-            raise H3ConditioningBundleError("H3 conditioning capture directory must be empty")
-        self.directory.mkdir(parents=True, exist_ok=True)
-        save_safetensors_atomic(self.directory / _FILES["conditioning"], self._tensors)
 
+    @staticmethod
+    def _schedule(
+        *,
+        video_sigmas: Sequence[float] | Any,
+        audio_sigmas: Sequence[float] | Any,
+        update_rule: str,
+        expected_nfe: int,
+    ) -> H3NativeSchedule:
         def values(rows: Sequence[float] | Any) -> tuple[float, ...]:
             if hasattr(rows, "detach"):
                 rows = rows.detach().to(device="cpu").tolist()
@@ -245,10 +240,35 @@ class H3ConditioningCaptureSession:
             audio_sigmas=values(audio_sigmas),
             update_rule=update_rule,
         )
-        if schedule.nfe != profile.nfe:
+        if schedule.nfe != expected_nfe:
             raise H3ConditioningBundleError(
                 "H3 conditioning scheduler NFE differs from the profile"
             )
+        return schedule
+
+    def finish(
+        self,
+        *,
+        bundle_id: str,
+        profile: H3ConditioningProfile,
+        request: Mapping[str, Any],
+        source: Mapping[str, str],
+        video_sigmas: Sequence[float] | Any,
+        audio_sigmas: Sequence[float] | Any,
+        update_rule: str,
+        schema_version: int = 1,
+    ) -> H3ConditioningBundle:
+        self._validate_finish(profile)
+        schedule = self._schedule(
+            video_sigmas=video_sigmas,
+            audio_sigmas=audio_sigmas,
+            update_rule=update_rule,
+            expected_nfe=profile.nfe,
+        )
+        if self.directory.exists() and any(self.directory.iterdir()):
+            raise H3ConditioningBundleError("H3 conditioning capture directory must be empty")
+        self.directory.mkdir(parents=True, exist_ok=True)
+        save_safetensors_atomic(self.directory / _FILES["conditioning"], self._tensors)
         (self.directory / _FILES["scheduler"]).write_text(
             json.dumps(schedule.to_mapping(), indent=2) + "\n",
             encoding="utf-8",
@@ -259,5 +279,36 @@ class H3ConditioningCaptureSession:
             profile=profile,
             request=request,
             source=source,
+            schema_version=schema_version,
+        )
+
+    def finish_in_memory(
+        self,
+        *,
+        bundle_id: str,
+        profile: H3ConditioningProfile,
+        request: Mapping[str, Any],
+        source: Mapping[str, str],
+        video_sigmas: Sequence[float] | Any,
+        audio_sigmas: Sequence[float] | Any,
+        update_rule: str,
+        schema_version: int = 1,
+    ) -> H3InMemoryConditioning:
+        """Transfer this capture directly to native denoising without materializing it."""
+
+        self._validate_finish(profile)
+        schedule = self._schedule(
+            video_sigmas=video_sigmas,
+            audio_sigmas=audio_sigmas,
+            update_rule=update_rule,
+            expected_nfe=profile.nfe,
+        )
+        return build_h3_in_memory_conditioning(
+            bundle_id=bundle_id,
+            profile=profile,
+            request=request,
+            source=source,
+            schedule=schedule,
+            tensors=self._tensors,
             schema_version=schema_version,
         )
