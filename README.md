@@ -8,6 +8,8 @@ Native **MiniMax H3 inference** for RTX 3080 20 GB and RTX 4090 48 GB. Vflash us
 
 This release fixes integer-offset overflow in large fused tensors and adds native T2VA Turbo4 on two 3080s. Application-owned stages completed five- and ten-second T2 requests; the standalone `H3Pipeline` remains five seconds and has not been rerun on the new dual-SM86 T2 profile. See [the qualification boundary](https://hansimov.github.io/vflash/reference/releases#v0-3-2).
 
+Current `main` additionally previews official Base16 I2VA and FL2VA complete pipelines at integer durations from five through ten seconds. Five and ten seconds have completed the published hardware checks; intermediate durations still require serving-specific end-to-end qualification. This preview does not expand the five-second Turbo or reference-video contracts.
+
 ## Check your setup
 
 Python 3.11 or newer is required. The base install does not download model weights or PyTorch.

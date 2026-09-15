@@ -4,6 +4,8 @@ Install Vflash to inspect your GPU and choose a supported profile. For complete 
 
 ::: info Before you begin
 The Python pipeline and `vflash generate` support **text, one to three images, or one short reference video → a five-second MP4** on SM89, plus reference-image generation on a cooperating SM86 pair. The `denoise` command and HTTP service accept **compiled conditioning → video/audio latents**, including the supported SM86 profiles. Model downloads and compilation are explicit steps; no weights are bundled with the package.
+
+Current `main` also previews official Base16 I2VA/FL2VA complete pipelines at integer durations from five through ten seconds. Only five and ten seconds have completed the published hardware qualification; Turbo and reference-video output remain five seconds.
 :::
 
 ## Install the CLI {#install}
