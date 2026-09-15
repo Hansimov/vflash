@@ -13,9 +13,7 @@ def _cpu_block(value, *, residual_scaling=0.25):
         return denoiser.H3BF16Weight(tensor(2, 2), None, 16, None, 2, 2)
 
     def residual():
-        return denoiser.H3LowRankResidualWeights(
-            tensor(1, 2), tensor(2, 1), residual_scaling
-        )
+        return denoiser.H3LowRankResidualWeights(tensor(1, 2), tensor(2, 1), residual_scaling)
 
     return denoiser.H3NativeBlockWeights(
         tensor(1, 6, 2),

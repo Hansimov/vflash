@@ -54,8 +54,7 @@ def _loudness_measurement(
         raise AudioDeliveryError("FFmpeg could not measure audio loudness") from exc
     if completed.returncode:
         raise AudioDeliveryError(
-            "FFmpeg audio loudness measurement failed: "
-            + completed.stderr[-2000:].strip()
+            "FFmpeg audio loudness measurement failed: " + completed.stderr[-2000:].strip()
         )
     try:
         stats, _ = json.JSONDecoder().raw_decode(
@@ -99,9 +98,7 @@ def web_loudness_filter(
     specification = f"volume={gain:.4f}dB"
     if limited:
         peak = 10 ** (TRUE_PEAK_DBTP / 20)
-        specification += (
-            f",aresample=192000,alimiter=limit={peak:.9f}:level=false:latency=true"
-        )
+        specification += f",aresample=192000,alimiter=limit={peak:.9f}:level=false:latency=true"
     return specification, {
         **report,
         "status": "normalized",

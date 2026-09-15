@@ -84,9 +84,9 @@ class CompiledAssets:
     auxiliary_tensor: Path
 
 
-def _input_specs(*, include_adapter: bool = True) -> tuple[
-    dict[str, tuple[str, tuple[int, ...]]], dict[str, tuple[str, tuple[int, ...]]]
-]:
+def _input_specs(
+    *, include_adapter: bool = True
+) -> tuple[dict[str, tuple[str, tuple[int, ...]]], dict[str, tuple[str, tuple[int, ...]]]]:
     base = dict(H3_RUNTIME_AUXILIARY_SPECS)
     base.update(
         {

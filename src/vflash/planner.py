@@ -25,9 +25,7 @@ def resolve_plan(
         "t2va-turbo4-exact-sm86",
         "i2va-base16-bf16-sm86",
         "fl2va-base16-bf16-sm86",
-    } and (
-        strategy != "sequence-head"
-    ):
+    } and (strategy != "sequence-head"):
         raise ContractError("this SM86 profile requires two GPUs with sequence-head execution")
     candidates = [
         catalog.target(target_id)

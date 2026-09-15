@@ -118,9 +118,7 @@ def test_session_loads_once_and_keeps_request_accounting_separate(
         progress_callback=lambda completed, total: progress.append((completed, total)),
     )
     expected_nfe = plan.profile.nfe
-    assert progress == [
-        (completed, expected_nfe) for completed in range(1, expected_nfe + 1)
-    ]
+    assert progress == [(completed, expected_nfe) for completed in range(1, expected_nfe + 1)]
 
     assert len(loads) == 1
     assert calls == [

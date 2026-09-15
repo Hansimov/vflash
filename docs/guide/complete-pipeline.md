@@ -93,7 +93,7 @@ For two RTX 3080 20 GB GPUs, prepare the [SM86 assets](../reference/pipeline-pro
 
 Reuse the same pipeline for sequential requests. Its native block ring leaves device memory available while the encoder and VAE take turns. CPU model masters remain owned for reuse, so sufficient host memory is also required. A progress callback runs synchronously and may raise to cancel; it must not call `close` from inside that callback. Application queues, accounts, storage and parallel worker scheduling stay outside this API.
 
-Inside `H3Pipeline`, the official encoder now transfers its newly captured tensors directly to the native stage as a validated, one-shot in-memory payload. This avoids writing, hashing and rereading the request-sized conditioning file. The optimization does not weaken an external boundary: standalone native calls, CLI/service jobs and explicitly materialized captures still use content-bound bundle directories. The in-memory payload cannot be reused after native consumption.
+Inside `H3Pipeline`, the official encoder and native stage use the same content-bound conditioning bundle contract as standalone native calls and service jobs. A validated, one-shot in-memory handoff remains available to engine integrators as an experimental primitive, but it is not the complete pipeline default: target-hardware A/B/A qualification preserved output bytes but did not improve wall latency. Do not assume that removing file I/O also removes the dominant host-memory or model-transition costs.
 
 The integration checks used a 240 GiB host-memory limit. This is a tested budget, not a measured minimum. The 64 GiB recommendation for the denoiser alone does not cover these additional encoders and decoders.
 

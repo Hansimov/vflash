@@ -171,13 +171,7 @@ def encode_mp4(
                 audio_filters.append(normalization)
         else:
             pcm = (
-                audio[0]
-                .T.float()
-                .clamp(-1, 1)
-                .mul(32767)
-                .round()
-                .to(torch.int16)
-                .contiguous()
+                audio[0].T.float().clamp(-1, 1).mul(32767).round().to(torch.int16).contiguous()
             )
             with wave.open(str(audio_path), "wb") as destination:
                 destination.setnchannels(2)

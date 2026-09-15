@@ -133,9 +133,10 @@ def load_prepared_weights(receipt: Path) -> PreparedWeights:
         or not isinstance(value["files"], list)
     ):
         raise ContractError("raw-weights receipt differs from the fixed compiler contract")
-    if not isinstance(value["transformer_directory"], str) or not Path(
-        value["transformer_directory"]
-    ).is_absolute():
+    if (
+        not isinstance(value["transformer_directory"], str)
+        or not Path(value["transformer_directory"]).is_absolute()
+    ):
         raise ContractError("raw-weights receipt requires an absolute transformer path")
     adapter_value = value["adapter_path"]
     if adapter_value is not None and (

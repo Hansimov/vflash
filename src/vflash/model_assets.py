@@ -116,8 +116,7 @@ def supported_request_modes(profile_id: str) -> tuple[str, ...]:
             for candidate in candidates
         )
         if candidates[0].definition.mode.value != "i2va" or (
-            candidates[1].definition.mode.value != "fl2va"
-            or invariant[0] != invariant[1]
+            candidates[1].definition.mode.value != "fl2va" or invariant[0] != invariant[1]
         ):
             raise ContractError("paired Base16 keyframe profiles differ")
         return ("i2va", "l2va", "fl2va")
@@ -130,9 +129,7 @@ def conditioning_profile_for_request(profile_id: str, request_mode: str) -> str:
     modes = supported_request_modes(profile_id)
     if request_mode not in modes:
         raise ContractError("the request mode differs from the prepared pipeline profile")
-    return _BASE16_KEYFRAME_PROFILE_BY_MODE.get(profile_id, {}).get(
-        request_mode, profile_id
-    )
+    return _BASE16_KEYFRAME_PROFILE_BY_MODE.get(profile_id, {}).get(request_mode, profile_id)
 
 
 @dataclass(frozen=True)

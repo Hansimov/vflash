@@ -268,9 +268,7 @@ class H3Pipeline:
             report("encoding", 0, 1)
             weight_resume_seconds = self._conditioner.resume_cuda()
             call_started = time.monotonic()
-            bundle = self._conditioner.capture_in_memory(
-                request, references, directory / "conditioning"
-            )
+            bundle = self._conditioner.capture(request, references, directory / "conditioning")
             capture_call_seconds = time.monotonic() - call_started
             suspend_seconds = self._conditioner.suspend_cuda()
             report("encoding", 1, 1)
@@ -282,12 +280,19 @@ class H3Pipeline:
                 "profile": asdict(bundle.profile),
                 "source": dict(bundle.source),
                 "bundle_id": bundle.bundle_id,
-                "conditioning_transport": "in-memory",
-                "conditioning_tensor_bytes": getattr(bundle, "tensor_bytes", None),
+                "conditioning_transport": "persisted-file",
+                "conditioning_tensor_bytes": next(
+                    (
+                        row.size_bytes
+                        for row in getattr(bundle, "files", ())
+                        if row.role == "conditioning"
+                    ),
+                    None,
+                ),
             }
             report("denoising", 0, self.profile.definition.nfe)
             native = self._core.generate(
-                bundle,
+                bundle.directory,
                 directory / "latents.safetensors",
                 progress_callback=lambda completed, total: report(
                     "denoising", completed, total

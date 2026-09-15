@@ -768,8 +768,7 @@ def _validate_last_frame_profile(
         or request["delivery_profiles"] != delivery_profile
     ):
         raise H3ConditioningBundleError(
-            "last-frame conditioning requires Base16 L2VA at 5-10s24 "
-            "within its canvas budget"
+            "last-frame conditioning requires Base16 L2VA at 5-10s24 within its canvas budget"
         )
 
 

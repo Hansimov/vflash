@@ -43,8 +43,9 @@ def test_released_model_identities_and_adapter_scaling_remain_distinct():
     assert i2va.workflow == "fl2va"
     assert i2va.adapter is None
     assert i2va.weight_profile == "minimax-h3-base"
-    assert transformer_identity(i2va.definition.id)["transformer_sha256"] != (
-        transformer_identity(base.definition.id)["transformer_sha256"]
+    assert (
+        transformer_identity(i2va.definition.id)["transformer_sha256"]
+        != (transformer_identity(base.definition.id)["transformer_sha256"])
     )
     fl2va = model_profile("fl2va-base16-bf16-sm89")
     assert fl2va.definition.mode.value == "fl2va"
@@ -90,9 +91,10 @@ def test_base16_resident_profiles_accept_all_keyframe_conditioning_modes(hardwar
         for key, value in transformer_identity(fl2va).items()
         if key != "oracle_profile"
     }
-    assert weights_source(i2va)["base_transformer_sha256"] == weights_source(fl2va)[
-        "base_transformer_sha256"
-    ]
+    assert (
+        weights_source(i2va)["base_transformer_sha256"]
+        == weights_source(fl2va)["base_transformer_sha256"]
+    )
     with pytest.raises(ContractError, match="request mode"):
         conditioning_profile_for_request(i2va, "t2va")
 
