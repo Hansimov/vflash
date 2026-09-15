@@ -651,11 +651,11 @@ def _empty_bf16_block_like(
     )
 
 
-def _copy_bf16_block_(
+def _bf16_block_copy_pairs(
     destination: H3NativeBlockWeights,
     source: H3NativeBlockWeights,
-) -> None:
-    """Queue one fixed-shape pinned-host block into an existing CUDA slot."""
+) -> tuple[tuple[Any, Any], ...]:
+    """Validate and freeze the tensor mapping for one host-to-device block copy."""
 
     pairs = [
         (destination.adaln_table, source.adaln_table),
@@ -692,7 +692,23 @@ def _copy_bf16_block_(
     for target, value in pairs:
         if tuple(target.shape) != tuple(value.shape) or target.dtype != value.dtype:
             raise H3NativeDenoiserError("BF16 ring block tensors have inconsistent layouts")
+    return tuple(pairs)
+
+
+def _copy_bf16_tensor_pairs_(pairs: tuple[tuple[Any, Any], ...]) -> None:
+    """Queue a previously validated fixed-shape block copy."""
+
+    for target, value in pairs:
         target.copy_(value, non_blocking=True)
+
+
+def _copy_bf16_block_(
+    destination: H3NativeBlockWeights,
+    source: H3NativeBlockWeights,
+) -> None:
+    """Validate and queue one fixed-shape pinned-host block into a CUDA slot."""
+
+    _copy_bf16_tensor_pairs_(_bf16_block_copy_pairs(destination, source))
 
 
 def _block_tensor_bytes(weights: H3NativeBlockWeights) -> int:
@@ -1126,7 +1142,7 @@ class H3NativeDenoiserBF16Ring:
     runtime invariant rather than an offload-framework side effect.
     """
 
-    backend_id = "cuda-bf16-pinned-host-two-slot-event-ring-torch-flash-v1"
+    backend_id = "cuda-bf16-pinned-host-two-slot-event-ring-torch-flash-v2"
     timing_eligible = True
     block_type = H3NativeBlockBF16Resident
 
@@ -1208,6 +1224,19 @@ class H3NativeDenoiserBF16Ring:
         self.rotary_backend = resolved_rotary_backends.pop()
         self.device_slot_weight_bytes = sum(
             _block_tensor_bytes(slot.weights) for slot in self.slots
+        )
+        # The artifact, slots, and their tensor layouts are immutable after
+        # construction. Validate every source/slot pairing once rather than
+        # rebuilding and revalidating the same Python mapping for every block
+        # in every NFE. The serial oracle always uses slot zero, while the
+        # production ring alternates slots by block parity.
+        self._ring_copy_pairs = tuple(
+            _bf16_block_copy_pairs(self.slots[index % 2].weights, host_block)
+            for index, host_block in enumerate(host_blocks)
+        )
+        self._serial_copy_pairs = tuple(
+            _bf16_block_copy_pairs(self.slots[0].weights, host_block)
+            for host_block in host_blocks
         )
 
     @classmethod
@@ -1304,7 +1333,7 @@ class H3NativeDenoiserBF16Ring:
                 # The prior invocation may still be consuming the last two
                 # blocks. An unrecorded event on the first invocation is a no-op.
                 self.copy_stream.wait_event(self.compute_done_events[index])
-                _copy_bf16_block_(self.slots[index].weights, self.host_blocks[index])
+                _copy_bf16_tensor_pairs_(self._ring_copy_pairs[index])
                 self.ready_events[index].record(self.copy_stream)
 
     def forward_prevalidated(
@@ -1342,10 +1371,7 @@ class H3NativeDenoiserBF16Ring:
             if next_index < len(self.host_blocks):
                 with torch.cuda.stream(self.copy_stream):
                     self.copy_stream.wait_event(self.compute_done_events[slot_index])
-                    _copy_bf16_block_(
-                        slot.weights,
-                        self.host_blocks[next_index],
-                    )
+                    _copy_bf16_tensor_pairs_(self._ring_copy_pairs[next_index])
                     self.ready_events[slot_index].record(self.copy_stream)
         return hidden_states, checkpoints
 
@@ -1364,10 +1390,10 @@ class H3NativeDenoiserBF16Ring:
         compute_stream = torch.cuda.current_stream(self.device)
         checkpoints: dict[int, Any] = {}
         slot = self.slots[0]
-        for index, host_block in enumerate(self.host_blocks):
+        for index, copy_pairs in enumerate(self._serial_copy_pairs):
             with torch.cuda.stream(self.copy_stream):
                 self.copy_stream.wait_event(self.compute_done_events[0])
-                _copy_bf16_block_(slot.weights, host_block)
+                _copy_bf16_tensor_pairs_(copy_pairs)
                 self.ready_events[0].record(self.copy_stream)
             compute_stream.wait_event(self.ready_events[0])
             hidden_states = slot.forward_prevalidated(hidden_states, invocation)
