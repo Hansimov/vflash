@@ -1,6 +1,6 @@
 # 生成视频
 
-Vflash 0.3.2 支持纯文字生成，也支持提示词加一至三张有序参考图，输出五秒 MP4。当前 main 还提供预览版官方 Base16 I2VA 和 FL2VA 链路，分别输入一张明确的首帧，或同时输入首帧和尾帧。连续请求使用 Python 接口，单次生成也可以使用容器命令行。完整链路支持单张 RTX 4090 48 GB 上的 T2VA Base4 和 Ref2VA Turbo4；Ref4 也支持双张 RTX 3080 20 GB。Base16 关键帧配置支持单张 RTX 4090 48 GB 或协作的双张 RTX 3080 20 GB。
+Vflash 0.3.2 支持纯文字生成，也支持提示词加一至三张有序参考图，输出五秒 MP4。当前 main 还提供预览版官方 Base16 I2VA、L2VA 和 FL2VA 请求，分别输入一张明确的首帧、一张明确的尾帧，或同时输入首尾帧。连续请求使用 Python 接口，单次生成也可以使用容器命令行。完整链路支持单张 RTX 4090 48 GB 上的 T2VA Base4 和 Ref2VA Turbo4；Ref4 也支持双张 RTX 3080 20 GB。Base16 关键帧配置支持单张 RTX 4090 48 GB 或协作的双张 RTX 3080 20 GB。
 
 单张 4090 的 Ref4 还支持[短视频参考](#reference-video)，同一实例可以交替处理图片和视频，无需切换权重。
 
@@ -8,9 +8,9 @@ Vflash 0.3.2 支持纯文字生成，也支持提示词加一至三张有序参�
 
 Vflash 负责原生去噪、模型生命周期、本地图像读取和 MP4 输出。文本和图像编码采用固定版本的 Diffusers 与 Transformers；Turbo 配置还使用 PEFT 适配器。音视频解码采用 H3 官方 VAE。它们是明确列出的依赖，不会被描述成新实现的原生内核。运行时不依赖 LightX2V 或业务服务。
 
-Turbo 请求使用四次去噪计算，并保留五秒合同；预览版 Base16 I2VA 和 FL2VA 使用 16 次，接受五至十秒的整数时长并采用原生 24 fps 时钟。对应的模型帧/交付帧为：5 秒 124/120、6 秒 158/144、7 秒 175/168、8 秒 192/192、9 秒 226/216、10 秒 243/240。目前只有五秒和十秒完成公开硬件资格验证；中间时长仍需由具体服务逐项做端到端资格验证。宽高必须是 32 的整数倍，总像素不超过 `928 × 512`，宽高比在 1:4 至 4:1 之间；更大的时长与画布组合仍需单独做容量资格验证。提示词原样传入。Ref2VA 的一至三张图片按照传入顺序编号为 `<Picture 1>`、`<Picture 2>`、`<Picture 3>`，请在提示词中说明每张图的主体和用途。这些是视觉参考，不代表视频中的帧位置，也不是严格的关键帧约束。I2VA 输入一张独立的第零帧锚点，提示词可将其称为 `<Picture 1>`。真正的 FL2VA 同时输入首尾锚点，提示词按时间顺序将其称为 `<Picture 1>` 和 `<Picture 2>`。
+Turbo 请求使用四次去噪计算，并保留五秒合同；预览版 Base16 关键帧请求使用 16 次，接受五至十秒的整数时长并采用原生 24 fps 时钟。对应的模型帧/交付帧为：5 秒 124/120、6 秒 158/144、7 秒 175/168、8 秒 192/192、9 秒 226/216、10 秒 243/240。宽高必须是 32 的整数倍，总像素不超过 `928 × 512`，宽高比在 1:4 至 4:1 之间；更大的时长与画布组合仍需单独做容量资格验证。提示词原样传入。Ref2VA 的一至三张图片按照传入顺序编号为 `<Picture 1>`、`<Picture 2>`、`<Picture 3>`，请在提示词中说明每张图的主体和用途。这些是视觉参考，不代表视频中的帧位置，也不是严格的关键帧约束。I2VA 输入第零帧锚点，L2VA 只输入尾帧锚点；这两种单图请求都可将图片称为 `<Picture 1>`。FL2VA 同时输入首尾锚点，提示词按时间顺序将其称为 `<Picture 1>` 和 `<Picture 2>`。I2VA/FL2VA 的五秒和十秒路径已有有界硬件实证；L2VA 与中间时长仍需在目标硬件上完成端到端资格验证。
 
-准备资产前先选择[固定模型配置](../reference/pipeline-profiles)。Ref2VA 使用 `transformer_ref` 与 Ref4 v0.1；T2VA 使用 `transformer` 与 Base4 v1.0；预览版 I2VA 和 FL2VA 使用官方 `transformer`，无 LoRA 执行 16 次计算。同一硬件上的成对 Base16 I2VA/FL2VA 配置具有完全相同的模型工件和调度，因此任一已准备的关键帧 pipeline 都能串行处理这两种请求，无需重启 profile 或执行冷初始化。条件信息仍按实际请求模式生成；结果以 `profile_id` 保留已准备身份，并以 `request_mode` 记录实际输入类型。每次请求的阶段驻留仍遵循所选内存策略。其他配置会在执行前拒绝模式切换。
+准备资产前先选择[固定模型配置](../reference/pipeline-profiles)。Ref2VA 使用 `transformer_ref` 与 Ref4 v0.1；T2VA 使用 `transformer` 与 Base4 v1.0；预览版关键帧请求使用官方 `transformer`，无 LoRA 执行 16 次计算。同一硬件上的成对 Base16 I2VA/FL2VA 配置具有完全相同的模型工件和调度，因此任一已准备的关键帧 pipeline 都能串行处理 I2VA、L2VA 和 FL2VA，无需重启 profile 或执行冷初始化。条件信息仍按实际请求模式生成；结果以 `profile_id` 保留已准备身份，并以 `request_mode` 记录实际输入类型。每次请求的阶段驻留仍遵循所选内存策略。其他配置会在执行前拒绝模式切换。
 
 ## 安装和模型资产
 
@@ -55,7 +55,7 @@ vflash generate \
   --output video.mp4 --trust-local-code
 ```
 
-Ref2VA 的 `--reference` 可以出现一至三次。T2VA 在准备时指定 `--profile t2va-turbo4-exact-sm89`，生成时不传图像参数。一个已准备的 SM89 或 SM86 Base16 关键帧配置既可只传 `--first-frame first-frame.png` 生成 I2VA，也可同时传 `--first-frame first-frame.png --last-frame last-frame.png` 生成 FL2VA；`--duration` 接受 5–10 的整数秒，省略时仍为五秒。目前公开的硬件实测仅覆盖五秒和十秒，中间时长仍需逐项端到端验收。显式的 `i2va-*` 与 `fl2va-*` profile ID 继续用于稳定的准备和来源记录。关键帧不可与 `--reference` 混用；SM86 配置还须传入 `--peer-gpu 1 --strategy sequence-head`。对应的 Python FL2VA 请求是 `VideoRequest(prompt=..., first_frame=Path("first-frame.png"), last_frame=Path("last-frame.png"), duration_seconds=10, seed=...)`。进度以 JSON 行写入 stderr，stdout 输出最终结果。每次命令独立加载并释放模型；要在多次请求间实现跨模式常驻，应复用同一个 Python `H3Pipeline` 实例。预装环境及完整挂载示例见 [Docker 生成](./docker#pipeline)。
+Ref2VA 的 `--reference` 可以出现一至三次。T2VA 在准备时指定 `--profile t2va-turbo4-exact-sm89`，生成时不传图像参数。一个已准备的 SM89 或 SM86 Base16 关键帧配置可只传 `--first-frame first-frame.png` 生成 I2VA，只传 `--last-frame last-frame.png` 生成 L2VA，或同时传两者生成 FL2VA；`--duration` 接受 5–10 的整数秒，省略时仍为五秒。显式的 `i2va-*` 与 `fl2va-*` profile ID 继续用于稳定的准备和来源记录；L2VA 复用 FL2VA 权重，不增加重复 profile。关键帧不可与 `--reference` 混用；SM86 配置还须传入 `--peer-gpu 1 --strategy sequence-head`。Python 中，L2VA 使用 `VideoRequest(last_frame=Path("last-frame.png"), ...)`，FL2VA 使用 `VideoRequest(first_frame=Path("first-frame.png"), last_frame=Path("last-frame.png"), ...)`。进度以 JSON 行写入 stderr，stdout 输出最终结果。每次命令独立加载并释放模型；要在多次请求间实现跨模式常驻，应复用同一个 Python `H3Pipeline` 实例。预装环境及完整挂载示例见 [Docker 生成](./docker#pipeline)。
 
 ## 一个明确拥有资源的实例
 

@@ -46,7 +46,7 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
     generate.add_argument(
         "--last-frame",
         type=Path,
-        help="one local image that anchors the final frame; requires --first-frame for FL2VA",
+        help="one local image that anchors the final frame for L2VA or FL2VA",
     )
     generate.add_argument("--width", type=int, default=928)
     generate.add_argument("--height", type=int, default=512)
@@ -55,7 +55,7 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
         type=int,
         choices=range(5, 11),
         default=5,
-        help="native delivery duration in seconds; 6-10 requires I2VA or FL2VA",
+        help="native delivery duration in seconds; 6-10 requires I2VA, L2VA, or FL2VA",
     )
     generate.add_argument("--seed", type=int, default=0)
     generate.add_argument(

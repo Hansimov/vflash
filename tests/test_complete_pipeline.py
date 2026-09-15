@@ -433,7 +433,7 @@ def test_request_duration_is_discrete_and_defaults_to_five_seconds():
         {},
         {"reference": Path("reference.png")},
     ):
-        with pytest.raises(ContractError, match="require I2VA or FL2VA"):
+        with pytest.raises(ContractError, match="require I2VA, L2VA, or FL2VA"):
             VideoRequest("A scene.", duration_seconds=6, **values)
 
 
@@ -544,7 +544,7 @@ def test_text_only_request_reuses_all_stages_without_reference_loading(tmp_path,
     "resident_profile",
     ["i2va-base16-bf16-sm89", "fl2va-base16-bf16-sm89"],
 )
-def test_one_base16_resident_serves_fl2va_then_i2va_without_reloading(
+def test_one_base16_resident_serves_fl2va_l2va_then_i2va_without_reloading(
     tmp_path, monkeypatch, resident_profile
 ):
     from vflash.model_assets import model_profile
@@ -574,15 +574,27 @@ def test_one_base16_resident_serves_fl2va_then_i2va_without_reloading(
         ),
         tmp_path / "fl2va.mp4",
     )
+    l2va = pipeline.generate(
+        VideoRequest("The action resolves at <Picture 1>.", last_frame=last),
+        tmp_path / "l2va.mp4",
+    )
     i2va = pipeline.generate(
         VideoRequest("Continue from <Picture 1>.", first_frame=first),
         tmp_path / "i2va.mp4",
     )
-    assert i2va.profile_id == fl2va.profile_id == resident_profile
-    assert fl2va.request_mode == "fl2va" and i2va.request_mode == "i2va"
-    assert observed == [("fl2va", (first, last)), ("i2va", (first,))]
-    assert events.count("native:generate") == 2
-    assert pipeline.request_count == 2
+    assert i2va.profile_id == l2va.profile_id == fl2va.profile_id == resident_profile
+    assert (fl2va.request_mode, l2va.request_mode, i2va.request_mode) == (
+        "fl2va",
+        "l2va",
+        "i2va",
+    )
+    assert observed == [
+        ("fl2va", (first, last)),
+        ("l2va", (last,)),
+        ("i2va", (first,)),
+    ]
+    assert events.count("native:generate") == 3
+    assert pipeline.request_count == 3
 
 
 def test_image_video_image_share_stages_and_release_frames(

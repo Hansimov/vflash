@@ -25,6 +25,7 @@ from vflash.model_assets import (
 from vflash.native.h3_conditioning_bundle import (
     H3_FIRST_FRAME_POLICY,
     H3_FL2VA_KEYFRAME_POLICY,
+    H3_LAST_FRAME_POLICY,
     H3_VIDEO_REFERENCE_POLICY,
 )
 from vflash.native.h3_runtime_artifact import load_h3_runtime_artifact
@@ -64,12 +65,18 @@ def conditioning_source(
         "scheduler": "training_euler",
         "nfe": profile.definition.nfe,
     }
-    if profile.definition.mode.value == "i2va":
+    effective_mode = request_mode or profile.definition.mode.value
+    if effective_mode == "i2va":
         if reference_policy != "match":
             raise ContractError("I2VA accepts one first frame, not a reference policy")
         configuration["first_frame_policy"] = H3_FIRST_FRAME_POLICY
         configuration["reference_policy_revision"] = 1
-    elif profile.definition.mode.value == "fl2va":
+    elif effective_mode == "l2va":
+        if reference_policy != "match":
+            raise ContractError("L2VA accepts one last frame, not a reference policy")
+        configuration["last_frame_policy"] = H3_LAST_FRAME_POLICY
+        configuration["reference_policy_revision"] = 1
+    elif effective_mode == "fl2va":
         if reference_policy != "match":
             raise ContractError("FL2VA accepts first and last frames, not a reference policy")
         configuration["keyframe_policy"] = H3_FL2VA_KEYFRAME_POLICY

@@ -62,18 +62,22 @@ COMPLETE_MODEL_PROFILES = (
 _BASE16_KEYFRAME_PROFILE_BY_MODE = {
     "i2va-base16-bf16-sm89": {
         "i2va": "i2va-base16-bf16-sm89",
+        "l2va": "fl2va-base16-bf16-sm89",
         "fl2va": "fl2va-base16-bf16-sm89",
     },
     "fl2va-base16-bf16-sm89": {
         "i2va": "i2va-base16-bf16-sm89",
+        "l2va": "fl2va-base16-bf16-sm89",
         "fl2va": "fl2va-base16-bf16-sm89",
     },
     "i2va-base16-bf16-sm86": {
         "i2va": "i2va-base16-bf16-sm86",
+        "l2va": "fl2va-base16-bf16-sm86",
         "fl2va": "fl2va-base16-bf16-sm86",
     },
     "fl2va-base16-bf16-sm86": {
         "i2va": "i2va-base16-bf16-sm86",
+        "l2va": "fl2va-base16-bf16-sm86",
         "fl2va": "fl2va-base16-bf16-sm86",
     },
 }
@@ -116,7 +120,7 @@ def supported_request_modes(profile_id: str) -> tuple[str, ...]:
             or invariant[0] != invariant[1]
         ):
             raise ContractError("paired Base16 keyframe profiles differ")
-        return ("i2va", "fl2va")
+        return ("i2va", "l2va", "fl2va")
     return (profile.definition.mode.value,)
 
 

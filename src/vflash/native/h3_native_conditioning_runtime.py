@@ -130,7 +130,7 @@ def _conditioning_task_matches(bundle_task: str, artifact: Any) -> bool:
     if bundle_task == artifact_task:
         return True
     return bool(
-        {bundle_task, artifact_task} <= {"i2va", "fl2va"}
+        {bundle_task, artifact_task} <= {"i2va", "l2va", "fl2va"}
         and artifact.weight_profile == "minimax-h3-base"
         and artifact.adapter_execution == "none"
     )
@@ -182,7 +182,7 @@ class H3NativeConditioningRuntime:
             raise H3NativeConditioningRuntimeError(
                 "the native runtime requires Torch Flash attention"
             )
-        if expected_task not in {None, "ref2va", "t2va", "i2va", "fl2va"}:
+        if expected_task not in {None, "ref2va", "t2va", "i2va", "l2va", "fl2va"}:
             raise H3NativeConditioningRuntimeError("unsupported native generation task")
         started = time.monotonic()
         resolved_device = torch.device(device)
@@ -262,7 +262,10 @@ class H3NativeConditioningRuntime:
             not artifact.is_complete_block_stack
             or not supported_weights
             or task not in {"ref2va", "t2va", "i2va", "fl2va"}
-            or (expected_task is not None and task != expected_task)
+            or (
+                expected_task is not None
+                and not _conditioning_task_matches(expected_task, artifact)
+            )
             or (
                 task in {"t2va", "i2va", "fl2va"}
                 and capability == (8, 6)
@@ -444,7 +447,7 @@ class H3NativeConditioningRuntime:
             raise H3NativeConditioningRuntimeError(
                 "video references require one SM89 GPU and their qualified Ref4 schedule"
             )
-        if bundle.schema_version in {3, 4}:
+        if bundle.schema_version in {3, 4, 5}:
             keyframe_topology = (
                 len(self.devices) == 1
                 and self.compute_capability == (8, 9)
@@ -461,6 +464,8 @@ class H3NativeConditioningRuntime:
                 mode = (
                     "I2VA first-frame"
                     if bundle.schema_version == 3
+                    else "L2VA last-frame"
+                    if bundle.schema_version == 5
                     else "FL2VA first-last-frame"
                 )
                 raise H3NativeConditioningRuntimeError(

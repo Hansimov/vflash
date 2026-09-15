@@ -29,6 +29,8 @@ from vflash.native.h3_conditioning_bundle import (
     H3_FIRST_FRAME_POLICY,
     H3_FL2VA_CONDITIONING_BUNDLE_SCHEMA_VERSION,
     H3_FL2VA_KEYFRAME_POLICY,
+    H3_LAST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION,
+    H3_LAST_FRAME_POLICY,
     H3_VIDEO_REFERENCE_POLICY,
     H3ConditioningBundle,
     H3ConditioningProfile,
@@ -289,6 +291,8 @@ class DiffusersConditioner:
             ]
         elif request.mode == "i2va":
             options["image"] = references[0].image
+        elif request.mode == "l2va":
+            options["last_image"] = references[0].image
         elif request.mode == "fl2va":
             options.update(image=references[0].image, last_image=references[1].image)
         self.pipe(
@@ -337,6 +341,8 @@ class DiffusersConditioner:
             raise ContractError("the request mode differs from the conditioner profile")
         is_video = request.reference_video is not None
         is_first_frame = request.first_frame is not None
+        is_last_frame = request.last_frame is not None
+        is_l2va = request.mode == "l2va"
         is_fl2va = request.mode == "fl2va"
         if is_video and self.prepared.profile_id != "ref2va-turbo4-exact-sm89":
             raise ContractError("video references require the single-SM89 Ref4 profile")
@@ -344,7 +350,7 @@ class DiffusersConditioner:
             2
             if is_fl2va
             else 1
-            if is_video or is_first_frame
+            if is_video or is_first_frame or is_last_frame
             else len(request.ordered_references)
         )
         if len(references) != expected_references:
@@ -395,6 +401,16 @@ class DiffusersConditioner:
                         "size_bytes": first_frame.size_bytes,
                         "sha256": first_frame.sha256,
                     },
+                    last_frame={
+                        "role": "last_frame",
+                        "size_bytes": last_frame.size_bytes,
+                        "sha256": last_frame.sha256,
+                    },
+                )
+            elif is_l2va:
+                last_frame = references[0]
+                request_metadata.update(
+                    last_frame_policy=H3_LAST_FRAME_POLICY,
                     last_frame={
                         "role": "last_frame",
                         "size_bytes": last_frame.size_bytes,
@@ -474,6 +490,8 @@ class DiffusersConditioner:
                 schema_version=(
                     H3_FL2VA_CONDITIONING_BUNDLE_SCHEMA_VERSION
                     if is_fl2va
+                    else H3_LAST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION
+                    if is_l2va
                     else H3_FIRST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION
                     if is_first_frame
                     else 2

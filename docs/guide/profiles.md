@@ -4,7 +4,7 @@ A profile chooses the model, LoRA revision, step count, and arithmetic. Its defa
 
 ## Available profiles {#available}
 
-Ref2VA generates video and audio from reference conditioning. T2VA uses text conditioning without reference images. I2VA anchors frame zero, while FL2VA anchors both ends of a clip. Base and Ref weights are separate. The [complete pipeline](./complete-pipeline) accepts these inputs with a matching fixed profile. The native interfaces below use compiled conditioning bundles; their default residency differs from the complete pipeline.
+Ref2VA generates video and audio from reference conditioning. T2VA uses text conditioning without reference images. I2VA anchors frame zero, L2VA anchors only the final frame, and FL2VA anchors both ends of a clip. Base and Ref weights are separate. The [complete pipeline](./complete-pipeline) accepts these inputs with a matching fixed profile. The native interfaces below use compiled conditioning bundles; their default residency differs from the complete pipeline.
 
 | GPU | Profile | Steps | Weight loading |
 | --- | --- | ---: | --- |
@@ -20,7 +20,7 @@ Ref2VA generates video and audio from reference conditioning. T2VA uses text con
 
 The HTTP service defaults to Turbo4 on a 4090. To change profiles, restart the service with the selected profile and its matching assets.
 
-The complete-pipeline Base16 I2VA and FL2VA profiles are a paired exception: on the same hardware they use the exact same model artifact and schedule, so one loaded `H3Pipeline` can accept both keyframe request modes serially without a profile restart. The prepared profile ID remains its provenance identity. This exception does not apply to Turbo, Ref2VA or T2VA.
+The complete-pipeline Base16 I2VA and FL2VA profile identities are a paired exception: on the same hardware they use the exact same model artifact and schedule, so one loaded `H3Pipeline` can accept I2VA, L2VA and FL2VA requests serially without a profile restart. L2VA is a request contract, not a duplicate weight profile. The prepared profile ID remains its provenance identity. This exception does not apply to Turbo, Ref2VA or T2VA.
 
 ```bash
 vflash profiles
@@ -74,4 +74,4 @@ The single-device 3080 profile has been checked for capacity and repeatable resu
 
 ## What is outside this release {#scope}
 
-The [complete profile table](../reference/pipeline-profiles) lists the released paths and current Base16 keyframe previews. The FL2VA schema and engine contract are implemented, but target-GPU latency and output quality are not yet qualified. Single-SM86 and Turbo8 remain native bundle-to-latents interfaces. Unlisted modes, adapters, quantization and temporal settings are outside these profiles. The HTTP API provides one serial denoising lane; account management, billing and distributed GPU scheduling belong to the application.
+The [complete profile table](../reference/pipeline-profiles) lists the released paths and current Base16 keyframe previews. The L2VA and FL2VA schemas and engine contracts are implemented, but L2VA target-GPU latency and output quality are not yet qualified. Single-SM86 and Turbo8 remain native bundle-to-latents interfaces. Unlisted modes, adapters, quantization and temporal settings are outside these profiles. The HTTP API provides one serial denoising lane; account management, billing and distributed GPU scheduling belong to the application.

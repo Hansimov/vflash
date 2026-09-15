@@ -15,8 +15,11 @@ from vflash.model_assets import model_profile
 from vflash.native.h3_conditioning_bundle import (
     H3_FL2VA_CONDITIONING_BUNDLE_SCHEMA_VERSION,
     H3_FL2VA_KEYFRAME_POLICY,
+    H3_LAST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION,
+    H3_LAST_FRAME_POLICY,
     H3_VIDEO_REFERENCE_POLICY,
     _validate_fl2va_profile,
+    _validate_last_frame_profile,
     _validate_request,
     _validate_source,
     _validate_video_profile,
@@ -247,4 +250,106 @@ def test_capture_passes_both_keyframes_and_emits_fl2va_schema4(
     result = owner.capture(request, (first, last), tmp_path / "conditioning")
     assert result["profile"].task == "fl2va"
     assert result["profile"].num_condition_video_rows == 2
+    assert events == ["synchronize", "discard"]
+
+
+@pytest.mark.parametrize(
+    "resident_profile",
+    ["i2va-base16-bf16-sm89", "fl2va-base16-bf16-sm89"],
+)
+@pytest.mark.parametrize(
+    ("duration_seconds", "model_frames", "delivery_frames"),
+    [(5, 124, 120), (10, 243, 240)],
+)
+def test_capture_passes_only_last_frame_and_emits_l2va_schema5(
+    tmp_path,
+    monkeypatch,
+    resident_profile,
+    duration_seconds,
+    model_frames,
+    delivery_frames,
+):
+    events = []
+    last = SimpleNamespace(image="last-rgb", size_bytes=101, sha256="b" * 64)
+    module = ModuleType("diffusers.modular_pipelines.minimax_h3")
+    module.MiniMaxH3ImageReference = lambda **kwargs: kwargs
+    module.MiniMaxH3VideoReference = lambda **kwargs: kwargs
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+    owner = DiffusersConditioner.__new__(DiffusersConditioner)
+    owner.profile = model_profile(resident_profile)
+    owner.prepared = SimpleNamespace(profile_id=owner.profile.definition.id)
+    owner._closed, owner._cuda_active = False, True
+    owner.versions = {"diffusers": "0.40.0", "torch": "2.11.0"}
+    owner.device, owner.transformer = "unused-cpu-fixture", object()
+    owner._torch = SimpleNamespace(
+        cuda=SimpleNamespace(synchronize=lambda _: events.append("synchronize")),
+        Generator=lambda: SimpleNamespace(manual_seed=lambda seed: seed),
+    )
+
+    class Pipe:
+        scheduler = SimpleNamespace(sigmas=list(range(17)))
+        audio_scheduler = SimpleNamespace(sigmas=list(range(17)))
+
+        def __call__(self, **kwargs):
+            assert "image" not in kwargs and "references" not in kwargs
+            assert kwargs["last_image"] == last.image
+            assert kwargs["num_frames"] == model_frames
+            assert kwargs["num_inference_steps"] == 17
+            raise H3ConditioningCaptureComplete
+
+    owner.pipe = Pipe()
+
+    class Capture:
+        def __init__(self, _directory):
+            pass
+
+        def install(self, transformer):
+            assert transformer is owner.transformer
+
+        def close(self):
+            pass
+
+        def discard(self):
+            events.append("discard")
+
+        def prefix_counts(self):
+            return 1, 0
+
+        def reference_token_budget(self, **kwargs):
+            return 1
+
+        def finish(self, **kwargs):
+            assert kwargs["schema_version"] == H3_LAST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION
+            request = kwargs["request"]
+            assert request["last_frame_policy"] == H3_LAST_FRAME_POLICY
+            assert request["delivery_profiles"] == [
+                {
+                    "temporal_profile": f"native-24fps-{duration_seconds}s",
+                    "frames": delivery_frames,
+                    "fps": 24,
+                }
+            ]
+            assert request["last_frame"]["sha256"] == last.sha256
+            assert "first_frame" not in request
+            assert _validate_request(request, task="l2va", schema_version=5) == request
+            _validate_last_frame_profile(kwargs["profile"], request)
+            assert kwargs["source"] == conditioning_source(
+                profile_id=resident_profile,
+                request_mode="l2va",
+                runtime_versions=owner.versions,
+            )
+            return kwargs
+
+    monkeypatch.setattr("vflash.adapters.diffusers_h3.H3ConditioningCaptureSession", Capture)
+    request = VideoRequest(
+        "The action resolves at <Picture 1>.",
+        last_frame=Path("last.png"),
+        width=32,
+        height=32,
+        seed=7,
+        duration_seconds=duration_seconds,
+    )
+    result = owner.capture(request, (last,), tmp_path / "conditioning")
+    assert result["profile"].task == "l2va"
+    assert result["profile"].num_condition_video_rows == 1
     assert events == ["synchronize", "discard"]

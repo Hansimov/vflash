@@ -12,7 +12,7 @@
 | `fl2va-base16-bf16-sm89`（预览） | 单张 RTX 4090 48 GB | 提示词加明确的首帧和尾帧 | `transformer` | 无 | 12 / 3 |
 | `fl2va-base16-bf16-sm86`（预览） | 双张 RTX 3080 20 GB，`sequence-head` | 提示词加明确的首帧和尾帧 | `transformer` | 无 | 12 / 3 |
 
-已发布的 Turbo 配置使用四次计算、BF16 权重和独立的 LoRA 残差，并保留五秒合同；预览 I2VA 和 FL2VA 配置使用官方 Base Transformer，以 BF16、无 LoRA执行 16 次计算，支持五秒（`124 → 120`帧）或十秒（`243 → 240`帧），均为24 fps。默认仍为 SM89 Ref4。同一硬件目标上的成对 Base16 I2VA/FL2VA 配置具有完全相同的模型工件、调度和官方 FL2VA 条件工作流，因此一个已准备的 Base16 关键帧 pipeline 可串行接受 I2VA 与 FL2VA 请求，无需重启 profile 或执行冷初始化；每个请求仍生成与实际模式一致的条件 schema 和来源信息，已准备的 profile ID 继续作为 pipeline 与结果身份。每次请求的阶段驻留仍遵循完整 pipeline 选择的内存策略。Turbo、Ref2VA 和 T2VA 配置仍只接受各自模式。原生单 SM86 与 Turbo8 接口具有不同的[验证范围](../guide/profiles)。
+已发布的 Turbo 配置使用四次计算、BF16 权重和独立的 LoRA 残差，并保留五秒合同；预览 Base16 profile 身份使用官方 Base Transformer，以 BF16、无 LoRA执行 16 次计算，支持五秒（`124 → 120`帧）或十秒（`243 → 240`帧），均为24 fps。默认仍为 SM89 Ref4。同一硬件目标上的成对 Base16 I2VA/FL2VA 配置具有完全相同的模型工件、调度和官方 FL2VA 条件工作流，因此一个已准备的 Base16 关键帧 pipeline 可串行接受 I2VA、L2VA 与 FL2VA 请求，无需重启 profile或执行冷初始化；每个请求仍生成与实际模式一致的条件 schema 和来源信息。L2VA 明确复用 FL2VA 权重 profile，不增加重复身份。已准备的 profile ID 继续作为 pipeline 与结果身份。每次请求的阶段驻留仍遵循完整 pipeline 选择的内存策略。Turbo、Ref2VA 和 T2VA 配置仍只接受各自模式。原生单 SM86 与 Turbo8 接口具有不同的[验证范围](../guide/profiles)。
 
 ## 准备预览版 Base16 I2VA
 
@@ -45,7 +45,7 @@ vflash generate \
   --duration 10 --gpu 0 --seed 1234 --output video.mp4 --trust-local-code
 ```
 
-Python 接口为 `VideoRequest(first_frame=Path(...), last_frame=Path(...), duration_seconds=10)`。官方 FL2VA workflow 会分别收到 `image` 和 `last_image`；提示词中的 `<Picture 1>` 与 `<Picture 2>` 按时间顺序表示首帧与尾帧。当前窄合同会拒绝只有尾帧而没有首帧的请求。复用成对配置不会改变已加载工件或已准备的 profile ID，只会按当前请求选择对应的 I2VA/FL2VA 条件合同。一条 SM89 pipeline 已在 640×352 下完成同进程十秒 I2VA→FL2VA：两条输出均解码为240帧和十秒双声道音频，第二次请求没有重复初始化。该有界实证不代表十秒928×512或SM86双卡已经资格化。SM86 FL2VA 请求与 I2VA 一样要求双卡 `sequence-head`。
+Python 接口为 `VideoRequest(first_frame=Path(...), last_frame=Path(...), duration_seconds=10)`。官方 FL2VA workflow 会分别收到 `image` 和 `last_image`；提示词中的 `<Picture 1>` 与 `<Picture 2>` 按时间顺序表示首帧与尾帧。只传 `last_frame` 会创建 L2VA 请求：官方 workflow 只收到 `last_image`，单张图可标记为 `<Picture 1>`。命令行可使用 `vflash generate ... --last-frame last-frame.png`，Python 可使用 `VideoRequest(last_frame=Path(...), duration_seconds=10)`。复用成对配置不会改变已加载工件或已准备的 profile ID，只会按当前请求选择对应的 I2VA、L2VA 或 FL2VA 条件合同。一条 SM89 pipeline 已在 640×352 下完成同进程十秒 I2VA→FL2VA：两条输出均解码为240帧和十秒双声道音频，第二次请求没有重复初始化。该有界实证不代表 L2VA、十秒928×512或SM86双卡已经资格化。SM86 关键帧请求统一要求双卡 `sequence-head`。
 
 ## 准备双 3080 生成 {#sm86}
 

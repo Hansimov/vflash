@@ -72,9 +72,9 @@ class VideoRequest:
     use ``references`` for an ordered tuple instead. ``reference_video`` accepts
     one visual-only local clip labeled ``<Video 1>``, without images. No references
     means T2VA and requires a T2VA pipeline. ``first_frame`` is a separate
-    I2VA input and is never interpreted as a Ref2VA content reference. Supplying
-    both ``first_frame`` and ``last_frame`` is a true FL2VA request with two
-    temporal anchors. A session never swaps models.
+    I2VA input and ``last_frame`` alone is an L2VA input; neither is interpreted
+    as a Ref2VA content reference. Supplying both is a true FL2VA request with
+    two temporal anchors. A session never swaps models.
     ``audio_delivery_profile='web-v1'`` applies bounded delivery gain after
     decoding; the default ``unchanged`` profile preserves the decoded waveform.
     """
@@ -121,17 +121,15 @@ class VideoRequest:
         if self.last_frame is not None:
             if not isinstance(self.last_frame, Path):
                 raise ContractError("last_frame must be a local pathlib.Path")
-            if self.first_frame is None:
-                raise ContractError("last_frame requires a first_frame for FL2VA")
             if self.ordered_references or self.reference_video is not None:
                 raise ContractError("provide keyframes or Ref2VA references, not both")
         if len(self.ordered_references) > 3:
             raise ContractError("Ref2VA supports at most three reference images")
         picture_count = (
             2
-            if self.last_frame is not None
+            if self.first_frame is not None and self.last_frame is not None
             else 1
-            if self.first_frame is not None
+            if self.first_frame is not None or self.last_frame is not None
             else len(self.ordered_references)
         )
         if any(
@@ -157,8 +155,10 @@ class VideoRequest:
             raise ContractError("seed must be an integer between 0 and 2^63-1")
         if type(self.duration_seconds) is not int or not 5 <= self.duration_seconds <= 10:
             raise ContractError("duration_seconds must be an integer from 5 to 10")
-        if self.duration_seconds > 5 and self.mode not in {"i2va", "fl2va"}:
-            raise ContractError("complete requests over five seconds require I2VA or FL2VA")
+        if self.duration_seconds > 5 and self.mode not in {"i2va", "l2va", "fl2va"}:
+            raise ContractError(
+                "complete requests over five seconds require I2VA, L2VA, or FL2VA"
+            )
         if self.audio_delivery_profile not in AUDIO_DELIVERY_PROFILES:
             raise ContractError("unknown audio delivery profile")
 
@@ -168,10 +168,12 @@ class VideoRequest:
 
     @property
     def mode(self) -> str:
-        if self.last_frame is not None:
+        if self.first_frame is not None and self.last_frame is not None:
             return "fl2va"
         if self.first_frame is not None:
             return "i2va"
+        if self.last_frame is not None:
+            return "l2va"
         return (
             "ref2va" if self.ordered_references or self.reference_video is not None else "t2va"
         )

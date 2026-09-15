@@ -44,7 +44,7 @@ def test_conditioning_hardware_is_provenance_but_model_identity_is_bound():
             validate_conditioning_source({**capture, field: value}, artifact)
 
 
-def test_official_base16_i2va_and_fl2va_conditioning_share_one_weight_runtime():
+def test_official_base16_keyframe_conditioning_shares_one_weight_runtime():
     common = {
         "model_repository": "MiniMaxAI/MiniMax-H3",
         "model_revision": "revision",
@@ -67,10 +67,12 @@ def test_official_base16_i2va_and_fl2va_conditioning_share_one_weight_runtime():
         adapter_execution="none",
     )
     assert _conditioning_task_matches("i2va", artifact)
+    assert _conditioning_task_matches("l2va", artifact)
     assert _conditioning_task_matches("fl2va", artifact)
     assert not _conditioning_task_matches("t2va", artifact)
     assert not _conditioning_task_matches("ref2va", artifact)
     artifact.adapter_execution = "runtime-residual"
+    assert not _conditioning_task_matches("l2va", artifact)
     assert not _conditioning_task_matches("fl2va", artifact)
 
 

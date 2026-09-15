@@ -4,7 +4,7 @@
 
 ## 可用配置 {#available}
 
-Ref2VA 基于参考素材生成视频和音频；T2VA 使用文本条件，不需要参考图片；I2VA 锚定第零帧，FL2VA 同时锚定片段两端。Base 与 Ref 权重相互独立。[完整链路](./complete-pipeline)通过相互匹配的固定配置接收这些输入。下列原生接口接收预编译条件包，其默认驻留策略与完整链路不同。
+Ref2VA 基于参考素材生成视频和音频；T2VA 使用文本条件，不需要参考图片；I2VA 锚定第零帧，L2VA 只锚定尾帧，FL2VA 同时锚定片段两端。Base 与 Ref 权重相互独立。[完整链路](./complete-pipeline)通过相互匹配的固定配置接收这些输入。下列原生接口接收预编译条件包，其默认驻留策略与完整链路不同。
 
 | 显卡 | 配置 | 步数 | 权重加载方式 |
 | --- | --- | ---: | --- |
@@ -20,7 +20,7 @@ Ref2VA 基于参考素材生成视频和音频；T2VA 使用文本条件，不�
 
 HTTP 服务默认使用 4090 Turbo4。切换配置时，需要同时更换匹配的资源并重启服务。
 
-完整 pipeline 的 Base16 I2VA 与 FL2VA 是一个成对例外：同一硬件上的两者使用完全相同的模型工件和调度，因此一个已经加载的 `H3Pipeline` 可以串行接收两种关键帧请求，而无需重启 profile；已准备的 profile ID 继续作为来源身份。该例外不适用于 Turbo、Ref2VA 或 T2VA。
+完整 pipeline 的 Base16 I2VA 与 FL2VA profile 身份是一个成对例外：同一硬件上的两者使用完全相同的模型工件和调度，因此一个已经加载的 `H3Pipeline` 可以串行接收 I2VA、L2VA 和 FL2VA 请求，而无需重启 profile。L2VA 是请求合同，不是重复的权重 profile；已准备的 profile ID 继续作为来源身份。该例外不适用于 Turbo、Ref2VA 或 T2VA。
 
 ```bash
 vflash profiles
@@ -74,4 +74,4 @@ Turbo4 和 Turbo8 都是蒸馏配置。减少步数可以降低计算量，但�
 
 ## 当前版本的边界 {#scope}
 
-[完整配置表](../reference/pipeline-profiles)列出已发布链路和当前 Base16 关键帧预览。FL2VA 的 schema 和引擎合同已经实现，但目标显卡延迟和成片质量尚未资格化。单 SM86 和 Turbo8 保留条件包到 latent 的接口。未列出的模式、LoRA、量化和时长帧率组合不在这些配置中。HTTP 接口一次串行执行一个任务；账号、计费和分布式 GPU 调度由接入 Vflash 的应用负责。
+[完整配置表](../reference/pipeline-profiles)列出已发布链路和当前 Base16 关键帧预览。L2VA 与 FL2VA 的 schema 和引擎合同已经实现，但 L2VA 的目标显卡延迟和成片质量尚未资格化。单 SM86 和 Turbo8 保留条件包到 latent 的接口。未列出的模式、LoRA、量化和时长帧率组合不在这些配置中。HTTP 接口一次串行执行一个任务；账号、计费和分布式 GPU 调度由接入 Vflash 的应用负责。

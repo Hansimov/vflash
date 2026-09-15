@@ -11,6 +11,8 @@ from vflash.native.h3_conditioning_bundle import (
     H3_FIRST_FRAME_POLICY,
     H3_FL2VA_CONDITIONING_BUNDLE_SCHEMA_VERSION,
     H3_FL2VA_KEYFRAME_POLICY,
+    H3_LAST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION,
+    H3_LAST_FRAME_POLICY,
     H3ConditioningBundleError,
     H3ConditioningProfile,
     _validate_request,
@@ -31,7 +33,7 @@ def write_bundle(directory, count, *, task="ref2va", frames=5, nfe=4):
     save_file = pytest.importorskip("safetensors.torch").save_file
     profile = H3ConditioningProfile(task, 32, 32, frames, nfe, 12, 3, count, count, 0)
     video = h3_target_video_tokens(width=32, height=32, frames=frames) + count
-    audio = h3_target_audio_tokens(frames=frames) if task in {"i2va", "fl2va"} else 1
+    audio = h3_target_audio_tokens(frames=frames) if task in {"i2va", "l2va", "fl2va"} else 1
     text = 2
     sequence = video + audio + text
     values = {
@@ -152,6 +154,63 @@ def test_native_first_frame_bundle_is_distinct_from_ref2va(
         (10, 243, 240),
     ],
 )
+def test_native_last_frame_bundle_is_distinct_from_fl2va(
+    tmp_path, duration_seconds, model_frames, delivery_frames
+):
+    profile, _request, source = write_bundle(
+        tmp_path,
+        1,
+        task="l2va",
+        frames=model_frames,
+        nfe=16,
+    )
+    prompt = "The action resolves at the supplied frame."
+    request = {
+        "source_case_id": "synthetic-last-frame-bundle",
+        "prompt": prompt,
+        "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
+        "seed": 97,
+        "last_frame_policy": H3_LAST_FRAME_POLICY,
+        "delivery_profiles": [
+            {
+                "temporal_profile": f"native-24fps-{duration_seconds}s",
+                "frames": delivery_frames,
+                "fps": 24,
+            }
+        ],
+        "last_frame": {
+            "role": "last_frame",
+            "size_bytes": 100,
+            "sha256": "e" * 64,
+        },
+    }
+    sealed = seal_h3_conditioning_bundle(
+        tmp_path,
+        bundle_id="h3-conditioning-last-frame",
+        profile=profile,
+        request=request,
+        source=source,
+        schema_version=H3_LAST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION,
+    )
+    assert sealed.schema_version == 5
+    assert sealed.profile.task == "l2va" and sealed.schedule.nfe == 16
+    assert sealed.request["last_frame"]["role"] == "last_frame"
+    assert "first_frame" not in sealed.request and "references" not in sealed.request
+    with pytest.raises(H3ConditioningBundleError, match="L2VA"):
+        _validate_request(request, task="fl2va", schema_version=5)
+
+
+@pytest.mark.parametrize(
+    ("duration_seconds", "model_frames", "delivery_frames"),
+    [
+        (5, 124, 120),
+        (6, 158, 144),
+        (7, 175, 168),
+        (8, 192, 192),
+        (9, 226, 216),
+        (10, 243, 240),
+    ],
+)
 def test_native_fl2va_bundle_binds_both_temporal_anchors(
     tmp_path, duration_seconds, model_frames, delivery_frames
 ):
@@ -217,7 +276,10 @@ def test_native_fl2va_bundle_binds_both_temporal_anchors(
         ((8, 9), 2, "sequence-head", False),
     ],
 )
-@pytest.mark.parametrize("schema_version,task", [(3, "i2va"), (4, "fl2va")])
+@pytest.mark.parametrize(
+    "schema_version,task",
+    [(3, "i2va"), (5, "l2va"), (4, "fl2va")],
+)
 def test_native_keyframe_reader_accepts_only_released_topologies(
     monkeypatch, tmp_path, capability, count, strategy, accepted, schema_version, task
 ):
@@ -230,8 +292,11 @@ def test_native_keyframe_reader_accepts_only_released_topologies(
 
     runtime = H3NativeConditioningRuntime.__new__(H3NativeConditioningRuntime)
     runtime._torch = object()
+    artifact_task = "fl2va" if task == "l2va" else task
     runtime.artifact = SimpleNamespace(
-        source={"oracle_profile": f"{task}-base-bf16-torch-sdpa-sm86"}
+        source={"oracle_profile": f"{artifact_task}-base-bf16-torch-sdpa-sm86"},
+        weight_profile="minimax-h3-base",
+        adapter_execution="none",
     )
     runtime.devices, runtime.compute_capability = [None] * count, capability
     runtime.parallel_strategy = strategy

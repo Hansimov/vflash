@@ -53,13 +53,14 @@ def test_released_model_identities_and_adapter_scaling_remain_distinct():
 
 
 @pytest.mark.parametrize("hardware", ["sm89", "sm86"])
-def test_base16_resident_profiles_accept_both_keyframe_conditioning_modes(hardware):
+def test_base16_resident_profiles_accept_all_keyframe_conditioning_modes(hardware):
     i2va = f"i2va-base16-bf16-{hardware}"
     fl2va = f"fl2va-base16-bf16-{hardware}"
     i2va_profile, fl2va_profile = model_profile(i2va), model_profile(fl2va)
     for resident in (i2va, fl2va):
-        assert supported_request_modes(resident) == ("i2va", "fl2va")
+        assert supported_request_modes(resident) == ("i2va", "l2va", "fl2va")
         assert conditioning_profile_for_request(resident, "i2va") == i2va
+        assert conditioning_profile_for_request(resident, "l2va") == fl2va
         assert conditioning_profile_for_request(resident, "fl2va") == fl2va
     assert i2va_profile.hardware == fl2va_profile.hardware
     assert i2va_profile.workflow == fl2va_profile.workflow == "fl2va"
@@ -312,6 +313,20 @@ def test_i2va_request_owns_one_explicit_first_frame():
         VideoRequest("Continue from <Picture 2>.", first_frame=frame)
 
 
+def test_l2va_request_owns_one_explicit_last_frame():
+    frame = Path("frame-last.png")
+    request = VideoRequest(
+        "The action resolves at <Picture 1>.", last_frame=frame, duration_seconds=10
+    )
+    assert request.mode == "l2va"
+    assert request.last_frame == frame
+    assert request.ordered_references == ()
+    with pytest.raises(ContractError, match="keyframes or Ref2VA"):
+        VideoRequest("A scene.", references=(Path("ref.png"),), last_frame=frame)
+    with pytest.raises(ContractError, match="picture label"):
+        VideoRequest("Resolve at <Picture 2>.", last_frame=frame)
+
+
 def test_fl2va_request_requires_two_explicit_temporal_anchors():
     first, last = Path("frame-zero.png"), Path("frame-last.png")
     request = VideoRequest(
@@ -322,8 +337,7 @@ def test_fl2va_request_requires_two_explicit_temporal_anchors():
     assert request.mode == "fl2va"
     assert (request.first_frame, request.last_frame) == (first, last)
     assert request.ordered_references == ()
-    with pytest.raises(ContractError, match="requires a first_frame"):
-        VideoRequest("A scene.", last_frame=last)
+    assert VideoRequest("A scene.", last_frame=last).mode == "l2va"
     with pytest.raises(ContractError, match="picture label"):
         VideoRequest(
             "Move from <Picture 1> through <Picture 3>.",

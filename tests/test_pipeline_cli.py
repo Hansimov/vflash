@@ -97,6 +97,29 @@ def test_generate_parser_exposes_first_and_last_frames_for_fl2va():
     )
 
 
+def test_generate_parser_exposes_last_frame_alone_for_l2va():
+    args = build_parser().parse_args(
+        [
+            "generate",
+            "--prepared-assets",
+            "receipt.json",
+            "--prompt-file",
+            "prompt.txt",
+            "--last-frame",
+            "frame-last.png",
+            "--duration",
+            "10",
+            "--gpu",
+            "0",
+            "--output",
+            "result.mp4",
+        ]
+    )
+    assert args.first_frame is None
+    assert args.last_frame == Path("frame-last.png")
+    assert args.duration == 10
+
+
 def test_generate_cli_runs_one_owned_pipeline_and_keeps_progress_off_stdout(
     tmp_path, monkeypatch, capsys
 ):
