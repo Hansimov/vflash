@@ -84,6 +84,11 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
         action="store_true",
         help="allow official decoder code from the verified local model snapshot",
     )
+    generate.add_argument(
+        "--profile-denoise",
+        action="store_true",
+        help="collect opt-in per-evaluation CUDA diagnostics; adds event overhead",
+    )
 
 
 def run_pipeline_command(args: argparse.Namespace) -> int:
@@ -140,12 +145,16 @@ def run_pipeline_command(args: argparse.Namespace) -> int:
     with H3Pipeline(
         prepared, device=devices[args.gpu], trust_local_code=True, **options
     ) as pipeline:
+        generation_options = {}
+        if args.profile_denoise:
+            generation_options["profile_denoise"] = True
         result = pipeline.generate(
             request,
             args.output,
             progress=lambda event: print(
                 json.dumps(asdict(event)), file=sys.stderr, flush=True
             ),
+            **generation_options,
         )
     print(json.dumps(asdict(result), default=str, indent=2))
     return 0

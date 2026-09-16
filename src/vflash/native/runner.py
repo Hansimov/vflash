@@ -125,13 +125,16 @@ class NativeEngineSession:
         output_latents: Path,
         *,
         progress_callback: Callable[[int, int], None] | None = None,
+        profile_denoise: bool = False,
     ) -> dict[str, Any]:
         if self.closed:
             raise ContractError("the native engine session is closed")
         started = time.perf_counter()
-        options = (
-            {"progress_callback": progress_callback} if progress_callback is not None else {}
-        )
+        options = {}
+        if progress_callback is not None:
+            options["progress_callback"] = progress_callback
+        if profile_denoise:
+            options["profile_denoise"] = True
         result = self.runtime.generate_latents(bundle, output_latents, **options)
         self.request_count += 1
         return {
@@ -192,6 +195,7 @@ def denoise_conditioning_bundle(
     auxiliary_tensor: Path,
     output_latents: Path,
     weight_residency: str = "default",
+    profile_denoise: bool = False,
 ) -> dict[str, Any]:
     """One-shot CLI path; services retain a NativeEngineSession instead."""
     with NativeEngineSession(
@@ -201,4 +205,4 @@ def denoise_conditioning_bundle(
         auxiliary_tensor=auxiliary_tensor,
         weight_residency=weight_residency,
     ) as session:
-        return session.generate(bundle, output_latents)
+        return session.generate(bundle, output_latents, profile_denoise=profile_denoise)

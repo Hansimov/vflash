@@ -7,6 +7,7 @@ No framework model graph or distributed launcher is required.
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
 from contextlib import suppress
@@ -129,19 +130,52 @@ class _SequenceHeadBlock(H3NativeBlockBF16Resident):
 
     def _attention(self, query: Any, key: Any, value: Any) -> Any:
         torch = _torch()
+        profile = getattr(self, "_vflash_collective_profile", None)
         chunks = 4
         qkv_send = _pack_qkv(query, key, value, chunks=chunks)
         qkv_receive = torch.empty_like(qkv_send)
+        if profile is None:
+            inbound = [
+                self.group.alltoall_base(qkv_receive[index], qkv_send[index], [], [])
+                for index in range(chunks)
+            ]
+            outbound, sends, receives = [], [], []
+            for index in range(chunks):
+                inbound[index].wait()
+                query, key, value = _unpack_qkv(qkv_receive[index], self.total_rows)
+                attention = super()._attention(query, key, value)
+                sent = _pack_attention(attention, qkv_receive.shape[4] * 2)
+                received = torch.empty_like(sent)
+                sends.append(sent)
+                receives.append(received)
+                outbound.append(self.group.alltoall_base(received, sent, [], []))
+            for work in outbound:
+                work.wait()
+            return _unpack_attention(torch.cat(receives, dim=3))
+
+        def exchange(receive: Any, send: Any) -> Any:
+            started = time.perf_counter()
+            work = self.group.alltoall_base(receive, send, [], [])
+            profile["calls"] += 1
+            profile["transmitted_bytes"] += int(send.numel() * send.element_size())
+            profile["issue_seconds"] += time.perf_counter() - started
+            return work
+
+        def complete(work: Any) -> None:
+            started = time.perf_counter()
+            work.wait()
+            profile["wait_seconds"] += time.perf_counter() - started
+
         # Queue QKV transfers before inserting any attention dependency into
         # the compute stream. Later head groups can transfer while an earlier
         # group computes; the return exchanges overlap subsequent attention.
         inbound = [
-            self.group.alltoall_base(qkv_receive[index], qkv_send[index], [], [])
+            exchange(qkv_receive[index], qkv_send[index])
             for index in range(chunks)
         ]
         outbound, sends, receives = [], [], []
         for index in range(chunks):
-            inbound[index].wait()
+            complete(inbound[index])
             query, key, value = _unpack_qkv(qkv_receive[index], self.total_rows)
             # A padded token is never admitted to the attention softmax.
             attention = super()._attention(query, key, value)
@@ -149,9 +183,9 @@ class _SequenceHeadBlock(H3NativeBlockBF16Resident):
             received = torch.empty_like(sent)
             sends.append(sent)
             receives.append(received)
-            outbound.append(self.group.alltoall_base(received, sent, [], []))
+            outbound.append(exchange(received, sent))
         for work in outbound:
-            work.wait()
+            complete(work)
         return _unpack_attention(torch.cat(receives, dim=3))
 
 
@@ -429,6 +463,32 @@ class H3NativeDenoiserParallel:
 
     def prepare_invocation(self, states: Any, **kwargs: Any) -> Any:
         return self.rings[0].prepare_invocation(states, **kwargs)
+
+    def begin_denoise_profile(self) -> None:
+        begun = []
+        try:
+            for ring in self.rings:
+                ring.begin_denoise_profile()
+                begun.append(ring)
+        except BaseException:
+            for ring in begun:
+                ring.abort_denoise_profile()
+            raise
+
+    def abort_denoise_profile(self) -> None:
+        for ring in self.rings:
+            ring.abort_denoise_profile()
+
+    def finish_denoise_profile(self) -> dict[str, Any]:
+        ranks = [ring.finish_denoise_profile() for ring in self.rings]
+        return {
+            "strategy": self.strategy,
+            "ranks": ranks,
+            "totals": {
+                key: sum(rank["totals"][key] for rank in ranks)
+                for key in ranks[0]["totals"]
+            },
+        }
 
     def forward_prevalidated(self, states: Any, invocation: Any) -> tuple[Any, dict[int, Any]]:
         torch = _torch()

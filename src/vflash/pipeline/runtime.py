@@ -156,6 +156,7 @@ class H3Pipeline:
         output_path: Path,
         *,
         progress: Callable[[PipelineProgress], None] | None = None,
+        profile_denoise: bool = False,
     ) -> VideoResult:
         """Return a complete MP4; failed or concurrent requests never publish a partial file."""
         started = time.monotonic()
@@ -201,7 +202,11 @@ class H3Pipeline:
             try:
                 initialization_seconds = self._ensure_prepared()
                 result = self._generate_one(
-                    request, tuple(references), output_path, progress=progress
+                    request,
+                    tuple(references),
+                    output_path,
+                    progress=progress,
+                    profile_denoise=profile_denoise,
                 )
             except BaseException as exc:
                 try:
@@ -248,6 +253,7 @@ class H3Pipeline:
         output_path: Path,
         *,
         progress: Callable[[PipelineProgress], None] | None,
+        profile_denoise: bool,
     ) -> VideoResult:
         def report(stage: str, completed: int, total: int) -> None:
             if progress is not None:
@@ -295,12 +301,17 @@ class H3Pipeline:
                 ),
             }
             report("denoising", 0, self.profile.definition.nfe)
+            native_options: dict[str, Any] = {
+                "progress_callback": lambda completed, total: report(
+                    "denoising", completed, total
+                )
+            }
+            if profile_denoise:
+                native_options["profile_denoise"] = True
             native = self._core.generate(
                 bundle.directory,
                 directory / "latents.safetensors",
-                progress_callback=lambda completed, total: report(
-                    "denoising", completed, total
-                ),
+                **native_options,
             )
             stages["denoising"] = {
                 key: value

@@ -1178,7 +1178,8 @@ class H3NativeDenoiserBF16Ring:
         self.host_blocks = host_blocks
         self.device = runtime_device
         self.attention_backend = attention_backend
-        self.host_weight_bytes = sum(_block_tensor_bytes(row) for row in host_blocks)
+        self._block_weight_bytes = tuple(_block_tensor_bytes(row) for row in host_blocks)
+        self.host_weight_bytes = sum(self._block_weight_bytes)
 
         with torch.cuda.device(runtime_device):
             slot_weights = tuple(
@@ -1238,6 +1239,121 @@ class H3NativeDenoiserBF16Ring:
             _bf16_block_copy_pairs(self.slots[0].weights, host_block)
             for host_block in host_blocks
         )
+        self._denoise_profile_records: list[dict[str, Any]] | None = None
+
+    def begin_denoise_profile(self) -> None:
+        """Enable detailed ring events for one diagnostic request."""
+
+        if getattr(self, "_denoise_profile_records", None) is not None:
+            raise H3NativeDenoiserError("BF16 ring profiling is already active")
+        self._denoise_profile_records = []
+
+    def abort_denoise_profile(self) -> None:
+        self._denoise_profile_records = None
+        for slot in self.slots:
+            slot._vflash_collective_profile = None
+
+    def finish_denoise_profile(self) -> dict[str, Any]:
+        """Resolve ring events after every owned CUDA stream has completed."""
+
+        records = self._denoise_profile_records
+        if records is None:
+            raise H3NativeDenoiserError("BF16 ring profiling is not active")
+        self._denoise_profile_records = None
+        evaluations = []
+        total_copies = total_bytes = total_collectives = 0
+        total_copy_active = total_ready_wait = total_block_compute = 0.0
+        total_collective_issue = total_collective_wait = 0.0
+        for record in records:
+            h2d_seconds = [
+                float(start.elapsed_time(end)) / 1000.0
+                for _index, _size, start, end in record["copies"]
+            ]
+            ready_wait_seconds = [
+                float(start.elapsed_time(end)) / 1000.0
+                for _index, start, end in record["ready_waits"]
+            ]
+            block_compute_seconds = [
+                float(start.elapsed_time(end)) / 1000.0
+                for _index, start, end in record["block_compute"]
+            ]
+            copied_bytes = sum(size for _index, size, _start, _end in record["copies"])
+            collective = dict(record["collective"])
+            copy_span = (
+                float(record["copy_span_start"].elapsed_time(record["copy_span_end"]))
+                / 1000.0
+            )
+            compute_span = (
+                float(record["compute_span_start"].elapsed_time(record["compute_span_end"]))
+                / 1000.0
+            )
+            evaluations.append(
+                {
+                    "evaluation_index": record["evaluation_index"],
+                    "copied_bytes": copied_bytes,
+                    "h2d_active_seconds": h2d_seconds,
+                    "h2d_span_seconds": copy_span,
+                    "ready_wait_seconds": ready_wait_seconds,
+                    "block_compute_seconds": block_compute_seconds,
+                    "compute_span_seconds": compute_span,
+                    "collective": collective,
+                }
+            )
+            total_copies += len(h2d_seconds)
+            total_bytes += copied_bytes
+            total_collectives += int(collective["calls"])
+            total_copy_active += sum(h2d_seconds)
+            total_ready_wait += sum(ready_wait_seconds)
+            total_block_compute += sum(block_compute_seconds)
+            total_collective_issue += float(collective["issue_seconds"])
+            total_collective_wait += float(collective["wait_seconds"])
+        return {
+            "device_index": self.device.index,
+            "evaluations": evaluations,
+            "totals": {
+                "copies": total_copies,
+                "copied_bytes": total_bytes,
+                "h2d_active_seconds": total_copy_active,
+                "ready_wait_seconds": total_ready_wait,
+                "block_compute_seconds": total_block_compute,
+                "collective_calls": total_collectives,
+                "collective_transmitted_bytes": sum(
+                    int(row["collective"]["transmitted_bytes"]) for row in records
+                ),
+                "collective_issue_seconds": total_collective_issue,
+                "collective_wait_seconds": total_collective_wait,
+            },
+        }
+
+    @staticmethod
+    def _record_profile_event(torch: Any, stream: Any) -> Any:
+        event = torch.cuda.Event(enable_timing=True, blocking=False)
+        event.record(stream)
+        return event
+
+    def _copy_ring_block(
+        self, index: int, profile: dict[str, Any] | None
+    ) -> None:
+        start = self._record_profile_event(_torch(), self.copy_stream) if profile else None
+        _copy_bf16_tensor_pairs_(self._ring_copy_pairs[index])
+        if profile is not None:
+            end = self._record_profile_event(_torch(), self.copy_stream)
+            block_weight_bytes = getattr(self, "_block_weight_bytes", None)
+            profile["copies"].append(
+                (
+                    index,
+                    (
+                        block_weight_bytes[index]
+                        if block_weight_bytes is not None
+                        else _block_tensor_bytes(self.host_blocks[index])
+                    ),
+                    start,
+                    end,
+                )
+            )
+            if profile["copy_span_start"] is None:
+                profile["copy_span_start"] = start
+            profile["copy_span_end"] = end
 
     @classmethod
     def load(
@@ -1326,14 +1442,14 @@ class H3NativeDenoiserBF16Ring:
             rotary_sin=rotary_sin,
         )
 
-    def _queue_initial_slots(self) -> None:
+    def _queue_initial_slots(self, profile: dict[str, Any] | None = None) -> None:
         torch = _torch()
         with torch.cuda.stream(self.copy_stream):
             for index in range(2):
                 # The prior invocation may still be consuming the last two
                 # blocks. An unrecorded event on the first invocation is a no-op.
                 self.copy_stream.wait_event(self.compute_done_events[index])
-                _copy_bf16_tensor_pairs_(self._ring_copy_pairs[index])
+                self._copy_ring_block(index, profile)
                 self.ready_events[index].record(self.copy_stream)
 
     def forward_prevalidated(
@@ -1353,26 +1469,67 @@ class H3NativeDenoiserBF16Ring:
         if any(index < 0 or index >= len(self.host_blocks) for index in checkpoint_blocks):
             raise H3NativeDenoiserError("BF16 ring checkpoint index is outside the stack")
         compute_stream = torch.cuda.current_stream(self.device)
-        self._queue_initial_slots()
+        profile_records = getattr(self, "_denoise_profile_records", None)
+        profile = None
+        if profile_records is not None:
+            profile = {
+                "evaluation_index": int(invocation.evaluation_index),
+                "copies": [],
+                "ready_waits": [],
+                "block_compute": [],
+                "copy_span_start": None,
+                "copy_span_end": None,
+                "compute_span_start": self._record_profile_event(torch, compute_stream),
+                "compute_span_end": None,
+                "collective": {
+                    "calls": 0,
+                    "transmitted_bytes": 0,
+                    "issue_seconds": 0.0,
+                    "wait_seconds": 0.0,
+                },
+            }
+            for slot in self.slots:
+                slot._vflash_collective_profile = profile["collective"]
+        self._queue_initial_slots(profile)
         checkpoints: dict[int, Any] = {}
-        for index in range(len(self.host_blocks)):
-            slot_index = index % 2
-            slot = self.slots[slot_index]
-            compute_stream.wait_event(self.ready_events[slot_index])
-            hidden_states = slot.forward_prevalidated(hidden_states, invocation)
-            self.compute_done_events[slot_index].record(compute_stream)
+        try:
+            for index in range(len(self.host_blocks)):
+                slot_index = index % 2
+                slot = self.slots[slot_index]
+                wait_start = (
+                    self._record_profile_event(torch, compute_stream) if profile else None
+                )
+                compute_stream.wait_event(self.ready_events[slot_index])
+                compute_start = (
+                    self._record_profile_event(torch, compute_stream) if profile else None
+                )
+                hidden_states = slot.forward_prevalidated(hidden_states, invocation)
+                compute_end = (
+                    self._record_profile_event(torch, compute_stream) if profile else None
+                )
+                self.compute_done_events[slot_index].record(compute_stream)
+                if profile is not None:
+                    profile["ready_waits"].append((index, wait_start, compute_start))
+                    profile["block_compute"].append((index, compute_start, compute_end))
 
-            if index in checkpoint_blocks:
-                # Keep GPU timing and oracle I/O separate at the caller.  This
-                # branch exists only for the untimed correctness pass.
-                checkpoints[index] = hidden_states.to(device="cpu")
+                if index in checkpoint_blocks:
+                    # Keep GPU timing and oracle I/O separate at the caller.  This
+                    # branch exists only for the untimed correctness pass.
+                    checkpoints[index] = hidden_states.to(device="cpu")
 
-            next_index = index + 2
-            if next_index < len(self.host_blocks):
-                with torch.cuda.stream(self.copy_stream):
-                    self.copy_stream.wait_event(self.compute_done_events[slot_index])
-                    _copy_bf16_tensor_pairs_(self._ring_copy_pairs[next_index])
-                    self.ready_events[slot_index].record(self.copy_stream)
+                next_index = index + 2
+                if next_index < len(self.host_blocks):
+                    with torch.cuda.stream(self.copy_stream):
+                        self.copy_stream.wait_event(self.compute_done_events[slot_index])
+                        self._copy_ring_block(next_index, profile)
+                        self.ready_events[slot_index].record(self.copy_stream)
+            if profile is not None:
+                profile["compute_span_end"] = profile["block_compute"][-1][2]
+                profile_records.append(profile)
+        finally:
+            if profile is not None:
+                for slot in self.slots:
+                    slot._vflash_collective_profile = None
         return hidden_states, checkpoints
 
     def forward_prevalidated_serial(

@@ -70,8 +70,10 @@ def test_session_loads_once_and_keeps_request_accounting_separate(
             loads.append(options)
             self.nfe = options["expected_nfe"]
 
-        def generate_latents(self, bundle, output, *, progress_callback=None):
-            calls.append((bundle, output))
+        def generate_latents(
+            self, bundle, output, *, progress_callback=None, profile_denoise=False
+        ):
+            calls.append((bundle, output, profile_denoise))
             if progress_callback is not None:
                 for completed in range(1, self.nfe + 1):
                     progress_callback(completed, self.nfe)
@@ -116,14 +118,15 @@ def test_session_loads_once_and_keeps_request_accounting_separate(
         tmp_path / "bundle-b",
         tmp_path / "second",
         progress_callback=lambda completed, total: progress.append((completed, total)),
+        profile_denoise=True,
     )
     expected_nfe = plan.profile.nfe
     assert progress == [(completed, expected_nfe) for completed in range(1, expected_nfe + 1)]
 
     assert len(loads) == 1
     assert calls == [
-        (tmp_path / "bundle-a", tmp_path / "first"),
-        (tmp_path / "bundle-b", tmp_path / "second"),
+        (tmp_path / "bundle-a", tmp_path / "first", False),
+        (tmp_path / "bundle-b", tmp_path / "second", True),
     ]
     assert first["session"]["initialization_charged_seconds"] > 0
     assert second["session"]["initialization_charged_seconds"] == 0

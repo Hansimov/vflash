@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 
 from vflash.native import h3_native_denoiser as denoiser
@@ -102,3 +104,55 @@ def test_back_to_back_invocations_preserve_inflight_weights(order):
     torch.cuda.synchronize()
 
     assert [output.item() for output in outputs] == [210.0, 210.0]
+
+
+def test_opt_in_ring_profile_reports_copy_wait_and_compute_without_changing_output(
+    monkeypatch,
+):
+    torch = pytest.importorskip("torch")
+    if not torch.cuda.is_available():
+        pytest.skip("the asynchronous weight-ring contract requires CUDA")
+
+    class Slot:
+        def __init__(self):
+            self.weights = torch.zeros(1, device="cuda")
+
+        def forward_prevalidated(self, value, _invocation):
+            return value * self.weights
+
+    ring = denoiser.H3NativeDenoiserBF16Ring.__new__(denoiser.H3NativeDenoiserBF16Ring)
+    ring.device = torch.device("cuda:0")
+    ring.host_blocks = tuple(
+        torch.tensor([value], pin_memory=True) for value in (2.0, 3.0, 5.0, 7.0)
+    )
+    ring.slots = (Slot(), Slot())
+    ring.copy_stream = torch.cuda.Stream()
+    ring.ready_events = tuple(torch.cuda.Event() for _ in range(2))
+    ring.compute_done_events = tuple(torch.cuda.Event() for _ in range(2))
+    ring._ring_copy_pairs = tuple(
+        ((ring.slots[index % 2].weights, host_block),)
+        for index, host_block in enumerate(ring.host_blocks)
+    )
+    ring._serial_copy_pairs = tuple(
+        ((ring.slots[0].weights, host_block),) for host_block in ring.host_blocks
+    )
+    monkeypatch.setattr(denoiser, "_block_tensor_bytes", lambda _block: 4)
+
+    ring.begin_denoise_profile()
+    output = ring.forward_prevalidated(
+        torch.ones(1, device="cuda"), SimpleNamespace(evaluation_index=3)
+    )[0]
+    torch.cuda.synchronize()
+    profile = ring.finish_denoise_profile()
+
+    assert output.item() == 210.0
+    assert profile["device_index"] == 0
+    assert profile["totals"]["copies"] == 4
+    assert profile["totals"]["copied_bytes"] == 16
+    assert profile["totals"]["collective_calls"] == 0
+    evaluation = profile["evaluations"][0]
+    assert evaluation["evaluation_index"] == 3
+    assert len(evaluation["h2d_active_seconds"]) == 4
+    assert len(evaluation["ready_wait_seconds"]) == 4
+    assert len(evaluation["block_compute_seconds"]) == 4
+    assert evaluation["compute_span_seconds"] >= 0

@@ -21,6 +21,19 @@
 
 首个任务之前，`/readyz` 通过只表示配置文件和显卡检查通过，不代表模型已经加载。
 
+## 剖析单次去噪请求 {#denoise-profile}
+
+`vflash generate` 与 `vflash denoise` 均支持 `--profile-denoise`。该开关刻意保持为显式诊断选项：它会为每个 evaluation 和每个流式 block 记录 CUDA timing event，因此最终吞吐比较应使用未开启诊断的独立运行。诊断本身不增加 evaluation 围栏；完整 pipeline 原本就会在发布每次进度前等待所有协作设备，报告会把这些既有围栏单列。
+
+返回的 `generation.denoise_profile` 会区分：
+
+- 主卡的行时间步准备、输入打包、invocation 准备、denoiser、final layer 与 latent 更新；
+- 每个 rank 的 H2D 活跃时间、计算流等待权重时间、block 执行以及复制/计算跨度；
+- sequence/head collective 的调用次数、传输字节、主机提交时间和主机 `Work.wait()` 时间；
+- 每个 evaluation 的引擎提交、既有进度围栏、回调、最终围栏和 profile 汇总耗时。
+
+H2D、ready wait、block compute 与 rank span 描述的是相互重叠的 CUDA stream，**不能相加**。block compute 包含 collective 临界路径；主机 collective wait 只是提交/同步诊断，不能单独当作 GPU 通信耗时。需要按 kernel 归因 NCCL 时仍应使用外部 CUDA profiler。诊断输出只含设备序号、时间和字节计数，不包含模型张量、提示词、路径或 GPU UUID。
+
 ## 让比较有意义 {#comparisons}
 
 使用相同的条件包、模型与 LoRA 版本、运行配置、显卡和输出边界。分别报告首次使用与后续请求耗时，并重复足够次数以观察波动。

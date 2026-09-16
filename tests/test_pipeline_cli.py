@@ -29,6 +29,50 @@ def test_generate_parser_preserves_reference_order():
     assert args.reference == [Path("second.png"), Path("first.png")]
     assert args.duration == 5
     assert args.audio_delivery_profile == "unchanged"
+    assert args.profile_denoise is False
+
+
+def test_generate_parser_exposes_opt_in_denoise_profile():
+    args = build_parser().parse_args(
+        [
+            "generate",
+            "--prepared-assets",
+            "receipt.json",
+            "--prompt-file",
+            "prompt.txt",
+            "--gpu",
+            "0",
+            "--output",
+            "output.mp4",
+            "--profile-denoise",
+        ]
+    )
+    assert args.profile_denoise is True
+
+    native = build_parser().parse_args(
+        [
+            "denoise",
+            "i2va-base16-bf16-sm86",
+            "--gpu",
+            "0",
+            "--peer-gpu",
+            "1",
+            "--strategy",
+            "sequence-head",
+            "--bundle",
+            "bundle",
+            "--artifact",
+            "artifact",
+            "--schedule-overlay",
+            "schedule",
+            "--auxiliary-tensor",
+            "auxiliary",
+            "--output-latents",
+            "latents.safetensors",
+            "--profile-denoise",
+        ]
+    )
+    assert native.profile_denoise is True
 
 
 def test_generate_parser_exposes_one_explicit_video_path():

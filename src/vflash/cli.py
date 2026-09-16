@@ -58,6 +58,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="default",
         help="stream BF16 blocks from host RAM to leave more GPU space for activations",
     )
+    denoise.add_argument(
+        "--profile-denoise",
+        action="store_true",
+        help="collect opt-in per-evaluation CUDA diagnostics; adds event overhead",
+    )
     return parser
 
 
@@ -112,6 +117,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 auxiliary_tensor=args.auxiliary_tensor,
                 weight_residency=args.weight_residency,
                 output_latents=args.output_latents,
+                profile_denoise=args.profile_denoise,
             )
             print(json.dumps(result, indent=2))
             return 0

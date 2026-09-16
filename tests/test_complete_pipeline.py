@@ -108,12 +108,18 @@ def _pipeline(*, fail: str | None = None) -> tuple[H3Pipeline, list[str]]:
         def capture_in_memory(self, request, reference, directory):
             return self.capture(request, reference, directory)
 
-        def generate(self, bundle, output, *, progress_callback):
+        def generate(self, bundle, output, *, progress_callback, profile_denoise=False):
             self._event("generate")
             output.write_bytes(b"owned latent test placeholder")
             for nfe in range(1, 5):
                 progress_callback(nfe, 4)
-            return {"generation": {"elapsed_seconds": 0.5, "output_path": str(output)}}
+            return {
+                "generation": {
+                    "elapsed_seconds": 0.5,
+                    "output_path": str(output),
+                    "denoise_profile": {"enabled": True} if profile_denoise else None,
+                }
+            }
 
         def generate_mp4(self, latent, output, **kwargs):
             self._event("generate")
@@ -208,6 +214,14 @@ def test_complete_pipeline_uses_persisted_conditioning_handoff(video_request, tm
     assert result.stages["encoding"]["conditioning_transport"] == "persisted-file"
     assert result.stages["encoding"]["conditioning_tensor_bytes"] is None
     assert result.stages["encoding"]["capture_diagnostics"]["finish_seconds"] == 0.2
+
+
+def test_complete_pipeline_forwards_opt_in_denoise_profile(video_request, tmp_path):
+    pipeline, _events = _pipeline()
+    result = pipeline.generate(
+        video_request, tmp_path / "profiled.mp4", profile_denoise=True
+    )
+    assert result.stages["denoising"]["denoise_profile"] == {"enabled": True}
 
 
 def test_ten_second_keyframe_request_passes_exact_media_contract(video_request, tmp_path):

@@ -148,6 +148,7 @@ class H3NativeConditioningRuntimeResult:
     attention_policy: dict[str, Any]
     stage_durations: dict[str, float]
     peak_allocated_bytes_by_device: tuple[int, ...]
+    denoise_profile: dict[str, Any] | None = None
 
 
 class H3NativeConditioningRuntime:
@@ -515,6 +516,7 @@ class H3NativeConditioningRuntime:
         output_path: Path,
         *,
         progress_callback: Callable[[int, int], None] | None = None,
+        profile_denoise: bool = False,
     ) -> H3NativeConditioningRuntimeResult:
         """Run one live request and export target-only VAE-ready latents."""
 
@@ -557,16 +559,90 @@ class H3NativeConditioningRuntime:
         for selected in self.devices:
             torch.cuda.reset_peak_memory_stats(selected)
         denoise_started = time.monotonic()
-        with torch.inference_mode():
-            while not engine.complete:
-                engine.step()
-                if progress_callback is not None:
-                    # A reported evaluation is complete on every cooperating GPU.
-                    for selected in self.devices:
-                        torch.cuda.synchronize(selected)
-                    progress_callback(engine.evaluation_index, self.overlay.schedule.nfe)
-        for selected in self.devices:
-            torch.cuda.synchronize(selected)
+        evaluation_host: list[dict[str, Any]] = []
+        ring_profile_started = False
+        denoise_profile: dict[str, Any] | None = None
+        if profile_denoise:
+            engine.begin_denoise_profile()
+            begin_ring_profile = getattr(self.denoiser, "begin_denoise_profile", None)
+            if callable(begin_ring_profile):
+                try:
+                    begin_ring_profile()
+                except BaseException:
+                    engine.abort_denoise_profile()
+                    raise
+                ring_profile_started = True
+        try:
+            with torch.inference_mode():
+                while not engine.complete:
+                    evaluation = engine.evaluation_index
+                    step_started = time.perf_counter() if profile_denoise else 0.0
+                    engine.step()
+                    step_seconds = (
+                        time.perf_counter() - step_started if profile_denoise else 0.0
+                    )
+                    fence_seconds_by_device: list[float] = []
+                    callback_seconds = 0.0
+                    if progress_callback is not None:
+                        # A reported evaluation is complete on every cooperating GPU.
+                        for selected in self.devices:
+                            fence_started = (
+                                time.perf_counter() if profile_denoise else 0.0
+                            )
+                            torch.cuda.synchronize(selected)
+                            if profile_denoise:
+                                fence_seconds_by_device.append(
+                                    time.perf_counter() - fence_started
+                                )
+                        callback_started = (
+                            time.perf_counter() if profile_denoise else 0.0
+                        )
+                        progress_callback(engine.evaluation_index, self.overlay.schedule.nfe)
+                        if profile_denoise:
+                            callback_seconds = time.perf_counter() - callback_started
+                    if profile_denoise:
+                        evaluation_host.append(
+                            {
+                                "evaluation_index": evaluation,
+                                "engine_step_seconds": step_seconds,
+                                "progress_fence_seconds_by_device": fence_seconds_by_device,
+                                "progress_callback_seconds": callback_seconds,
+                            }
+                        )
+            final_fence_seconds_by_device = []
+            for selected in self.devices:
+                fence_started = time.perf_counter() if profile_denoise else 0.0
+                torch.cuda.synchronize(selected)
+                if profile_denoise:
+                    final_fence_seconds_by_device.append(
+                        time.perf_counter() - fence_started
+                    )
+            if profile_denoise:
+                execution_seconds_to_final_fence = time.monotonic() - denoise_started
+                materialization_started = time.perf_counter()
+                engine_profile = engine.finish_denoise_profile()
+                ring_profile = None
+                if ring_profile_started:
+                    ring_profile = self.denoiser.finish_denoise_profile()
+                    ring_profile_started = False
+                materialization_seconds = time.perf_counter() - materialization_started
+                denoise_profile = {
+                    "schema_version": 1,
+                    "instrumentation": "opt-in-cuda-events-with-existing-progress-fences",
+                    "added_nfe_fences": False,
+                    "execution_seconds_to_final_fence": execution_seconds_to_final_fence,
+                    "materialization_seconds": materialization_seconds,
+                    "evaluation_host": evaluation_host,
+                    "final_fence_seconds_by_device": final_fence_seconds_by_device,
+                    "engine": engine_profile,
+                    "block_ring": ring_profile,
+                }
+        except BaseException:
+            if profile_denoise:
+                engine.abort_denoise_profile()
+                if ring_profile_started:
+                    self.denoiser.abort_denoise_profile()
+            raise
         denoise_seconds = time.monotonic() - denoise_started
         if not bool(
             torch.isfinite(engine.latent_state.video_latents).all()
@@ -628,6 +704,7 @@ class H3NativeConditioningRuntime:
                 "latent_export": export_seconds,
             },
             peak_allocated_bytes_by_device=device_peaks,
+            denoise_profile=denoise_profile,
         )
 
     def _require_open(self) -> None:

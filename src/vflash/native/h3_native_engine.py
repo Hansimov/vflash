@@ -10,6 +10,7 @@ and numerical kernel portfolios share one full-trajectory quality harness.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -169,6 +170,7 @@ class H3NativeEngine:
         self.sequence_length = sequence_length
         self.row_timestep_plan: tuple[H3NativeRowTimestepStep, ...] = row_plan
         self.input_pack_invocation = pack_invocation
+        self._denoise_profile_records: list[dict[str, Any]] | None = None
 
     @property
     def complete(self) -> bool:
@@ -177,6 +179,71 @@ class H3NativeEngine:
     @property
     def evaluation_index(self) -> int:
         return self.latent_state.evaluation_index
+
+    def begin_denoise_profile(self) -> None:
+        """Enable opt-in CUDA-event diagnostics without changing step fences."""
+
+        if self._denoise_profile_records is not None:
+            raise H3NativeEngineError("H3 denoise profiling is already active")
+        self._denoise_profile_records = []
+
+    def abort_denoise_profile(self) -> None:
+        """Discard incomplete diagnostic event owners after a failed request."""
+
+        self._denoise_profile_records = None
+
+    def finish_denoise_profile(self) -> dict[str, Any]:
+        """Materialize completed primary-stream events after the caller's fence."""
+
+        records = self._denoise_profile_records
+        if records is None:
+            raise H3NativeEngineError("H3 denoise profiling is not active")
+        self._denoise_profile_records = None
+        sections = (
+            ("row_setup", "start", "row_setup_end"),
+            ("input_pack", "row_setup_end", "input_pack_end"),
+            ("invocation_prepare", "input_pack_end", "invocation_prepare_end"),
+            ("denoiser", "invocation_prepare_end", "denoiser_end"),
+            ("final_layer", "denoiser_end", "final_layer_end"),
+            ("latent_update", "final_layer_end", "latent_update_end"),
+        )
+        evaluations = []
+        totals = {name: 0.0 for name, _start, _end in sections}
+        totals["primary_stream"] = 0.0
+        host_totals = {name: 0.0 for name, _start, _end in sections}
+        host_totals["engine_step"] = 0.0
+        for record in records:
+            events = record["events"]
+            gpu_seconds = {
+                name: float(events[start].elapsed_time(events[end])) / 1000.0
+                for name, start, end in sections
+            }
+            gpu_seconds["primary_stream"] = (
+                float(events["start"].elapsed_time(events["latent_update_end"])) / 1000.0
+            )
+            for name, value in gpu_seconds.items():
+                totals[name] += value
+            for name, value in record["host_seconds"].items():
+                host_totals[name] += value
+            evaluations.append(
+                {
+                    "evaluation_index": record["evaluation_index"],
+                    "primary_gpu_seconds": gpu_seconds,
+                    "host_seconds": dict(record["host_seconds"]),
+                }
+            )
+        return {
+            "evaluations": evaluations,
+            "primary_gpu_seconds": totals,
+            "host_seconds": host_totals,
+        }
+
+    @staticmethod
+    def _record_profile_event(torch: Any, device: Any) -> Any:
+        with torch.cuda.device(device):
+            event = torch.cuda.Event(enable_timing=True, blocking=False)
+            event.record(torch.cuda.current_stream(device))
+        return event
 
     def _prepare_denoiser_invocation(
         self,
@@ -229,7 +296,20 @@ class H3NativeEngine:
             raise H3NativeEngineError("the H3 native engine schedule is already complete")
         evaluation = self.evaluation_index
         row_step = self.row_timestep_plan[evaluation]
+        profile_records = self._denoise_profile_records
+        profile = profile_records is not None
+        events: dict[str, Any] = {}
+        host_seconds: dict[str, float] = {}
+        engine_started = time.perf_counter() if profile else 0.0
+        section_started = engine_started
+        device = self.latent_state.device
+        if profile:
+            events["start"] = self._record_profile_event(torch, device)
         adaln_indices = row_step.timestep_indices * 3 + self.token_tags
+        if profile:
+            host_seconds["row_setup"] = time.perf_counter() - section_started
+            events["row_setup_end"] = self._record_profile_event(torch, device)
+            section_started = time.perf_counter()
         with torch.inference_mode():
             packed = self.input_packer.forward_prevalidated(
                 video_latents=self.latent_state.video_latents,
@@ -237,6 +317,10 @@ class H3NativeEngine:
                 refined_text=self.refined_text,
                 invocation=self.input_pack_invocation,
             )
+            if profile:
+                host_seconds["input_pack"] = time.perf_counter() - section_started
+                events["input_pack_end"] = self._record_profile_event(torch, device)
+                section_started = time.perf_counter()
             invocation = self._prepare_denoiser_invocation(
                 packed,
                 evaluation_index=evaluation,
@@ -249,16 +333,39 @@ class H3NativeEngine:
                 video_indices=self.video_indices,
                 audio_indices=self.audio_indices,
             )
+            if profile:
+                host_seconds["invocation_prepare"] = time.perf_counter() - section_started
+                events["invocation_prepare_end"] = self._record_profile_event(torch, device)
+                section_started = time.perf_counter()
             hidden_states = self._forward_denoiser(packed, invocation)
+            if profile:
+                host_seconds["denoiser"] = time.perf_counter() - section_started
+                events["denoiser_end"] = self._record_profile_event(torch, device)
+                section_started = time.perf_counter()
             video_velocity, audio_velocity = self.final_layer.forward_prevalidated(
                 hidden_states,
                 final_invocation,
             )
+            if profile:
+                host_seconds["final_layer"] = time.perf_counter() - section_started
+                events["final_layer_end"] = self._record_profile_event(torch, device)
+                section_started = time.perf_counter()
             self.latent_state.step(
                 video_velocity=video_velocity,
                 audio_velocity=audio_velocity,
                 evaluation_index=evaluation,
             )
+            if profile:
+                host_seconds["latent_update"] = time.perf_counter() - section_started
+                events["latent_update_end"] = self._record_profile_event(torch, device)
+                host_seconds["engine_step"] = time.perf_counter() - engine_started
+                profile_records.append(
+                    {
+                        "evaluation_index": evaluation,
+                        "events": events,
+                        "host_seconds": host_seconds,
+                    }
+                )
         return H3NativeEngineStepResult(
             evaluation_index=evaluation,
             packed_input=packed if capture_packed_input else None,
