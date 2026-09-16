@@ -337,6 +337,29 @@ class _H3BlockOperations:
         projected = self._adapted_linear(states, weight, adapter)
         return self._gate_residual(residual, gate, projected)
 
+    def _profiled_adapted_gate_residual(
+        self,
+        states: Any,
+        weight: H3BF16Weight,
+        adapter: H3LowRankResidualWeights | None,
+        residual: Any,
+        gate: Any,
+        *,
+        prefix: str,
+        detail: dict[str, list[tuple[Any, Any]]],
+        event: Callable[[], Any],
+    ) -> Any:
+        """Split one projection from its pointwise residual only while profiling."""
+
+        projection_start = event()
+        projected = self._adapted_linear(states, weight, adapter)
+        projection_end = event()
+        output = self._gate_residual(residual, gate, projected)
+        residual_end = event()
+        detail.setdefault(f"{prefix}_projection", []).append((projection_start, projection_end))
+        detail.setdefault(f"{prefix}_gate_residual", []).append((projection_end, residual_end))
+        return output
+
     def _modulate(self, normalized: Any, scale: Any, shift: Any) -> Any:
         return normalized * (1.0 + scale) + shift
 
@@ -357,6 +380,28 @@ class _H3BlockOperations:
                 self.weights.ffn_in_residual,
             )
         )
+
+    def _profiled_ffn_input(
+        self,
+        normalized: Any,
+        *,
+        detail: dict[str, list[tuple[Any, Any]]],
+        event: Callable[[], Any],
+    ) -> Any:
+        """Split the FFN input projection from SiLU-times-gate for diagnostics."""
+
+        projection_start = event()
+        packed = self._adapted_linear(
+            normalized,
+            self.weights.ffn_in,
+            self.weights.ffn_in_residual,
+        )
+        projection_end = event()
+        output = self._silu_mul(packed)
+        activation_end = event()
+        detail.setdefault("ffn_input_projection", []).append((projection_start, projection_end))
+        detail.setdefault("ffn_input_silu_mul", []).append((projection_end, activation_end))
+        return output
 
     def _rotary(self, hidden_states: Any, cos: Any, sin: Any) -> Any:
         return _apply_rotary(hidden_states, cos, sin)
@@ -561,6 +606,7 @@ class _H3BlockOperations:
             "block_index": block_index,
             "phases": [],
             "attention_detail": {},
+            "block_detail": {},
         }
         phase_start = event()
 
@@ -607,12 +653,15 @@ class _H3BlockOperations:
         finally:
             self._vflash_attention_phase_profile = None
         finish_phase("attention")
-        hidden_states = self._adapted_gate_residual(
+        hidden_states = self._profiled_adapted_gate_residual(
             attention.flatten(2, 3),
             self.weights.attention_out,
             self.weights.attention_out_residual,
             residual,
             gate_msa,
+            prefix="attention_output",
+            detail=record["block_detail"],
+            event=event,
         )
         finish_phase("attention_output")
 
@@ -620,14 +669,21 @@ class _H3BlockOperations:
         normalized = _rms_norm(hidden_states, self.weights.ffn_norm, eps=self.norm_eps)
         normalized = self._modulate(normalized, scale_mlp, shift_mlp)
         finish_phase("ffn_norm_modulate")
-        ffn = self._ffn_input(normalized)
+        ffn = self._profiled_ffn_input(
+            normalized,
+            detail=record["block_detail"],
+            event=event,
+        )
         finish_phase("ffn_input")
-        hidden_states = self._adapted_gate_residual(
+        hidden_states = self._profiled_adapted_gate_residual(
             ffn,
             self.weights.ffn_out,
             self.weights.ffn_out_residual,
             residual,
             gate_mlp,
+            prefix="ffn_output",
+            detail=record["block_detail"],
+            event=event,
         )
         finish_phase("ffn_output")
         phase_records.append(record)
@@ -1025,6 +1081,49 @@ class H3NativeBlockBF16Resident(_H3BlockOperations):
             block_size=self.elementwise_block_size,
         )
 
+    def _profiled_ffn_input(
+        self,
+        normalized: Any,
+        *,
+        detail: dict[str, list[tuple[Any, Any]]],
+        event: Callable[[], Any],
+    ) -> Any:
+        adapter = self.weights.ffn_in_residual
+        if (
+            self.elementwise_backend != "triton-strict"
+            or self.adapter_fusion_backend != "triton-strict"
+            or self.elementwise_block_size != 1024
+            or self.artifact.target.compute_capability != "sm89"
+            or self.artifact.weight_profile != "lightx-ref-turbo4-v0.1"
+            or adapter is None
+            or adapter.scaling != 0.0625
+        ):
+            return super()._profiled_ffn_input(
+                normalized,
+                detail=detail,
+                event=event,
+            )
+        from vflash.native.h3_fused_ops import triton_strict_bf16_ffn_adapter_silu
+
+        base_start = event()
+        base = self._linear(normalized, self.weights.ffn_in)
+        base_end = event()
+        update = self._residual_linear_unscaled(normalized, adapter)
+        adapter_end = event()
+        output = triton_strict_bf16_ffn_adapter_silu(
+            base,
+            update,
+            scaling=adapter.scaling,
+            block_size=self.elementwise_block_size,
+        )
+        activation_end = event()
+        detail.setdefault("ffn_input_base_projection", []).append((base_start, base_end))
+        detail.setdefault("ffn_input_adapter_projection", []).append((base_end, adapter_end))
+        detail.setdefault("ffn_input_adapter_silu_mul", []).append(
+            (adapter_end, activation_end)
+        )
+        return output
+
     def _qkv_linear(self, states: Any) -> Any:
         if self.adapter_fusion_backend == "torch-eager" or not self.weights.qkv_residuals:
             return super()._qkv_linear(states)
@@ -1151,6 +1250,52 @@ class H3NativeBlockBF16Resident(_H3BlockOperations):
                 block_size=self.elementwise_block_size,
             )
         return super()._adapted_gate_residual(states, weight, adapter, residual, gate)
+
+    def _profiled_adapted_gate_residual(
+        self,
+        states: Any,
+        weight: H3BF16Weight,
+        adapter: H3LowRankResidualWeights | None,
+        residual: Any,
+        gate: Any,
+        *,
+        prefix: str,
+        detail: dict[str, list[tuple[Any, Any]]],
+        event: Callable[[], Any],
+    ) -> Any:
+        if self.adapter_fusion_backend == "torch-eager" or adapter is None:
+            return super()._profiled_adapted_gate_residual(
+                states,
+                weight,
+                adapter,
+                residual,
+                gate,
+                prefix=prefix,
+                detail=detail,
+                event=event,
+            )
+        from vflash.native.h3_fused_ops import triton_strict_bf16_adapter_gate_residual
+
+        base_start = event()
+        base = self._linear(states, weight)
+        base_end = event()
+        update = self._residual_linear_unscaled(states, adapter)
+        adapter_end = event()
+        output = triton_strict_bf16_adapter_gate_residual(
+            base,
+            update,
+            residual,
+            gate,
+            scaling=adapter.scaling,
+            block_size=self.elementwise_block_size,
+        )
+        residual_end = event()
+        detail.setdefault(f"{prefix}_base_projection", []).append((base_start, base_end))
+        detail.setdefault(f"{prefix}_adapter_projection", []).append((base_end, adapter_end))
+        detail.setdefault(f"{prefix}_adapter_gate_residual", []).append(
+            (adapter_end, residual_end)
+        )
+        return output
 
 
 class _H3BlockStack:
@@ -1393,6 +1538,7 @@ class H3NativeDenoiserBF16Ring:
         total_collective_issue = total_collective_wait = 0.0
         total_profiled_blocks = total_attention_chunks = 0
         total_block_phases: dict[str, float] = {}
+        total_block_details: dict[str, float] = {}
         total_attention_phases: dict[str, float] = {}
         for record in records:
             h2d_seconds = [
@@ -1417,6 +1563,7 @@ class H3NativeDenoiserBF16Ring:
                 / 1000.0
             )
             block_phases: dict[str, float] = {}
+            block_details: dict[str, float] = {}
             attention_phases: dict[str, float] = {}
             profiled_blocks = 0
             attention_chunks = 0
@@ -1425,6 +1572,10 @@ class H3NativeDenoiserBF16Ring:
                 for name, start, end in block["phases"]:
                     seconds = float(start.elapsed_time(end)) / 1000.0
                     block_phases[name] = block_phases.get(name, 0.0) + seconds
+                for name, spans in block.get("block_detail", {}).items():
+                    for start, end in spans:
+                        seconds = float(start.elapsed_time(end)) / 1000.0
+                        block_details[name] = block_details.get(name, 0.0) + seconds
                 attention_detail = block.get("attention_detail", {})
                 attention_chunks += len(attention_detail.get("flash_sdpa", []))
                 for name, spans in attention_detail.items():
@@ -1445,6 +1596,7 @@ class H3NativeDenoiserBF16Ring:
                     "collective": collective,
                     "profiled_blocks": profiled_blocks,
                     "block_phase_seconds": block_phases,
+                    "block_detail_seconds": block_details,
                     "attention_chunks_profiled": attention_chunks,
                     "attention_critical_path_seconds": attention_phases,
                 }
@@ -1461,6 +1613,8 @@ class H3NativeDenoiserBF16Ring:
             total_attention_chunks += attention_chunks
             for name, seconds in block_phases.items():
                 total_block_phases[name] = total_block_phases.get(name, 0.0) + seconds
+            for name, seconds in block_details.items():
+                total_block_details[name] = total_block_details.get(name, 0.0) + seconds
             for name, seconds in attention_phases.items():
                 total_attention_phases[name] = total_attention_phases.get(name, 0.0) + seconds
         return {
@@ -1469,6 +1623,7 @@ class H3NativeDenoiserBF16Ring:
             "phase_totals": {
                 "profiled_blocks": total_profiled_blocks,
                 "block_phase_seconds": total_block_phases,
+                "block_detail_seconds": total_block_details,
                 "attention_chunks_profiled": total_attention_chunks,
                 "attention_critical_path_seconds": total_attention_phases,
             },

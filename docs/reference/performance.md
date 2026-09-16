@@ -32,6 +32,8 @@ The returned `generation.denoise_profile` separates:
 - per-evaluation and per-rank totals for AdaLN, attention normalization/modulation, QKV projection,
   Q/K normalization and rotary, attention, attention output, FFN normalization/modulation, FFN input
   and FFN output;
+- nested block details for output projection versus gate/residual, and FFN input projection versus
+  SiLU-times-gate; adapter-fused and tensor-parallel implementations retain implementation-specific labels;
 - sequence/head collective calls, transmitted bytes, host issue time and host `Work.wait()` time;
 - for sequence/head attention, QKV packing, inbound dependency waits, QKV unpacking, Flash-SDPA,
   attention-result packing, outbound dependency waits and final unpacking on the compute stream;
@@ -43,6 +45,8 @@ The sequence/head `inbound_ready_wait` and `outbound_ready_wait` fields measure 
 actually delay the compute stream. They do not measure the full lifetime of NCCL kernels, which can run
 on another stream and overlap QKV packing or Flash-SDPA. The nested attention fields are already inside
 the outer `attention` phase; do not add them to that phase or to block execution a second time.
+Likewise, `block_detail_seconds` is nested inside `block_phase_seconds`; it exists to estimate a
+fusion ceiling and must not be added to the outer phase totals.
 
 ## Make comparisons useful {#comparisons}
 

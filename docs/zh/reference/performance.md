@@ -31,6 +31,8 @@
 - 每个 rank 的 H2D 活跃时间、计算流等待权重时间、block 执行以及复制/计算跨度；
 - 每个 evaluation 与 rank 汇总的 AdaLN、attention norm/modulation、QKV projection、Q/K norm 与
   rotary、attention、attention output、FFN norm/modulation、FFN input 和 FFN output；
+- 输出投影与 gate/residual、FFN 输入投影与 SiLU-times-gate 的 block 内部明细；adapter 融合和
+  tensor-parallel 实现保留各自明确的实现标签；
 - sequence/head collective 的调用次数、传输字节、主机提交时间和主机 `Work.wait()` 时间；
 - sequence/head attention 在计算流上的 QKV pack、入站依赖等待、QKV unpack、Flash-SDPA、
   attention 结果 pack、出站依赖等待和最终 unpack；
@@ -41,6 +43,8 @@ H2D、ready wait、block compute 与 rank span 描述的是相互重叠的 CUDA 
 sequence/head 的 `inbound_ready_wait` 与 `outbound_ready_wait` 只测量实际阻塞计算流的依赖，
 不代表 NCCL kernel 的完整生命周期；后者可能在另一条 stream 上与 QKV pack 或 Flash-SDPA 重叠。
 这些 attention 子阶段已经包含在外层 `attention` 中，不能再与 attention 或 block 执行重复相加。
+同样，`block_detail_seconds` 已经包含在 `block_phase_seconds` 内，只用于估算融合收益上限，不能再与
+外层阶段合计。
 
 ## 让比较有意义 {#comparisons}
 

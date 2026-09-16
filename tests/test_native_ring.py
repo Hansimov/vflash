@@ -188,6 +188,10 @@ def test_ring_profile_aggregates_block_and_attention_phase_events():
                             (Event(72), Event(82)),
                         ],
                     },
+                    "block_detail": {
+                        "ffn_input_projection": [(Event(90), Event(100))],
+                        "ffn_input_silu_mul": [(Event(100), Event(102))],
+                    },
                 }
             ],
             "copy_span_start": Event(0),
@@ -212,6 +216,10 @@ def test_ring_profile_aggregates_block_and_attention_phase_events():
         "qkv_projection": pytest.approx(0.03),
         "attention": pytest.approx(0.04),
     }
+    assert evaluation["block_detail_seconds"] == {
+        "ffn_input_projection": pytest.approx(0.01),
+        "ffn_input_silu_mul": pytest.approx(0.002),
+    }
     assert evaluation["attention_critical_path_seconds"] == {
         "qkv_pack": pytest.approx(0.005),
         "flash_sdpa": pytest.approx(0.02),
@@ -219,6 +227,64 @@ def test_ring_profile_aggregates_block_and_attention_phase_events():
     assert profile["phase_totals"] == {
         "profiled_blocks": 1,
         "block_phase_seconds": evaluation["block_phase_seconds"],
+        "block_detail_seconds": evaluation["block_detail_seconds"],
         "attention_chunks_profiled": 2,
         "attention_critical_path_seconds": evaluation["attention_critical_path_seconds"],
+    }
+
+
+def test_profiled_block_helpers_preserve_projection_and_pointwise_order():
+    instance = denoiser._H3BlockOperations.__new__(denoiser._H3BlockOperations)
+    weight = object()
+    adapter = object()
+    instance.weights = SimpleNamespace(ffn_in=weight, ffn_in_residual=adapter)
+    calls = []
+    markers = iter(range(7))
+
+    def adapted(states, selected_weight, selected_adapter):
+        calls.append(("projection", states, selected_weight, selected_adapter))
+        return "projected"
+
+    def silu_mul(projected):
+        calls.append(("silu", projected))
+        return "activated"
+
+    def gate_residual(residual, gate, projected):
+        calls.append(("residual", residual, gate, projected))
+        return "combined"
+
+    instance._adapted_linear = adapted
+    instance._silu_mul = silu_mul
+    instance._gate_residual = gate_residual
+    detail = {}
+
+    assert (
+        instance._profiled_ffn_input("normalized", detail=detail, event=lambda: next(markers))
+        == "activated"
+    )
+    assert (
+        instance._profiled_adapted_gate_residual(
+            "states",
+            weight,
+            adapter,
+            "residual",
+            "gate",
+            prefix="ffn_output",
+            detail=detail,
+            event=lambda: next(markers),
+        )
+        == "combined"
+    )
+
+    assert calls == [
+        ("projection", "normalized", weight, adapter),
+        ("silu", "projected"),
+        ("projection", "states", weight, adapter),
+        ("residual", "residual", "gate", "projected"),
+    ]
+    assert detail == {
+        "ffn_input_projection": [(0, 1)],
+        "ffn_input_silu_mul": [(1, 2)],
+        "ffn_output_projection": [(3, 4)],
+        "ffn_output_gate_residual": [(4, 5)],
     }

@@ -255,6 +255,26 @@ class _TensorBlock(H3NativeBlockBF16Resident):
             block_size=self.elementwise_block_size,
         )
 
+    def _profiled_adapted_gate_residual(
+        self,
+        states: Any,
+        weight: Any,
+        adapter: Any,
+        residual: Any,
+        gate: Any,
+        *,
+        prefix: str,
+        detail: dict[str, list[tuple[Any, Any]]],
+        event: Callable[[], Any],
+    ) -> Any:
+        """Keep tensor-parallel collective arithmetic intact in diagnostic runs."""
+
+        start = event()
+        output = self._adapted_gate_residual(states, weight, adapter, residual, gate)
+        end = event()
+        detail.setdefault(f"{prefix}_tensor_parallel_total", []).append((start, end))
+        return output
+
 
 class _SequenceRing(H3NativeDenoiserBF16Ring):
     block_type = _SequenceHeadBlock
