@@ -99,6 +99,8 @@ with H3Pipeline(prepared, device=devices[0], trust_local_code=True) as pipeline:
 
 `VideoResult.elapsed_seconds` 覆盖成功 `generate` 从输入校验到参考素材清理的完整耗时，包括首次模型加载。`stages.initialization_seconds` 是本次调用中的加载耗时，显式预加载后为零；`stages.request_elapsed_seconds` 仅扣除这部分加载，便于比较请求。`stages.session_initialization_seconds` 保留实例最初的加载成本，也可读取 `pipeline.initialization_seconds`。`stages.input_preparation` 包含资产检查和素材加载，其中 `reference_loading_seconds` 已计入准备耗时。编码和媒体阶段还分别记录 `weight_resume_seconds`、`suspend_seconds`，以及 `capture_call_seconds` 或 `decode_call_seconds`；编码阶段也会记录 `conditioning_transport` 和捕获的 `conditioning_tensor_bytes`。外层阶段同时包含同步回调和协调开销。这些明细存在包含关系，不能全部视作独立耗时相加。
 
+`stages.encoding.capture_diagnostics` 会进一步拆分官方 conditioning 调用、捕获钩子等待、metadata 处理和持久化 bundle 收尾。收尾记录区分 tensor 写入与 seal/reload，`process_deltas` 则报告对应区间的页故障、块 I/O 和上下文切换。钩子等待已包含在 `official_pipeline_seconds` 中，全部字段又都包含在 `capture_call_seconds` 中；它们只用于归因，不能作为独立阶段相加。进程计数也不是整机资源统计。
+
 输出路径不能已经存在。编码、媒体核验以及 GPU 阶段清理成功后才发布视频。执行失败会关闭此实例并移除临时文件。`close()` 在等待 CUDA 完成后释放持有的模型与 hook，不会重置其他调用方的 CUDA 上下文。模型关闭后，CUDA 库仍可能保留进程级工作缓冲；需要释放整个 CUDA 上下文时，应退出该独立进程。
 
 在只读容器中运行时，需要为 Triton 提供可写、且允许加载编译后共享库的缓存目录。带有 `noexec` 的临时文件系统不能作为该缓存目录。

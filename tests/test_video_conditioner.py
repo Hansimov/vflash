@@ -141,6 +141,20 @@ def test_capture_emits_schema2_with_complete_identity_and_always_discards(
     else:
         owner.capture(request, (decoded,), tmp_path / "conditioning")
         assert events[:3] == ["install", "synchronize", "capture-close"]
+        assert set(owner.last_capture_diagnostics) == {
+            "elapsed_seconds",
+            "official_pipeline_seconds",
+            "capture_hook_seconds",
+            "metadata_seconds",
+            "finish_seconds",
+            "finish_stage_seconds",
+            "process_deltas",
+        }
+        assert all(
+            value >= 0
+            for name, value in owner.last_capture_diagnostics.items()
+            if name.endswith("seconds") and not isinstance(value, dict)
+        )
     assert events[-1] == "discard"
     assert decoded.frames is not None  # caller, not capture, owns the RGB lifetime
     decoded.close()

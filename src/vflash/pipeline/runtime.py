@@ -270,12 +270,16 @@ class H3Pipeline:
             call_started = time.monotonic()
             bundle = self._conditioner.capture(request, references, directory / "conditioning")
             capture_call_seconds = time.monotonic() - call_started
+            capture_diagnostics = getattr(self._conditioner, "last_capture_diagnostics", {})
             suspend_seconds = self._conditioner.suspend_cuda()
             report("encoding", 1, 1)
             stages["encoding"] = {
                 "elapsed_seconds": time.monotonic() - stage_started,
                 "weight_resume_seconds": weight_resume_seconds,
                 "capture_call_seconds": capture_call_seconds,
+                "capture_diagnostics": dict(capture_diagnostics)
+                if isinstance(capture_diagnostics, dict)
+                else {},
                 "suspend_seconds": suspend_seconds,
                 "profile": asdict(bundle.profile),
                 "source": dict(bundle.source),

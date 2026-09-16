@@ -77,6 +77,15 @@ def _pipeline(*, fail: str | None = None) -> tuple[H3Pipeline, list[str]]:
 
         def capture(self, request, reference, directory):
             self._event("capture")
+            self.last_capture_diagnostics = {
+                "elapsed_seconds": 0.5,
+                "official_pipeline_seconds": 0.25,
+                "capture_hook_seconds": {},
+                "metadata_seconds": 0.05,
+                "finish_seconds": 0.2,
+                "finish_stage_seconds": {},
+                "process_deltas": {},
+            }
             directory.mkdir()
             return SimpleNamespace(
                 directory=directory,
@@ -198,6 +207,7 @@ def test_complete_pipeline_uses_persisted_conditioning_handoff(video_request, tm
     assert observed[0].name == "conditioning"
     assert result.stages["encoding"]["conditioning_transport"] == "persisted-file"
     assert result.stages["encoding"]["conditioning_tensor_bytes"] is None
+    assert result.stages["encoding"]["capture_diagnostics"]["finish_seconds"] == 0.2
 
 
 def test_ten_second_keyframe_request_passes_exact_media_contract(video_request, tmp_path):

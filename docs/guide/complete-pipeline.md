@@ -99,6 +99,13 @@ The integration checks used a 240 GiB host-memory limit. This is a tested budget
 
 `VideoResult.elapsed_seconds` covers the successful `generate` call from input validation through reference cleanup, including a first model load. `stages.initialization_seconds` records loading during this call (zero after explicit preloading); `stages.request_elapsed_seconds` excludes only that load. `stages.session_initialization_seconds` records the session's original loading cost, also available as `pipeline.initialization_seconds`. `stages.input_preparation` includes asset checks and reference loading; its `reference_loading_seconds` is nested inside preparation. Encoding and media stages report `weight_resume_seconds`, `suspend_seconds`, and `capture_call_seconds` or `decode_call_seconds`. Encoding also identifies `conditioning_transport` and the captured `conditioning_tensor_bytes`. Their outer durations cover synchronous callbacks and orchestration. Do not sum nested durations as independent costs.
 
+`stages.encoding.capture_diagnostics` further separates the official conditioning call,
+capture-hook waits, metadata work, and persisted-bundle finishing. The finish record separates tensor
+writing from sealing/reloading, while `process_deltas` reports page faults, block I/O, and context
+switches for the relevant intervals. Hook waits are nested in `official_pipeline_seconds`, and all of
+these values are nested in `capture_call_seconds`; they are diagnostic attribution, not additive stage
+totals. The counters describe this process only and are not host-wide resource measurements.
+
 The output path must not already exist. A video is published only after encoding, media probing and GPU stage cleanup have succeeded. A failed execution retires the pipeline and removes temporary files. `close()` releases owned models and hooks after a CUDA completion fence; it never resets another owner's CUDA context. CUDA libraries may retain process-level workspaces after a model closes. Exit the dedicated process when the application needs to relinquish its entire CUDA context.
 
 When running in a read-only container, give Triton a writable cache directory that permits loading compiled shared libraries. A temporary filesystem mounted with `noexec` cannot serve as that cache.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -56,10 +57,32 @@ class H3ConditioningCaptureSession:
         self._installed = False
         self._transformer_entered = False
         self._captured = False
+        self._capture_stage_seconds = {
+            "transformer_inputs": 0.0,
+            "time_embedding": 0.0,
+            "rotary_embedding": 0.0,
+            "packed_input": 0.0,
+        }
+        self._finish_stage_seconds: dict[str, float] = {}
 
     @property
     def captured(self) -> bool:
         return self._captured
+
+    @property
+    def capture_stage_seconds(self) -> dict[str, float]:
+        """Return wall-clock waits observed at the four capture hooks."""
+
+        return dict(self._capture_stage_seconds)
+
+    @property
+    def finish_stage_seconds(self) -> dict[str, float]:
+        """Return persisted-bundle materialization timings after a successful finish."""
+
+        return dict(self._finish_stage_seconds)
+
+    def _record_capture_stage(self, name: str, started: float) -> None:
+        self._capture_stage_seconds[name] += time.monotonic() - started
 
     def install(self, transformer: Any) -> None:
         if self._installed:
@@ -110,16 +133,22 @@ class H3ConditioningCaptureSession:
             raise H3ConditioningBundleError(
                 "H3 conditioning capture observed more than one evaluation"
             )
-        for source, target in _STATIC_INPUTS.items():
-            if source not in kwargs:
-                raise H3ConditioningBundleError(
-                    f"H3 conditioning capture is missing transformer input: {source}"
-                )
-            self._tensors[target] = _cpu_tensor(kwargs[source], name=source)
-        self._tensors["first_timesteps"] = _cpu_tensor(kwargs.get("timestep"), name="timestep")
-        self._tensors["first_timestep_indices"] = _cpu_tensor(
-            kwargs.get("timestep_indices"), name="timestep_indices"
-        )
+        started = time.monotonic()
+        try:
+            for source, target in _STATIC_INPUTS.items():
+                if source not in kwargs:
+                    raise H3ConditioningBundleError(
+                        f"H3 conditioning capture is missing transformer input: {source}"
+                    )
+                self._tensors[target] = _cpu_tensor(kwargs[source], name=source)
+            self._tensors["first_timesteps"] = _cpu_tensor(
+                kwargs.get("timestep"), name="timestep"
+            )
+            self._tensors["first_timestep_indices"] = _cpu_tensor(
+                kwargs.get("timestep_indices"), name="timestep_indices"
+            )
+        finally:
+            self._record_capture_stage("transformer_inputs", started)
         self._transformer_entered = True
 
     def _time_embedding_hook(
@@ -132,7 +161,11 @@ class H3ConditioningCaptureSession:
             raise H3ConditioningBundleError(
                 "H3 conditioning time embedding is outside the first evaluation"
             )
-        self._tensors["first_time_embeddings"] = _cpu_tensor(output, name="time_embeddings")
+        started = time.monotonic()
+        try:
+            self._tensors["first_time_embeddings"] = _cpu_tensor(output, name="time_embeddings")
+        finally:
+            self._record_capture_stage("time_embedding", started)
 
     def _rotary_hook(
         self,
@@ -147,8 +180,12 @@ class H3ConditioningCaptureSession:
             or len(output) != 2
         ):
             raise H3ConditioningBundleError("H3 conditioning rotary output is invalid")
-        self._tensors["rotary_cos"] = _cpu_tensor(output[0], name="rotary_cos")
-        self._tensors["rotary_sin"] = _cpu_tensor(output[1], name="rotary_sin")
+        started = time.monotonic()
+        try:
+            self._tensors["rotary_cos"] = _cpu_tensor(output[0], name="rotary_cos")
+            self._tensors["rotary_sin"] = _cpu_tensor(output[1], name="rotary_sin")
+        finally:
+            self._record_capture_stage("rotary_embedding", started)
 
     def _block_zero_pre_hook(
         self,
@@ -161,9 +198,13 @@ class H3ConditioningCaptureSession:
                 "H3 conditioning block-zero input is outside the first evaluation"
             )
         hidden_states = args[0] if args else kwargs.get("hidden_states")
-        self._tensors["first_packed_input"] = _cpu_tensor(
-            hidden_states, name="first_packed_input"
-        )
+        started = time.monotonic()
+        try:
+            self._tensors["first_packed_input"] = _cpu_tensor(
+                hidden_states, name="first_packed_input"
+            )
+        finally:
+            self._record_capture_stage("packed_input", started)
         if set(self._tensors) != _TENSORS:
             missing = sorted(_TENSORS - set(self._tensors))
             raise H3ConditioningBundleError(
@@ -258,6 +299,7 @@ class H3ConditioningCaptureSession:
         update_rule: str,
         schema_version: int = 1,
     ) -> H3ConditioningBundle:
+        started = time.monotonic()
         self._validate_finish(profile)
         schedule = self._schedule(
             video_sigmas=video_sigmas,
@@ -265,15 +307,21 @@ class H3ConditioningCaptureSession:
             update_rule=update_rule,
             expected_nfe=profile.nfe,
         )
+        validation_seconds = time.monotonic() - started
         if self.directory.exists() and any(self.directory.iterdir()):
             raise H3ConditioningBundleError("H3 conditioning capture directory must be empty")
         self.directory.mkdir(parents=True, exist_ok=True)
+        started = time.monotonic()
         save_safetensors_atomic(self.directory / _FILES["conditioning"], self._tensors)
+        tensor_write_seconds = time.monotonic() - started
+        started = time.monotonic()
         (self.directory / _FILES["scheduler"]).write_text(
             json.dumps(schedule.to_mapping(), indent=2) + "\n",
             encoding="utf-8",
         )
-        return seal_h3_conditioning_bundle(
+        scheduler_write_seconds = time.monotonic() - started
+        started = time.monotonic()
+        bundle = seal_h3_conditioning_bundle(
             self.directory,
             bundle_id=bundle_id,
             profile=profile,
@@ -281,6 +329,13 @@ class H3ConditioningCaptureSession:
             source=source,
             schema_version=schema_version,
         )
+        self._finish_stage_seconds = {
+            "validation": validation_seconds,
+            "tensor_write": tensor_write_seconds,
+            "scheduler_write": scheduler_write_seconds,
+            "seal_and_reload": time.monotonic() - started,
+        }
+        return bundle
 
     def finish_in_memory(
         self,

@@ -45,6 +45,26 @@ from vflash.pipeline.contracts import VideoRequest
 from vflash.pipeline.residency import capture_cpu_master, restore_cpu_master
 
 
+def _process_counters() -> dict[str, int]:
+    """Return process counters that distinguish paging from ordinary compute waits."""
+
+    import resource
+
+    usage = resource.getrusage(resource.RUSAGE_SELF)
+    return {
+        "major_faults": usage.ru_majflt,
+        "minor_faults": usage.ru_minflt,
+        "input_blocks": usage.ru_inblock,
+        "output_blocks": usage.ru_oublock,
+        "voluntary_context_switches": usage.ru_nvcsw,
+        "involuntary_context_switches": usage.ru_nivcsw,
+    }
+
+
+def _counter_delta(before: dict[str, int], after: dict[str, int]) -> dict[str, int]:
+    return {name: after[name] - before[name] for name in before}
+
+
 def validate_adapter_dependencies() -> dict[str, str]:
     """Fail before loading model components when the tested adapter API is unavailable."""
     import diffusers
@@ -87,6 +107,7 @@ class DiffusersConditioner:
         self._cpu_masters: tuple[tuple[Any, Any], ...] = ()
         self._text_groups: tuple[Any, ...] = ()
         self._onload_handle = None
+        self.last_capture_diagnostics: dict[str, Any] = {}
         self._offload_installed = self._cuda_active = self._cuda_touched = False
         self._closed = self._released = False
         started = time.monotonic()
@@ -334,6 +355,9 @@ class DiffusersConditioner:
         *,
         in_memory: bool,
     ) -> H3ConditioningBundle | H3InMemoryConditioning:
+        total_started = time.monotonic()
+        total_counters = _process_counters()
+        self.last_capture_diagnostics = {}
         self._require_open()
         if not self._cuda_active:
             raise ContractError("resume the conditioner before encoding a request")
@@ -364,6 +388,8 @@ class DiffusersConditioner:
         capture = H3ConditioningCaptureSession(directory)
         try:
             capture.install(self.transformer)
+            invoke_started = time.monotonic()
+            invoke_counters = _process_counters()
             try:
                 self._invoke(request, references)
             except H3ConditioningCaptureComplete as complete:
@@ -371,6 +397,9 @@ class DiffusersConditioner:
                 clear_frames(complete.__traceback__)
             else:
                 raise ContractError("the official conditioner did not stop before denoising")
+            official_pipeline_seconds = time.monotonic() - invoke_started
+            after_invoke_counters = _process_counters()
+            metadata_started = time.monotonic()
             capture.close()
             video_prefix, audio_prefix = capture.prefix_counts()
             source = conditioning_source(
@@ -479,7 +508,10 @@ class DiffusersConditioner:
                 }
             )
             finish = capture.finish_in_memory if in_memory else capture.finish
-            return finish(
+            metadata_seconds = time.monotonic() - metadata_started
+            finish_started = time.monotonic()
+            finish_counters = _process_counters()
+            result = finish(
                 bundle_id=f"h3-conditioning-{identity[:32]}",
                 profile=profile,
                 request=request_metadata,
@@ -499,6 +531,22 @@ class DiffusersConditioner:
                     else 1
                 ),
             )
+            finish_seconds = time.monotonic() - finish_started
+            after_finish_counters = _process_counters()
+            self.last_capture_diagnostics = {
+                "elapsed_seconds": time.monotonic() - total_started,
+                "official_pipeline_seconds": official_pipeline_seconds,
+                "capture_hook_seconds": dict(getattr(capture, "capture_stage_seconds", {})),
+                "metadata_seconds": metadata_seconds,
+                "finish_seconds": finish_seconds,
+                "finish_stage_seconds": dict(getattr(capture, "finish_stage_seconds", {})),
+                "process_deltas": {
+                    "total": _counter_delta(total_counters, after_finish_counters),
+                    "official_pipeline": _counter_delta(invoke_counters, after_invoke_counters),
+                    "finish": _counter_delta(finish_counters, after_finish_counters),
+                },
+            }
+            return result
         finally:
             capture.discard()
 
