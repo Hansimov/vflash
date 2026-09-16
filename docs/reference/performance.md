@@ -29,10 +29,20 @@ The returned `generation.denoise_profile` separates:
 
 - primary-device row setup, input packing, invocation preparation, denoiser, final layer and latent update;
 - per-rank H2D-active time, compute-stream waits for streamed weights, block execution and the copy/compute spans;
+- per-evaluation and per-rank totals for AdaLN, attention normalization/modulation, QKV projection,
+  Q/K normalization and rotary, attention, attention output, FFN normalization/modulation, FFN input
+  and FFN output;
 - sequence/head collective calls, transmitted bytes, host issue time and host `Work.wait()` time;
+- for sequence/head attention, QKV packing, inbound dependency waits, QKV unpacking, Flash-SDPA,
+  attention-result packing, outbound dependency waits and final unpacking on the compute stream;
 - per-evaluation engine submission, existing progress fences, callback time, final fence and profile materialization.
 
 H2D, ready-wait, block-compute and rank-span values describe overlapping CUDA streams and are **not additive**. Block compute includes the collective critical path. Host collective wait is a launch/synchronization diagnostic, not GPU communication duration by itself. Use an external CUDA profiler when kernel-level NCCL attribution is required. The diagnostic output contains device indices and timing/byte counts, not model tensors, prompts, paths or GPU UUIDs.
+
+The sequence/head `inbound_ready_wait` and `outbound_ready_wait` fields measure dependencies that
+actually delay the compute stream. They do not measure the full lifetime of NCCL kernels, which can run
+on another stream and overlap QKV packing or Flash-SDPA. The nested attention fields are already inside
+the outer `attention` phase; do not add them to that phase or to block execution a second time.
 
 ## Make comparisons useful {#comparisons}
 

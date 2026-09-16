@@ -22,6 +22,7 @@ from vflash.native.h3_native_denoiser import (
     H3NativeDenoiserBF16Ring,
     H3NativeDenoiserError,
     _pin_bf16_block,
+    _record_cuda_profile_event,
     _torch,
     load_h3_native_block,
 )
@@ -131,9 +132,24 @@ class _SequenceHeadBlock(H3NativeBlockBF16Resident):
     def _attention(self, query: Any, key: Any, value: Any) -> Any:
         torch = _torch()
         profile = getattr(self, "_vflash_collective_profile", None)
+        attention_profile = (
+            getattr(self, "_vflash_attention_phase_profile", None)
+            if profile is not None
+            else None
+        )
+        stream = (
+            torch.cuda.current_stream(query.device) if attention_profile is not None else None
+        )
+
+        def event() -> Any:
+            return _record_cuda_profile_event(torch, stream)
+
         chunks = 4
+        qkv_pack_start = event() if attention_profile is not None else None
         qkv_send = _pack_qkv(query, key, value, chunks=chunks)
         qkv_receive = torch.empty_like(qkv_send)
+        if attention_profile is not None:
+            attention_profile["qkv_pack"] = (qkv_pack_start, event())
         if profile is None:
             inbound = [
                 self.group.alltoall_base(qkv_receive[index], qkv_send[index], [], [])
@@ -169,24 +185,42 @@ class _SequenceHeadBlock(H3NativeBlockBF16Resident):
         # Queue QKV transfers before inserting any attention dependency into
         # the compute stream. Later head groups can transfer while an earlier
         # group computes; the return exchanges overlap subsequent attention.
-        inbound = [
-            exchange(qkv_receive[index], qkv_send[index])
-            for index in range(chunks)
-        ]
+        inbound = [exchange(qkv_receive[index], qkv_send[index]) for index in range(chunks)]
         outbound, sends, receives = [], [], []
         for index in range(chunks):
+            wait_start = event() if attention_profile is not None else None
             complete(inbound[index])
+            wait_end = event() if attention_profile is not None else None
             query, key, value = _unpack_qkv(qkv_receive[index], self.total_rows)
+            unpack_end = event() if attention_profile is not None else None
             # A padded token is never admitted to the attention softmax.
             attention = super()._attention(query, key, value)
+            sdpa_end = event() if attention_profile is not None else None
             sent = _pack_attention(attention, qkv_receive.shape[4] * 2)
+            pack_end = event() if attention_profile is not None else None
+            if attention_profile is not None:
+                attention_profile.setdefault("inbound_ready_wait", []).append(
+                    (wait_start, wait_end)
+                )
+                attention_profile.setdefault("qkv_unpack", []).append((wait_end, unpack_end))
+                attention_profile.setdefault("flash_sdpa", []).append((unpack_end, sdpa_end))
+                attention_profile.setdefault("attention_pack", []).append((sdpa_end, pack_end))
             received = torch.empty_like(sent)
             sends.append(sent)
             receives.append(received)
             outbound.append(exchange(received, sent))
+        outbound_wait_start = event() if attention_profile is not None else None
         for work in outbound:
             complete(work)
-        return _unpack_attention(torch.cat(receives, dim=3))
+        outbound_wait_end = event() if attention_profile is not None else None
+        output = _unpack_attention(torch.cat(receives, dim=3))
+        if attention_profile is not None:
+            attention_profile["outbound_ready_wait"] = (
+                outbound_wait_start,
+                outbound_wait_end,
+            )
+            attention_profile["output_unpack"] = (outbound_wait_end, event())
+        return output
 
 
 class _TensorBlock(H3NativeBlockBF16Resident):
@@ -485,8 +519,7 @@ class H3NativeDenoiserParallel:
             "strategy": self.strategy,
             "ranks": ranks,
             "totals": {
-                key: sum(rank["totals"][key] for rank in ranks)
-                for key in ranks[0]["totals"]
+                key: sum(rank["totals"][key] for rank in ranks) for key in ranks[0]["totals"]
             },
         }
 

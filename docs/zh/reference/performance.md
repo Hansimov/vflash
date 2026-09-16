@@ -29,10 +29,18 @@
 
 - 主卡的行时间步准备、输入打包、invocation 准备、denoiser、final layer 与 latent 更新；
 - 每个 rank 的 H2D 活跃时间、计算流等待权重时间、block 执行以及复制/计算跨度；
+- 每个 evaluation 与 rank 汇总的 AdaLN、attention norm/modulation、QKV projection、Q/K norm 与
+  rotary、attention、attention output、FFN norm/modulation、FFN input 和 FFN output；
 - sequence/head collective 的调用次数、传输字节、主机提交时间和主机 `Work.wait()` 时间；
+- sequence/head attention 在计算流上的 QKV pack、入站依赖等待、QKV unpack、Flash-SDPA、
+  attention 结果 pack、出站依赖等待和最终 unpack；
 - 每个 evaluation 的引擎提交、既有进度围栏、回调、最终围栏和 profile 汇总耗时。
 
 H2D、ready wait、block compute 与 rank span 描述的是相互重叠的 CUDA stream，**不能相加**。block compute 包含 collective 临界路径；主机 collective wait 只是提交/同步诊断，不能单独当作 GPU 通信耗时。需要按 kernel 归因 NCCL 时仍应使用外部 CUDA profiler。诊断输出只含设备序号、时间和字节计数，不包含模型张量、提示词、路径或 GPU UUID。
+
+sequence/head 的 `inbound_ready_wait` 与 `outbound_ready_wait` 只测量实际阻塞计算流的依赖，
+不代表 NCCL kernel 的完整生命周期；后者可能在另一条 stream 上与 QKV pack 或 Flash-SDPA 重叠。
+这些 attention 子阶段已经包含在外层 `attention` 中，不能再与 attention 或 block 执行重复相加。
 
 ## 让比较有意义 {#comparisons}
 

@@ -156,3 +156,69 @@ def test_opt_in_ring_profile_reports_copy_wait_and_compute_without_changing_outp
     assert len(evaluation["ready_wait_seconds"]) == 4
     assert len(evaluation["block_compute_seconds"]) == 4
     assert evaluation["compute_span_seconds"] >= 0
+
+
+def test_ring_profile_aggregates_block_and_attention_phase_events():
+    class Event:
+        def __init__(self, milliseconds):
+            self.milliseconds = milliseconds
+
+        def elapsed_time(self, other):
+            return other.milliseconds - self.milliseconds
+
+    ring = denoiser.H3NativeDenoiserBF16Ring.__new__(denoiser.H3NativeDenoiserBF16Ring)
+    ring.device = SimpleNamespace(index=2)
+    ring._denoise_profile_records = [
+        {
+            "evaluation_index": 7,
+            "copies": [(0, 16, Event(0), Event(10))],
+            "ready_waits": [(0, Event(10), Event(12))],
+            "block_compute": [(0, Event(12), Event(112))],
+            "block_phases": [
+                {
+                    "block_index": 0,
+                    "phases": [
+                        ("qkv_projection", Event(20), Event(50)),
+                        ("attention", Event(50), Event(90)),
+                    ],
+                    "attention_detail": {
+                        "qkv_pack": (Event(50), Event(55)),
+                        "flash_sdpa": [
+                            (Event(60), Event(70)),
+                            (Event(72), Event(82)),
+                        ],
+                    },
+                }
+            ],
+            "copy_span_start": Event(0),
+            "copy_span_end": Event(10),
+            "compute_span_start": Event(12),
+            "compute_span_end": Event(112),
+            "collective": {
+                "calls": 2,
+                "transmitted_bytes": 32,
+                "issue_seconds": 0.01,
+                "wait_seconds": 0.02,
+            },
+        }
+    ]
+
+    profile = ring.finish_denoise_profile()
+
+    evaluation = profile["evaluations"][0]
+    assert evaluation["profiled_blocks"] == 1
+    assert evaluation["attention_chunks_profiled"] == 2
+    assert evaluation["block_phase_seconds"] == {
+        "qkv_projection": pytest.approx(0.03),
+        "attention": pytest.approx(0.04),
+    }
+    assert evaluation["attention_critical_path_seconds"] == {
+        "qkv_pack": pytest.approx(0.005),
+        "flash_sdpa": pytest.approx(0.02),
+    }
+    assert profile["phase_totals"] == {
+        "profiled_blocks": 1,
+        "block_phase_seconds": evaluation["block_phase_seconds"],
+        "attention_chunks_profiled": 2,
+        "attention_critical_path_seconds": evaluation["attention_critical_path_seconds"],
+    }

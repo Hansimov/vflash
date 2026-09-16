@@ -41,6 +41,12 @@ def _torch() -> Any:
     return torch
 
 
+def _record_cuda_profile_event(torch: Any, stream: Any) -> Any:
+    event = torch.cuda.Event(enable_timing=True, blocking=False)
+    event.record(stream)
+    return event
+
+
 @dataclass(frozen=True)
 class H3LowRankResidualWeights:
     down: Any
@@ -445,6 +451,14 @@ class _H3BlockOperations:
     ) -> Any:
         """Execute one block after the NFE boundary validated its invocation."""
 
+        phase_records = getattr(self, "_vflash_block_phase_profile", None)
+        if phase_records is not None:
+            return self._forward_prevalidated_profiled(
+                hidden_states,
+                invocation,
+                phase_records,
+            )
+
         torch = _torch()
 
         spec = self.artifact.spec
@@ -508,6 +522,116 @@ class _H3BlockOperations:
             residual,
             gate_mlp,
         )
+
+    def _forward_prevalidated_profiled(
+        self,
+        hidden_states: Any,
+        invocation: H3NativeBlockInvocation,
+        phase_records: list[dict[str, Any]],
+    ) -> Any:
+        """Run the unchanged block arithmetic with opt-in CUDA phase events."""
+
+        torch = _torch()
+        spec = self.artifact.spec
+        if (
+            invocation.artifact_id != self.artifact.artifact_id
+            or not isinstance(hidden_states, torch.Tensor)
+            or tuple(hidden_states.shape)
+            != (
+                invocation.batch_size,
+                invocation.sequence_length,
+                invocation.hidden_size,
+            )
+            or hidden_states.device != invocation.device
+            or hidden_states.dtype != invocation.dtype
+        ):
+            raise H3NativeDenoiserError(
+                "H3 prevalidated invocation does not match this block activation"
+            )
+        block_index = getattr(self, "_vflash_block_profile_index", None)
+        if not isinstance(block_index, int):
+            raise H3NativeDenoiserError("H3 block phase profile has no block index")
+
+        stream = torch.cuda.current_stream(invocation.device)
+
+        def event() -> Any:
+            return _record_cuda_profile_event(torch, stream)
+
+        record: dict[str, Any] = {
+            "block_index": block_index,
+            "phases": [],
+            "attention_detail": {},
+        }
+        phase_start = event()
+
+        def finish_phase(name: str) -> None:
+            nonlocal phase_start
+            phase_end = event()
+            record["phases"].append((name, phase_start, phase_end))
+            phase_start = phase_end
+
+        table = self.weights.adaln_table
+        modulation = (
+            table[invocation.evaluation_index]
+            .to(
+                device=invocation.device,
+                dtype=invocation.dtype,
+            )
+            .index_select(0, invocation.adaln_indices)
+        )
+        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = modulation.unbind(1)
+        finish_phase("adaln")
+
+        residual = hidden_states
+        normalized = _rms_norm(
+            hidden_states,
+            self.weights.attention_norm,
+            eps=self.norm_eps,
+        )
+        normalized = self._modulate(normalized, scale_msa, shift_msa)
+        finish_phase("attention_norm_modulate")
+
+        query, key, value = self._qkv_linear(normalized).chunk(3, dim=-1)
+        finish_phase("qkv_projection")
+        heads = spec.num_attention_heads
+        head_dim = spec.attention_head_dim
+        query = query.unflatten(-1, (heads, head_dim))
+        key = key.unflatten(-1, (heads, head_dim))
+        value = value.unflatten(-1, (heads, head_dim))
+        query, key = self._qk_norm_rotary(query, key, invocation)
+        finish_phase("qk_norm_rotary")
+
+        self._vflash_attention_phase_profile = record["attention_detail"]
+        try:
+            attention = self._attention(query, key, value)
+        finally:
+            self._vflash_attention_phase_profile = None
+        finish_phase("attention")
+        hidden_states = self._adapted_gate_residual(
+            attention.flatten(2, 3),
+            self.weights.attention_out,
+            self.weights.attention_out_residual,
+            residual,
+            gate_msa,
+        )
+        finish_phase("attention_output")
+
+        residual = hidden_states
+        normalized = _rms_norm(hidden_states, self.weights.ffn_norm, eps=self.norm_eps)
+        normalized = self._modulate(normalized, scale_mlp, shift_mlp)
+        finish_phase("ffn_norm_modulate")
+        ffn = self._ffn_input(normalized)
+        finish_phase("ffn_input")
+        hidden_states = self._adapted_gate_residual(
+            ffn,
+            self.weights.ffn_out,
+            self.weights.ffn_out_residual,
+            residual,
+            gate_mlp,
+        )
+        finish_phase("ffn_output")
+        phase_records.append(record)
+        return hidden_states
 
 
 def _resident_bf16_weight(weight: H3BF16Weight, device: Any) -> H3BF16Weight:
@@ -1252,6 +1376,9 @@ class H3NativeDenoiserBF16Ring:
         self._denoise_profile_records = None
         for slot in self.slots:
             slot._vflash_collective_profile = None
+            slot._vflash_block_phase_profile = None
+            slot._vflash_block_profile_index = None
+            slot._vflash_attention_phase_profile = None
 
     def finish_denoise_profile(self) -> dict[str, Any]:
         """Resolve ring events after every owned CUDA stream has completed."""
@@ -1264,6 +1391,9 @@ class H3NativeDenoiserBF16Ring:
         total_copies = total_bytes = total_collectives = 0
         total_copy_active = total_ready_wait = total_block_compute = 0.0
         total_collective_issue = total_collective_wait = 0.0
+        total_profiled_blocks = total_attention_chunks = 0
+        total_block_phases: dict[str, float] = {}
+        total_attention_phases: dict[str, float] = {}
         for record in records:
             h2d_seconds = [
                 float(start.elapsed_time(end)) / 1000.0
@@ -1280,13 +1410,29 @@ class H3NativeDenoiserBF16Ring:
             copied_bytes = sum(size for _index, size, _start, _end in record["copies"])
             collective = dict(record["collective"])
             copy_span = (
-                float(record["copy_span_start"].elapsed_time(record["copy_span_end"]))
-                / 1000.0
+                float(record["copy_span_start"].elapsed_time(record["copy_span_end"])) / 1000.0
             )
             compute_span = (
                 float(record["compute_span_start"].elapsed_time(record["compute_span_end"]))
                 / 1000.0
             )
+            block_phases: dict[str, float] = {}
+            attention_phases: dict[str, float] = {}
+            profiled_blocks = 0
+            attention_chunks = 0
+            for block in record.get("block_phases", []):
+                profiled_blocks += 1
+                for name, start, end in block["phases"]:
+                    seconds = float(start.elapsed_time(end)) / 1000.0
+                    block_phases[name] = block_phases.get(name, 0.0) + seconds
+                attention_detail = block.get("attention_detail", {})
+                attention_chunks += len(attention_detail.get("flash_sdpa", []))
+                for name, spans in attention_detail.items():
+                    if not isinstance(spans, list):
+                        spans = [spans]
+                    for start, end in spans:
+                        seconds = float(start.elapsed_time(end)) / 1000.0
+                        attention_phases[name] = attention_phases.get(name, 0.0) + seconds
             evaluations.append(
                 {
                     "evaluation_index": record["evaluation_index"],
@@ -1297,6 +1443,10 @@ class H3NativeDenoiserBF16Ring:
                     "block_compute_seconds": block_compute_seconds,
                     "compute_span_seconds": compute_span,
                     "collective": collective,
+                    "profiled_blocks": profiled_blocks,
+                    "block_phase_seconds": block_phases,
+                    "attention_chunks_profiled": attention_chunks,
+                    "attention_critical_path_seconds": attention_phases,
                 }
             )
             total_copies += len(h2d_seconds)
@@ -1307,9 +1457,21 @@ class H3NativeDenoiserBF16Ring:
             total_block_compute += sum(block_compute_seconds)
             total_collective_issue += float(collective["issue_seconds"])
             total_collective_wait += float(collective["wait_seconds"])
+            total_profiled_blocks += profiled_blocks
+            total_attention_chunks += attention_chunks
+            for name, seconds in block_phases.items():
+                total_block_phases[name] = total_block_phases.get(name, 0.0) + seconds
+            for name, seconds in attention_phases.items():
+                total_attention_phases[name] = total_attention_phases.get(name, 0.0) + seconds
         return {
             "device_index": self.device.index,
             "evaluations": evaluations,
+            "phase_totals": {
+                "profiled_blocks": total_profiled_blocks,
+                "block_phase_seconds": total_block_phases,
+                "attention_chunks_profiled": total_attention_chunks,
+                "attention_critical_path_seconds": total_attention_phases,
+            },
             "totals": {
                 "copies": total_copies,
                 "copied_bytes": total_bytes,
@@ -1327,13 +1489,9 @@ class H3NativeDenoiserBF16Ring:
 
     @staticmethod
     def _record_profile_event(torch: Any, stream: Any) -> Any:
-        event = torch.cuda.Event(enable_timing=True, blocking=False)
-        event.record(stream)
-        return event
+        return _record_cuda_profile_event(torch, stream)
 
-    def _copy_ring_block(
-        self, index: int, profile: dict[str, Any] | None
-    ) -> None:
+    def _copy_ring_block(self, index: int, profile: dict[str, Any] | None) -> None:
         start = self._record_profile_event(_torch(), self.copy_stream) if profile else None
         _copy_bf16_tensor_pairs_(self._ring_copy_pairs[index])
         if profile is not None:
@@ -1477,6 +1635,7 @@ class H3NativeDenoiserBF16Ring:
                 "copies": [],
                 "ready_waits": [],
                 "block_compute": [],
+                "block_phases": [],
                 "copy_span_start": None,
                 "copy_span_end": None,
                 "compute_span_start": self._record_profile_event(torch, compute_stream),
@@ -1490,6 +1649,7 @@ class H3NativeDenoiserBF16Ring:
             }
             for slot in self.slots:
                 slot._vflash_collective_profile = profile["collective"]
+                slot._vflash_block_phase_profile = profile["block_phases"]
         self._queue_initial_slots(profile)
         checkpoints: dict[int, Any] = {}
         try:
@@ -1503,6 +1663,8 @@ class H3NativeDenoiserBF16Ring:
                 compute_start = (
                     self._record_profile_event(torch, compute_stream) if profile else None
                 )
+                if profile is not None:
+                    slot._vflash_block_profile_index = index
                 hidden_states = slot.forward_prevalidated(hidden_states, invocation)
                 compute_end = (
                     self._record_profile_event(torch, compute_stream) if profile else None
@@ -1530,6 +1692,9 @@ class H3NativeDenoiserBF16Ring:
             if profile is not None:
                 for slot in self.slots:
                     slot._vflash_collective_profile = None
+                    slot._vflash_block_phase_profile = None
+                    slot._vflash_block_profile_index = None
+                    slot._vflash_attention_phase_profile = None
         return hidden_states, checkpoints
 
     def forward_prevalidated_serial(
