@@ -29,6 +29,7 @@ def test_generate_parser_preserves_reference_order():
     assert args.reference == [Path("second.png"), Path("first.png")]
     assert args.duration == 5
     assert args.audio_delivery_profile == "unchanged"
+    assert args.keyframe_delivery_profile == "decoded"
     assert args.profile_denoise is False
 
 
@@ -106,6 +107,8 @@ def test_generate_parser_exposes_first_frame_separately_from_references():
             "frame-zero.png",
             "--duration",
             "10",
+            "--keyframe-delivery-profile",
+            "exact-v1",
             "--gpu",
             "0",
             "--output",
@@ -114,6 +117,7 @@ def test_generate_parser_exposes_first_frame_separately_from_references():
     )
     assert args.first_frame == Path("frame-zero.png")
     assert args.duration == 10
+    assert args.keyframe_delivery_profile == "exact-v1"
     assert args.reference == [] and args.reference_video is None
 
 

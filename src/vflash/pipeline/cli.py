@@ -64,6 +64,12 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
         default="unchanged",
         help="decoded-audio delivery policy; web-v1 uses bounded loudness gain",
     )
+    generate.add_argument(
+        "--keyframe-delivery-profile",
+        choices=("decoded", "exact-v1"),
+        default="decoded",
+        help="temporal-anchor delivery policy; exact-v1 restores supplied endpoints",
+    )
     generate.add_argument("--output", type=Path, required=True, help="new MP4 output path")
     generate.add_argument("--gpu", type=int, required=True, help="physical nvidia-smi index")
     generate.add_argument(
@@ -121,6 +127,7 @@ def run_pipeline_command(args: argparse.Namespace) -> int:
         seed=args.seed,
         duration_seconds=args.duration,
         audio_delivery_profile=args.audio_delivery_profile,
+        keyframe_delivery_profile=args.keyframe_delivery_profile,
     )
     if args.output.exists() or args.output.is_symlink():
         raise ContractError("the output path already exists")

@@ -17,6 +17,11 @@ from vflash.adapters.official_vae import (
 )
 from vflash.media.audio_delivery import AUDIO_DELIVERY_PROFILES
 from vflash.media.encoding import MediaError, encode_mp4, media_executables
+from vflash.media.keyframe_delivery import (
+    DECODED_KEYFRAME_DELIVERY_PROFILE,
+    KEYFRAME_DELIVERY_PROFILES,
+    apply_exact_keyframe_delivery,
+)
 from vflash.native.h3_tensor_file import load_safetensor_tensors
 from vflash.pipeline.residency import capture_cpu_master, restore_cpu_master
 
@@ -175,6 +180,9 @@ class OfficialMediaDecoder:
         duration_seconds: float,
         fps: int = 24,
         audio_delivery_profile: str = "unchanged",
+        keyframe_delivery_profile: str = DECODED_KEYFRAME_DELIVERY_PROFILE,
+        first_frame: Any | None = None,
+        last_frame: Any | None = None,
     ) -> MediaResult:
         self._require_open()
         if not self._cuda_active:
@@ -187,6 +195,12 @@ class OfficialMediaDecoder:
             raise MediaError("this delivery supports whole seconds from five through ten")
         if audio_delivery_profile not in AUDIO_DELIVERY_PROFILES:
             raise MediaError("unknown audio delivery profile")
+        if keyframe_delivery_profile not in KEYFRAME_DELIVERY_PROFILES:
+            raise MediaError("unknown keyframe delivery profile")
+        if keyframe_delivery_profile == DECODED_KEYFRAME_DELIVERY_PROFILE and (
+            first_frame is not None or last_frame is not None
+        ):
+            raise MediaError("decoded keyframe delivery does not accept endpoint images")
         if output_path.exists() or output_path.is_symlink():
             raise MediaError("the output path already exists")
         started = time.monotonic()
@@ -207,6 +221,18 @@ class OfficialMediaDecoder:
         frames, samples = round(duration_seconds * fps), round(duration_seconds * 32000)
         if video.shape[2] < frames or audio.shape[2] < samples:
             raise MediaError("decoded media is shorter than the requested delivery")
+        keyframe_delivery = None
+        if keyframe_delivery_profile != DECODED_KEYFRAME_DELIVERY_PROFILE:
+            delivery_started = time.monotonic()
+            keyframe_delivery = apply_exact_keyframe_delivery(
+                video,
+                width=width,
+                height=height,
+                delivery_frames=frames,
+                first_frame=first_frame,
+                last_frame=last_frame,
+            )
+            stages["keyframe_delivery"] = time.monotonic() - delivery_started
         peak = int(self._torch.cuda.max_memory_allocated(self.device))
         encode_started = time.monotonic()
         encode_options = (
@@ -222,6 +248,8 @@ class OfficialMediaDecoder:
             audio_sample_rate=self.audio_sample_rate,
             **encode_options,
         )
+        if keyframe_delivery is not None:
+            media["keyframe_delivery"] = keyframe_delivery
         stages["media_encode"] = time.monotonic() - encode_started
         return MediaResult(output_path, time.monotonic() - started, stages, peak, media)
 

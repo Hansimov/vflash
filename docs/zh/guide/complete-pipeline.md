@@ -55,7 +55,11 @@ vflash generate \
   --output video.mp4 --trust-local-code
 ```
 
-Ref2VA 的 `--reference` 可以出现一至三次。T2VA 在准备时指定 `--profile t2va-turbo4-exact-sm89`，生成时不传图像参数。一个已准备的 SM89 或 SM86 Base16 关键帧配置可只传 `--first-frame first-frame.png` 生成 I2VA，只传 `--last-frame last-frame.png` 生成 L2VA，或同时传两者生成 FL2VA；`--duration` 接受 5–10 的整数秒，省略时仍为五秒。显式的 `i2va-*` 与 `fl2va-*` profile ID 继续用于稳定的准备和来源记录；L2VA 复用 FL2VA 权重，不增加重复 profile。关键帧不可与 `--reference` 混用；SM86 配置还须传入 `--peer-gpu 1 --strategy sequence-head`。Python 中，L2VA 使用 `VideoRequest(last_frame=Path("last-frame.png"), ...)`，FL2VA 使用 `VideoRequest(first_frame=Path("first-frame.png"), last_frame=Path("last-frame.png"), ...)`。进度以 JSON 行写入 stderr，stdout 输出最终结果。每次命令独立加载并释放模型；要在多次请求间实现跨模式常驻，应复用同一个 Python `H3Pipeline` 实例。预装环境及完整挂载示例见 [Docker 生成](./docker#pipeline)。
+Ref2VA 的 `--reference` 可以出现一至三次。T2VA 在准备时指定 `--profile t2va-turbo4-exact-sm89`，生成时不传图像参数。一个已准备的 SM89 或 SM86 Base16 关键帧配置可只传 `--first-frame first-frame.png` 生成 I2VA，只传 `--last-frame last-frame.png` 生成 L2VA，或同时传两者生成 FL2VA；`--duration` 接受 5–10 的整数秒，省略时仍为五秒。显式的 `i2va-*` 与 `fl2va-*` profile ID 继续用于稳定的准备和来源记录；L2VA 复用 FL2VA 权重，不增加重复 profile。关键帧不可与 `--reference` 混用；SM86 配置还须传入 `--peer-gpu 1 --strategy sequence-head`。Python 中，L2VA 使用 `VideoRequest(last_frame=Path("last-frame.png"), ...)`，FL2VA 使用 `VideoRequest(first_frame=Path("first-frame.png"), last_frame=Path("last-frame.png"), ...)`。
+
+默认交付仍保留官方 VAE 重建后的关键帧。设置 `keyframe_delivery_profile="exact-v1"` 或传入 `--keyframe-delivery-profile exact-v1` 后，解码阶段会恢复每个已提供的时间端点。图像先按照官方条件编码的拉伸几何，用 LANCZOS 调整到目标画布；端点在 H.264 量化前与输入一致，再用固定四帧线性过渡衔接模型运动。结果会记录实际策略和被修改的帧序号。这是一项显式交付策略，并不代表模型能在整个视频中保留同等精细度。
+
+进度以 JSON 行写入 stderr，stdout 输出最终结果。每次命令独立加载并释放模型；要在多次请求间实现跨模式常驻，应复用同一个 Python `H3Pipeline` 实例。预装环境及完整挂载示例见 [Docker 生成](./docker#pipeline)。
 
 ## 一个明确拥有资源的实例
 

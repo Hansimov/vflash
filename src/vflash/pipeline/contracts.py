@@ -11,6 +11,7 @@ from typing import Any, Literal
 
 from vflash.contracts import ContractError
 from vflash.media.audio_delivery import AUDIO_DELIVERY_PROFILES
+from vflash.media.keyframe_delivery import KEYFRAME_DELIVERY_PROFILES
 from vflash.model_assets import DEFAULT_MODEL_PROFILE
 from vflash.model_assets import DIFFUSERS_REVISION as DIFFUSERS_REVISION
 from vflash.model_assets import MODEL_REVISION as MODEL_REVISION
@@ -77,6 +78,9 @@ class VideoRequest:
     two temporal anchors. A session never swaps models.
     ``audio_delivery_profile='web-v1'`` applies bounded delivery gain after
     decoding; the default ``unchanged`` profile preserves the decoded waveform.
+    ``keyframe_delivery_profile='exact-v1'`` restores supplied temporal anchors
+    at the delivered endpoints after VAE decode; the default ``decoded`` profile
+    preserves the model output for controlled comparison.
     """
 
     prompt: str
@@ -91,6 +95,9 @@ class VideoRequest:
     duration_seconds: int = field(default=5, kw_only=True)
     audio_delivery_profile: Literal["unchanged", "web-v1"] = field(
         default="unchanged", kw_only=True
+    )
+    keyframe_delivery_profile: Literal["decoded", "exact-v1"] = field(
+        default="decoded", kw_only=True
     )
 
     def __post_init__(self) -> None:
@@ -161,6 +168,12 @@ class VideoRequest:
             )
         if self.audio_delivery_profile not in AUDIO_DELIVERY_PROFILES:
             raise ContractError("unknown audio delivery profile")
+        if self.keyframe_delivery_profile not in KEYFRAME_DELIVERY_PROFILES:
+            raise ContractError("unknown keyframe delivery profile")
+        if self.keyframe_delivery_profile != "decoded" and not (
+            self.first_frame is not None or self.last_frame is not None
+        ):
+            raise ContractError("exact keyframe delivery requires a temporal keyframe")
 
     @property
     def ordered_references(self) -> tuple[Path, ...]:

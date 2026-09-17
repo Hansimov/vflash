@@ -252,10 +252,15 @@ def test_base16_raw_assets_omit_the_adapter_contract(tmp_path):
 
 def test_t2va_request_cannot_contain_an_unbound_picture_label():
     assert VideoRequest("A scene.").audio_delivery_profile == "unchanged"
+    assert VideoRequest("A scene.").keyframe_delivery_profile == "decoded"
     assert VideoRequest("A scene.", audio_delivery_profile="web-v1").mode == "t2va"
     assert VideoRequest("A scene.", Path("reference.png")).mode == "ref2va"
     with pytest.raises(ContractError, match="audio delivery"):
         VideoRequest(**{"prompt": "A scene.", "audio_delivery_profile": "broadcast"})
+    with pytest.raises(ContractError, match="keyframe delivery"):
+        VideoRequest(**{"prompt": "A scene.", "keyframe_delivery_profile": "unknown"})
+    with pytest.raises(ContractError, match="requires a temporal keyframe"):
+        VideoRequest("A scene.", keyframe_delivery_profile="exact-v1")
     with pytest.raises(ContractError, match="picture label"):
         VideoRequest("A scene from <Picture 1>.")
 

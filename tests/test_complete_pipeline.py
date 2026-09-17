@@ -236,6 +236,7 @@ def test_ten_second_keyframe_request_passes_exact_media_contract(video_request, 
         first_frame=video_request.reference,
         duration_seconds=10,
         audio_delivery_profile="web-v1",
+        keyframe_delivery_profile="exact-v1",
     )
     result = pipeline.generate(request, tmp_path / "ten-seconds.mp4")
     assert (request.model_frames, request.delivery_frames) == (243, 240)
@@ -245,6 +246,8 @@ def test_ten_second_keyframe_request_passes_exact_media_contract(video_request, 
         "duration_seconds": 10,
         "fps": 24,
         "audio_delivery_profile": "web-v1",
+        "keyframe_delivery_profile": "exact-v1",
+        "first_frame": result.media["first_frame"],
     }
 
 
@@ -574,15 +577,24 @@ def test_one_base16_resident_serves_fl2va_l2va_then_i2va_without_reloading(
             "Move from <Picture 1> to <Picture 2>.",
             first_frame=first,
             last_frame=last,
+            keyframe_delivery_profile="exact-v1",
         ),
         tmp_path / "fl2va.mp4",
     )
     l2va = pipeline.generate(
-        VideoRequest("The action resolves at <Picture 1>.", last_frame=last),
+        VideoRequest(
+            "The action resolves at <Picture 1>.",
+            last_frame=last,
+            keyframe_delivery_profile="exact-v1",
+        ),
         tmp_path / "l2va.mp4",
     )
     i2va = pipeline.generate(
-        VideoRequest("Continue from <Picture 1>.", first_frame=first),
+        VideoRequest(
+            "Continue from <Picture 1>.",
+            first_frame=first,
+            keyframe_delivery_profile="exact-v1",
+        ),
         tmp_path / "i2va.mp4",
     )
     assert i2va.profile_id == l2va.profile_id == fl2va.profile_id == resident_profile
@@ -596,6 +608,10 @@ def test_one_base16_resident_serves_fl2va_l2va_then_i2va_without_reloading(
         ("l2va", (last,)),
         ("i2va", (first,)),
     ]
+    assert fl2va.media["first_frame"] == first
+    assert fl2va.media["last_frame"] == last
+    assert "first_frame" not in l2va.media and l2va.media["last_frame"] == last
+    assert i2va.media["first_frame"] == first and "last_frame" not in i2va.media
     assert events.count("native:generate") == 3
     assert pipeline.request_count == 3
 

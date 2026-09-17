@@ -283,3 +283,63 @@ def test_media_decoder_delivers_the_exact_ten_second_audio_video_window(
         audio_delivery_profile="web-v1",
     )
     assert observed["audio_delivery_profile"] == "web-v1"
+
+
+def test_exact_keyframe_delivery_restores_only_delivery_endpoints(
+    tmp_path, monkeypatch
+) -> None:
+    Image = pytest.importorskip("PIL.Image")
+    decoder = OfficialMediaDecoder.__new__(OfficialMediaDecoder)
+    decoder._closed = False
+    decoder._cuda_active = True
+    decoder.device = "cuda:0"
+    decoder.audio_sample_rate = 32000
+    decoder._torch = SimpleNamespace(
+        cuda=SimpleNamespace(
+            reset_peak_memory_stats=lambda _device: None,
+            max_memory_allocated=lambda _device: 123,
+        )
+    )
+    decoded_video = torch.zeros(1, 3, 124, 32, 64)
+    decoded_audio = torch.zeros(1, 2, 160000)
+    decoder._decode_cpu = lambda *_args, **_kwargs: (
+        decoded_video,
+        decoded_audio,
+        {"decode": 1.0},
+    )
+    first = Image.new("RGB", (128, 128), (255, 0, 0))
+    last = Image.new("RGB", (32, 64), (0, 0, 255))
+    observed = {}
+
+    def encode(video, _audio, _output, **_kwargs):
+        observed["first"] = video[0, :, 0].clone()
+        observed["second"] = video[0, :, 1].clone()
+        observed["last"] = video[0, :, 119].clone()
+        return {}
+
+    monkeypatch.setattr("vflash.media.runtime.encode_mp4", encode)
+    result = decoder.generate_mp4(
+        tmp_path / "latents.safetensors",
+        tmp_path / "exact.mp4",
+        height=32,
+        width=64,
+        duration_seconds=5,
+        keyframe_delivery_profile="exact-v1",
+        first_frame=first,
+        last_frame=last,
+    )
+    torch.testing.assert_close(observed["first"][0], torch.ones(32, 64))
+    torch.testing.assert_close(observed["first"][1:], torch.zeros(2, 32, 64))
+    torch.testing.assert_close(observed["second"][0], torch.full((32, 64), 0.75))
+    torch.testing.assert_close(observed["second"][1:], torch.zeros(2, 32, 64))
+    torch.testing.assert_close(observed["last"][2], torch.ones(32, 64))
+    torch.testing.assert_close(observed["last"][:2], torch.zeros(2, 32, 64))
+    assert result.media["keyframe_delivery"] == {
+        "profile": "exact-v1",
+        "geometry": "official-stretch-lanczos-rgb-v1",
+        "transition": "four-frame-linear-feather-v1",
+        "exact_frame_indices": [0, 119],
+        "transition_frame_indices": [1, 2, 3, 116, 117, 118],
+    }
+    first.close()
+    last.close()

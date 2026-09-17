@@ -327,6 +327,16 @@ class H3Pipeline:
                 if request.audio_delivery_profile != "unchanged"
                 else {}
             )
+            if request.keyframe_delivery_profile != "decoded":
+                media_options["keyframe_delivery_profile"] = (
+                    request.keyframe_delivery_profile
+                )
+                if request.mode in {"i2va", "fl2va"}:
+                    media_options["first_frame"] = references[0].image
+                if request.mode == "l2va":
+                    media_options["last_frame"] = references[0].image
+                elif request.mode == "fl2va":
+                    media_options["last_frame"] = references[1].image
             media = self._media.generate_mp4(
                 directory / "latents.safetensors",
                 directory / "video.mp4",
