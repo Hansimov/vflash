@@ -32,6 +32,7 @@ H3_VIDEO_REFERENCE_POLICY = "official-video-cfr24-v1"
 H3_FIRST_FRAME_POLICY = "official-fl2va-first-frame-stretch-v1"
 H3_FL2VA_KEYFRAME_POLICY = "official-fl2va-first-last-frame-v1"
 H3_LAST_FRAME_POLICY = "official-fl2va-last-frame-stretch-v1"
+H3_BASE16_MAX_CANVAS_PIXELS = 768 * 1344
 
 _BUNDLE_ID = re.compile(r"h3-conditioning-[a-z0-9][a-z0-9-]{0,95}")
 _IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,255}")
@@ -723,7 +724,7 @@ def _validate_first_frame_profile(
         or profile.nfe != 16
         or delivery_profile is None
         or (profile.video_flow_shift, profile.audio_flow_shift) != (12, 3)
-        or profile.width * profile.height > 928 * 512
+        or profile.width * profile.height > H3_BASE16_MAX_CANVAS_PIXELS
         or profile.num_condition_audio_rows != 0
         or profile.num_condition_video_rows != expected_rows
         or request["delivery_profiles"] != delivery_profile
@@ -741,7 +742,7 @@ def _validate_fl2va_profile(profile: H3ConditioningProfile, request: Mapping[str
         or profile.nfe != 16
         or delivery_profile is None
         or (profile.video_flow_shift, profile.audio_flow_shift) != (12, 3)
-        or profile.width * profile.height > 928 * 512
+        or profile.width * profile.height > H3_BASE16_MAX_CANVAS_PIXELS
         or profile.num_condition_audio_rows != 0
         or profile.num_condition_video_rows != expected_rows
         or request["delivery_profiles"] != delivery_profile
@@ -762,7 +763,7 @@ def _validate_last_frame_profile(
         or profile.nfe != 16
         or delivery_profile is None
         or (profile.video_flow_shift, profile.audio_flow_shift) != (12, 3)
-        or profile.width * profile.height > 928 * 512
+        or profile.width * profile.height > H3_BASE16_MAX_CANVAS_PIXELS
         or profile.num_condition_audio_rows != 0
         or profile.num_condition_video_rows != expected_rows
         or request["delivery_profiles"] != delivery_profile

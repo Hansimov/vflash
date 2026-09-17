@@ -15,6 +15,9 @@ from vflash.native.h3_conditioning_bundle import (
     H3_LAST_FRAME_POLICY,
     H3ConditioningBundleError,
     H3ConditioningProfile,
+    _validate_first_frame_profile,
+    _validate_fl2va_profile,
+    _validate_last_frame_profile,
     _validate_request,
     h3_target_audio_tokens,
     h3_target_video_tokens,
@@ -26,6 +29,30 @@ from vflash.native.h3_native_scheduler import H3NativeSchedule
 
 class ReachedSourceValidation(RuntimeError):
     pass
+
+
+@pytest.mark.parametrize(
+    ("task", "validator", "anchors"),
+    [
+        ("i2va", _validate_first_frame_profile, 1),
+        ("l2va", _validate_last_frame_profile, 1),
+        ("fl2va", _validate_fl2va_profile, 2),
+    ],
+)
+def test_base16_keyframe_profiles_accept_the_qualified_one_megapixel_canvas(
+    task, validator, anchors
+):
+    rows = anchors * (1344 // 32) * (768 // 32)
+    profile = H3ConditioningProfile(task, 1344, 768, 243, 16, 12, 3, rows, rows, 0)
+    request = {
+        "delivery_profiles": [
+            {"temporal_profile": "native-24fps-10s", "frames": 240, "fps": 24.0}
+        ]
+    }
+    assert validator(profile, request) is None
+    too_large = H3ConditioningProfile(task, 1376, 768, 243, 16, 12, 3, rows, rows, 0)
+    with pytest.raises(H3ConditioningBundleError, match="canvas budget"):
+        validator(too_large, request)
 
 
 def write_bundle(directory, count, *, task="ref2va", frames=5, nfe=4):

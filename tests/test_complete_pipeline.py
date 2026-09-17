@@ -405,7 +405,7 @@ def test_bad_input_and_busy_session_do_not_run_models_or_destroy_outputs(
     [
         {"width": 641},
         {"height": 0},
-        {"width": 1344, "height": 768},
+        {"width": 1376, "height": 768},
         {"prompt": " "},
         {"seed": True},
         {"seed": -1},
@@ -416,6 +416,28 @@ def test_request_limits_are_cpu_contracts(tmp_path, changes):
     values = {"prompt": "An example scene.", "reference": tmp_path / "reference.png", **changes}
     with pytest.raises(ContractError):
         VideoRequest(**values)
+
+
+def test_one_megapixel_canvas_is_allowed_except_for_video_references(tmp_path):
+    for references in (
+        {},
+        {"reference": tmp_path / "reference.png"},
+        {"first_frame": tmp_path / "first.png"},
+        {"last_frame": tmp_path / "last.png"},
+        {
+            "first_frame": tmp_path / "first.png",
+            "last_frame": tmp_path / "last.png",
+        },
+    ):
+        request = VideoRequest("An example scene.", width=1344, height=768, **references)
+        assert request.width * request.height == 1_032_192
+    with pytest.raises(ContractError, match="475,136"):
+        VideoRequest(
+            "<Video 1> continues.",
+            width=1344,
+            height=768,
+            reference_video=tmp_path / "reference.mp4",
+        )
 
 
 def test_request_duration_is_discrete_and_defaults_to_five_seconds():

@@ -17,6 +17,8 @@ from vflash.model_assets import DIFFUSERS_REVISION as DIFFUSERS_REVISION
 from vflash.model_assets import MODEL_REVISION as MODEL_REVISION
 
 PIPELINE_PROFILE = DEFAULT_MODEL_PROFILE
+MAX_CANVAS_PIXELS = 768 * 1344
+VIDEO_REFERENCE_CANVAS_PIXELS = 928 * 512
 
 
 @dataclass(frozen=True)
@@ -154,9 +156,14 @@ class VideoRequest:
             for value in (self.width, self.height)
         ):
             raise ContractError("the canvas must use positive multiples of 32")
-        if self.width * self.height > 928 * 512 or not 0.25 <= self.width / self.height <= 4:
+        max_pixels = (
+            VIDEO_REFERENCE_CANVAS_PIXELS
+            if self.reference_video is not None
+            else MAX_CANVAS_PIXELS
+        )
+        if self.width * self.height > max_pixels or not 0.25 <= self.width / self.height <= 4:
             raise ContractError(
-                "this pipeline supports a canvas up to 928x512 pixels at 1:4-4:1"
+                f"this request mode supports at most {max_pixels:,} canvas pixels at 1:4-4:1"
             )
         if type(self.seed) is not int or not 0 <= self.seed < 2**63:
             raise ContractError("seed must be an integer between 0 and 2^63-1")
