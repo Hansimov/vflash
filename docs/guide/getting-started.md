@@ -1,11 +1,11 @@
 # Get started
 
-Install Vflash to inspect your GPU and choose a supported profile. For complete video generation on one RTX 4090 48 GB or reference-image generation on two RTX 3080 20 GB GPUs, continue with the [complete pipeline](./complete-pipeline) and [official-weight preparation](./compile-weights). The native bundle workflow is described below.
+Install Vflash to inspect your GPU and choose a supported profile. For complete video generation on one RTX 4090 48 GB, optional paired Base16 keyframe generation on two matching 48 GB 4090s, or reference-image generation on two RTX 3080 20 GB GPUs, continue with the [complete pipeline](./complete-pipeline) and [official-weight preparation](./compile-weights). The native bundle workflow is described below.
 
 ::: info Before you begin
 The Python pipeline and `vflash generate` support **text, one to three images, or one short reference video → a five-second MP4** on SM89, plus reference-image generation on a cooperating SM86 pair. The `denoise` command and HTTP service accept **compiled conditioning → video/audio latents**, including the supported SM86 profiles. Model downloads and compilation are explicit steps; no weights are bundled with the package.
 
-Current `main` also previews official Base16 I2VA/L2VA/FL2VA complete requests at integer durations from five through ten seconds. A prepared Base16 keyframe pipeline accepts a first frame, a last frame, or both without reloading weights. L2VA and intermediate durations remain unqualified on target hardware; Turbo and reference-video output remain five seconds.
+Current `main` also previews official Base16 I2VA/L2VA/FL2VA complete requests at integer durations from five through ten seconds. A prepared Base16 keyframe pipeline accepts a first frame, a last frame, or both without reloading weights. One ten-second, 736 × 992 SM89 L2VA case has bounded completion, media-integrity, endpoint and latency evidence; broader L2VA quality and other duration/canvas combinations remain unqualified. Turbo and reference-video output remain five seconds.
 :::
 
 ## Install the CLI {#install}
@@ -69,7 +69,7 @@ For a 3080, select `ref2va-turbo4-exact-sm86` and use assets compiled for that p
 
 The command writes the video and audio latent tensors to `result.safetensors` and prints a JSON summary. The tensors are inputs for a compatible decoder; the file is not a playable video.
 
-## Use two 3080s for one request {#parallel}
+## Use two GPUs for one request {#parallel}
 
 To use two RTX 3080 20 GB devices for one request, keep the same SM86 Turbo4 assets:
 
@@ -86,7 +86,9 @@ Add the same `--gpu`, `--peer-gpu`, and `--strategy` options to `vflash denoise`
 
 Both strategies use BF16 weights, exact attention and the complete four-step schedule. Selecting a peer defaults to `sequence-head`. See [the architecture guide](../reference/architecture#parallel) for the implementation.
 
-Parallel execution changes GEMM shapes or reduction order. Results are **not bitwise identical to single-GPU execution**. Full latent and decoded-media smoke checks passed on one workload; cross-case instruction-quality qualification remains pending. See [performance measurement](../reference/performance#parallel) for scope and memory accounting.
+Current `main` also accepts two matching RTX 4090 48 GB devices for a prepared SM89 Base16 I2VA/FL2VA profile. Pass the same peer options, but use `sequence-head`; `tensor` remains rejected. Both devices stream blocks from one prepared SM89 artifact. This opt-in path prioritizes one request's latency and should not replace two independent workers when two requests are ready.
+
+Parallel execution changes GEMM shapes or reduction order, so results **need not be bitwise identical to single-GPU execution**. Full latent and decoded-media smoke checks passed on one workload; cross-case instruction-quality qualification remains pending. See [performance measurement](../reference/performance#parallel) for scope and memory accounting.
 
 ## Reuse a loaded model {#reuse}
 

@@ -2,6 +2,10 @@
 
 当前版本为 **0.3.2 正式版**：修复大张量索引越界，并新增双 RTX 3080 20 GB 原生 T2VA Turbo4。独立完整链路仍为五秒、24 fps；既有配置和新增原生集成的验证范围见[完整配置表](./pipeline-profiles)。
 
+## 当前 main · 可选双 SM89 Base16 低延迟路径
+
+预览版Base16关键帧配置可用两张匹配的RTX 4090 48 GB，以`sequence-head`和block streaming协作执行。该路径必须显式选择，不改变单卡默认值。一个固定的十秒736 × 992 L2VA请求耗时484.232秒，单卡对照为774.153秒；MP4输出字节一致，两张450W卡没有热降频样本，最高温度分别为65/78°C。双卡会消耗更多总GPU时间，所以仅在第二张卡本来会空闲时作为低延迟路径；已有两个待执行请求时，两个独立worker吞吐更高。其他SM89配置和`tensor`仍会被拒绝。
+
 ## 0.3.2 · 宽索引与双 SM86 文生推理 {#v0-3-2}
 
 [源码标签](https://github.com/Hansimov/vflash/tree/v0.3.2) · [镜像与安装包身份](https://github.com/Hansimov/vflash/blob/v0.3.2/docker/images.json)

@@ -300,7 +300,7 @@ def test_native_fl2va_bundle_binds_both_temporal_anchors(
         ((8, 6), 2, "sequence-head", True),
         ((8, 6), 1, "single", False),
         ((8, 6), 2, "tensor", False),
-        ((8, 9), 2, "sequence-head", False),
+        ((8, 9), 2, "sequence-head", True),
     ],
 )
 @pytest.mark.parametrize(

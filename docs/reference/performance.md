@@ -62,6 +62,8 @@ A cooperating pair can reduce latency for one request; independent workers serve
 
 The published [a3 dual-3080 comparison](./benchmarks#sm86-parallel) measured a 1.725× speedup on one fixed workload. It retains its original software version, thermal observations and quality limits; it is not a speed guarantee for the current release or other workloads.
 
+Current `main` also has one controlled SM89 Base16 result: a fixed ten-second, 736 × 992 L2VA request took 774.153 and 773.515 seconds in the bracketing single-device controls, and 484.232 seconds on two devices. The 773.834-second control mean makes the paired reduction 37.4%. All three MP4 outputs were byte-identical. The paired run kept both 450 W cards at or below 78°C without thermal-slowdown samples; the second single-device control also recorded a 65.077°C maximum rolling ten-minute mean. Two serial paired requests would consume 968.464 device-seconds versus a 773.834-second mean makespan for two independent single-card requests, a 25.2% fleet penalty. This evidence qualifies an opt-in idle-peer latency path rather than a throughput default.
+
 ## Check output quality {#quality}
 
 A faster result is useful only if it still meets your task. Judge decoded outputs against the original instructions and references: instruction following, identity and detail consistency, motion, visual artifacts, and the relationship between audio and video. A candidate matching a baseline may still fail the task if the baseline also fails.

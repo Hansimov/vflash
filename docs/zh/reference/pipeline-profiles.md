@@ -7,9 +7,9 @@
 | `ref2va-turbo4-exact-sm89` | 单张 RTX 4090 48 GB | 提示词加 1–3 张有序图片，或一段 2–5 秒视频 | `transformer_ref` | Ref Turbo4 v0.1，alpha 8 / rank 128 | 12 / 3 |
 | `ref2va-turbo4-exact-sm86` | 双张 RTX 3080 20 GB，`sequence-head` | 提示词加 1–3 张有序图片 | `transformer_ref` | Ref Turbo4 v0.1，alpha 8 / rank 128 | 12 / 3 |
 | `t2va-turbo4-exact-sm89` | 单张 RTX 4090 48 GB | 纯文字提示词 | `transformer` | Base Turbo4 v1.0，alpha 128 / rank 128 | 6 / 3 |
-| `i2va-base16-bf16-sm89`（预览） | 单张 RTX 4090 48 GB | 提示词加一张明确的首帧 | `transformer` | 无 | 12 / 3 |
+| `i2va-base16-bf16-sm89`（预览） | 单张 RTX 4090 48 GB；可选匹配双卡 `sequence-head` | 提示词加一张明确的首帧 | `transformer` | 无 | 12 / 3 |
 | `i2va-base16-bf16-sm86`（预览） | 双张 RTX 3080 20 GB，`sequence-head` | 提示词加一张明确的首帧 | `transformer` | 无 | 12 / 3 |
-| `fl2va-base16-bf16-sm89`（预览） | 单张 RTX 4090 48 GB | 提示词加明确的首帧和尾帧 | `transformer` | 无 | 12 / 3 |
+| `fl2va-base16-bf16-sm89`（预览） | 单张 RTX 4090 48 GB；可选匹配双卡 `sequence-head` | 提示词加明确的首帧和尾帧 | `transformer` | 无 | 12 / 3 |
 | `fl2va-base16-bf16-sm86`（预览） | 双张 RTX 3080 20 GB，`sequence-head` | 提示词加明确的首帧和尾帧 | `transformer` | 无 | 12 / 3 |
 
 已发布的 Turbo 配置使用四次计算、BF16 权重和独立的 LoRA 残差，并保留五秒合同；预览 Base16 profile 身份使用官方 Base Transformer，以 BF16、无 LoRA执行 16 次计算，支持五秒（`124 → 120`帧）或十秒（`243 → 240`帧），均为24 fps。默认仍为 SM89 Ref4。同一硬件目标上的成对 Base16 I2VA/FL2VA 配置具有完全相同的模型工件、调度和官方 FL2VA 条件工作流，因此一个已准备的 Base16 关键帧 pipeline 可串行接受 I2VA、L2VA 与 FL2VA 请求，无需重启 profile或执行冷初始化；每个请求仍生成与实际模式一致的条件 schema 和来源信息。L2VA 明确复用 FL2VA 权重 profile，不增加重复身份。已准备的 profile ID 继续作为 pipeline 与结果身份。每次请求的阶段驻留仍遵循完整 pipeline 选择的内存策略。Turbo、Ref2VA 和 T2VA 配置仍只接受各自模式。原生单 SM86 与 Turbo8 接口具有不同的[验证范围](../guide/profiles)。
@@ -35,6 +35,8 @@ vflash generate \
 ```
 
 `--first-frame` 表示第零帧锚点，与 Ref2VA 的 `--reference` 输入相互独立；Python 接口为 `VideoRequest(first_frame=Path(...))`。提示词可以将该图标记为 `<Picture 1>`，超出这一张已提供图片的标签会被拒绝。内部调用官方编码器的单帧 FL2VA 条件路径，对外请求类型仍明确为 I2VA。双 SM86 准备阶段使用 `i2va-base16-bf16-sm86`，生成时增加 `--peer-gpu 1 --strategy sequence-head`。一条 928 × 512、120 帧请求在不计冷启动时耗时 281.2 秒；其中一张卡触发软件热降频，因此该结果只证明可行性和持续产能，不作为无热降频延迟或质量结论。
+
+SM89 Base16 配置也可以让两张匹配的48 GB显卡复用同一份SM89准备资产，并增加`--peer-gpu 1 --strategy sequence-head`。一个固定的十秒736 × 992 L2VA请求与单卡输出字节一致，成功请求耗时降低37.4%；两张450W显卡最高不高于78°C，热降频样本为0。但双卡串行生成两条结果的makespan比两张独立单卡并行生成两条高25.1%，因此只有在另一张卡本来会空闲且请求明确优先低延迟时才应选择该拓扑。
 
 真正的双锚 FL2VA 请求既可以复用同一硬件上已经准备好的 Base16 I2VA 关键帧 pipeline，也可以编译并准备显式的 `fl2va-base16-bf16-sm89` 或 `fl2va-base16-bf16-sm86` 身份，然后同时传入首尾帧：
 

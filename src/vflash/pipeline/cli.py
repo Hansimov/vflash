@@ -78,12 +78,12 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
         help="one local 2-5s MP4/MOV/WebM labeled <Video 1>; excludes --reference",
     )
     generate.add_argument(
-        "--peer-gpu", type=int, help="second SM86 GPU for cooperative denoising"
+        "--peer-gpu", type=int, help="second matching GPU for cooperative denoising"
     )
     generate.add_argument(
         "--strategy",
         choices=("sequence-head",),
-        help="qualified complete dual-SM86 strategy; default sequence-head",
+        help="qualified complete two-GPU strategy; default sequence-head",
     )
     generate.add_argument(
         "--trust-local-code",

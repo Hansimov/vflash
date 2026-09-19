@@ -68,6 +68,46 @@ def test_two_devices_resolve_an_explicit_strategy():
     assert default.parallel_strategy == "sequence-head"
 
 
+def test_two_sm89_devices_resolve_only_base16_sequence_head():
+    from dataclasses import replace
+
+    first = device(capability="8.9", memory=48.0)
+    second = replace(first, index=1, uuid="peer-device")
+    plan = resolve_plan(
+        ProfileCatalog.bundled(),
+        profile_id="i2va-base16-bf16-sm89",
+        device=first,
+        peer_device=second,
+    )
+    assert plan.parallel_strategy == "sequence-head"
+    assert plan.gpu_uuids == (first.uuid, second.uuid)
+    for profile_id, strategy in (
+        ("i2va-base16-bf16-sm89", "tensor"),
+        ("t2va-turbo4-exact-sm89", "sequence-head"),
+        ("ref2va-turbo4-exact-sm89", "sequence-head"),
+    ):
+        with pytest.raises(ContractError, match="qualified pair"):
+            resolve_plan(
+                ProfileCatalog.bundled(),
+                profile_id=profile_id,
+                device=first,
+                peer_device=second,
+                strategy=strategy,
+            )
+    for invalid_peer in (
+        replace(second, compute_capability="8.6"),
+        replace(second, memory_gib=24.0),
+        first,
+    ):
+        with pytest.raises(ContractError, match="qualified pair"):
+            resolve_plan(
+                ProfileCatalog.bundled(),
+                profile_id="fl2va-base16-bf16-sm89",
+                device=first,
+                peer_device=invalid_peer,
+            )
+
+
 @pytest.mark.parametrize(
     "profile_id",
     [

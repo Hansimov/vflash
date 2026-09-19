@@ -55,13 +55,15 @@ The two strategies share the same numerical execution interface. They do not pro
 
 Fused elementwise kernels select 32-bit or 64-bit indices from the tensors' shapes and strides. The check covers strided AdaLN views and packed FFN/QKV inputs, whose addressed span can exceed the logical output size. Large offsets are widened before multiplication; smaller tensors retain the 32-bit specialization. This changes address calculation, not BF16 operations or rounding order. Safe indexing does not establish a workload's VRAM capacity or complete-pipeline support.
 
-## Two 3080s for one request {#parallel}
+## Two GPUs for one request {#parallel}
 
 For a 3080 service focused on request latency, start with two GPUs using `sequence-head`. The caller selects the peer explicitly. A single-GPU session remains available; Vflash never acquires another GPU automatically.
 
 A paired session owns two device rings, two submitting CPU threads and a local NCCL group. `sequence-head` shares one host weight store, divides token rows for projections, then exchanges attention data so each device processes complete sequences for its assigned heads. `tensor` instead streams weight shards and reduces partial projections, including the LoRA branches. No global `torch.distributed` group or distributed launcher is required.
 
 Both strategies preserve the complete profile and use event-protected buffers. A rank failure aborts its peer. Partitioning changes floating-point reduction order, so parallel output need not be bitwise identical to single-GPU output. See the [measured scope](./performance#parallel).
+
+Current `main` extends only Base16 I2VA/FL2VA on two matching SM89 48 GB devices to the same block-ring `sequence-head` implementation. Other SM89 profiles and `tensor` are rejected. The caller must still select both devices explicitly. This is a bounded latency option, not automatic scheduling or a throughput default; two independent workers remain preferable when two requests are ready.
 
 ## LoRA is part of the profile {#lora-execution}
 

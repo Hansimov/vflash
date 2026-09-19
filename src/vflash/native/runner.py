@@ -44,8 +44,10 @@ class NativeEngineSession:
     ) -> None:
         started = time.perf_counter()
         profile = plan.profile
-        if weight_residency not in {"default", "resident", "block-ring"} or (
-            plan.target.compute_capability == "8.6" and weight_residency == "resident"
+        if (
+            weight_residency not in {"default", "resident", "block-ring"}
+            or (plan.target.compute_capability == "8.6" and weight_residency == "resident")
+            or (plan.peer_device is not None and weight_residency == "resident")
         ):
             raise ContractError("unsupported native weight residency")
         if (
@@ -65,8 +67,8 @@ class NativeEngineSession:
         ):
             raise ContractError(
                 "the public denoiser supports exact Ref2VA/T2VA Turbo4 on SM86, "
-                "I2VA/FL2VA Base16 on paired SM86, and Ref2VA Turbo4/Turbo8, "
-                "T2VA Turbo4, or I2VA/FL2VA Base16 on SM89"
+                "I2VA/FL2VA Base16 on paired SM86 or paired SM89, and Ref2VA "
+                "Turbo4/Turbo8, T2VA Turbo4, or I2VA/FL2VA Base16 on one SM89"
             )
         if "torch" in sys.modules and sys.modules["torch"].cuda.is_initialized():
             raise ContractError("select the Vflash GPU before initializing CUDA")
@@ -86,7 +88,18 @@ class NativeEngineSession:
                 plan.peer_device is not None
                 and (
                     plan.peer_device.uuid == plan.gpu_uuid
-                    or plan.target.compute_capability != "8.6"
+                    or (
+                        plan.target.compute_capability == "8.9"
+                        and (
+                            profile.id
+                            not in {
+                                "i2va-base16-bf16-sm89",
+                                "fl2va-base16-bf16-sm89",
+                            }
+                            or plan.parallel_strategy != "sequence-head"
+                        )
+                    )
+                    or plan.target.compute_capability not in {"8.6", "8.9"}
                 )
             )
         ):

@@ -17,7 +17,9 @@ Keep it installable from this repository alone, without external project paths o
 Inspect the current implementation and supported profiles before extending a surface. Preserve numerical evidence,
 licenses and attribution, but do not treat old module layout as a constraint. State the actual runnable boundary;
 the Python/container pipeline generates complete Ref4 videos from one to three ordered references on one SM89 GPU
-or a cooperating SM86 pair, and Base4 T2VA on one SM89 GPU. A single SM89 Ref4 pipeline also accepts one
+or a cooperating SM86 pair, and Base4 T2VA on one SM89 GPU. Preview Base16 I2VA/FL2VA assets may also use an
+explicit pair of matching SM89 48 GB GPUs with block-ring `sequence-head` execution; this is a bounded
+single-request latency option, not automatic scheduling or the throughput default. A single SM89 Ref4 pipeline also accepts one
 2–5 second visual-only video reference, without mixing images. Complete SM86 uses `sequence-head`; single-SM86
 and Turbo8 retain their latent interface. The current profile guide owns the supported boundary; archived release
 notes describe their original versions, not additional requirements for a new release.

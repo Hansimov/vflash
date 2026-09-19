@@ -48,8 +48,10 @@ def test_tampered_t2_sm86_plan_rejected_before_runtime(monkeypatch, tmp_path, st
         ("ref2va-turbo4-exact-sm86", "8.6", 20.0, "sequence-head", "block-ring"),
         ("t2va-turbo4-exact-sm86", "8.6", 20.0, "sequence-head", "block-ring"),
         ("i2va-base16-bf16-sm89", "8.9", 48.0, "single", "default"),
+        ("i2va-base16-bf16-sm89", "8.9", 48.0, "sequence-head", "block-ring"),
         ("i2va-base16-bf16-sm86", "8.6", 20.0, "sequence-head", "block-ring"),
         ("fl2va-base16-bf16-sm89", "8.9", 48.0, "single", "default"),
+        ("fl2va-base16-bf16-sm89", "8.9", 48.0, "sequence-head", "block-ring"),
         ("fl2va-base16-bf16-sm86", "8.6", 20.0, "sequence-head", "block-ring"),
     ],
 )

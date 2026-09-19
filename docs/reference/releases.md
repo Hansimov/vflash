@@ -2,6 +2,10 @@
 
 The current release is **0.3.2**: large-tensor index safety and native T2VA Turbo4 on two RTX 3080 20 GB GPUs. The standalone complete pipeline remains five seconds at 24 fps; its existing profiles and the new native-only qualification are listed in [complete profiles](./pipeline-profiles).
 
+## Current main · optional dual-SM89 Base16 latency path
+
+Preview Base16 keyframe profiles can use two matching RTX 4090 48 GB devices with `sequence-head` and block streaming. This is opt-in and does not change the single-GPU default. One fixed 10-second, 736 × 992 L2VA request completed in 484.232 seconds versus 774.153 seconds on one device, with byte-identical MP4 output, no thermal-slowdown samples and peak temperatures of 65/78°C at 450 W. The pair consumes more aggregate GPU time, so it is a latency path only when the second device would otherwise be idle; two ready requests retain higher throughput on two independent workers. Other SM89 profiles and `tensor` remain rejected.
+
 ## 0.3.2 · wide tensor offsets and dual-SM86 T2VA {#v0-3-2}
 
 [Source tag](https://github.com/Hansimov/vflash/tree/v0.3.2) · [Images and package identities](https://github.com/Hansimov/vflash/blob/v0.3.2/docker/images.json)

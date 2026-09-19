@@ -406,7 +406,7 @@ def _partition_invocation(
 
 
 class H3NativeDenoiserParallel:
-    """Two SM86 devices cooperatively execute one complete native request."""
+    """Two matching GPUs cooperatively execute one complete native request."""
 
     backend_id = "cuda-bf16-two-device-nccl-block-ring-v1"
 
@@ -421,17 +421,34 @@ class H3NativeDenoiserParallel:
     ) -> H3NativeDenoiserParallel:
         torch = _torch()
         devices = tuple(torch.device(device) for device in devices)
+        expected_capability = {
+            "sm86": (8, 6),
+            "sm89": (8, 9),
+        }.get(artifact.target.compute_capability)
         if (
             strategy not in {"tensor", "sequence-head"}
             or len(devices) != 2
             or devices[0] == devices[1]
-            or artifact.target.compute_capability != "sm86"
-            or any(torch.cuda.get_device_capability(device) != (8, 6) for device in devices)
+            or expected_capability is None
+            or any(
+                torch.cuda.get_device_capability(device) != expected_capability
+                for device in devices
+            )
+            or (
+                expected_capability == (8, 9)
+                and (
+                    strategy != "sequence-head"
+                    or artifact.weight_profile != "minimax-h3-base"
+                    or artifact.adapter_execution != "none"
+                )
+            )
             or artifact.spec.num_attention_heads % 2
             or (strategy == "sequence-head" and artifact.spec.num_attention_heads % 8)
             or artifact.spec.ffn_dim % 2
         ):
-            raise H3NativeDenoiserError("parallel execution requires two distinct SM86 devices")
+            raise H3NativeDenoiserError(
+                "parallel execution requires a qualified pair of matching devices"
+            )
         host_blocks: list[list[H3NativeBlockWeights]] = [[], []]
         with PinnedHostArena() as arena:
             for row in artifact.blocks:

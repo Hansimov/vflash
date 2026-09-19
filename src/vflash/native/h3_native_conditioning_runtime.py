@@ -199,7 +199,11 @@ class H3NativeConditioningRuntime:
         if parallel_strategy not in {"single", "tensor", "sequence-head"}:
             raise H3NativeConditioningRuntimeError("unknown parallel execution strategy")
         if weight_residency == "default":
-            weight_residency = "block-ring" if capability == (8, 6) else "resident"
+            weight_residency = (
+                "block-ring"
+                if capability == (8, 6) or parallel_strategy != "single"
+                else "resident"
+            )
         if weight_residency not in {"resident", "block-ring"} or (
             (capability == (8, 6) or parallel_strategy != "single")
             and weight_residency != "block-ring"
@@ -210,11 +214,11 @@ class H3NativeConditioningRuntime:
             if (
                 resolved_device.index != 0
                 or torch.cuda.device_count() != 2
-                or capability != (8, 6)
-                or torch.cuda.get_device_capability(1) != (8, 6)
+                or torch.cuda.get_device_capability(1) != capability
+                or (capability == (8, 9) and parallel_strategy != "sequence-head")
             ):
                 raise H3NativeConditioningRuntimeError(
-                    "parallel execution requires exactly two visible SM86 GPUs"
+                    "parallel execution requires exactly two visible matching GPUs"
                 )
             devices = (resolved_device, torch.device("cuda:1"))
             # Establish the complete device group before loading its weights.
@@ -269,11 +273,24 @@ class H3NativeConditioningRuntime:
             )
             or (
                 task in {"t2va", "i2va", "fl2va"}
-                and capability == (8, 6)
+                and (capability == (8, 6) or parallel_strategy != "single")
                 and (
                     parallel_strategy != "sequence-head"
                     or artifact.weight_profile not in {"lightx-turbo4-v1.0", "minimax-h3-base"}
+                    or (
+                        capability == (8, 9)
+                        and (
+                            task not in {"i2va", "fl2va"}
+                            or artifact.weight_profile != "minimax-h3-base"
+                            or artifact.adapter_execution != "none"
+                        )
+                    )
                 )
+            )
+            or (
+                capability == (8, 9)
+                and parallel_strategy != "single"
+                and task not in {"i2va", "fl2va"}
             )
             or (
                 expected_weight_profile is not None
@@ -455,7 +472,7 @@ class H3NativeConditioningRuntime:
                 and self.parallel_strategy == "single"
             ) or (
                 len(self.devices) == 2
-                and self.compute_capability == (8, 6)
+                and self.compute_capability in {(8, 6), (8, 9)}
                 and self.parallel_strategy == "sequence-head"
             )
             if (
@@ -470,7 +487,7 @@ class H3NativeConditioningRuntime:
                     else "FL2VA first-last-frame"
                 )
                 raise H3NativeConditioningRuntimeError(
-                    f"{mode} bundles require a qualified SM89 single or SM86 pair and "
+                    f"{mode} bundles require a qualified SM89 single or matching pair and "
                     "their Base16 schedule"
                 )
         validate_conditioning_source(bundle.source, self.artifact.source)

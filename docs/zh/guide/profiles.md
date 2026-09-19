@@ -74,4 +74,4 @@ Turbo4 和 Turbo8 都是蒸馏配置。减少步数可以降低计算量，但�
 
 ## 当前版本的边界 {#scope}
 
-[完整配置表](../reference/pipeline-profiles)列出已发布链路和当前 Base16 关键帧预览。L2VA 与 FL2VA 的 schema 和引擎合同已经实现，但 L2VA 的目标显卡延迟和成片质量尚未资格化。单 SM86 和 Turbo8 保留条件包到 latent 的接口。未列出的模式、LoRA、量化和时长帧率组合不在这些配置中。HTTP 接口一次串行执行一个任务；账号、计费和分布式 GPU 调度由接入 Vflash 的应用负责。
+[完整配置表](../reference/pipeline-profiles)列出已发布链路和当前 Base16 关键帧预览。L2VA 与 FL2VA 的 schema 和引擎合同已经实现。一个十秒、736 × 992 的 SM89 L2VA 案例已有目标显卡完成性、媒体完整性、端点和延迟对照的有界证据；更广泛的 L2VA 质量和其他形状仍未资格化。单 SM86 和 Turbo8 保留条件包到 latent 的接口。未列出的模式、LoRA、量化和时长帧率组合不在这些配置中。HTTP 接口一次串行执行一个任务；账号、计费和分布式 GPU 调度由接入 Vflash 的应用负责。

@@ -6,6 +6,11 @@ from vflash.catalog import ProfileCatalog
 from vflash.contracts import ContractError, ExecutionPlan, PeerDevice
 from vflash.hardware import NvidiaDevice
 
+SM89_SEQUENCE_HEAD_PROFILES = {
+    "i2va-base16-bf16-sm89",
+    "fl2va-base16-bf16-sm89",
+}
+
 
 def resolve_plan(
     catalog: ProfileCatalog,
@@ -39,15 +44,25 @@ def resolve_plan(
             f"(sm{device.compute_capability.replace('.', '')}, {device.memory_gib:.1f} GiB)"
         )
     target = max(candidates, key=lambda item: item.minimum_memory_gib)
-    if peer_device is not None and (
-        device.uuid == peer_device.uuid
-        or target.compute_capability != "8.6"
-        or peer_device.compute_capability != "8.6"
-        or peer_device.memory_gib < target.minimum_memory_gib
-    ):
-        raise ContractError(
-            "parallel execution requires two distinct SM86 GPUs with 20 GiB each"
+    if peer_device is not None:
+        valid_sm86 = target.compute_capability == "8.6" and strategy in {
+            "tensor",
+            "sequence-head",
+        }
+        valid_sm89 = (
+            target.compute_capability == "8.9"
+            and profile.id in SM89_SEQUENCE_HEAD_PROFILES
+            and strategy == "sequence-head"
         )
+        if (
+            device.uuid == peer_device.uuid
+            or peer_device.compute_capability != target.compute_capability
+            or peer_device.memory_gib < target.minimum_memory_gib
+            or not (valid_sm86 or valid_sm89)
+        ):
+            raise ContractError(
+                "parallel execution requires a qualified pair of distinct, matching GPUs"
+            )
     return ExecutionPlan(
         profile=profile,
         target=target,

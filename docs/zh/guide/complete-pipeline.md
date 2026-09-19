@@ -1,6 +1,6 @@
 # 生成视频
 
-Vflash 0.3.2 支持纯文字生成，也支持提示词加一至三张有序参考图，输出五秒 MP4。当前 main 还提供预览版官方 Base16 I2VA、L2VA 和 FL2VA 请求，分别输入一张明确的首帧、一张明确的尾帧，或同时输入首尾帧。连续请求使用 Python 接口，单次生成也可以使用容器命令行。完整链路支持单张 RTX 4090 48 GB 上的 T2VA Base4 和 Ref2VA Turbo4；Ref4 也支持双张 RTX 3080 20 GB。Base16 关键帧配置支持单张 RTX 4090 48 GB 或协作的双张 RTX 3080 20 GB。
+Vflash 0.3.2 支持纯文字生成，也支持提示词加一至三张有序参考图，输出五秒 MP4。当前 main 还提供预览版官方 Base16 I2VA、L2VA 和 FL2VA 请求，分别输入一张明确的首帧、一张明确的尾帧，或同时输入首尾帧。连续请求使用 Python 接口，单次生成也可以使用容器命令行。完整链路支持单张 RTX 4090 48 GB 上的 T2VA Base4 和 Ref2VA Turbo4；Ref4 也支持双张 RTX 3080 20 GB。Base16 关键帧配置支持单张 RTX 4090 48 GB、可选的双张匹配 RTX 4090 48 GB 协作，或协作的双张 RTX 3080 20 GB。
 
 单张 4090 的 Ref4 还支持[短视频参考](#reference-video)，同一实例可以交替处理图片和视频，无需切换权重。
 
@@ -8,7 +8,7 @@ Vflash 0.3.2 支持纯文字生成，也支持提示词加一至三张有序参�
 
 Vflash 负责原生去噪、模型生命周期、本地图像读取和 MP4 输出。文本和图像编码采用固定版本的 Diffusers 与 Transformers；Turbo 配置还使用 PEFT 适配器。音视频解码采用 H3 官方 VAE。它们是明确列出的依赖，不会被描述成新实现的原生内核。运行时不依赖 LightX2V 或业务服务。
 
-Turbo 请求使用四次去噪计算，并保留五秒合同；预览版 Base16 关键帧请求使用 16 次，接受五至十秒的整数时长并采用原生 24 fps 时钟。对应的模型帧/交付帧为：5 秒 124/120、6 秒 158/144、7 秒 175/168、8 秒 192/192、9 秒 226/216、10 秒 243/240。宽高必须是 32 的整数倍，画布总像素不超过 1,032,192（`1344 × 768` 的面积），宽高比在 1:4 至 4:1 之间。视频参考请求仍保留独立的 475,136 像素输出上限。这些是 API 天花板；服务端仍只能声明已在实际硬件上通过资格验证的时长与画布组合。提示词原样传入。Ref2VA 的一至三张图片按照传入顺序编号为 `<Picture 1>`、`<Picture 2>`、`<Picture 3>`，请在提示词中说明每张图的主体和用途。这些是视觉参考，不代表视频中的帧位置，也不是严格的关键帧约束。I2VA 输入第零帧锚点，L2VA 只输入尾帧锚点；这两种单图请求都可将图片称为 `<Picture 1>`。FL2VA 同时输入首尾锚点，提示词按时间顺序将其称为 `<Picture 1>` 和 `<Picture 2>`。I2VA/FL2VA 的五秒和十秒路径已有有界硬件实证；L2VA 与中间时长仍需在目标硬件上完成端到端资格验证。
+Turbo 请求使用四次去噪计算，并保留五秒合同；预览版 Base16 关键帧请求使用 16 次，接受五至十秒的整数时长并采用原生 24 fps 时钟。对应的模型帧/交付帧为：5 秒 124/120、6 秒 158/144、7 秒 175/168、8 秒 192/192、9 秒 226/216、10 秒 243/240。宽高必须是 32 的整数倍，画布总像素不超过 1,032,192（`1344 × 768` 的面积），宽高比在 1:4 至 4:1 之间。视频参考请求仍保留独立的 475,136 像素输出上限。这些是 API 天花板；服务端仍只能声明已在实际硬件上通过资格验证的时长与画布组合。提示词原样传入。Ref2VA 的一至三张图片按照传入顺序编号为 `<Picture 1>`、`<Picture 2>`、`<Picture 3>`，请在提示词中说明每张图的主体和用途。这些是视觉参考，不代表视频中的帧位置，也不是严格的关键帧约束。I2VA 输入第零帧锚点，L2VA 只输入尾帧锚点；这两种单图请求都可将图片称为 `<Picture 1>`。FL2VA 同时输入首尾锚点，提示词按时间顺序将其称为 `<Picture 1>` 和 `<Picture 2>`。I2VA/FL2VA 的五秒和十秒路径已有有界硬件实证。一个十秒、736 × 992 的 SM89 L2VA 案例现已有完成性、媒体完整性、端点和延迟对照的有界证据；更广泛的 L2VA 质量、其他画布与中间时长仍需在目标硬件上资格化。
 
 准备资产前先选择[固定模型配置](../reference/pipeline-profiles)。Ref2VA 使用 `transformer_ref` 与 Ref4 v0.1；T2VA 使用 `transformer` 与 Base4 v1.0；预览版关键帧请求使用官方 `transformer`，无 LoRA 执行 16 次计算。同一硬件上的成对 Base16 I2VA/FL2VA 配置具有完全相同的模型工件和调度，因此任一已准备的关键帧 pipeline 都能串行处理 I2VA、L2VA 和 FL2VA，无需重启 profile 或执行冷初始化。条件信息仍按实际请求模式生成；结果以 `profile_id` 保留已准备身份，并以 `request_mode` 记录实际输入类型。每次请求的阶段驻留仍遵循所选内存策略。其他配置会在执行前拒绝模式切换。
 
@@ -55,7 +55,7 @@ vflash generate \
   --output video.mp4 --trust-local-code
 ```
 
-Ref2VA 的 `--reference` 可以出现一至三次。T2VA 在准备时指定 `--profile t2va-turbo4-exact-sm89`，生成时不传图像参数。一个已准备的 SM89 或 SM86 Base16 关键帧配置可只传 `--first-frame first-frame.png` 生成 I2VA，只传 `--last-frame last-frame.png` 生成 L2VA，或同时传两者生成 FL2VA；`--duration` 接受 5–10 的整数秒，省略时仍为五秒。显式的 `i2va-*` 与 `fl2va-*` profile ID 继续用于稳定的准备和来源记录；L2VA 复用 FL2VA 权重，不增加重复 profile。关键帧不可与 `--reference` 混用；SM86 配置还须传入 `--peer-gpu 1 --strategy sequence-head`。Python 中，L2VA 使用 `VideoRequest(last_frame=Path("last-frame.png"), ...)`，FL2VA 使用 `VideoRequest(first_frame=Path("first-frame.png"), last_frame=Path("last-frame.png"), ...)`。
+Ref2VA 的 `--reference` 可以出现一至三次。T2VA 在准备时指定 `--profile t2va-turbo4-exact-sm89`，生成时不传图像参数。一个已准备的 SM89 或 SM86 Base16 关键帧配置可只传 `--first-frame first-frame.png` 生成 I2VA，只传 `--last-frame last-frame.png` 生成 L2VA，或同时传两者生成 FL2VA；`--duration` 接受 5–10 的整数秒，省略时仍为五秒。显式的 `i2va-*` 与 `fl2va-*` profile ID 继续用于稳定的准备和来源记录；L2VA 复用 FL2VA 权重，不增加重复 profile。关键帧不可与 `--reference` 混用；SM86 配置须传入 `--peer-gpu 1 --strategy sequence-head`，当前 main 也允许 SM89 Base16 关键帧配置用同样参数选择可选的双卡执行。Python 中，L2VA 使用 `VideoRequest(last_frame=Path("last-frame.png"), ...)`，FL2VA 使用 `VideoRequest(first_frame=Path("first-frame.png"), last_frame=Path("last-frame.png"), ...)`。
 
 默认交付仍保留官方 VAE 重建后的关键帧。设置 `keyframe_delivery_profile="exact-v1"` 或传入 `--keyframe-delivery-profile exact-v1` 后，解码阶段会恢复每个已提供的时间端点。图像先按照官方条件编码的拉伸几何，用 LANCZOS 调整到目标画布；端点在 H.264 量化前与输入一致，再用固定四帧线性过渡衔接模型运动。结果会记录实际策略和被修改的帧序号。这是一项显式交付策略，并不代表模型能在整个视频中保留同等精细度。
 
@@ -90,6 +90,8 @@ with H3Pipeline(prepared, device=devices[0], trust_local_code=True) as pipeline:
 原有的单图参数 `reference=Path(...)` 仍可使用；它与 `references=(...)` 二选一。
 
 使用双张 RTX 3080 20 GB 时，先准备 [SM86 资产](../reference/pipeline-profiles#sm86)，让进程仅看到这两张卡，并向 `H3Pipeline` 传入 `peer_device=devices[1], strategy="sequence-head"`。编码和解码使用 `devices[0]`，原生去噪使用双卡。单 SM86 或 `tensor` 完整链路会在模型加载前拒绝。命令行对应选项为 `--gpu 0 --peer-gpu 1 --strategy sequence-head`。
+
+当前 main 也允许 SM89 Base16 关键帧配置在恰好可见两张匹配 RTX 4090 48 GB 时使用同一组 Python 与命令行参数。这里只接受 `sequence-head`；两张卡共享同一 SM89 工件，并各自使用 block ring。一个固定的十秒、736 × 992 L2VA 请求把成功 `generate` 耗时从774.153秒降到484.232秒，输出 MP4 字节一致，但总共消耗968.464 GPU秒，而单卡为774.153 GPU秒。这只是有界的单请求低延迟结果，不是吞吐默认值；同时有两个待执行请求时，应使用两个独立单卡 worker。
 
 0.3.2 的构造函数只在 CPU 上检查配置；首次 `generate` 先完整读取、校验素材，再加载模型。服务可在接单前调用 `pipeline.prepare()` 预加载模型。重复调用会复用已有阶段，输入错误也不会销毁健康、已加载的实例。预加载不会执行条件编码或编译每种输入形状；首次使用仍可能产生算子准备成本。
 

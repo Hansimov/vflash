@@ -1,11 +1,11 @@
 # 开始使用
 
-安装 Vflash 后，可以检查显卡并选择配置。需要在单张 RTX 4090 48 GB 上生成视频，或使用双张 RTX 3080 20 GB 生成参考图视频时，请接着阅读[完整链路](./complete-pipeline)和[官方权重准备流程](./compile-weights)。下文介绍原生条件包接口。
+安装 Vflash 后，可以检查显卡并选择配置。需要在单张 RTX 4090 48 GB 上生成视频、用两张匹配的 48 GB 4090 可选加速 Base16 关键帧生成，或使用双张 RTX 3080 20 GB 生成参考图视频时，请接着阅读[完整链路](./complete-pipeline)和[官方权重准备流程](./compile-weights)。下文介绍原生条件包接口。
 
 ::: info 开始前请确认
 Python 链路和 `vflash generate` 在 SM89 上支持**纯文字、一至三张图片，或一段短视频参考 → 五秒 MP4**，双 SM86 也支持参考图完整生成。`denoise` 命令和 HTTP 服务使用**预编译条件包 → 音视频 latent**，包含已支持的 SM86 配置。模型需要明确下载和编译，不随软件包附带。
 
-当前 `main` 还预览官方 Base16 I2VA/L2VA/FL2VA 完整请求，接受五至十秒的整数时长。同一个已准备的 Base16 关键帧 pipeline 可输入首帧、尾帧或同时输入两者，无需重新加载权重。L2VA 与中间时长仍未在目标硬件上完成资格验证；Turbo 和视频参考的输出合同仍为五秒。
+当前 `main` 还预览官方 Base16 I2VA/L2VA/FL2VA 完整请求，接受五至十秒的整数时长。同一个已准备的 Base16 关键帧 pipeline 可输入首帧、尾帧或同时输入两者，无需重新加载权重。一个十秒、736 × 992 的 SM89 L2VA 案例已有完成性、媒体完整性、端点和延迟对照的有界证据；更广泛的 L2VA 质量以及其他时长/画布组合仍未资格化。Turbo 和视频参考的输出合同仍为五秒。
 :::
 
 ## 安装命令行工具 {#install}
@@ -69,7 +69,7 @@ vflash denoise ref2va-turbo4-exact-sm89 \
 
 命令会把视频和音频 latent 张量写入 `result.safetensors`，并打印 JSON 摘要。这些张量需要交给兼容的解码器；该文件还不是可播放的视频。
 
-## 用两张 3080 执行一个请求 {#parallel}
+## 用两张显卡执行一个请求 {#parallel}
 
 选择两张 RTX 3080 20 GB，继续使用相同的 SM86 Turbo4 资源：
 
@@ -86,7 +86,9 @@ vflash plan ref2va-turbo4-exact-sm86 --gpu 0 --peer-gpu 1 --strategy sequence-he
 
 两种方式均使用 BF16 权重、精确注意力和完整的四步调度。选择第二张卡后，默认策略是 `sequence-head`。实现说明见[双卡架构](../reference/architecture#parallel)。
 
-并行计算改变 GEMM 形状或归约顺序，**不保证与单卡逐位一致**。一个负载已通过完整 latent 与解码后视频、音频的基础检查，跨案例指令遵循质量仍待评测。测量边界与内存口径见[性能测量](../reference/performance#parallel)。
+当前 `main` 还允许已准备的 SM89 Base16 I2VA/FL2VA profile 使用两张匹配的 RTX 4090 48 GB。传入同样的 peer 参数，但只能选择 `sequence-head`；`tensor` 仍会被拒绝。两张卡从同一份已准备的 SM89 工件分块流入权重。这是优先降低单个请求延迟的可选路径；已有两个就绪请求时，不应取代两个独立 worker。
+
+并行计算改变 GEMM 形状或归约顺序，因此结果**不一定与单卡逐位一致**。一个负载已通过完整 latent 与解码后视频、音频的基础检查，跨案例指令遵循质量仍待评测。测量边界与内存口径见[性能测量](../reference/performance#parallel)。
 
 ## 复用已加载的模型 {#reuse}
 
