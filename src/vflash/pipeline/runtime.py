@@ -328,9 +328,7 @@ class H3Pipeline:
                 else {}
             )
             if request.keyframe_delivery_profile != "decoded":
-                media_options["keyframe_delivery_profile"] = (
-                    request.keyframe_delivery_profile
-                )
+                media_options["keyframe_delivery_profile"] = request.keyframe_delivery_profile
                 if request.mode in {"i2va", "fl2va"}:
                     media_options["first_frame"] = references[0].image
                 if request.mode == "l2va":

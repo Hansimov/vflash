@@ -603,17 +603,13 @@ class H3NativeConditioningRuntime:
                     if progress_callback is not None:
                         # A reported evaluation is complete on every cooperating GPU.
                         for selected in self.devices:
-                            fence_started = (
-                                time.perf_counter() if profile_denoise else 0.0
-                            )
+                            fence_started = time.perf_counter() if profile_denoise else 0.0
                             torch.cuda.synchronize(selected)
                             if profile_denoise:
                                 fence_seconds_by_device.append(
                                     time.perf_counter() - fence_started
                                 )
-                        callback_started = (
-                            time.perf_counter() if profile_denoise else 0.0
-                        )
+                        callback_started = time.perf_counter() if profile_denoise else 0.0
                         progress_callback(engine.evaluation_index, self.overlay.schedule.nfe)
                         if profile_denoise:
                             callback_seconds = time.perf_counter() - callback_started
@@ -631,9 +627,7 @@ class H3NativeConditioningRuntime:
                 fence_started = time.perf_counter() if profile_denoise else 0.0
                 torch.cuda.synchronize(selected)
                 if profile_denoise:
-                    final_fence_seconds_by_device.append(
-                        time.perf_counter() - fence_started
-                    )
+                    final_fence_seconds_by_device.append(time.perf_counter() - fence_started)
             if profile_denoise:
                 execution_seconds_to_final_fence = time.monotonic() - denoise_started
                 materialization_started = time.perf_counter()

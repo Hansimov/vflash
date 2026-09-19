@@ -16,6 +16,7 @@ from vflash.native.h3_parallel import (  # noqa: E402
     shard_h3_block,
 )
 from vflash.native.h3_parallel_relayout import (  # noqa: E402
+    H3ParallelRelayoutError,
     pack_attention_reference,
     pack_qkv_reference,
 )
@@ -141,6 +142,13 @@ def test_direct_relayout_cpu_fallback_matches_previous_materializations(monkeypa
 
     attention = torch.randn((2, 13, 2, 5), generator=generator)
     assert torch.equal(_pack_attention(attention, 14), pack_attention_reference(attention, 14))
+
+
+def test_direct_relayout_switch_fails_closed(monkeypatch):
+    monkeypatch.setenv("VFLASH_H3_DIRECT_RELAYOUT", "auto")
+    query = torch.zeros((1, 2, 8, 4))
+    with pytest.raises(H3ParallelRelayoutError, match="must be '0' or '1'"):
+        _pack_qkv(query, query, query, chunks=4)
 
 
 @pytest.mark.skipif(

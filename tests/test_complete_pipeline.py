@@ -218,9 +218,7 @@ def test_complete_pipeline_uses_persisted_conditioning_handoff(video_request, tm
 
 def test_complete_pipeline_forwards_opt_in_denoise_profile(video_request, tmp_path):
     pipeline, _events = _pipeline()
-    result = pipeline.generate(
-        video_request, tmp_path / "profiled.mp4", profile_denoise=True
-    )
+    result = pipeline.generate(video_request, tmp_path / "profiled.mp4", profile_denoise=True)
     assert result.stages["denoising"]["denoise_profile"] == {"enabled": True}
 
 
