@@ -160,6 +160,7 @@ html[lang='zh-CN'] .vf-home h1 { font-size: clamp(34px, 3.6vw, 48px); line-heigh
   .vf-home .vf-meta { margin-top: 20px; }
   .vf-card-body { padding: 20px; }
   .vf-card-heading { padding: 16px 20px; }
+  .vf-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .vf-home .vf-gpu-note { min-height: 0; }
   .vf-availability { padding: 20px 0; }
   .vf-guides { padding: 32px 0; }

@@ -2,6 +2,12 @@
 
 Generate a complete video with the [pipeline image](#pipeline), or run the native denoiser as a local HTTP service. The service accepts a compiled conditioning bundle and returns video and audio latents (tensors ready for decoding). It loads one profile and reuses it across serial requests.
 
+::: warning Image version
+The latest prebuilt Docker images remain **0.3.2**. Version 0.4.0 is published as source and a
+wheel; build its `runtime` or `pipeline` target locally to use Base16 keyframes, five-to-ten-second
+requests and the new exact two-GPU relayout. Do not infer 0.4.0 capabilities from a 0.3.2 image.
+:::
+
 ## Requirements {#requirements}
 
 Use Linux AMD64 with Docker Compose v2, NVIDIA Container Toolkit, and an NVIDIA driver compatible with the image's CUDA 13.0 runtime. You also need one supported GPU or a cooperating 3080 pair from the [hardware list](./profiles) and all four [runtime inputs](../reference/runtime-assets).
@@ -40,7 +46,7 @@ docker compose --env-file docker/.env -f docker/compose.yaml pull
 docker compose --env-file docker/.env -f docker/compose.yaml up -d --no-build
 ```
 
-Versioned images are published on [Docker Hub](https://hub.docker.com/r/hansimov/vflash/tags). Their immutable digests are recorded in [the image inventory](https://github.com/Hansimov/vflash/blob/v0.3.2/docker/images.json). Models stay mounted read-only; outputs and kernel caches use separate writable storage. To build locally, use `docker build --target runtime -t vflash:0.3.2 .` and select that image in your environment file.
+Versioned images are published on [Docker Hub](https://hub.docker.com/r/hansimov/vflash/tags). Their immutable digests are recorded in [the image inventory](https://github.com/Hansimov/vflash/blob/v0.3.2/docker/images.json). Models stay mounted read-only; outputs and kernel caches use separate writable storage. To build version 0.4.0 locally, use `docker build --target runtime -t vflash:0.4.0 .` and select that image in your environment file.
 
 The Compose configuration binds the API to **127.0.0.1:8000**. The engine has no built-in authentication. Keep this binding for local use, or put the API behind your application's authentication before allowing remote access.
 
@@ -90,7 +96,7 @@ Use one to three `--reference` arguments for Ref4. For T2VA, prepare Base4 asset
 
 For two RTX 3080 20 GB GPUs, use [SM86-compiled assets](../reference/pipeline-profiles#sm86) and add `--profile ref2va-turbo4-exact-sm86` to `prepare-pipeline`. In the generation command, replace `--gpus device=0` with `--gpus '"device=0,1"'` and add `--peer-gpu 1 --strategy sequence-head` after `--gpu 0`. Keep both cards assigned to this process until it exits. The primary owns encoding and decoding; the pair cooperates in denoising. These are complete-pipeline options, separate from the native HTTP Compose setup below.
 
-To build the complete image from the tagged source, run `docker build --target pipeline -t vflash:0.3.2-pipeline .` and substitute that local image name in the commands.
+To build the complete image from the v0.4.0 tagged source, run `docker build --target pipeline -t vflash:0.4.0-pipeline .` and substitute that local image name in the commands.
 
 The published images reuse the immutable 0.3.1 image layers and install the 0.3.2 wheel. The [release assets](https://github.com/Hansimov/vflash/releases/tag/v0.3.2) include that wheel and `Dockerfile.release`; [the inventory](https://github.com/Hansimov/vflash/blob/v0.3.2/docker/images.json) records its hash, dependency images and qualification. This avoids redownloading unchanged dependencies; the source Dockerfile above remains the full build recipe. For the published small-layer build, check out the inventory’s `implementation_revision` and place the attached wheel in `dist/` before using `Dockerfile.release`. The release tag adds documentation and the image inventory without changing runtime source.
 

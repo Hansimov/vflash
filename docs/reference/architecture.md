@@ -61,9 +61,28 @@ For a 3080 service focused on request latency, start with two GPUs using `sequen
 
 A paired session owns two device rings, two submitting CPU threads and a local NCCL group. `sequence-head` shares one host weight store, divides token rows for projections, then exchanges attention data so each device processes complete sequences for its assigned heads. `tensor` instead streams weight shards and reduces partial projections, including the LoRA branches. No global `torch.distributed` group or distributed launcher is required.
 
+The exact `sequence-head` path carries Q, K and V in four overlapped collective chunks. Direct
+Triton relayouts read the normalized tensors through their strides and write the destination-major
+send buffers once. The return path likewise merges four received buffers directly into global head
+order. This preserves the existing BF16 values and NCCL wire format while avoiding materialized
+stack, permutation and concatenation intermediates. It is independently exercised on SM86 and
+SM89; see [Sol-Engine alignment](./sol-engine-alignment).
+
 Both strategies preserve the complete profile and use event-protected buffers. A rank failure aborts its peer. Partitioning changes floating-point reduction order, so parallel output need not be bitwise identical to single-GPU output. See the [measured scope](./performance#parallel).
 
-Current `main` extends only Base16 I2VA/FL2VA on two matching SM89 48 GB devices to the same block-ring `sequence-head` implementation. Other SM89 profiles and `tensor` are rejected. The caller must still select both devices explicitly. This is a bounded latency option, not automatic scheduling or a throughput default; two independent workers remain preferable when two requests are ready.
+Version 0.4.0 extends only Base16 I2VA/L2VA/FL2VA on two matching SM89 48 GB devices to the same block-ring `sequence-head` implementation. Other SM89 profiles and `tensor` are rejected. The caller must still select both devices explicitly. This is a bounded latency option, not automatic scheduling or a throughput default; two independent workers remain preferable when two requests are ready.
+
+## Optimization admission {#optimization-admission}
+
+Vflash separates semantics-preserving layout and lifetime work from approximate model execution.
+An exact optimization keeps the selected profile's attention, precision, schedule and BF16 rounding
+contract. It still needs target-hardware and complete-request validation; a faster microkernel alone
+is insufficient.
+
+Approximate attention, cross-step caches, quantized communication and lower-precision linear
+compute require new explicit profiles. They remain default-off until decoded video and audio,
+stability, latency and rollback all pass on each supported architecture. Upstream results on a
+different GPU or step schedule are hypotheses, not qualification evidence.
 
 ## LoRA is part of the profile {#lora-execution}
 

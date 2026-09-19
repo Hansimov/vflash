@@ -5,7 +5,7 @@ Install Vflash to inspect your GPU and choose a supported profile. For complete 
 ::: info Before you begin
 The Python pipeline and `vflash generate` support **text, one to three images, or one short reference video → a five-second MP4** on SM89, plus reference-image generation on a cooperating SM86 pair. The `denoise` command and HTTP service accept **compiled conditioning → video/audio latents**, including the supported SM86 profiles. Model downloads and compilation are explicit steps; no weights are bundled with the package.
 
-Current `main` also previews official Base16 I2VA/L2VA/FL2VA complete requests at integer durations from five through ten seconds. A prepared Base16 keyframe pipeline accepts a first frame, a last frame, or both without reloading weights. One ten-second, 736 × 992 SM89 L2VA case has bounded completion, media-integrity, endpoint and latency evidence; broader L2VA quality and other duration/canvas combinations remain unqualified. Turbo and reference-video output remain five seconds.
+Version 0.4.0 also supports official Base16 I2VA/L2VA/FL2VA complete requests at integer durations from five through ten seconds. A prepared Base16 keyframe pipeline accepts a first frame, a last frame, or both without reloading weights. One ten-second, 736 × 992 SM89 L2VA case has bounded completion, media-integrity, endpoint and latency evidence; broader L2VA quality and other duration/canvas combinations remain unqualified. Turbo and reference-video output remain five seconds.
 :::
 
 ## Install the CLI {#install}
@@ -13,7 +13,7 @@ Current `main` also previews official Base16 I2VA/L2VA/FL2VA complete requests a
 Use Python 3.11 or newer. The base installation is lightweight and does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.3.2 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.4.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
@@ -86,7 +86,7 @@ Add the same `--gpu`, `--peer-gpu`, and `--strategy` options to `vflash denoise`
 
 Both strategies use BF16 weights, exact attention and the complete four-step schedule. Selecting a peer defaults to `sequence-head`. See [the architecture guide](../reference/architecture#parallel) for the implementation.
 
-Current `main` also accepts two matching RTX 4090 48 GB devices for a prepared SM89 Base16 I2VA/FL2VA profile. Pass the same peer options, but use `sequence-head`; `tensor` remains rejected. Both devices stream blocks from one prepared SM89 artifact. This opt-in path prioritizes one request's latency and should not replace two independent workers when two requests are ready.
+Version 0.4.0 also accepts two matching RTX 4090 48 GB devices for a prepared SM89 Base16 I2VA/L2VA/FL2VA profile. Pass the same peer options, but use `sequence-head`; `tensor` remains rejected. Both devices stream blocks from one prepared SM89 artifact. This opt-in path prioritizes one request's latency and should not replace two independent workers when two requests are ready.
 
 Parallel execution changes GEMM shapes or reduction order, so results **need not be bitwise identical to single-GPU execution**. Full latent and decoded-media smoke checks passed on one workload; cross-case instruction-quality qualification remains pending. See [performance measurement](../reference/performance#parallel) for scope and memory accounting.
 

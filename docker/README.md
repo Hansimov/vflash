@@ -4,6 +4,10 @@
 
 Use the [pipeline image](https://hansimov.github.io/vflash/guide/docker#pipeline) to generate a complete MP4 from text alone or a prompt and one to three references on SM89, or from references on two SM86 GPUs. The separate native HTTP service is described below.
 
+The latest prebuilt images are 0.3.2. Version 0.4.0 is available as source and a wheel; build the
+Docker targets from its tag for Base16 keyframes, five-to-ten-second requests and exact direct
+two-GPU relayouts.
+
 The service accepts compiled conditioning bundles and returns video and audio latents (tensors ready for decoding). It uses one GPU or a cooperating pair and reuses a loaded model across serial requests.
 
 You need Linux AMD64, Docker Compose v2, NVIDIA Container Toolkit, a CUDA 13.0-compatible driver, a supported GPU, and matching compiled runtime assets. The image does not contain model weights and serves the bundle-to-latent API. The separate [weights compiler](../docs/guide/compile-weights.md) prepares Ref4 assets for SM86/SM89 and Base4 assets for SM86/SM89; [complete MP4 generation](../docs/guide/complete-pipeline.md) uses the pipeline image or Python extra.

@@ -7,14 +7,14 @@
 | `ref2va-turbo4-exact-sm89` | 单张 RTX 4090 48 GB | 提示词加 1–3 张有序图片，或一段 2–5 秒视频 | `transformer_ref` | Ref Turbo4 v0.1，alpha 8 / rank 128 | 12 / 3 |
 | `ref2va-turbo4-exact-sm86` | 双张 RTX 3080 20 GB，`sequence-head` | 提示词加 1–3 张有序图片 | `transformer_ref` | Ref Turbo4 v0.1，alpha 8 / rank 128 | 12 / 3 |
 | `t2va-turbo4-exact-sm89` | 单张 RTX 4090 48 GB | 纯文字提示词 | `transformer` | Base Turbo4 v1.0，alpha 128 / rank 128 | 6 / 3 |
-| `i2va-base16-bf16-sm89`（预览） | 单张 RTX 4090 48 GB；可选匹配双卡 `sequence-head` | 提示词加一张明确的首帧 | `transformer` | 无 | 12 / 3 |
-| `i2va-base16-bf16-sm86`（预览） | 双张 RTX 3080 20 GB，`sequence-head` | 提示词加一张明确的首帧 | `transformer` | 无 | 12 / 3 |
-| `fl2va-base16-bf16-sm89`（预览） | 单张 RTX 4090 48 GB；可选匹配双卡 `sequence-head` | 提示词加明确的首帧和尾帧 | `transformer` | 无 | 12 / 3 |
-| `fl2va-base16-bf16-sm86`（预览） | 双张 RTX 3080 20 GB，`sequence-head` | 提示词加明确的首帧和尾帧 | `transformer` | 无 | 12 / 3 |
+| `i2va-base16-bf16-sm89` | 单张 RTX 4090 48 GB；可选匹配双卡 `sequence-head` | 提示词加一张明确的首帧 | `transformer` | 无 | 12 / 3 |
+| `i2va-base16-bf16-sm86` | 双张 RTX 3080 20 GB，`sequence-head` | 提示词加一张明确的首帧 | `transformer` | 无 | 12 / 3 |
+| `fl2va-base16-bf16-sm89` | 单张 RTX 4090 48 GB；可选匹配双卡 `sequence-head` | 提示词加明确的首帧和尾帧 | `transformer` | 无 | 12 / 3 |
+| `fl2va-base16-bf16-sm86` | 双张 RTX 3080 20 GB，`sequence-head` | 提示词加明确的首帧和尾帧 | `transformer` | 无 | 12 / 3 |
 
-已发布的 Turbo 配置使用四次计算、BF16 权重和独立的 LoRA 残差，并保留五秒合同；预览 Base16 profile 身份使用官方 Base Transformer，以 BF16、无 LoRA执行 16 次计算，支持五秒（`124 → 120`帧）或十秒（`243 → 240`帧），均为24 fps。默认仍为 SM89 Ref4。同一硬件目标上的成对 Base16 I2VA/FL2VA 配置具有完全相同的模型工件、调度和官方 FL2VA 条件工作流，因此一个已准备的 Base16 关键帧 pipeline 可串行接受 I2VA、L2VA 与 FL2VA 请求，无需重启 profile或执行冷初始化；每个请求仍生成与实际模式一致的条件 schema 和来源信息。L2VA 明确复用 FL2VA 权重 profile，不增加重复身份。已准备的 profile ID 继续作为 pipeline 与结果身份。每次请求的阶段驻留仍遵循完整 pipeline 选择的内存策略。Turbo、Ref2VA 和 T2VA 配置仍只接受各自模式。原生单 SM86 与 Turbo8 接口具有不同的[验证范围](../guide/profiles)。
+已发布的 Turbo 配置使用四次计算、BF16 权重和独立的 LoRA 残差，并保留五秒合同；Base16 profile 身份使用官方 Base Transformer，以 BF16、无 LoRA 执行 16 次计算，支持五秒（`124 → 120` 帧）或十秒（`243 → 240` 帧），均为 24 fps。默认仍为 SM89 Ref4。同一硬件目标上的成对 Base16 I2VA/FL2VA 配置具有完全相同的模型工件、调度和官方 FL2VA 条件工作流，因此一个已准备的 Base16 关键帧 pipeline 可串行接受 I2VA、L2VA 与 FL2VA 请求，无需重启 profile 或执行冷初始化；每个请求仍生成与实际模式一致的条件 schema 和来源信息。L2VA 明确复用 FL2VA 权重 profile，不增加重复身份。已准备的 profile ID 继续作为 pipeline 与结果身份。每次请求的阶段驻留仍遵循完整 pipeline 选择的内存策略。Turbo、Ref2VA 和 T2VA 配置仍只接受各自模式。原生单 SM86 与 Turbo8 接口具有不同的[验证范围](../guide/profiles)。
 
-## 准备预览版 Base16 I2VA
+## 准备 Base16 I2VA
 
 使用固定版本的官方 Base Transformer，省略 `--adapter` 来准备和编译权重，再创建通常的六字段完整链路记录。资产 JSON 中的 `adapter_path` 为 `null`，其余字段填写官方模型与解码器目录以及三项编译输出。
 
@@ -122,6 +122,6 @@ Base LoRA 的上游文件名包含 `fl2v`，本版验证的是其 T2VA 用法，
 
 ## 资源生命周期
 
-文件放到最终位置后，进行一次准备和哈希校验；启动读取本地记录，不再完整重读模型。0.3.2 可通过 `H3Pipeline.prepare()` 显式预加载，否则首次请求在 CPU 输入检查完成后加载模型，并保留以便复用；各阶段使用的显卡由上述配置决定。预加载不执行条件编码或准备所有输入形状。资产准备、模型加载、首次请求和重复请求应分别计时。取消正在执行的请求会关闭实例；继续生成前需要新建实例。
+文件放到最终位置后，进行一次准备和哈希校验；启动读取本地记录，不再完整重读模型。0.4.0 可通过 `H3Pipeline.prepare()` 显式预加载，否则首次请求在 CPU 输入检查完成后加载模型，并保留以便复用；各阶段使用的显卡由上述配置决定。预加载不执行条件编码或准备所有输入形状。资产准备、模型加载、首次请求和重复请求应分别计时。取消正在执行的请求会关闭实例；继续生成前需要新建实例。
 
 [参考视频输入](../guide/complete-pipeline#reference-video)复用单 SM89 Ref4 资产，已通过同一实例连续处理图片、视频、图片的完整验证。SM86 和 Turbo8 的视频参考仍不在支持范围内。

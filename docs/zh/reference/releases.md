@@ -1,10 +1,20 @@
 # 版本更新
 
-当前版本为 **0.3.2 正式版**：修复大张量索引越界，并新增双 RTX 3080 20 GB 原生 T2VA Turbo4。独立完整链路仍为五秒、24 fps；既有配置和新增原生集成的验证范围见[完整配置表](./pipeline-profiles)。
+当前版本为 **0.4.0 正式版**。它新增官方 Base16 首帧、尾帧和首尾帧生成，支持五至十秒；关键帧画布上限提升到约一百万像素，并新增可选的双 SM89 低延迟路径。精确双卡路径现使用 destination-major 直接重排，并分别在 SM86 和 SM89 上完成实测。
 
-## 当前 main · 可选双 SM89 Base16 低延迟路径
+## 0.4.0 · Base16 关键帧与 Sol-Engine 实测对齐 {#v0-4-0}
 
-预览版Base16关键帧配置可用两张匹配的RTX 4090 48 GB，以`sequence-head`和block streaming协作执行。该路径必须显式选择，不改变单卡默认值。一个固定的十秒736 × 992 L2VA请求耗时484.232秒，单卡对照为774.153秒；MP4输出字节一致，两张450W卡没有热降频样本，最高温度分别为65/78°C。双卡会消耗更多总GPU时间，所以仅在第二张卡本来会空闲时作为低延迟路径；已有两个待执行请求时，两个独立worker吞吐更高。其他SM89配置和`tensor`仍会被拒绝。
+[源码标签](https://github.com/Hansimov/vflash/tree/v0.4.0) · [Sol-Engine 对齐](./sol-engine-alignment)
+
+一个已准备的 Base16 pipeline 现在可以在不重新加载官方 Transformer 的情况下处理 I2VA、L2VA 和 FL2VA。它接受五至十秒的整数时长，固定 24 fps；画布最多 1,032,192 像素，宽高为 32 的倍数，宽高比介于 1:4 和 4:1。条件默认保留在内存中，仍可显式持久化以便重放。精确端点交付和有界音频交付属于引擎持有的媒体阶段。Turbo 和视频参考 profile 保留各自的五秒合同。
+
+两张匹配的 RTX 4090 48 GB 可以显式选择 block streaming 的 `sequence-head`，用于一个 Base16 请求。在固定的十秒、736 × 992 L2VA 负载上，双卡耗时 484.232 秒，前后两个单卡对照为 774.153 和 773.515 秒，三个 MP4 字节一致。37.4% 的延迟降低以相比双独立 worker 多 25.2% 的总设备时间为代价，因此仅在 peer 原本空闲时适用。其他 SM89 profile 和 `tensor` 继续被拒绝。
+
+协作路径用精确 Triton destination-major copy 替代 QKV 和返回 attention 的多次布局物化。在代表性 55,413-token shape 上，QKV copy 在 SM86/SM89 上分别快 2.429×/1.952×，返回 head 合并分别快 2.027×/1.932×；QKV 和 head 合并的操作峰值分别少 1,136.4 和 378.8 MiB，所有对照元素均一致。最终未开启 profile 的完整 A/B/A 在双 SM86 和双 SM89 上分别改善 1.503% 和 0.472%，压缩视频流一致。这是有价值的精确内存布局改进，并非完整视频的大幅提速；负载与媒体边界见[性能指南](./performance#direct-relayout)。
+
+本版将实现与 NVIDIA Sol-Engine 的固定修订 [`ca26dbd`](https://github.com/NVlabs/Sana/tree/ca26dbd2b7034cc90a64c093d715d99b0bfa5b7f) 对照。Vflash 只在 SM86/SM89 合同中采用精确重排机制；AdaLN 预计算和严格融合操作已在引擎中存在。SOL/BSA attention、跨步 cache、INT8/FP8 通信、SM100 专用 MXFP8 以及四步 FastH3 adapter 都不进入 exact 默认。上游 B300 或 50-step 结果不会被写成 Vflash 的提速数字。
+
+此外，新版还新增了显式启用的去噪阶段归因、内存条件捕获指标、fail-closed ring-copy 预校验和明确关键帧模式来源。实证只限于列出的目标显卡和工作负载，不代表所有时长/画布组合或广泛的语义与音频质量。模型权重仍是单独授权的输入。0.4.0 发布源码与 wheel；在独立通过镜像资格验证和发布清单前，0.3.2 仍是最新的预构建容器镜像。
 
 ## 0.3.2 · 宽索引与双 SM86 文生推理 {#v0-3-2}
 
@@ -152,6 +162,6 @@ python -m pip install -e .
 
 ## 能力状态 {#availability}
 
-公开包包含列表中的 **BF16 Ref2VA Turbo4 / Turbo8、SM89与双SM86 T2VA Turbo4 去噪器**，以及**单 SM89 或双 SM86 的 Ref4、单 SM89 的 T2VA Python / 容器完整链路**。官方权重编译器创建 SM86/SM89 的 Ref4，以及 SM86/SM89 的 Base4 资源，其他原生配置仍需匹配的已准备资产。容器镜像单独发布，不包含模型权重。
+公开包包含列表中的 **BF16 Ref2VA Turbo4 / Turbo8、SM89 与双 SM86 T2VA Turbo4 去噪器**，以及**单 SM89 或双 SM86 的 Ref4、单 SM89 的 T2VA、SM89 或双 SM86 的 Base16 I2VA/L2VA/FL2VA Python 完整链路**。匹配的双 SM89 还可显式选择 Base16 协作低延迟路径。官方权重编译器创建 SM86/SM89 的 Ref4 和 Base4 资源；Base16 关键帧 profile 使用其固定官方 Transformer 资产。最新预构建容器仍为 0.3.2，因此保留该版更窄的接口。模型权重不随包提供。
 
 新增模式、适配器和硬件分别完成安装、数值与解码检查后，才会进入支持列表。

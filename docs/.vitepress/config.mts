@@ -24,6 +24,9 @@ const sidebar = (zh = false) => {
         { text: zh ? '生成视频' : 'Generate a video', link: `${prefix}/guide/complete-pipeline` },
         { text: zh ? '编译官方权重' : 'Compile official weights', link: `${prefix}/guide/compile-weights` },
         { text: zh ? '测量性能与质量' : 'Measure speed and quality', link: `${prefix}/reference/performance` },
+        { text: zh ? 'Sol-Engine 对齐' : 'Sol-Engine alignment', link: `${prefix}/reference/sol-engine-alignment` },
+        { text: zh ? '故障排查' : 'Troubleshooting', link: `${prefix}/guide/troubleshooting` },
+        { text: zh ? '参与开发' : 'Contributing', link: `${prefix}/guide/contributing` },
       ],
     },
     {

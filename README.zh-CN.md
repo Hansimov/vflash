@@ -4,18 +4,26 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
-**0.3.2 正式版。** 使用纯文字、一至三张图片，或[一段参考视频](https://hansimov.github.io/vflash/zh/guide/complete-pipeline#reference-video)生成五秒 MP4。单张 RTX 4090 48 GB 支持这三种输入；双张 RTX 3080 20 GB 支持参考图生成。通过 [Python 或容器完整链路](https://hansimov.github.io/vflash/zh/guide/complete-pipeline)接入，运行资产可[从官方权重编译](https://hansimov.github.io/vflash/zh/guide/compile-weights)。原生 Python、CLI 和 HTTP 接口接收条件包并输出音视频 latent。
+**0.4.0 正式版。** 通过完整 Python 或容器 pipeline 生成同步视频和音频。Turbo profile 使用纯文字、
+一至三张图片或[一段短参考视频](https://hansimov.github.io/vflash/zh/guide/complete-pipeline#reference-video)
+生成五秒 MP4；官方 Base16 关键帧 profile 接受首帧、尾帧或两者，并支持五至十秒的整数时长。同一个
+prepared keyframe pipeline 可以在 I2VA、L2VA 和 FL2VA 之间切换，不重新加载权重。
 
-本版修复大型融合张量的整数索引溢出，并新增双 3080 原生 T2VA Turbo4。应用持有的阶段已完成五秒与十秒文生请求；独立 `H3Pipeline` 仍为五秒，新双 SM86 T2 配置尚未重跑这一包装的 GPU 链路。详见[验证边界](https://hansimov.github.io/vflash/zh/reference/releases#v0-3-2)。
+原生核心面向 RTX 3080 20 GB（SM86）和 RTX 4090 48 GB（SM89）。0.4.0 为双卡
+`sequence-head` 新增精确 destination-major 重排，保持 dense BF16 attention 和 collective wire
+合同，并给出与 NVIDIA Sol-Engine 的目标硬件实测对照。稀疏 attention、跨步 cache 和量化通信不进入
+exact 默认。详见[采用、暂缓和拒绝的机制](https://hansimov.github.io/vflash/zh/reference/sol-engine-alignment)。
 
-当前 `main` 还预览官方 Base16 I2VA、L2VA 和 FL2VA 完整请求，接受五至十秒的整数时长。同一个已经准备好的 Base16 关键帧 pipeline 可输入首帧、尾帧或同时输入两者，无需重新加载权重。I2VA/FL2VA 的五秒和十秒路径已有有界硬件核查；L2VA 与中间时长仍需在目标硬件上完成端到端资格验证。该预览不扩大 Turbo 或视频参考的五秒合同。
+十秒 Base16 边界在列出的硬件上已有有界完整请求证据，但不代表任意画布或提示词都得到保证。匹配的
+SM89 双卡是显式的单请求低延迟选项；两个独立 worker 仍是吞吐默认。Turbo 和视频参考继续保持各自的
+五秒合同。[查看资格边界](https://hansimov.github.io/vflash/zh/reference/releases#v0-4-0)。
 
 ## 检查运行环境
 
 需要 Python 3.11 或更新版本。基础安装不会下载模型权重或 PyTorch。
 
 ```bash
-git clone --branch v0.3.2 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.4.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
@@ -28,9 +36,10 @@ vflash plan ref2va-turbo4-exact-sm89 --gpu 0
 
 | 显卡配置 | 已发布配置 | 权重放置 |
 | --- | --- | --- |
-| 单 RTX 4090 48 GB | Ref2VA Turbo4 / Turbo8；T2VA Turbo4 | 默认常驻显存，也可选择分块加载 |
+| 单 RTX 4090 48 GB | Ref2VA Turbo4 / Turbo8；T2VA Turbo4；Base16 I2VA/L2VA/FL2VA | 原生核心默认常驻；完整 pipeline 使用分块加载 |
 | 单 RTX 3080 20 GB | Ref2VA Turbo4 | 从系统内存分块加载 |
-| 双 RTX 3080 20 GB | Ref2VA Turbo4；原生 T2VA Turbo4 | 共享主机权重，两卡协作执行 |
+| 双 RTX 3080 20 GB | Ref2VA Turbo4；T2VA Turbo4；Base16 I2VA/L2VA/FL2VA | 共享主机权重，协作 `sequence-head` |
+| 双 RTX 4090 48 GB | Base16 I2VA/L2VA/FL2VA | 可选的协作低延迟路径，不是吞吐默认 |
 
 使用双 3080 时，通过 `--peer-gpu 1` 显式选择第二张卡。T2VA 必须使用 `sequence-head`；原生 Ref4 也可选择 `tensor`。引擎不会自动占用其他显卡。
 
@@ -44,6 +53,8 @@ vflash plan ref2va-turbo4-exact-sm89 --gpu 0
 - [通过 Python 接入](https://hansimov.github.io/vflash/zh/guide/python)，在多个请求之间复用模型。
 - [启动 Docker 与 HTTP 服务](https://hansimov.github.io/vflash/zh/guide/docker)，使用独立 worker 和有容量限制的任务队列。
 - [测量性能与质量](https://hansimov.github.io/vflash/zh/reference/performance)，区分加载、推理和端到端成本。
+- [对照 Sol-Engine](https://hansimov.github.io/vflash/zh/reference/sol-engine-alignment)，只采用通过 SM86/SM89 实测的机制。
+- [排查问题](https://hansimov.github.io/vflash/zh/guide/troubleshooting)，在不削弱资源所有权检查的情况下定位启动、内存、双卡与输出故障。
 
 Turbo4 和 Turbo8 使用蒸馏 LoRA。精确注意力不保证基础模型的质量；不同显卡或并行策略也不保证逐位一致的结果。完整生成使用固定的 Ref4 或 T2VA Base4 v1.0 资产和会话。双 SM86 的 Ref4 必须使用 `sequence-head`；单 SM86 与 Turbo8 使用原生条件包接口。W8 以及任意适配器或模式切换不在支持范围内。请查看[验证范围](https://hansimov.github.io/vflash/zh/guide/profiles)。
 
@@ -56,7 +67,8 @@ pre-commit run --all-files
 pytest
 ```
 
-使用 `npm ci` 和 `npm run docs:build` 构建双语文档。代码职责见[贡献者地图](AGENTS.md)。
+使用 `npm ci` 和 `npm run docs:build` 构建双语文档。证据、隐私与发布要求见
+[参与开发](https://hansimov.github.io/vflash/zh/guide/contributing)和[贡献者地图](AGENTS.md)。
 
 ## 许可证
 

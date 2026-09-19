@@ -15,7 +15,7 @@ MiniMax H3 和可选 LoRA 权重各自遵循其许可证、使用规则和地域
 
 Vflash 基于 MiniMax 公开的 H3 架构和模型权重开发。LightX2V 的开放推理实现及 Turbo LoRA 为兼容性开发和性能对比提供了重要参考。
 
-运行时使用 [PyTorch](https://github.com/pytorch/pytorch)、[Triton](https://github.com/triton-lang/triton) 和 NVIDIA CUDA。同时感谢 [FlashAttention](https://github.com/Dao-AILab/flash-attention)、[CUTLASS](https://github.com/NVIDIA/cutlass)、[SageAttention](https://github.com/thu-ml/SageAttention)、[FastVideo](https://github.com/hao-ai-lab/FastVideo)、[Alibaba PAI](https://huggingface.co/alibaba-pai/MiniMax-H3-Acc-LoRAs) 和 [OpenVDN](https://huggingface.co/OpenVDN/vdn-minimax-h3) 社区为 H3 加速研究提供的工作。
+运行时使用 [PyTorch](https://github.com/pytorch/pytorch)、[Triton](https://github.com/triton-lang/triton) 和 NVIDIA CUDA。同时感谢 [NVIDIA Sol-Engine](https://github.com/NVlabs/Sana/tree/sol-engine)、[FlashAttention](https://github.com/Dao-AILab/flash-attention)、[CUTLASS](https://github.com/NVIDIA/cutlass)、[SageAttention](https://github.com/thu-ml/SageAttention)、[FastVideo](https://github.com/hao-ai-lab/FastVideo)、[Alibaba PAI](https://huggingface.co/alibaba-pai/MiniMax-H3-Acc-LoRAs) 和 [OpenVDN](https://huggingface.co/OpenVDN/vdn-minimax-h3) 为 H3 加速研究提供的工作。Vflash 的双卡直接重排采用了 Sol-Engine 描述的 destination-major 机制，并适配到自己的 collective 布局。[对齐页面](./sol-engine-alignment)明确记录了采用、暂缓和拒绝的项目。
 
 致谢不表示当前版本包含所有被提及的实现或 LoRA。实际可用范围见[配置与硬件](../guide/profiles)。
 

@@ -13,10 +13,10 @@ Ref2VA generates video and audio from reference conditioning. T2VA uses text con
 | RTX 3080 20 GB | `ref2va-turbo4-exact-sm86` | 4 | Streamed from host memory |
 | RTX 4090 48 GB | `t2va-turbo4-exact-sm89` | 4 | Resident; validation scope below |
 | Two RTX 3080 20 GB GPUs | `t2va-turbo4-exact-sm86` | 4 | Streamed; `sequence-head` only |
-| RTX 4090 48 GB | `i2va-base16-bf16-sm89` | 16 | Resident; preview |
-| Two RTX 3080 20 GB GPUs | `i2va-base16-bf16-sm86` | 16 | Streamed; `sequence-head` preview |
-| RTX 4090 48 GB | `fl2va-base16-bf16-sm89` | 16 | Resident; contract preview |
-| Two RTX 3080 20 GB GPUs | `fl2va-base16-bf16-sm86` | 16 | Streamed; `sequence-head` contract preview |
+| RTX 4090 48 GB | `i2va-base16-bf16-sm89` | 16 | Resident |
+| Two RTX 3080 20 GB GPUs | `i2va-base16-bf16-sm86` | 16 | Streamed; `sequence-head` |
+| RTX 4090 48 GB | `fl2va-base16-bf16-sm89` | 16 | Resident |
+| Two RTX 3080 20 GB GPUs | `fl2va-base16-bf16-sm86` | 16 | Streamed; `sequence-head` |
 
 The HTTP service defaults to Turbo4 on a 4090. To change profiles, restart the service with the selected profile and its matching assets.
 
@@ -74,4 +74,4 @@ The single-device 3080 profile has been checked for capacity and repeatable resu
 
 ## What is outside this release {#scope}
 
-The [complete profile table](../reference/pipeline-profiles) lists the released paths and current Base16 keyframe previews. The L2VA and FL2VA schemas and engine contracts are implemented. One ten-second, 736 × 992 SM89 L2VA case has bounded target-GPU completion, media-integrity, endpoint and latency evidence; broader L2VA quality and other shapes remain unqualified. Single-SM86 and Turbo8 remain native bundle-to-latents interfaces. Unlisted modes, adapters, quantization and temporal settings are outside these profiles. The HTTP API provides one serial denoising lane; account management, billing and distributed GPU scheduling belong to the application.
+The [complete profile table](../reference/pipeline-profiles) lists the released paths and Base16 keyframe profiles. The L2VA and FL2VA schemas and engine contracts are implemented. One ten-second, 736 × 992 SM89 L2VA case has bounded target-GPU completion, media-integrity, endpoint and latency evidence; broader L2VA quality and other shapes remain unqualified. Single-SM86 and Turbo8 remain native bundle-to-latents interfaces. Unlisted modes, adapters, quantization and temporal settings are outside these profiles. The HTTP API provides one serial denoising lane; account management, billing and distributed GPU scheduling belong to the application.

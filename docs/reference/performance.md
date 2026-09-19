@@ -62,7 +62,26 @@ A cooperating pair can reduce latency for one request; independent workers serve
 
 The published [a3 dual-3080 comparison](./benchmarks#sm86-parallel) measured a 1.725× speedup on one fixed workload. It retains its original software version, thermal observations and quality limits; it is not a speed guarantee for the current release or other workloads.
 
-Current `main` also has one controlled SM89 Base16 result: a fixed ten-second, 736 × 992 L2VA request took 774.153 and 773.515 seconds in the bracketing single-device controls, and 484.232 seconds on two devices. The 773.834-second control mean makes the paired reduction 37.4%. All three MP4 outputs were byte-identical. The paired run kept both 450 W cards at or below 78°C without thermal-slowdown samples; the second single-device control also recorded a 65.077°C maximum rolling ten-minute mean. Two serial paired requests would consume 968.464 device-seconds versus a 773.834-second mean makespan for two independent single-card requests, a 25.2% fleet penalty. This evidence qualifies an opt-in idle-peer latency path rather than a throughput default.
+Version 0.4.0 has one controlled SM89 Base16 result: a fixed ten-second, 736 × 992 L2VA request took 774.153 and 773.515 seconds in the bracketing single-device controls, and 484.232 seconds on two devices. The 773.834-second control mean makes the paired reduction 37.4%. All three MP4 outputs were byte-identical. The paired run kept both 450 W cards at or below 78°C without thermal-slowdown samples; the second single-device control also recorded a 65.077°C maximum rolling ten-minute mean. Two serial paired requests would consume 968.464 device-seconds versus a 773.834-second mean makespan for two independent single-card requests, a 25.2% fleet penalty. This evidence qualifies an opt-in idle-peer latency path rather than a throughput default.
+
+### Exact direct relayout boundary {#direct-relayout}
+
+Version 0.4.0 removes materialized layout chains from the two-device `sequence-head` path. Final
+unprofiled A/direct/A runs measured **174.776 → 172.149 seconds (1.503%)** for a five-second 512²
+I2VA request on dual SM86, and **474.669 → 472.429 seconds (0.472%)** for a ten-second 736 × 992
+L2VA request on dual SM89. The corresponding denoising reductions were 1.995% and 0.623%.
+
+A separate profiled SM89 A/direct/A measured a 0.662% complete-request and 0.801% denoising
+reduction. It showed QKV packing falling from about 4.51 to 2.13 seconds per rank and returned-head
+merge from about 1.38 to 0.67 seconds per rank over 800 profiled blocks. Flash-SDPA remained about
+223–235 seconds per rank and did not change, so the layout kernels are not the dominant bottleneck.
+
+At the representative 55,413-token shape, direct QKV packing saved 1,136.4 MiB of transient
+allocation and direct returned-head merge saved 378.8 MiB on both SM86 and SM89. Each was a 50%
+operation-peak reduction; they are separate operation peaks, not additive pipeline VRAM. Every
+operator comparison was element-equal and all complete A/B/A video elementary streams matched.
+Repeated official audio decoding varied in both controls and candidates. No large model or media
+file was hashed for these checks. See the [Sol-Engine alignment matrix](./sol-engine-alignment).
 
 ## Check output quality {#quality}
 

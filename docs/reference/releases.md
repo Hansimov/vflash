@@ -1,10 +1,20 @@
 # Release notes
 
-The current release is **0.3.2**: large-tensor index safety and native T2VA Turbo4 on two RTX 3080 20 GB GPUs. The standalone complete pipeline remains five seconds at 24 fps; its existing profiles and the new native-only qualification are listed in [complete profiles](./pipeline-profiles).
+The current release is **0.4.0**. It adds official Base16 first-frame, last-frame and first-plus-last-frame generation from five through ten seconds, raises the keyframe canvas ceiling to about one megapixel, and adds an opt-in two-SM89 latency path. The exact two-GPU path now uses direct destination-major relayouts measured independently on SM86 and SM89.
 
-## Current main · optional dual-SM89 Base16 latency path
+## 0.4.0 · Base16 keyframes and measured Sol-Engine alignment {#v0-4-0}
 
-Preview Base16 keyframe profiles can use two matching RTX 4090 48 GB devices with `sequence-head` and block streaming. This is opt-in and does not change the single-GPU default. One fixed 10-second, 736 × 992 L2VA request completed in 484.232 seconds versus 774.153 seconds on one device, with byte-identical MP4 output, no thermal-slowdown samples and peak temperatures of 65/78°C at 450 W. The pair consumes more aggregate GPU time, so it is a latency path only when the second device would otherwise be idle; two ready requests retain higher throughput on two independent workers. Other SM89 profiles and `tensor` remain rejected.
+[Source tag](https://github.com/Hansimov/vflash/tree/v0.4.0) · [Sol-Engine alignment](./sol-engine-alignment)
+
+One prepared Base16 pipeline can now process I2VA, L2VA and FL2VA requests without reloading the official transformer. It accepts integer durations from five through ten seconds at 24 fps and canvases up to 1,032,192 pixels, with dimensions divisible by 32 and aspect ratios from 1:4 through 4:1. Conditioning stays in memory by default; persisted bundles remain available for explicit replay. Exact endpoint delivery and bounded audio delivery are part of the owned media stage. Turbo and reference-video profiles retain their separate five-second contracts.
+
+Matching RTX 4090 48 GB devices can opt into `sequence-head` with block streaming for a single Base16 request. On one fixed ten-second, 736 × 992 L2VA workload, the paired path took 484.232 seconds versus 774.153 and 773.515 seconds in bracketing single-device controls. All three MP4 files were byte-identical. The 37.4% latency reduction costs 25.2% more aggregate device time than two independent workers, so the pair is only a latency choice when its peer would otherwise be idle. Other SM89 profiles and `tensor` remain rejected.
+
+The cooperative path replaces materialized QKV and returned-attention layout chains with exact Triton destination-major copies. At a representative 55,413-token shape, the QKV copy was 2.429× faster on SM86 and 1.952× faster on SM89; returned-head merge was 2.027× and 1.932× faster respectively. QKV and head-merge operation peaks fell by 1,136.4 and 378.8 MiB. Every compared element matched. Final unprofiled complete A/B/A requests improved by 1.503% on dual SM86 and 0.472% on dual SM89, with identical compressed video streams. These are useful exact memory-layout gains, not a large complete-video speedup; the workloads and media boundary are recorded in the [performance guide](./performance#direct-relayout).
+
+The implementation was compared with NVIDIA Sol-Engine at pinned revision [`ca26dbd`](https://github.com/NVlabs/Sana/tree/ca26dbd2b7034cc90a64c093d715d99b0bfa5b7f). Vflash adopts only the exact relayout mechanism for its SM86/SM89 contract. AdaLN precomputation and strict fused operations already existed in the engine. SOL/BSA attention, cross-step caches, INT8/FP8 communication, SM100-only MXFP8 compute and the four-step FastH3 adapter do not enter the exact defaults. Upstream B300 or 50-step results are not presented as Vflash speedups.
+
+The release also adds opt-in denoising phase attribution, live-conditioning capture metrics, fail-closed ring-copy validation and explicit keyframe-mode provenance. Its evidence is bounded to the listed target GPUs and workloads; it does not establish every duration/canvas combination or broad semantic and audio quality. Model weights remain separate licensed inputs. Version 0.4.0 is released as source and a wheel; the published 0.3.2 container images remain the latest prebuilt images until a separately qualified image inventory is published.
 
 ## 0.3.2 · wide tensor offsets and dual-SM86 T2VA {#v0-3-2}
 
@@ -152,6 +162,6 @@ Added explicit block streaming on a 4090 and completed-step callbacks for integr
 
 ## Availability {#availability}
 
-The package provides the listed **BF16 Ref2VA Turbo4/Turbo8, SM89 T2VA Turbo4 and dual-SM86 T2VA Turbo4 denoisers**, plus the **Ref4 Python/container pipeline on SM89 or dual SM86, and T2VA on SM89**. The official-weight compiler creates Ref4 assets for SM86/SM89 and Base4 assets for SM86/SM89. Other native profiles require matching prepared assets. Published container images are available separately; model weights are not bundled.
+The package provides the listed **BF16 Ref2VA Turbo4/Turbo8, SM89 T2VA Turbo4 and dual-SM86 T2VA Turbo4 denoisers**, plus the **Ref4 Python pipeline on SM89 or dual SM86, T2VA on SM89, and Base16 I2VA/L2VA/FL2VA on SM89 or dual SM86**. Matching SM89 devices have an opt-in cooperative Base16 latency path. The official-weight compiler creates Ref4 and Base4 assets for SM86/SM89; Base16 keyframe profiles use their fixed official transformer assets. The latest prebuilt containers remain 0.3.2 and therefore retain that release's narrower interface. Model weights are not bundled.
 
 New modes, adapters and hardware require their own installation, numerical and decoded-output checks before entering the support table.

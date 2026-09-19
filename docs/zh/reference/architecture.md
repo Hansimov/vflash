@@ -61,9 +61,24 @@ Ref4/T2VA 完整链路明确采用分块加载，让编码器、核心和 VAE �
 
 双卡会话管理两个显存缓冲环、两个提交计算的 CPU 线程和一个局部 NCCL 通信组。`sequence-head` 共享一份主机权重，投影时划分序列行，再交换注意力数据，让每张卡处理所分配注意力头的完整序列。`tensor` 则加载权重分片，归约各卡的投影结果，包括 LoRA 分支。无需全局 `torch.distributed` 状态或分布式启动器。
 
+精确 `sequence-head` 路径使用四个可重叠 collective 分块传输 Q、K、V。直接 Triton 重排按照
+normalized tensor 的 stride 读取，并一次写入 destination-major send buffer；返回路径也直接把四个
+received buffer 合并为全局 head 顺序。它不改变既有 BF16 数值和 NCCL wire layout，同时去掉 stack、
+permute 和 concat 的物化中间张量。该路径已分别在 SM86 与 SM89 上执行，详见
+[Sol-Engine 对齐](./sol-engine-alignment)。
+
 两种方式都执行完整配置，并以事件保护缓冲区。任一卡失败时会中止另一卡。分片改变浮点归约顺序，因此双卡结果不一定与单卡逐位相同；已测范围见[性能测量](./performance#parallel)。
 
-当前 `main` 仅将同一套 block-ring `sequence-head` 实现扩展到两张匹配的 SM89 48 GB 显卡上的 Base16 I2VA/FL2VA。其他 SM89 profile 和 `tensor` 会被拒绝，调用方仍必须显式选择两张卡。这是范围有限的低延迟选项，不是自动调度或默认吞吐策略；有两个就绪请求时，两个独立 worker 仍更合适。
+0.4.0 仅将同一套 block-ring `sequence-head` 实现扩展到两张匹配的 SM89 48 GB 显卡上的 Base16 I2VA/L2VA/FL2VA。其他 SM89 profile 和 `tensor` 会被拒绝，调用方仍必须显式选择两张卡。这是范围有限的低延迟选项，不是自动调度或默认吞吐策略；有两个就绪请求时，两个独立 worker 仍更合适。
+
+## 优化准入 {#optimization-admission}
+
+Vflash 把保持语义的布局/生命周期优化与近似模型执行分开。精确优化必须保持所选 profile 的 attention、
+精度、schedule 和 BF16 舍入合同；即便如此，仍需目标硬件和完整请求验证，单个更快的 microkernel 不足以晋级。
+
+近似 attention、跨步 cache、量化通信和低精度线性计算必须使用新的显式 profile。在每种受支持架构上的
+解码视频/音频、稳定性、延迟与回滚全部通过前，它们保持默认关闭。不同 GPU 或步数下的上游结果只能形成
+实验假设，不能成为本项目资格证据。
 
 ## LoRA 属于运行配置 {#lora-execution}
 

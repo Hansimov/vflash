@@ -4,18 +4,30 @@ Native **MiniMax H3 inference** for RTX 3080 20 GB and RTX 4090 48 GB. Vflash us
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
-**0.3.2.** Generate five-second MP4s from text, one to three images, or [a short reference video](https://hansimov.github.io/vflash/guide/complete-pipeline#reference-video). One RTX 4090 48 GB supports all three inputs; two RTX 3080 20 GB GPUs support image references. Use the [Python or container pipeline](https://hansimov.github.io/vflash/guide/complete-pipeline), with [assets compiled from official weights](https://hansimov.github.io/vflash/guide/compile-weights). The native Python, CLI and HTTP interfaces accept conditioning bundles and return audio/video latents.
+**0.4.0.** Generate synchronized video and audio through a complete Python or container pipeline.
+Turbo profiles create five-second MP4s from text, one to three images, or
+[a short reference video](https://hansimov.github.io/vflash/guide/complete-pipeline#reference-video).
+Official Base16 keyframe profiles accept a first frame, a last frame, or both, at integer durations
+from five through ten seconds. One prepared keyframe pipeline can switch among I2VA, L2VA and FL2VA
+without reloading weights.
 
-This release fixes integer-offset overflow in large fused tensors and adds native T2VA Turbo4 on two 3080s. Application-owned stages completed five- and ten-second T2 requests; the standalone `H3Pipeline` remains five seconds and has not been rerun on the new dual-SM86 T2 profile. See [the qualification boundary](https://hansimov.github.io/vflash/reference/releases#v0-3-2).
+The native core targets RTX 3080 20 GB (SM86) and RTX 4090 48 GB (SM89). Version 0.4.0 adds exact
+destination-major relayouts for two-GPU `sequence-head`, preserves the dense BF16 attention and
+collective wire contract, and documents a hardware-measured comparison with NVIDIA Sol-Engine.
+Sparse attention, cross-step caches and quantized communication remain outside the exact defaults.
+See [what was adopted, deferred or rejected](https://hansimov.github.io/vflash/reference/sol-engine-alignment).
 
-Current `main` additionally previews official Base16 I2VA, L2VA and FL2VA complete requests at integer durations from five through ten seconds. A single prepared Base16 keyframe pipeline accepts a first frame, a last frame, or both without reloading weights. Five- and ten-second I2VA/FL2VA paths have completed bounded hardware checks. One ten-second, 736 × 992 SM89 L2VA case also has bounded completion, media-integrity, endpoint and latency evidence; broader L2VA quality and other duration/canvas combinations still require qualification. Matching SM89 Base16 devices may opt into a two-GPU `sequence-head` latency path; independent workers remain the throughput default. This preview does not expand the five-second Turbo or reference-video contracts.
+The ten-second Base16 boundary has bounded complete-request evidence on the listed hardware, but it
+is not a guarantee for every canvas or prompt. A matching SM89 pair is an explicit single-request
+latency option; two independent workers remain the throughput default. Turbo and reference-video
+profiles retain their separate five-second contracts. [Read the qualification boundary](https://hansimov.github.io/vflash/reference/releases#v0-4-0).
 
 ## Check your setup
 
 Python 3.11 or newer is required. The base install does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.3.2 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.4.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
@@ -28,9 +40,10 @@ vflash plan ref2va-turbo4-exact-sm89 --gpu 0
 
 | GPU configuration | Released profiles | Weight placement |
 | --- | --- | --- |
-| One RTX 4090 48 GB | Ref2VA Turbo4 / Turbo8; T2VA Turbo4 | Resident by default; optional block streaming |
+| One RTX 4090 48 GB | Ref2VA Turbo4 / Turbo8; T2VA Turbo4; Base16 I2VA/L2VA/FL2VA | Resident native core; complete pipeline uses block streaming |
 | One RTX 3080 20 GB | Ref2VA Turbo4 | Streamed from host RAM |
-| Two RTX 3080 20 GB GPUs | Ref2VA Turbo4; native T2VA Turbo4 | Shared host weights; cooperative execution |
+| Two RTX 3080 20 GB GPUs | Ref2VA Turbo4; T2VA Turbo4; Base16 I2VA/L2VA/FL2VA | Shared host weights; cooperative `sequence-head` |
+| Two RTX 4090 48 GB GPUs | Base16 I2VA/L2VA/FL2VA | Opt-in cooperative latency path; not the throughput default |
 
 For a cooperating 3080 pair, select the peer explicitly with `--peer-gpu 1`. T2VA requires `sequence-head`; native Ref4 also offers `tensor`. The engine never selects another device automatically.
 
@@ -43,6 +56,8 @@ For the native denoiser, allow **64 GiB or more of available system memory per w
 - [Integrate through Python](https://hansimov.github.io/vflash/guide/python) and reuse a loaded model across requests.
 - [Start Docker and HTTP](https://hansimov.github.io/vflash/guide/docker) for an isolated worker and bounded job queue.
 - [Measure speed and quality](https://hansimov.github.io/vflash/reference/performance), with loading and end-to-end costs kept separate.
+- [Compare Sol-Engine mechanisms](https://hansimov.github.io/vflash/reference/sol-engine-alignment) against the actual SM86/SM89 contract.
+- [Troubleshoot](https://hansimov.github.io/vflash/guide/troubleshooting) startup, memory, dual-GPU and output problems without weakening ownership checks.
 
 Turbo4 and Turbo8 are distilled adapters. Exact attention is not a base-model quality guarantee, and different GPU or parallel configurations need not produce bitwise-identical results. Complete generation uses fixed Ref4 or T2VA Base4 v1.0 assets and sessions. Dual-SM86 Ref4 requires `sequence-head`; single-SM86 and Turbo8 use the native latent interface. W8 and arbitrary adapter or mode switching are outside the supported profiles. Read [the validation scope](https://hansimov.github.io/vflash/guide/profiles).
 
@@ -55,7 +70,9 @@ pre-commit run --all-files
 pytest
 ```
 
-Build the bilingual docs with `npm ci` and `npm run docs:build`. See [the contributor map](AGENTS.md) for code ownership.
+Build the bilingual docs with `npm ci` and `npm run docs:build`. See the
+[contribution guide](https://hansimov.github.io/vflash/guide/contributing) and [contributor map](AGENTS.md)
+for evidence, privacy and release requirements.
 
 ## License
 
