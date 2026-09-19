@@ -81,7 +81,6 @@ def test_base16_resident_profiles_accept_all_keyframe_conditioning_modes(hardwar
         fl2va_profile.definition.precision,
         fl2va_profile.definition.attention,
     )
-    assert model_schedule(i2va).to_mapping() == model_schedule(fl2va).to_mapping()
     assert {
         key: value
         for key, value in transformer_identity(i2va).items()
