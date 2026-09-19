@@ -8,11 +8,16 @@ from vflash.native.h3_native_denoiser import (  # noqa: E402
     H3NativeBlockWeights,
 )
 from vflash.native.h3_parallel import (  # noqa: E402
+    _merge_attention,
     _pack_attention,
     _pack_qkv,
     _unpack_attention,
     _unpack_qkv,
     shard_h3_block,
+)
+from vflash.native.h3_parallel_relayout import (  # noqa: E402
+    pack_attention_reference,
+    pack_qkv_reference,
 )
 
 
@@ -124,6 +129,39 @@ def test_sequence_head_exchange_restores_tokens_and_excludes_padding(rows, chunk
         *(tensor.transpose(1, 2) for tensor in tensors)
     ).transpose(1, 2)
     torch.testing.assert_close(actual, expected)
+
+
+def test_direct_relayout_cpu_fallback_matches_previous_materializations(monkeypatch):
+    monkeypatch.setenv("VFLASH_H3_DIRECT_RELAYOUT", "1")
+    generator = torch.Generator().manual_seed(319)
+    query, key, value = [torch.randn((2, 7, 16, 5), generator=generator) for _ in range(3)]
+    assert torch.equal(
+        _pack_qkv(query, key, value, chunks=4), pack_qkv_reference(query, key, value, chunks=4)
+    )
+
+    attention = torch.randn((2, 13, 2, 5), generator=generator)
+    assert torch.equal(_pack_attention(attention, 14), pack_attention_reference(attention, 14))
+
+
+@pytest.mark.skipif(
+    not torch.cuda.is_available(), reason="CUDA is required for Triton relayout"
+)
+def test_direct_relayout_cuda_is_bit_exact(monkeypatch):
+    monkeypatch.setenv("VFLASH_H3_DIRECT_RELAYOUT", "1")
+    generator = torch.Generator(device="cuda").manual_seed(711)
+    tensors = [
+        torch.randn((1, 19, 32, 16), generator=generator, device="cuda", dtype=torch.bfloat16)
+        for _ in range(3)
+    ]
+    packed = _pack_qkv(*tensors, chunks=4)
+    assert torch.equal(packed, pack_qkv_reference(*tensors, chunks=4))
+
+    attention = torch.randn(
+        (1, 37, 4, 16), generator=generator, device="cuda", dtype=torch.bfloat16
+    )
+    sent = [_pack_attention(attention + index, 38) for index in range(4)]
+    reference = _unpack_attention(torch.cat(sent, dim=3))
+    assert torch.equal(_merge_attention(sent), reference)
 
 
 def test_failed_rank_aborts_waiting_peer_and_rejects_reuse(monkeypatch):

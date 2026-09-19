@@ -89,14 +89,9 @@ def shard_h3_block(
 
 
 def _pack_qkv(query: Any, key: Any, value: Any, *, chunks: int = 1) -> Any:
-    torch = _torch()
-    batch, rows, heads, width = query.shape
-    return (
-        torch.stack((query, key, value), dim=0)
-        .reshape(3, batch, rows, 2, chunks, heads // (2 * chunks), width)
-        .permute(4, 3, 0, 1, 2, 5, 6)
-        .contiguous()
-    )
+    from vflash.native.h3_parallel_relayout import pack_qkv
+
+    return pack_qkv(query, key, value, chunks=chunks)
 
 
 def _unpack_qkv(received: Any, total_rows: int) -> tuple[Any, Any, Any]:
@@ -106,21 +101,20 @@ def _unpack_qkv(received: Any, total_rows: int) -> tuple[Any, Any, Any]:
 
 
 def _pack_attention(attention: Any, padded_rows: int) -> Any:
-    import torch.nn.functional as functional
+    from vflash.native.h3_parallel_relayout import pack_attention
 
-    batch, rows, heads, width = attention.shape
-    if rows != padded_rows:
-        attention = functional.pad(attention, (0, 0, 0, 0, 0, padded_rows - rows))
-    return (
-        attention.reshape(batch, 2, padded_rows // 2, heads, width)
-        .permute(1, 0, 2, 3, 4)
-        .contiguous()
-    )
+    return pack_attention(attention, padded_rows)
 
 
 def _unpack_attention(received: Any) -> Any:
     _, batch, rows, heads, width = received.shape
     return received.permute(1, 2, 0, 3, 4).reshape(batch, rows, heads * 2, width).contiguous()
+
+
+def _merge_attention(received: list[Any]) -> Any:
+    from vflash.native.h3_parallel_relayout import merge_attention
+
+    return merge_attention(received)
 
 
 class _SequenceHeadBlock(H3NativeBlockBF16Resident):
@@ -167,7 +161,7 @@ class _SequenceHeadBlock(H3NativeBlockBF16Resident):
                 outbound.append(self.group.alltoall_base(received, sent, [], []))
             for work in outbound:
                 work.wait()
-            return _unpack_attention(torch.cat(receives, dim=3))
+            return _merge_attention(receives)
 
         def exchange(receive: Any, send: Any) -> Any:
             started = time.perf_counter()
@@ -213,7 +207,7 @@ class _SequenceHeadBlock(H3NativeBlockBF16Resident):
         for work in outbound:
             complete(work)
         outbound_wait_end = event() if attention_profile is not None else None
-        output = _unpack_attention(torch.cat(receives, dim=3))
+        output = _merge_attention(receives)
         if attention_profile is not None:
             attention_profile["outbound_ready_wait"] = (
                 outbound_wait_start,
