@@ -5,6 +5,7 @@ from __future__ import annotations
 import gc
 import hashlib
 import time
+from contextlib import nullcontext
 from importlib.metadata import version
 from pathlib import Path
 from traceback import clear_frames
@@ -41,7 +42,7 @@ from vflash.pipeline.assets import (
     canonical_sha256,
     conditioning_source,
 )
-from vflash.pipeline.contracts import VideoRequest
+from vflash.pipeline.contracts import ConditioningReuseScope, VideoRequest
 from vflash.pipeline.residency import capture_cpu_master, restore_cpu_master
 
 
@@ -107,12 +108,17 @@ class DiffusersConditioner:
         self._cpu_masters: tuple[tuple[Any, Any], ...] = ()
         self._text_groups: tuple[Any, ...] = ()
         self._onload_handle = None
+        self._encoding_reuse = None
         self.last_capture_diagnostics: dict[str, Any] = {}
         self._offload_installed = self._cuda_active = self._cuda_touched = False
         self._closed = self._released = False
         started = time.monotonic()
         try:
             self._load_components()
+            if self.profile.workflow == "fl2va":
+                from vflash.adapters.conditioning_reuse import H3CleanConditioningReuse
+
+                self._encoding_reuse = H3CleanConditioningReuse(self)
         except BaseException as exc:
             self.close()
             clear_frames(exc.__traceback__)
@@ -332,20 +338,36 @@ class DiffusersConditioner:
         request: VideoRequest,
         references: tuple[DecodedReference | DecodedVideoReference, ...],
         directory: Path,
+        *,
+        reuse_scope: ConditioningReuseScope | None = None,
     ) -> H3ConditioningBundle:
         """Materialize a content-bound bundle for an external or persisted boundary."""
 
-        return self._capture(request, references, directory, in_memory=False)
+        return self._capture(
+            request,
+            references,
+            directory,
+            in_memory=False,
+            reuse_scope=reuse_scope,
+        )
 
     def capture_in_memory(
         self,
         request: VideoRequest,
         references: tuple[DecodedReference | DecodedVideoReference, ...],
         directory: Path,
+        *,
+        reuse_scope: ConditioningReuseScope | None = None,
     ) -> H3InMemoryConditioning:
         """Capture a one-shot same-process payload for the complete pipeline."""
 
-        return self._capture(request, references, directory, in_memory=True)
+        return self._capture(
+            request,
+            references,
+            directory,
+            in_memory=True,
+            reuse_scope=reuse_scope,
+        )
 
     def _capture(
         self,
@@ -354,6 +376,7 @@ class DiffusersConditioner:
         directory: Path,
         *,
         in_memory: bool,
+        reuse_scope: ConditioningReuseScope | None,
     ) -> H3ConditioningBundle | H3InMemoryConditioning:
         total_started = time.monotonic()
         total_counters = _process_counters()
@@ -385,18 +408,40 @@ class DiffusersConditioner:
             raise ContractError("decoded reference modality differs from the request")
         if directory.exists() and any(directory.iterdir()):
             raise ContractError("conditioning output must be a new or empty directory")
+        reuse = getattr(self, "_encoding_reuse", None)
+        if reuse_scope is not None and reuse is None:
+            raise ContractError(
+                "this conditioning profile does not support clean encoding reuse"
+            )
+        if reuse is not None:
+            reuse.observe_scope(reuse_scope)
+        reuse_context = (
+            reuse.capture(reuse_scope, request, references)
+            if reuse_scope is not None
+            else nullcontext(
+                {
+                    "mode": "off",
+                    "status": "disabled",
+                    "cached_bytes": 0,
+                    "encoder_calls": {},
+                }
+            )
+        )
         capture = H3ConditioningCaptureSession(directory)
         try:
             capture.install(self.transformer)
             invoke_started = time.monotonic()
             invoke_counters = _process_counters()
-            try:
-                self._invoke(request, references)
-            except H3ConditioningCaptureComplete as complete:
-                self._torch.cuda.synchronize(self.device)
-                clear_frames(complete.__traceback__)
-            else:
-                raise ContractError("the official conditioner did not stop before denoising")
+            with reuse_context as reuse_report:
+                try:
+                    self._invoke(request, references)
+                except H3ConditioningCaptureComplete as complete:
+                    self._torch.cuda.synchronize(self.device)
+                    clear_frames(complete.__traceback__)
+                else:
+                    raise ContractError(
+                        "the official conditioner did not stop before denoising"
+                    )
             official_pipeline_seconds = time.monotonic() - invoke_started
             after_invoke_counters = _process_counters()
             metadata_started = time.monotonic()
@@ -540,6 +585,7 @@ class DiffusersConditioner:
                 "metadata_seconds": metadata_seconds,
                 "finish_seconds": finish_seconds,
                 "finish_stage_seconds": dict(getattr(capture, "finish_stage_seconds", {})),
+                "conditioning_reuse": dict(reuse_report),
                 "process_deltas": {
                     "total": _counter_delta(total_counters, after_finish_counters),
                     "official_pipeline": _counter_delta(invoke_counters, after_invoke_counters),
@@ -547,6 +593,10 @@ class DiffusersConditioner:
                 },
             }
             return result
+        except BaseException:
+            if reuse is not None:
+                reuse.clear()
+            raise
         finally:
             capture.discard()
 
@@ -569,8 +619,11 @@ class DiffusersConditioner:
                         "group_offloading",
                     ):
                         registry.remove_hook(name, recurse=False)
+        encoding_reuse = getattr(self, "_encoding_reuse", None)
+        if encoding_reuse is not None:
+            encoding_reuse.clear()
         self._cpu_masters = self._text_groups = ()
-        self.pipe = self.transformer = self._reference_setup = None
+        self.pipe = self.transformer = self._reference_setup = self._encoding_reuse = None
         self._cuda_active = self._cuda_touched = False
         self._released = True
         gc.collect()

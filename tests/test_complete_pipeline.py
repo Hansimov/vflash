@@ -9,7 +9,7 @@ import pytest
 
 from vflash.contracts import ContractError
 from vflash.native.h3_conditioning_bundle import H3ConditioningProfile
-from vflash.pipeline.contracts import VideoRequest
+from vflash.pipeline.contracts import ConditioningReuseScope, VideoRequest
 from vflash.pipeline.runtime import H3Pipeline
 
 
@@ -214,6 +214,33 @@ def test_complete_pipeline_uses_persisted_conditioning_handoff(video_request, tm
     assert result.stages["encoding"]["conditioning_transport"] == "persisted-file"
     assert result.stages["encoding"]["conditioning_tensor_bytes"] is None
     assert result.stages["encoding"]["capture_diagnostics"]["finish_seconds"] == 0.2
+
+
+def test_complete_pipeline_forwards_only_a_typed_conditioning_reuse_scope(
+    video_request, tmp_path
+):
+    pipeline, _events = _pipeline()
+    observed = []
+    original = pipeline._conditioner.capture
+
+    def capture(request, references, directory, *, reuse_scope=None):
+        observed.append(reuse_scope)
+        return original(request, references, directory)
+
+    pipeline._conditioner.capture = capture
+    scope = ConditioningReuseScope("request-siblings-0123456789")
+    pipeline.generate(
+        video_request,
+        tmp_path / "scoped.mp4",
+        conditioning_reuse_scope=scope,
+    )
+    assert observed == [scope]
+    with pytest.raises(ContractError, match="typed opaque scope"):
+        pipeline.generate(
+            video_request,
+            tmp_path / "untyped.mp4",
+            conditioning_reuse_scope="request-siblings-0123456789",
+        )
 
 
 def test_complete_pipeline_forwards_opt_in_denoise_profile(video_request, tmp_path):

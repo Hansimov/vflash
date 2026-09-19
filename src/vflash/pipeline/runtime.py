@@ -24,6 +24,7 @@ from vflash.model_assets import model_profile, supported_request_modes
 from vflash.native.runner import NativeEngineSession
 from vflash.pipeline.assets import PreparedPipelineAssets
 from vflash.pipeline.contracts import (
+    ConditioningReuseScope,
     PipelineProgress,
     VideoRequest,
     VideoResult,
@@ -157,6 +158,7 @@ class H3Pipeline:
         *,
         progress: Callable[[PipelineProgress], None] | None = None,
         profile_denoise: bool = False,
+        conditioning_reuse_scope: ConditioningReuseScope | None = None,
     ) -> VideoResult:
         """Return a complete MP4; failed or concurrent requests never publish a partial file."""
         started = time.monotonic()
@@ -164,6 +166,10 @@ class H3Pipeline:
             raise ContractError("the pipeline is closed")
         if not isinstance(request, VideoRequest) or not isinstance(output_path, Path):
             raise ContractError("generate requires a VideoRequest and pathlib.Path output")
+        if conditioning_reuse_scope is not None and not isinstance(
+            conditioning_reuse_scope, ConditioningReuseScope
+        ):
+            raise ContractError("conditioning reuse requires a typed opaque scope")
         if request.mode not in supported_request_modes(self.profile.definition.id):
             raise ContractError("the request mode differs from the prepared pipeline profile")
         if request.reference_video is not None and (
@@ -207,6 +213,7 @@ class H3Pipeline:
                     output_path,
                     progress=progress,
                     profile_denoise=profile_denoise,
+                    conditioning_reuse_scope=conditioning_reuse_scope,
                 )
             except BaseException as exc:
                 try:
@@ -254,6 +261,7 @@ class H3Pipeline:
         *,
         progress: Callable[[PipelineProgress], None] | None,
         profile_denoise: bool,
+        conditioning_reuse_scope: ConditioningReuseScope | None,
     ) -> VideoResult:
         def report(stage: str, completed: int, total: int) -> None:
             if progress is not None:
@@ -274,7 +282,17 @@ class H3Pipeline:
             report("encoding", 0, 1)
             weight_resume_seconds = self._conditioner.resume_cuda()
             call_started = time.monotonic()
-            bundle = self._conditioner.capture(request, references, directory / "conditioning")
+            capture_options = (
+                {"reuse_scope": conditioning_reuse_scope}
+                if conditioning_reuse_scope is not None
+                else {}
+            )
+            bundle = self._conditioner.capture(
+                request,
+                references,
+                directory / "conditioning",
+                **capture_options,
+            )
             capture_call_seconds = time.monotonic() - call_started
             capture_diagnostics = getattr(self._conditioner, "last_capture_diagnostics", {})
             suspend_seconds = self._conditioner.suspend_cuda()

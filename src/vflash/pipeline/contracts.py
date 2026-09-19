@@ -22,6 +22,26 @@ VIDEO_REFERENCE_CANVAS_PIXELS = 928 * 512
 
 
 @dataclass(frozen=True)
+class ConditioningReuseScope:
+    """Opaque caller-owned boundary for exact, request-local encoder reuse.
+
+    Vflash never derives this value from prompt or media content. The trusted
+    scheduler must give sibling candidates from one accepted generation the
+    same unpredictable or owner-bound value and every other request a different
+    value. It is deliberately excluded from media and bundle metadata.
+    """
+
+    value: str
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.value, str)
+            or re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", self.value) is None
+        ):
+            raise ContractError("conditioning reuse scope must be an opaque 1-128 character ID")
+
+
+@dataclass(frozen=True)
 class PipelineAssets:
     """Local immutable assets; no component path is inferred from environment variables."""
 

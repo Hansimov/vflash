@@ -148,6 +148,7 @@ def test_capture_emits_schema2_with_complete_identity_and_always_discards(
             "metadata_seconds",
             "finish_seconds",
             "finish_stage_seconds",
+            "conditioning_reuse",
             "process_deltas",
         }
         assert all(

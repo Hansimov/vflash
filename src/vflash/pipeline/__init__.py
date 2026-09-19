@@ -6,6 +6,7 @@ from importlib import import_module
 from typing import Any
 
 from vflash.pipeline.contracts import (
+    ConditioningReuseScope,
     PipelineAssets,
     PipelineProgress,
     VideoRequest,
@@ -13,6 +14,7 @@ from vflash.pipeline.contracts import (
 )
 
 __all__ = [
+    "ConditioningReuseScope",
     "H3Pipeline",
     "PipelineAssets",
     "PipelineProgress",
