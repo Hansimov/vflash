@@ -99,6 +99,12 @@ with H3Pipeline(prepared, device=devices[0], trust_local_code=True) as pipeline:
 
 同一实例可以连续处理多个请求。原生权重采用 block ring，为轮流使用显卡的编码器与 VAE 留出空间；CPU 模型副本由实例持有以便复用，因此也需要足够的主机内存。进度回调同步执行，抛出异常可取消请求；不要在回调内部调用 `close`。任务队列、账号、存储及多进程调度由应用负责。
 
+当前 main 还提供默认关闭的精确复用：同一创作请求中串行执行的 I2VA、L2VA 或 FL2VA 候选，可共享不受 seed 影响的文本和关键帧编码。可信调度器为同一次已受理请求的兄弟候选创建一个不透明 `ConditioningReuseScope`，并在每次 `generate` 时以 `conditioning_reuse_scope` 传入。不能从公开提示词或媒体内容推导scope，不能让终端用户传入，也不能跨owner或请求复用；不传scope时完全保持普通无缓存路径。
+
+缓存只保存一个CPU副本，最多128 MiB；一小时无活动后过期，每次命中会刷新期限。scope或输入变化、无scope调用、捕获失败、以及`close()`都会立即清空。缓存仅包含Qwen3-VL文本输出、token tag和干净关键帧VAE latent；初始噪声、加噪后的参考latent、packed状态、scheduler状态、DiT/attention/FFN激活、解码latent和媒体都不会复用。可从`result.stages["encoding"]["capture_diagnostics"]["conditioning_reuse"]`读取`hit`、`miss`或`capacity-bypass`，以及编码器调用次数和耗时。
+
+在一个双SM86 sequence-head实例上，预热后的5秒、512 × 512完整A/B/A把两个串行候选的总耗时从控制中位`352.393`秒降到`340.403`秒（`3.402%`），首候选没有变慢，两个候选的H.264和AAC流均跨三臂一致。这只是有界的SM86证据，不代表SM89或线上服务已经获得同样收益。有独立显卡时仍应一张卡一个worker并行执行；为了命中缓存而把本可并行的候选串行化，会损害首结果时延和全fleet吞吐。
+
 `H3Pipeline` 内的官方编码器与原生阶段默认使用和独立原生调用、服务任务相同的内容绑定条件包契约。经过校验、仅可消费一次的内存交接仍作为引擎集成方可用的实验原语保留，但不作为完整流水线默认路径：目标硬件 A/B/A 验证保持了输出字节一致，却没有改善端到端耗时。不能因为去掉文件 I/O，就推断主机内存和模型切换的主要成本也随之消失。
 
 集成验证使用了 240 GiB 主机内存上限。这是已测预算，不是测得的最低要求；去噪器单独运行时的 64 GiB 建议不包含这些编码器和解码器。
