@@ -184,3 +184,22 @@ def test_cache_copies_values_and_expires():
 
     too_small = _RequestEncodingCache(maximum_bytes=1)
     assert not too_small.put(key, value)
+
+
+def test_default_cache_covers_serial_long_candidates_and_refreshes_on_hit():
+    torch = pytest.importorskip("torch")
+    now = [10.0]
+    cache = _RequestEncodingCache(clock=lambda: now[0])
+    key = _EncodingKey(ConditioningReuseScope("long-sibling-scope"), "b" * 64, 1)
+    value = _CleanEncoding(
+        torch.ones((1, 2, 5120), dtype=torch.bfloat16),
+        torch.zeros(2, dtype=torch.int64),
+        (torch.ones((1, 24, 1, 2, 2), dtype=torch.float32),),
+    )
+    assert cache.put(key, value)
+    now[0] += 3500.0
+    assert cache.get(key) is not None
+    now[0] += 3500.0
+    assert cache.get(key) is not None
+    now[0] += 3601.0
+    assert cache.get(key) is None

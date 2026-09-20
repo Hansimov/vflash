@@ -94,7 +94,7 @@ class _RequestEncodingCache:
         self,
         *,
         maximum_bytes: int = 128 * 1024 * 1024,
-        ttl_seconds: float = 300.0,
+        ttl_seconds: float = 3600.0,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         if type(maximum_bytes) is not int or not 0 < maximum_bytes <= 256 * 1024 * 1024:
@@ -103,9 +103,9 @@ class _RequestEncodingCache:
             isinstance(ttl_seconds, bool)
             or not isinstance(ttl_seconds, int | float)
             or not math.isfinite(ttl_seconds)
-            or not 0 < ttl_seconds <= 600
+            or not 0 < ttl_seconds <= 3600
         ):
-            raise ContractError("conditioning cache lifetime must be at most ten minutes")
+            raise ContractError("conditioning cache lifetime must be at most one hour")
         self.maximum_bytes = maximum_bytes
         self.ttl_seconds = float(ttl_seconds)
         self._clock = clock
@@ -133,6 +133,11 @@ class _RequestEncodingCache:
             self.misses += 1
             return None
         self.hits += 1
+        # A candidate cannot reach this serial conditioner until the previous
+        # sibling has finished denoising and decoding. Refresh from each hit so
+        # up to four long candidates remain covered without retaining anything
+        # across a scope change, failure, close, or an hour of inactivity.
+        self._expires_at = self._clock() + self.ttl_seconds
         return self._value.independent_copy()
 
     def put(self, key: _EncodingKey, value: _CleanEncoding) -> bool:
