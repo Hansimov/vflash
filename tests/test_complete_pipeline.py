@@ -457,8 +457,8 @@ def test_one_megapixel_canvas_is_allowed_except_for_video_references(tmp_path):
             "last_frame": tmp_path / "last.png",
         },
     ):
-        request = VideoRequest("An example scene.", width=1344, height=768, **references)
-        assert request.width * request.height == 1_032_192
+        request = VideoRequest("An example scene.", width=1024, height=1024, **references)
+        assert request.width * request.height == 1_048_576
     with pytest.raises(ContractError, match="475,136"):
         VideoRequest(
             "<Video 1> continues.",
