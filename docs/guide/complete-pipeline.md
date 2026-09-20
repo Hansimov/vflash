@@ -12,6 +12,21 @@ Turbo requests use four denoising evaluations and retain their five-second contr
 
 Choose the [fixed model profile](../reference/pipeline-profiles) before preparing assets. Ref2VA uses `transformer_ref` and Ref4 v0.1; T2VA uses `transformer` and Base4 v1.0; Base16 keyframe requests use the official `transformer` at 16 evaluations without an adapter. The paired Base16 I2VA and FL2VA profile identities for the same hardware share the exact model artifact and schedule, so either prepared keyframe pipeline can serve I2VA, L2VA and FL2VA serially without a profile restart or cold initialization. Conditioning metadata remains specific to the actual request. The result keeps the prepared identity in `profile_id` and records the actual input type in `request_mode`. Per-request stage residency still follows the selected memory strategy. Other profiles reject mode changes before execution.
 
+### Full binary-megapixel budget on source main
+
+Source main (`53d6687` and later) raises the Base16 pipeline and native conditioning
+ceiling to **1,048,576 pixels**: a 1024 × 1024 square is no longer reduced to 992 × 992.
+The existing 0.4.0 tag retains its 1,032,192-pixel ceiling. Dimensions remain multiples
+of 32; total area does not require either dimension to equal 1024. This does not
+enlarge the separate reference-video contract.
+
+A cooperating pair of RTX 3080 20 GB GPUs completed one five-second 1024 × 1024 I2VA
+request (120 delivered frames, full decode). With the same latent, normal and
+`silent-v1` delivery produced identical compressed video streams and zero-valued
+decoded silent audio. This is a bounded capacity and media-contract screen, not
+a semantic-quality or end-to-end speed claim. Other duration/hardware combinations
+must retain their own serving qualification; API validation alone does not qualify them.
+
 ## Installation and assets
 
 Install the pipeline extra from the release checkout and provide `ffmpeg` and `ffprobe` on `PATH`:
