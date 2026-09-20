@@ -42,8 +42,8 @@ class ReachedSourceValidation(RuntimeError):
 def test_base16_keyframe_profiles_accept_the_qualified_one_megapixel_canvas(
     task, validator, anchors
 ):
-    rows = anchors * (1344 // 32) * (768 // 32)
-    profile = H3ConditioningProfile(task, 1344, 768, 243, 16, 12, 3, rows, rows, 0)
+    rows = anchors * (1024 // 32) ** 2
+    profile = H3ConditioningProfile(task, 1024, 1024, 243, 16, 12, 3, rows, rows, 0)
     request = {
         "delivery_profiles": [
             {"temporal_profile": "native-24fps-10s", "frames": 240, "fps": 24.0}

@@ -32,7 +32,7 @@ H3_VIDEO_REFERENCE_POLICY = "official-video-cfr24-v1"
 H3_FIRST_FRAME_POLICY = "official-fl2va-first-frame-stretch-v1"
 H3_FL2VA_KEYFRAME_POLICY = "official-fl2va-first-last-frame-v1"
 H3_LAST_FRAME_POLICY = "official-fl2va-last-frame-stretch-v1"
-H3_BASE16_MAX_CANVAS_PIXELS = 768 * 1344
+H3_BASE16_MAX_CANVAS_PIXELS = 1024**2
 
 _BUNDLE_ID = re.compile(r"h3-conditioning-[a-z0-9][a-z0-9-]{0,95}")
 _IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,255}")
