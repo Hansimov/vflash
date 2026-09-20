@@ -93,5 +93,31 @@ HEALTHCHECK NONE
 ENTRYPOINT ["vflash"]
 CMD ["--help"]
 
+# Explicit experimental overlay: the ordinary pipeline and default image stay exact.
+FROM pipeline AS pipeline-sol-sm89
+USER root
+RUN python -m pip install \
+        nvidia-cutlass-dsl==4.5.0 cuda-python==13.2.0 apache-tvm-ffi==0.1.11 \
+    && git init /tmp/vflash-sol-upstream \
+    && git -C /tmp/vflash-sol-upstream remote add origin https://github.com/NVlabs/Sana.git \
+    && git -C /tmp/vflash-sol-upstream sparse-checkout init --cone \
+    && git -C /tmp/vflash-sol-upstream sparse-checkout set techniques/sparse_backends \
+    && git -C /tmp/vflash-sol-upstream fetch --filter=blob:none --depth=1 origin \
+        d0c0a4685ab5dc2336d18b7213d85f13def92418 \
+    && git -C /tmp/vflash-sol-upstream checkout --detach FETCH_HEAD
+# CUTLASS 4.5 TVM-FFI expects positional stream arguments at these four call sites.
+# This is a build-time ABI patch, not a dense runtime fallback or a numerical change.
+RUN test "$(grep -c '^                stream=stream,' \
+        /tmp/vflash-sol-upstream/techniques/sparse_backends/sol_attn/interface.py)" = 4 \
+    && sed -i 's/^                stream=stream,/                stream,/' \
+        /tmp/vflash-sol-upstream/techniques/sparse_backends/sol_attn/interface.py \
+    && python -m pip install --no-build-isolation \
+        /tmp/vflash-sol-upstream/techniques/sparse_backends \
+    && rm -rf /tmp/vflash-sol-upstream
+LABEL org.vflash.sol-attention.revision="d0c0a4685ab5dc2336d18b7213d85f13def92418" \
+      org.vflash.sol-attention.patch="cutlass-4.5-positional-stream"
+USER 10001:10001
+RUN python -c "import sol_attn; import torch; assert not torch.cuda.is_initialized()"
+
 # A plain build and the existing Compose service keep the native-only image.
 FROM runtime AS default

@@ -53,7 +53,19 @@ class H3NativeConditioningRuntimeError(RuntimeError):
     """A live conditioning bundle cannot execute on the selected native runtime."""
 
 
-def _attention_policy() -> dict[str, Any]:
+def _attention_policy(
+    sol: Any = None, *, configured_backend: str = "torch-flash"
+) -> dict[str, Any]:
+    if sol is not None:
+        return sol.metadata()
+    if configured_backend == "sol-sm89":
+        return {
+            "attention_backend": "sol-sm89",
+            "exact": False,
+            "effective_backends": [],
+            "operator_calls": 0,
+            "fallback_enabled": False,
+        }
     return {
         "attention_backend": "torch-flash",
         "strict_attention_backend": "torch-flash",
@@ -179,10 +191,8 @@ class H3NativeConditioningRuntime:
     ) -> None:
         import torch
 
-        if attention_backend != "torch-flash":
-            raise H3NativeConditioningRuntimeError(
-                "the native runtime requires Torch Flash attention"
-            )
+        if attention_backend not in {"torch-flash", "sol-sm89"}:
+            raise H3NativeConditioningRuntimeError("unknown native attention backend")
         if expected_task not in {None, "ref2va", "t2va", "i2va", "l2va", "fl2va"}:
             raise H3NativeConditioningRuntimeError("unsupported native generation task")
         started = time.monotonic()
@@ -192,6 +202,15 @@ class H3NativeConditioningRuntime:
         if resolved_device.index is None:
             resolved_device = torch.device("cuda:0")
         capability = torch.cuda.get_device_capability(resolved_device)
+        if attention_backend == "sol-sm89" and (
+            capability != (8, 9)
+            or parallel_strategy != "single"
+            or expected_weight_profile != "minimax-h3-base"
+            or expected_nfe != 16
+        ):
+            raise H3NativeConditioningRuntimeError(
+                "approximate Sol requires single-SM89 official Base16"
+            )
         if capability not in {(8, 6), (8, 9)}:
             raise H3NativeConditioningRuntimeError(
                 "the live native runtime currently supports only SM86 and SM89"
@@ -209,6 +228,8 @@ class H3NativeConditioningRuntime:
             and weight_residency != "block-ring"
         ):
             raise H3NativeConditioningRuntimeError("unsupported native weight residency")
+        if attention_backend == "sol-sm89" and weight_residency != "block-ring":
+            raise H3NativeConditioningRuntimeError("Sol requires the serial block-ring runtime")
         devices = (resolved_device,)
         if parallel_strategy != "single":
             if (
@@ -320,6 +341,7 @@ class H3NativeConditioningRuntime:
         self.overlay = overlay
         self.auxiliary_tensor_path = auxiliary_store.path
         self.attention_backend = attention_backend
+        self._sol_attention = None
         self.input_packer = self.final_layer = self.denoiser = None
         self._closed = self._released = False
         try:
@@ -345,7 +367,8 @@ class H3NativeConditioningRuntime:
         artifact, overlay, store = self.artifact, self.overlay, auxiliary_store
         resolved_device, devices = self.device, self.devices
         parallel_strategy, weight_residency = self.parallel_strategy, self.weight_residency
-        attention_backend = self.attention_backend
+        # Block math stays strict; only the explicit per-request video operator differs.
+        attention_backend = "torch-flash"
         input_started = time.monotonic()
         projection_weights = load_h3_native_input_projection_weights(
             base_load=store.load,
@@ -440,7 +463,9 @@ class H3NativeConditioningRuntime:
                     for device in self.devices
                 ],
             },
-            "attention_policy": _attention_policy(),
+            "attention_policy": _attention_policy(
+                self._sol_attention, configured_backend=self.attention_backend
+            ),
         }
 
     def _load_request_tensors(
@@ -545,6 +570,27 @@ class H3NativeConditioningRuntime:
         prepare_started = time.monotonic()
         bundle, tensors = self._load_request_tensors(conditioning)
         device = self.device
+        self._sol_attention = None
+        slots = getattr(self.denoiser, "slots", ())
+        for slot in slots:
+            slot._sol_attention = None
+        if self.attention_backend == "sol-sm89":
+            from vflash.native.h3_sol_attention import (
+                SolVideoAttention,
+                protected_prefix_length,
+            )
+
+            prefix, length = protected_prefix_length(
+                tensors, bundle.profile.num_condition_video_rows
+            )
+            operator = SolVideoAttention(device, prefix, length)
+            if not slots:
+                raise H3NativeConditioningRuntimeError(
+                    "Sol requires the serial block-ring runtime"
+                )
+            for slot in slots:
+                slot._sol_attention = operator
+            self._sol_attention = operator
         state = H3NativeLatentState(
             self.overlay.schedule,
             video_latents=tensors["initial_video"].to(device=device, dtype=torch.float32),
@@ -708,7 +754,7 @@ class H3NativeConditioningRuntime:
             nfe=self.overlay.schedule.nfe,
             elapsed_seconds=elapsed,
             peak_allocated_bytes=peak,
-            attention_policy=_attention_policy(),
+            attention_policy=_attention_policy(self._sol_attention),
             stage_durations={
                 "request_prepare": prepare_seconds,
                 "denoise": denoise_seconds,

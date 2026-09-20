@@ -31,6 +31,26 @@ def test_generate_parser_preserves_reference_order():
     assert args.audio_delivery_profile == "unchanged"
     assert args.keyframe_delivery_profile == "decoded"
     assert args.profile_denoise is False
+    assert args.attention_backend == "torch-flash"
+
+
+def test_generate_parser_exposes_explicit_approximate_sol():
+    args = build_parser().parse_args(
+        [
+            "generate",
+            "--prepared-assets",
+            "receipt.json",
+            "--prompt-file",
+            "prompt.txt",
+            "--gpu",
+            "0",
+            "--output",
+            "output.mp4",
+            "--attention-backend",
+            "sol-sm89",
+        ]
+    )
+    assert args.attention_backend == "sol-sm89"
 
 
 def test_generate_parser_exposes_opt_in_denoise_profile():

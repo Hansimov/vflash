@@ -41,6 +41,7 @@ class NativeEngineSession:
         schedule_overlay: Path,
         auxiliary_tensor: Path,
         weight_residency: str = "default",
+        attention_backend: str | None = None,
     ) -> None:
         started = time.perf_counter()
         profile = plan.profile
@@ -114,7 +115,7 @@ class NativeEngineSession:
             schedule_overlay_path=schedule_overlay,
             auxiliary_tensor_path=auxiliary_tensor,
             device="cuda:0",
-            attention_backend=profile.attention.backend,
+            attention_backend=attention_backend or profile.attention.backend,
             expected_task=profile.mode.value,
             expected_weight_profile=WEIGHT_PROFILES[profile.id],
             expected_model_repository=profile.model,

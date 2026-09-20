@@ -1182,6 +1182,9 @@ class H3NativeBlockBF16Resident(_H3BlockOperations):
         )
 
     def _attention(self, query: Any, key: Any, value: Any) -> Any:
+        approximate = getattr(self, "_sol_attention", None)
+        if approximate is not None:
+            return approximate(query, key, value)
         import torch.nn.functional as functional
         from torch.nn.attention import SDPBackend, sdpa_kernel
 

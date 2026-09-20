@@ -62,7 +62,7 @@ and measurement boundaries are in the [performance guide](./performance).
 | Layerwise component offload and temporary VAE residency | Vflash uses explicit CPU masters, a two-slot block ring and serial encoder/core/VAE ownership | **Already present with a different lifecycle.** Do not add a second offload manager; improve the owned lifecycle only when stage and peak-memory measurements justify it. |
 | LoRA consumer fusion | Base16 has no adapter; qualified Turbo paths already fuse selected QKV merge and FFN adapter/activation consumers | **Partly present and profile-scoped.** The upstream FastH3 adapter is not interchangeable, and unsupported adapters keep the explicit residual path. |
 | Combined RMSNorm/AdaLN and QKNorm/RoPE/pack | Upstream fusion changes reduction or rotary arithmetic boundaries | **Not copied.** Requires independent same-architecture numerical and full-request proof. |
-| SOL/BSA sparse attention | Optional approximate attention upstream | **Not a production backend.** A conservative SM89 candidate changed the generated trajectory and missed the preregistered complete-request gate. |
+| Sol sparse attention | Explicit `sol-sm89` backend on source main | **Experimental, default off.** Single-SM89 Base16 only; actual CuTe execution and complete media are measured separately from quality qualification. See below. |
 | TeaCache / FirstBlockCache | Upstream 4090 result uses 49 DiT forwards and reuses 35 | **Deferred.** Vflash Base16 uses 16 evaluations; the reuse opportunity and quality risk are different. |
 | INT8 QKV and FP8 output transport | Default in the eight-B300 fast profile | **Rejected for the exact default.** Lossy transport and a different topology need a separate profile and quality gate. |
 | Fused MXFP8 linears | SM100-family path; upstream reports material output divergence | **Out of scope.** It does not target SM86/SM89 and cannot inherit an exact label. |
@@ -76,6 +76,73 @@ The released Vflash profiles use dense PyTorch Flash SDPA and exact BF16 transpo
 the selected implementation preserves its declared arithmetic and attention contract; it does not
 mean that two GPU architectures, two parallel decompositions, or a distilled adapter must emit the
 same tensor.
+
+### Explicit SM89 Sol backend (source main)
+
+`H3Pipeline(..., attention_backend="sol-sm89")` and `vflash generate --attention-backend sol-sm89`
+select the approximate path. Omitting the option, or selecting `torch-flash`, retains the dense
+default. It is restricted to a single SM89 GPU, official Base16 and serial block-ring execution;
+SM86, two-GPU execution and adapter profiles do not silently switch to another backend.
+This source-main option is not in the 0.4.0 wheel or older prebuilt images.
+
+The adapter calls [NVIDIA Sol-Attn](https://nvlabs.github.io/Sana/Sol-Engine/docs/techniques/sparse/sol_attn/)
+at pinned source `d0c0a4685ab5dc2336d18b7213d85f13def92418`, version 0.5.0. It requires
+`get_sol_attn_backend(device) == "cute_sm89"`; missing dependencies or incompatible layouts raise
+instead of falling back. BF16 BTHD Q/K/V have head dimension 128. `tau=0`, diagonal thresholds and
+an exact text/conditioning/audio KV sink are fixed. Those prefix query rows additionally use dense
+Torch Flash attention; only target-video query rows retain Sol output. QKV materialization and
+prefix attention remain inside the measured request.
+
+This protects those rows' attention operation, **not end-to-end audio or identity equivalence**:
+later layers still consume altered hidden states. The generated trajectory and audio can change.
+Execution metadata reports `exact=false`, effective backends, the protected prefix length and
+operator calls; configuration before the first request reports zero calls and no executed backend.
+
+Build the optional overlay from the source checkout:
+
+```bash
+docker build --target pipeline-sol-sm89 -t vflash:pipeline-sol-sm89 .
+```
+
+It pins CUTLASS DSL 4.5.0, cuda-python 13.2.0 and TVM-FFI 0.1.11 on the existing Torch 2.11/cu130
+pipeline. Four upstream interface call sites receive the tested positional-stream ABI patch at
+build time. The default Docker target and ordinary pipeline are unchanged; model assets remain
+external. Reuse prepared assets and the mounts from the complete-pipeline guide, select this image,
+and add `--attention-backend sol-sm89` to `generate`. Do not extrapolate first-use JIT latency to
+warm throughput or treat a successful MP4 as a same-quality result.
+
+### Complete-request exploratory screen
+
+The source-main adapter was exercised on one RTX 4090 48 GB (SM89), 450 W limit, in one persistent
+Torch 2.11/cu130 pipeline with official Base16, BF16, 16 evaluations and `exact-v1` endpoint delivery.
+Each workload froze its prompt, reference and seed. Initialization took 72.311 s and is excluded
+below, as are service queueing and delivery. **Denoising profiling was enabled:** these are complete
+local MP4-request attribution measurements, not unprofiled service-throughput qualification.
+
+| Workload / execution order | Dense A | Sol | Dense A2 |
+| --- | ---: | ---: | ---: |
+| 5 s · 512 × 672 · I2VA · complete request | 122.910 s | 131.464 s | Not run |
+| Same small workload · denoising stage | 94.408 s | 107.723 s | Not run |
+| 10 s · 736 × 992 · L2VA · complete request | 767.342 s | 617.283 s | 767.883 s |
+| Same long workload · denoising stage | 715.365 s | 564.808 s | 715.938 s |
+
+Against the mean long-workload control, request time fell 19.584% (1.244×) and denoising fell
+21.078%; control drift was 0.070%. The small Sol run includes first-use compilation, whose isolated
+cost was not measured. It does not establish a warmed small-workload gain or regression. Each Sol
+request recorded 800 actual `cute_sm89` calls; both also executed the protected dense prefix.
+Peak allocated denoiser memory was 5,421,633,536 bytes for either small arm and 17,186,832,384 bytes
+for all long arms; device-wide sampled peak was 18,359 MiB. The maximum rolling ten-minute busy
+temperature was 65.119°C, instantaneous peak 67°C, with no thermal-flag samples.
+
+All five MP4s fully decoded, with 120/240 frames, finite audio and no black frames. Twelve temporal
+samples per result retained the visible subject and endpoint relationship, but Sol changed
+intermediate progression and the audio waveform. Endpoint PSNR stayed approximately 33.14 dB
+(I2VA) and 31.28 dB (L2VA), measured against this direct-engine run's declared Lanczos resize—not
+an application's separate cropping policy. These endpoint numbers do not qualify moving frames.
+Full-speed motion and audio-content/listening assessment remain open. In particular, low audio
+energy in both small arms is not a pass. **Same-quality and accepted-video throughput are not yet
+established; dense remains the deployment default.** No private reference or prompt is published
+with this two-workload screen, so it is aggregate engineering evidence, not a public benchmark suite.
 
 Approximate methods can be valuable, but they must be named, default-off, measurable and removable.
 They need a frozen prompt/reference/seed suite, full decoded video and audio review, actual playback

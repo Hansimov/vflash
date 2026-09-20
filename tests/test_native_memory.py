@@ -31,6 +31,7 @@ def test_host_allocation_and_retained_cache_are_reported_separately():
     runtime.initialization_seconds = 1.0
     runtime.initialization_stages = {}
     runtime.attention_backend = "torch-flash"
+    runtime._sol_attention = None
     runtime.attention_strict_prefix_evaluations = 0
     runtime.attention_schedule = ("torch-flash",) * 4
 
