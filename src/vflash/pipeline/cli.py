@@ -60,9 +60,9 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
     generate.add_argument("--seed", type=int, default=0)
     generate.add_argument(
         "--audio-delivery-profile",
-        choices=("unchanged", "web-v1"),
+        choices=("unchanged", "web-v1", "silent-v1"),
         default="unchanged",
-        help="decoded-audio delivery policy; web-v1 uses bounded loudness gain",
+        help="audio delivery: unchanged, bounded web-v1 gain, or explicit silent-v1",
     )
     generate.add_argument(
         "--keyframe-delivery-profile",

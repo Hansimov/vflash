@@ -100,6 +100,8 @@ class VideoRequest:
     two temporal anchors. A session never swaps models.
     ``audio_delivery_profile='web-v1'`` applies bounded delivery gain after
     decoding; the default ``unchanged`` profile preserves the decoded waveform.
+    ``silent-v1`` enforces a silent stereo AAC track and skips waveform decoding.
+    It never changes joint AV denoising or infers intent from prompt text.
     ``keyframe_delivery_profile='exact-v1'`` restores supplied temporal anchors
     at the delivered endpoints after VAE decode; the default ``decoded`` profile
     preserves the model output for controlled comparison.
@@ -115,7 +117,7 @@ class VideoRequest:
     first_frame: Path | None = field(default=None, kw_only=True)
     last_frame: Path | None = field(default=None, kw_only=True)
     duration_seconds: int = field(default=5, kw_only=True)
-    audio_delivery_profile: Literal["unchanged", "web-v1"] = field(
+    audio_delivery_profile: Literal["unchanged", "web-v1", "silent-v1"] = field(
         default="unchanged", kw_only=True
     )
     keyframe_delivery_profile: Literal["decoded", "exact-v1"] = field(

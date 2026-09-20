@@ -15,7 +15,7 @@ from vflash.adapters.official_vae import (
     prepare_official_h3_audio_decoder,
     prepare_official_h3_video_decoder,
 )
-from vflash.media.audio_delivery import AUDIO_DELIVERY_PROFILES
+from vflash.media.audio_delivery import AUDIO_DELIVERY_PROFILES, SILENT_AUDIO_PROFILE
 from vflash.media.encoding import MediaError, encode_mp4, media_executables
 from vflash.media.keyframe_delivery import (
     DECODED_KEYFRAME_DELIVERY_PROFILE,
@@ -135,12 +135,21 @@ class OfficialMediaDecoder:
         self._torch.cuda.empty_cache()
         return time.monotonic() - started
 
-    def _decode_cpu(self, latent_path: Path, *, height: int, width: int) -> tuple[Any, ...]:
+    def _decode_cpu(
+        self, latent_path: Path, *, height: int, width: int, silent_samples: int | None = None
+    ) -> tuple[Any, ...]:
         torch = self._torch
         started = time.monotonic()
-        tensors = load_safetensor_tensors(latent_path, ("video_latents", "audio_latents"))
+        names = (
+            ("video_latents",)
+            if silent_samples is not None
+            else ("video_latents", "audio_latents")
+        )
+        tensors = load_safetensor_tensors(latent_path, names)
         load_seconds = time.monotonic() - started
-        if tensors["video_latents"].ndim != 5 or tensors["audio_latents"].ndim != 3:
+        if tensors["video_latents"].ndim != 5 or (
+            silent_samples is None and tensors["audio_latents"].ndim != 3
+        ):
             raise MediaError("native output is not VAE-ready")
         started = time.monotonic()
         video = decode_official_h3_video_latents(
@@ -154,19 +163,26 @@ class OfficialMediaDecoder:
         video = video[..., :height, :width].contiguous().cpu()
         video_seconds = time.monotonic() - started
         started = time.monotonic()
-        audio = decode_official_h3_audio_latents(
-            self.audio,
-            tensors["audio_latents"],
-            device=self.device,
-            torch_module=torch,
-        ).cpu()
+        if silent_samples is None:
+            audio = decode_official_h3_audio_latents(
+                self.audio,
+                tensors["audio_latents"],
+                device=self.device,
+                torch_module=torch,
+            ).cpu()
+            audio_seconds = time.monotonic() - started
+        else:
+            # Joint AV denoising remains untouched: deleting its audio tokens
+            # could change the video. Only the unused waveform decoder is skipped.
+            audio = torch.zeros((1, 2, silent_samples), dtype=torch.float32, device="cpu")
+            audio_seconds = 0.0
         return (
             video,
             audio,
             {
                 "latent_load": load_seconds,
                 "video_decode_and_copy": video_seconds,
-                "audio_decode_and_copy": time.monotonic() - started,
+                "audio_decode_and_copy": audio_seconds,
             },
         )
 
@@ -205,8 +221,16 @@ class OfficialMediaDecoder:
             raise MediaError("the output path already exists")
         started = time.monotonic()
         self._torch.cuda.reset_peak_memory_stats(self.device)
+        frames, samples = round(duration_seconds * fps), round(duration_seconds * 32000)
         try:
-            video, audio, stages = self._decode_cpu(latent_path, height=height, width=width)
+            decode_options = (
+                {"silent_samples": samples}
+                if audio_delivery_profile == SILENT_AUDIO_PROFILE
+                else {}
+            )
+            video, audio, stages = self._decode_cpu(
+                latent_path, height=height, width=width, **decode_options
+            )
         except BaseException as exc:
             # Unwound decoder frames can own CUDA intermediates even when the
             # caller retains the exception. Clear them only after completion.
@@ -218,7 +242,6 @@ class OfficialMediaDecoder:
             else:
                 clear_frames(exc.__traceback__)
             raise
-        frames, samples = round(duration_seconds * fps), round(duration_seconds * 32000)
         if video.shape[2] < frames or audio.shape[2] < samples:
             raise MediaError("decoded media is shorter than the requested delivery")
         keyframe_delivery = None

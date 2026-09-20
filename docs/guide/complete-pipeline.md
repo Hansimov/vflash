@@ -63,6 +63,16 @@ Set `audio_delivery_profile="web-v1"`, or pass `--audio-delivery-profile web-v1`
 
 ## One owned pipeline
 
+Source main adds `audio_delivery_profile="silent-v1"` (CLI: `--audio-delivery-profile silent-v1`)
+to enforce digital silence in a stereo AAC track with the original duration and sample rate.
+It skips the unused waveform decoder, not joint audio/video denoising; video latents,
+video decoding and endpoint delivery stay unchanged. The engine never infers this policy
+from a prompt. Applications must request it only for explicit whole-video silence, not for
+unspecified audio or a request to omit music. The default remains `unchanged`.
+
+This is a deterministic delivery contract, not improved model audio understanding or a
+denoising acceleration claim. It is not part of the existing 0.4.0 tag.
+
 Run a pipeline in a dedicated process before any other code initializes CUDA. Choose the device explicitly. This example expects exactly one visible compatible GPU:
 
 ```python

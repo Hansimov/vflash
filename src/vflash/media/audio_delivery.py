@@ -10,8 +10,9 @@ from collections.abc import Sequence
 
 from vflash.native.errors import VflashNativeError
 
-AUDIO_DELIVERY_PROFILES = ("unchanged", "web-v1")
+AUDIO_DELIVERY_PROFILES = ("unchanged", "web-v1", "silent-v1")
 WEB_AUDIO_PROFILE = "web-v1"
+SILENT_AUDIO_PROFILE = "silent-v1"
 TARGET_LUFS = -18.0
 TRUE_PEAK_DBTP = -2.0
 TARGET_LRA = 11.0

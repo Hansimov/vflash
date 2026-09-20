@@ -14,6 +14,7 @@ from typing import Any
 
 from vflash.media.audio_delivery import (
     AUDIO_DELIVERY_PROFILES,
+    SILENT_AUDIO_PROFILE,
     WEB_AUDIO_PROFILE,
     web_loudness_filter,
 )
@@ -152,6 +153,11 @@ def encode_mp4(
             raise MediaError("decoded audio contains nonfinite values")
         audio_filters: list[str] = []
         audio_delivery = None
+        if audio_delivery_profile == SILENT_AUDIO_PROFILE:
+            # Never modify the caller's waveform. Keep the AAC clock/stream
+            # contract while enforcing silence independently of model output.
+            audio = torch.zeros_like(audio)
+            audio_delivery = {"profile": SILENT_AUDIO_PROFILE, "status": "silent"}
         if audio_delivery_profile == WEB_AUDIO_PROFILE:
             audio_path = directory / "audio.f32le"
             pcm = audio[0].T.float().contiguous()

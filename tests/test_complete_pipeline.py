@@ -249,7 +249,10 @@ def test_complete_pipeline_forwards_opt_in_denoise_profile(video_request, tmp_pa
     assert result.stages["denoising"]["denoise_profile"] == {"enabled": True}
 
 
-def test_ten_second_keyframe_request_passes_exact_media_contract(video_request, tmp_path):
+@pytest.mark.parametrize("audio_profile", ["web-v1", "silent-v1"])
+def test_ten_second_keyframe_request_passes_exact_media_contract(
+    video_request, tmp_path, audio_profile
+):
     from vflash.model_assets import model_profile
 
     pipeline, _events = _pipeline()
@@ -260,7 +263,7 @@ def test_ten_second_keyframe_request_passes_exact_media_contract(video_request, 
         reference=None,
         first_frame=video_request.reference,
         duration_seconds=10,
-        audio_delivery_profile="web-v1",
+        audio_delivery_profile=audio_profile,
         keyframe_delivery_profile="exact-v1",
     )
     result = pipeline.generate(request, tmp_path / "ten-seconds.mp4")
@@ -270,7 +273,7 @@ def test_ten_second_keyframe_request_passes_exact_media_contract(video_request, 
         "width": request.width,
         "duration_seconds": 10,
         "fps": 24,
-        "audio_delivery_profile": "web-v1",
+        "audio_delivery_profile": audio_profile,
         "keyframe_delivery_profile": "exact-v1",
         "first_frame": result.media["first_frame"],
     }
