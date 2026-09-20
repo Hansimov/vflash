@@ -4,15 +4,17 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
-**0.4.0 正式版。** 通过完整 Python 或容器 pipeline 生成同步视频和音频。Turbo profile 使用纯文字、
+**0.5.0 正式版。** 通过完整 Python 或容器 pipeline 生成同步视频和音频。Turbo profile 使用纯文字、
 一至三张图片或[一段短参考视频](https://hansimov.github.io/vflash/zh/guide/complete-pipeline#reference-video)
 生成五秒 MP4；官方 Base16 关键帧 profile 接受首帧、尾帧或两者，并支持五至十秒的整数时长。同一个
 prepared keyframe pipeline 可以在 I2VA、L2VA 和 FL2VA 之间切换，不重新加载权重。
 
-原生核心面向 RTX 3080 20 GB（SM86）和 RTX 4090 48 GB（SM89）。0.4.0 为双卡
-`sequence-head` 新增精确 destination-major 重排，保持 dense BF16 attention 和 collective wire
-合同，并给出与 NVIDIA Sol-Engine 的目标硬件实测对照。稀疏 attention、跨步 cache 和量化通信不进入
-exact 默认。详见[采用、暂缓和拒绝的机制](https://hansimov.github.io/vflash/zh/reference/sol-engine-alignment)。
+原生核心面向 RTX 3080 20 GB（SM86）和 RTX 4090 48 GB（SM89）。0.5.0 在**单SM89官方Base16默认
+使用近似Sol attention**；SM86、协作双卡及Turbo仍为dense。Python、CLI与原生HTTP服务共享该策略，
+可显式用`--attention-backend torch-flash`保留dense。标准Docker构建包含固定Sol依赖；Python安装
+GPU依赖后执行`python -m vflash.install_sol`。缺依赖明确报错，不静默切换后端。
+跨步cache与量化通信不进入默认；不承诺完整媒体质量等价。
+详见[采用、暂缓和拒绝的机制](https://hansimov.github.io/vflash/zh/reference/sol-engine-alignment)。
 
 十秒 Base16 边界在列出的硬件上已有有界完整请求证据，但不代表任意画布或提示词都得到保证。匹配的
 SM89 双卡是显式的单请求低延迟选项；两个独立 worker 仍是吞吐默认。Turbo 和视频参考继续保持各自的
@@ -23,7 +25,7 @@ SM89 双卡是显式的单请求低延迟选项；两个独立 worker 仍是吞�
 需要 Python 3.11 或更新版本。基础安装不会下载模型权重或 PyTorch。
 
 ```bash
-git clone --branch v0.4.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.5.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
@@ -36,7 +38,7 @@ vflash plan ref2va-turbo4-exact-sm89 --gpu 0
 
 | 显卡配置 | 已发布配置 | 权重放置 |
 | --- | --- | --- |
-| 单 RTX 4090 48 GB | Ref2VA Turbo4 / Turbo8；T2VA Turbo4；Base16 I2VA/L2VA/FL2VA | 原生核心默认常驻；完整 pipeline 使用分块加载 |
+| 单 RTX 4090 48 GB | Ref2VA Turbo4 / Turbo8；T2VA Turbo4；Base16 I2VA/L2VA/FL2VA | Base16 Sol使用分块加载，Turbo原生核心保持常驻 |
 | 单 RTX 3080 20 GB | Ref2VA Turbo4 | 从系统内存分块加载 |
 | 双 RTX 3080 20 GB | Ref2VA Turbo4；T2VA Turbo4；Base16 I2VA/L2VA/FL2VA | 共享主机权重，协作 `sequence-head` |
 | 双 RTX 4090 48 GB | Base16 I2VA/L2VA/FL2VA | 可选的协作低延迟路径，不是吞吐默认 |

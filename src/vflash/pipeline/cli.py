@@ -60,9 +60,9 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
     generate.add_argument("--seed", type=int, default=0)
     generate.add_argument(
         "--attention-backend",
-        choices=("torch-flash", "sol-sm89"),
-        default="torch-flash",
-        help="sol-sm89 explicitly enables approximate single-SM89 Base16 attention",
+        choices=("auto", "torch-flash", "sol-sm89"),
+        default="auto",
+        help="auto selects approximate Sol for single-SM89 Base16; torch-flash is dense",
     )
     generate.add_argument(
         "--audio-delivery-profile",
@@ -155,7 +155,7 @@ def run_pipeline_command(args: argparse.Namespace) -> int:
         if args.peer_gpu not in devices:
             raise ContractError(f"GPU index {args.peer_gpu} was not found")
         options = {"peer_device": devices[args.peer_gpu], "strategy": args.strategy}
-    if args.attention_backend != "torch-flash":
+    if args.attention_backend != "auto":
         options["attention_backend"] = args.attention_backend
     with H3Pipeline(
         prepared, device=devices[args.gpu], trust_local_code=True, **options

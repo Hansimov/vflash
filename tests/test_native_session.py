@@ -55,8 +55,9 @@ def test_tampered_t2_sm86_plan_rejected_before_runtime(monkeypatch, tmp_path, st
         ("fl2va-base16-bf16-sm86", "8.6", 20.0, "sequence-head", "block-ring"),
     ],
 )
+@pytest.mark.parametrize("attention", ["auto", "torch-flash"])
 def test_session_loads_once_and_keeps_request_accounting_separate(
-    monkeypatch, tmp_path, profile_id, capability, memory, strategy, residency
+    monkeypatch, tmp_path, profile_id, capability, memory, strategy, residency, attention
 ):
     loads = []
     calls = []
@@ -90,6 +91,7 @@ def test_session_loads_once_and_keeps_request_accounting_separate(
     monkeypatch.setattr(
         "vflash.native.h3_native_conditioning_runtime.H3NativeConditioningRuntime", Runtime
     )
+    monkeypatch.setattr("vflash.native.runner.require_attention_dependencies", lambda _: None)
     monkeypatch.setitem(
         sys.modules,
         "torch",
@@ -113,6 +115,7 @@ def test_session_loads_once_and_keeps_request_accounting_separate(
         schedule_overlay=tmp_path / "schedule",
         auxiliary_tensor=tmp_path / "auxiliary",
         weight_residency=residency,
+        attention_backend=attention,
     )
     first = session.generate(tmp_path / "bundle-a", tmp_path / "first")
     progress = []
@@ -139,7 +142,16 @@ def test_session_loads_once_and_keeps_request_accounting_separate(
     )
     assert loads[0]["expected_task"] == plan.profile.mode.value
     assert loads[0]["parallel_strategy"] == strategy
-    assert loads[0]["weight_residency"] == residency
+    sol = (
+        attention == "auto"
+        and capability == "8.9"
+        and strategy == "single"
+        and expected_nfe == 16
+    )
+    assert loads[0]["attention_backend"] == ("sol-sm89" if sol else "torch-flash")
+    assert loads[0]["weight_residency"] == (
+        "block-ring" if sol and residency == "default" else residency
+    )
     assert second["parallel"]["strategy"] == strategy
     session.close()
     session.close()

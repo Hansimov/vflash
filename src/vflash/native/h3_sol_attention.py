@@ -1,4 +1,4 @@
-"""Opt-in approximate video attention with exact text, keyframe and audio rows.
+"""Approximate video attention with exact text, keyframe and audio rows.
 
 Uses NVIDIA Sol-Attn's public API; no upstream implementation is vendored.
 The conservative SM89 profile fixes tau=0 and never silently falls back.

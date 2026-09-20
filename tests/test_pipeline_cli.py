@@ -31,7 +31,7 @@ def test_generate_parser_preserves_reference_order():
     assert args.audio_delivery_profile == "unchanged"
     assert args.keyframe_delivery_profile == "decoded"
     assert args.profile_denoise is False
-    assert args.attention_backend == "torch-flash"
+    assert args.attention_backend == "auto"
 
 
 def test_generate_parser_exposes_explicit_approximate_sol():

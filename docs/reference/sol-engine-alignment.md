@@ -62,7 +62,7 @@ and measurement boundaries are in the [performance guide](./performance).
 | Layerwise component offload and temporary VAE residency | Vflash uses explicit CPU masters, a two-slot block ring and serial encoder/core/VAE ownership | **Already present with a different lifecycle.** Do not add a second offload manager; improve the owned lifecycle only when stage and peak-memory measurements justify it. |
 | LoRA consumer fusion | Base16 has no adapter; qualified Turbo paths already fuse selected QKV merge and FFN adapter/activation consumers | **Partly present and profile-scoped.** The upstream FastH3 adapter is not interchangeable, and unsupported adapters keep the explicit residual path. |
 | Combined RMSNorm/AdaLN and QKNorm/RoPE/pack | Upstream fusion changes reduction or rotary arithmetic boundaries | **Not copied.** Requires independent same-architecture numerical and full-request proof. |
-| Sol sparse attention | Explicit `sol-sm89` backend on source main | **Experimental, default off.** Single-SM89 Base16 only; actual CuTe execution and complete media are measured separately from quality qualification. See below. |
+| Sol sparse attention | `auto` selects `sol-sm89` in 0.5.0 | **Default for single-SM89 official Base16 only.** Approximate; explicit dense remains available. Actual CuTe execution and complete media are separate from quality qualification. |
 | TeaCache / FirstBlockCache | Upstream 4090 result uses 49 DiT forwards and reuses 35 | **Deferred.** Vflash Base16 uses 16 evaluations; the reuse opportunity and quality risk are different. |
 | INT8 QKV and FP8 output transport | Default in the eight-B300 fast profile | **Rejected for the exact default.** Lossy transport and a different topology need a separate profile and quality gate. |
 | Fused MXFP8 linears | SM100-family path; upstream reports material output divergence | **Out of scope.** It does not target SM86/SM89 and cannot inherit an exact label. |
@@ -72,18 +72,21 @@ and measurement boundaries are in the [performance guide](./performance).
 
 ## Exact and approximate are separate products
 
-The released Vflash profiles use dense PyTorch Flash SDPA and exact BF16 transport. “Exact” means
+Dense Vflash execution uses PyTorch Flash SDPA and exact BF16 transport. “Exact” means
 the selected implementation preserves its declared arithmetic and attention contract; it does not
 mean that two GPU architectures, two parallel decompositions, or a distilled adapter must emit the
 same tensor.
 
-### Explicit SM89 Sol backend (source main)
+### SM89 Sol default in 0.5.0 {#sol-default}
 
-`H3Pipeline(..., attention_backend="sol-sm89")` and `vflash generate --attention-backend sol-sm89`
-select the approximate path. Omitting the option, or selecting `torch-flash`, retains the dense
-default. It is restricted to a single SM89 GPU, official Base16 and serial block-ring execution;
-SM86, two-GPU execution and adapter profiles do not silently switch to another backend.
-This source-main option is not in the 0.4.0 wheel or older prebuilt images.
+The shared `auto` default selects approximate `sol-sm89` for single-SM89 official Base16 and
+`torch-flash` elsewhere. It applies to `H3Pipeline`, `NativeEngineSession`, `generate`, `denoise`
+and HTTP (`VFLASH_ATTENTION_BACKEND=auto`). Use `attention_backend="torch-flash"`,
+`--attention-backend torch-flash`, or the corresponding HTTP environment value to keep dense.
+Sol requires serial block-ring residency; native `default` resolves to block-ring for Sol.
+An explicit unsupported Sol selection fails. It does not enable Sol on SM86, pairs or Turbo.
+The prepared model/scheduler identity is unchanged; results report the actual non-exact policy.
+Version 0.4.0 and older prebuilt images do not contain this option.
 
 The adapter calls [NVIDIA Sol-Attn](https://nvlabs.github.io/Sana/Sol-Engine/docs/techniques/sparse/sol_attn/)
 at pinned source `d0c0a4685ab5dc2336d18b7213d85f13def92418`, version 0.5.0. It requires
@@ -98,17 +101,18 @@ later layers still consume altered hidden states. The generated trajectory and a
 Execution metadata reports `exact=false`, effective backends, the protected prefix length and
 operator calls; configuration before the first request reports zero calls and no executed backend.
 
-Build the optional overlay from the source checkout:
+Build the standard complete image from the 0.5.0 source checkout:
 
 ```bash
-docker build --target pipeline-sol-sm89 -t vflash:pipeline-sol-sm89 .
+docker build --target pipeline -t vflash:0.5.0-pipeline .
 ```
 
 It pins CUTLASS DSL 4.5.0, cuda-python 13.2.0 and TVM-FFI 0.1.11 on the existing Torch 2.11/cu130
 pipeline. Four upstream interface call sites receive the tested positional-stream ABI patch at
-build time. The default Docker target and ordinary pipeline are unchanged; model assets remain
-external. Reuse prepared assets and the mounts from the complete-pipeline guide, select this image,
-and add `--attention-backend sol-sm89` to `generate`. Do not extrapolate first-use JIT latency to
+build time. Both ordinary `runtime` and `pipeline` images include Sol; the separate experimental
+overlay is removed. For Python, install GPU/pipeline extras and run `python -m vflash.install_sol`
+in that environment (requires Git and network access; does not fetch models). Model assets remain
+external. Reuse prepared assets and the complete-pipeline mounts. Do not extrapolate first-use JIT latency to
 warm throughput or treat a successful MP4 as a same-quality result.
 
 ### Complete-request exploratory screen
@@ -141,10 +145,11 @@ intermediate progression and the audio waveform. Endpoint PSNR stayed approximat
 an application's separate cropping policy. These endpoint numbers do not qualify moving frames.
 Full-speed motion and audio-content/listening assessment remain open. In particular, low audio
 energy in both small arms is not a pass. **Same-quality and accepted-video throughput are not yet
-established; dense remains the deployment default.** No private reference or prompt is published
+established.** Version 0.5.0 makes the bounded Sol path the single-SM89 Base16 default as an explicit
+release decision, not a same-quality certification. No private reference or prompt is published
 with this two-workload screen, so it is aggregate engineering evidence, not a public benchmark suite.
 
-Approximate methods can be valuable, but they must be named, default-off, measurable and removable.
+Approximate methods must be named, measurable and removable, with default changes disclosed.
 They need a frozen prompt/reference/seed suite, full decoded video and audio review, actual playback
 and listening, repeat timing, thermal/stability evidence and a clear rollback. Tensor similarity or
 an upstream sample alone cannot qualify them.

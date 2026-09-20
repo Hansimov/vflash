@@ -28,8 +28,10 @@ arithmetic, memory layout, loading, scheduling, media delivery or only diagnosti
 adapter, step-count or precision change into a kernel speed comparison.
 
 An exact layout optimization should first prove element equality at representative shapes, then run
-a complete request. An approximate optimization needs a separate profile and full quality gate; it
-must never appear under an existing exact profile through an environment-dependent silent fallback.
+a complete request. Approximation must be named and reported as non-exact, never introduced through
+an environment-dependent silent fallback. Version 0.5.0 explicitly changes the single-SM89 Base16
+default to Sol while retaining the prepared model identity and explicit dense selection. This release
+decision does not close the full media-quality gate or permit other unqualified approximations.
 
 Add fail-closed input validation and a CPU reference path where appropriate. A runtime fallback must
 remain visible in result metadata or be limited to a semantics-preserving implementation.

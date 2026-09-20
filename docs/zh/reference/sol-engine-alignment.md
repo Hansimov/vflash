@@ -55,7 +55,7 @@ Sol-Engine 的 Ulysses 直接重排，但 Vflash 保留自己的四分块重叠�
 | 分层组件 offload 与临时 VAE 常驻 | Vflash 使用显式 CPU master、双槽 block ring，以及 encoder/core/VAE 串行所有权 | **已用不同生命周期实现。** 不叠加第二套 offload manager；只有阶段耗时和峰值显存证明有收益时才修改现有生命周期。 |
 | LoRA consumer fusion | Base16 没有 adapter；已准入的 Turbo 路径已融合部分 QKV merge 和 FFN adapter/activation consumer | **部分已有且限定 profile。** 上游 FastH3 adapter 不能互换，未准入 adapter 继续走显式 residual 路径。 |
 | RMSNorm/AdaLN 与 QKNorm/RoPE/pack 组合融合 | 上游融合改变 reduction 或 rotary 的算术边界 | **不直接复制。** 需同架构数值和完整请求独立证明。 |
-| Sol 稀疏注意力 | 源码main中的显式`sol-sm89`后端 | **实验性、默认关闭。** 仅单SM89官方Base16；真实CuTe执行与完整媒体实测不等于质量资格。见下文。 |
+| Sol 稀疏注意力 | 0.5.0的`auto`选择`sol-sm89` | **仅单SM89官方Base16默认启用。** 仍是近似，显式dense可选；真实CuTe执行和完整媒体不等于质量资格。 |
 | TeaCache / FirstBlockCache | 上游 4090 结果为 49 次 DiT forward，复用其中 35 次 | **暂缓。** Vflash Base16 只有 16 次评估，收益空间与质量风险不同。 |
 | INT8 QKV 与 FP8 输出传输 | 八张 B300 快速配置的默认项 | **不进入精确默认。** 有损传输和不同拓扑需要独立 profile 与质量门。 |
 | MXFP8 融合线性层 | SM100 系列路径；上游报告了明显输出差异 | **不在范围内。** 不面向 SM86/SM89，也不能继承 exact 名称。 |
@@ -65,14 +65,17 @@ Sol-Engine 的 Ulysses 直接重排，但 Vflash 保留自己的四分块重叠�
 
 ## 精确与近似是两类产品
 
-已发布的 Vflash profile 使用 dense PyTorch Flash SDPA 和精确 BF16 传输。这里的“精确”表示所选实现
+dense执行使用PyTorch Flash SDPA和精确BF16传输。这里的“精确”表示所选实现
 保持声明的算术与注意力合同；它不表示不同 GPU 架构、不同并行拆分或蒸馏 adapter 必须输出相同张量。
 
-### 显式SM89 Sol后端（源码main）
+### 0.5.0的SM89 Sol默认 {#sol-default}
 
-`H3Pipeline(..., attention_backend="sol-sm89")`或`vflash generate --attention-backend sol-sm89`
-启用近似路径；省略该参数或选择`torch-flash`保持dense默认。当前只接受单SM89、官方Base16及串行
-block-ring执行，SM86、双卡和adapter配置不会静默切换成其他后端。此选项尚不属于0.4.0 wheel或旧预构建镜像。
+共享`auto`默认在单SM89官方Base16选择近似`sol-sm89`，其他配置为`torch-flash`。
+覆盖`H3Pipeline`、`NativeEngineSession`、`generate`、`denoise`及HTTP的`VFLASH_ATTENTION_BACKEND=auto`。
+用`attention_backend="torch-flash"`、`--attention-backend torch-flash`或对应HTTP环境值显式保留dense。
+Sol需要串行block-ring；原生会话的`default`在Sol下解析为block-ring。显式选择不支持的Sol会报错，
+不会在SM86、双卡或Turbo上启用。prepared模型/调度身份不变，结果报告实际非精确策略。
+0.4.0和旧预构建镜像不含该能力。
 
 适配器调用[NVIDIA Sol-Attn](https://nvlabs.github.io/Sana/Sol-Engine/docs/techniques/sparse/sol_attn/)，
 固定源码`d0c0a4685ab5dc2336d18b7213d85f13def92418`、版本0.5.0。
@@ -85,16 +88,17 @@ BF16 BTHD Q/K/V的head dimension为128；固定`tau=0`、对角阈值及文字/�
 视频轨迹和声音都可能改变。执行metadata报告`exact=false`、真实后端、保护前缀长度和调用次数；
 首个请求前只报告零次调用及空执行后端，不能把配置声明当作执行证据。
 
-在源码checkout中构建可选镜像：
+在0.5.0源码checkout中构建标准完整镜像：
 
 ```bash
-docker build --target pipeline-sol-sm89 -t vflash:pipeline-sol-sm89 .
+docker build --target pipeline -t vflash:0.5.0-pipeline .
 ```
 
 该target基于原Torch 2.11/cu130 pipeline，固定CUTLASS DSL 4.5.0、cuda-python 13.2.0及
 TVM-FFI 0.1.11，并在构建时对上游四处interface调用应用已测的位置stream参数ABI补丁。
-默认Docker target和普通pipeline不变，模型仍外部挂载。复用既有prepared assets及完整pipeline指南的
-挂载方式，选择此镜像并向`generate`加入`--attention-backend sol-sm89`。
+普通`runtime`和`pipeline`都包含Sol，移除独立实验overlay。Python安装GPU/pipeline依赖后，在同一
+环境运行`python -m vflash.install_sol`（需要Git及网络，不下载模型）。模型仍外部挂载，复用既有
+prepared assets及完整pipeline指南的挂载方式即可。
 首用JIT时延不能外推为热态吞吐，MP4成功也不等于同质量成立。
 
 ### 完整请求探索性对照
@@ -121,10 +125,11 @@ control漂移0.070%。小场景Sol包含首次编译，其独立成本未分离�
 但Sol改变了中间进展和音频波形。端点PSNR约33.14 dB（I2VA）及31.28 dB（L2VA），
 参考为此次直接引擎合同的Lanczos resize，不是应用层另行规定的裁切；端点指标不代表运动帧合格。
 全速动态、声音内容和实际试听仍未关闭，尤其小场景两臂声音能量都较低，不能记为质量通过。
-**同质量和合格视频吞吐尚未成立，线上默认仍为dense。** 两场景不公开私有参考/提示，仅作为聚合工程
+**同质量和合格视频吞吐尚未成立。** 0.5.0将有界Sol路径作为单SM89 Base16默认是明确的版本决策，
+不是同质量认证。两场景不公开私有参考/提示，仅作为聚合工程
 证据，不能冒充可公开复现的完整benchmark套件。
 
-近似方法可能有价值，但必须具名、默认关闭、可测量且可移除。它们需要固定的提示词/参考/seed 套件、
+近似方法必须具名、可测量且可移除，默认变更必须明确披露。它们需要固定的提示词/参考/seed套件、
 完整解码视频与音频复核、实际播放与试听、重复计时、温度/稳定性证据和清晰回滚。仅有张量相似度或上游
 样片不能完成资格验证。
 

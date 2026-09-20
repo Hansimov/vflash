@@ -3,10 +3,14 @@
 把 Vflash 作为本地 HTTP 服务运行。服务接收预编译条件包，返回视频和音频潜变量（latents，即解码前的张量）；加载一个固定配置后，连续串行处理多个请求。
 
 ::: warning 镜像版本
-最新预构建 Docker 镜像仍为 **0.3.2**。0.4.0 发布源码和 wheel；如需 Base16 关键帧、
+最新预构建 Docker 镜像仍为 **0.3.2**。0.5.0 发布源码和 wheel；如需 Base16 关键帧、
 五至十秒请求和新的精确双卡重排，请在本地构建 `runtime` 或 `pipeline` target。
-不得从 0.3.2 镜像推导 0.4.0 能力。
+不得从 0.3.2 镜像推导 0.5.0 能力。
 :::
+
+标准`runtime`与`pipeline`构建均包含固定Sol依赖。单SM89官方Base16默认近似Sol，其他配置/双卡保持dense。
+HTTP可设置`VFLASH_ATTENTION_BACKEND=torch-flash`，`generate`/`denoise`可加`--attention-backend torch-flash`。
+`/readyz`报告选择结果而不是已执行调用，任务runtime元数据才报告实际后端；缺依赖时服务不就绪，不静默回退。
 
 ## 运行要求 {#requirements}
 
@@ -25,7 +29,7 @@ cp docker/.env.example docker/.env
 编辑 `docker/.env`，把所有示例路径换成 Docker 主机上的绝对路径：
 
 ```dotenv
-VFLASH_IMAGE=hansimov/vflash:0.3.2
+VFLASH_IMAGE=vflash:0.5.0
 VFLASH_PROFILE_ID=ref2va-turbo4-exact-sm89
 VFLASH_GPU_DEVICE=0
 
@@ -42,11 +46,11 @@ VFLASH_HOST_OUTPUTS=/path/to/outputs
 
 ```bash
 sudo install -d -o 10001 -g 10001 /path/to/outputs
-docker compose --env-file docker/.env -f docker/compose.yaml pull
+docker compose --env-file docker/.env -f docker/compose.yaml build
 docker compose --env-file docker/.env -f docker/compose.yaml up -d --no-build
 ```
 
-带版本号的镜像已发布到 [Docker Hub](https://hub.docker.com/r/hansimov/vflash/tags)，不可变摘要见[镜像清单](https://github.com/Hansimov/vflash/blob/v0.3.2/docker/images.json)。模型只读挂载，输出和内核缓存使用独立的可写存储。需要本地构建 0.4.0 时，执行 `docker build --target runtime -t vflash:0.4.0 .`，然后在环境文件中选择该镜像。
+带版本号的镜像已发布到 [Docker Hub](https://hub.docker.com/r/hansimov/vflash/tags)，不可变摘要见[镜像清单](https://github.com/Hansimov/vflash/blob/v0.3.2/docker/images.json)。模型只读挂载，输出和内核缓存使用独立的可写存储。需要本地构建 0.5.0 时，执行 `docker build --target runtime -t vflash:0.5.0 .`，然后在环境文件中选择该镜像。
 
 Compose 默认只将接口绑定到 **127.0.0.1:8000**。引擎没有内置身份验证；本地使用时保留这个绑定，需要远程访问时则先接入应用的鉴权层。
 
@@ -54,10 +58,10 @@ Compose 默认只将接口绑定到 **127.0.0.1:8000**。引擎没有内置身�
 
 `pipeline` 镜像预装官方编码器与 VAE 适配器、CUDA 对应的 Torchvision、FFmpeg 和 FFprobe，入口是 `vflash`，用 `generate` 生成完整视频。独立的原生镜像运行 HTTP latent 服务。
 
-拉取已发布的完整链路镜像：
+从发布版源码构建完整链路镜像：
 
 ```bash
-docker pull hansimov/vflash:0.3.2-pipeline
+docker build --target pipeline -t vflash:0.5.0-pipeline .
 mkdir -p inputs outputs cache
 ```
 
@@ -71,7 +75,7 @@ docker run --rm --runtime=runc -e NVIDIA_VISIBLE_DEVICES=void \
   -v /absolute/model-directory:/models:ro \
   -v "$PWD/inputs:/inputs:ro" -v "$PWD/outputs:/outputs:rw" \
   -v "$PWD/cache:/cache:rw" \
-  hansimov/vflash:0.3.2-pipeline prepare-pipeline \
+  vflash:0.5.0-pipeline prepare-pipeline \
   --assets /inputs/pipeline-assets.json --receipt /outputs/prepared-assets.json
 ```
 
@@ -85,7 +89,7 @@ docker run --rm --gpus device=0 --shm-size 4g \
   -v /absolute/model-directory:/models:ro \
   -v "$PWD/inputs:/inputs:ro" -v "$PWD/outputs:/outputs:rw" \
   -v "$PWD/cache:/cache:rw" \
-  hansimov/vflash:0.3.2-pipeline generate \
+  vflash:0.5.0-pipeline generate \
   --prepared-assets /outputs/prepared-assets.json \
   --prompt-file /inputs/prompt.txt \
   --reference /inputs/subject.png --reference /inputs/setting.png \
@@ -94,7 +98,7 @@ docker run --rm --gpus device=0 --shm-size 4g \
 
 使用 Ref4 时，`--reference` 可以出现一至三次。使用 T2VA 时，以 `--profile t2va-turbo4-exact-sm89` 准备 Base4 资产，并省略参考图。两者均生成五秒、24 fps 视频。进度 JSON 写入 stderr，最终结果写入 stdout。镜像不包含模型权重；请核对[完整链路能力和内存预算](./complete-pipeline)及[模型许可证](../reference/license)。
 
-如需从 v0.4.0 标签源码构建完整镜像，可执行 `docker build --target pipeline -t vflash:0.4.0-pipeline .`，并将命令中的镜像名替换为本地名称。
+如需从 v0.5.0 标签源码构建完整镜像，可执行 `docker build --target pipeline -t vflash:0.5.0-pipeline .`，并将命令中的镜像名替换为本地名称。
 
 双张 RTX 3080 20 GB 使用 [SM86 编译资产](../reference/pipeline-profiles#sm86)，在 `prepare-pipeline` 后加 `--profile ref2va-turbo4-exact-sm86`。生成命令将 `--gpus device=0` 替换为 `--gpus '"device=0,1"'`，在 `--gpu 0` 后加 `--peer-gpu 1 --strategy sequence-head`。进程退出前，两张卡都由该实例持有；主卡执行编码和解码，双卡共同去噪。这里是完整链路配置，下文的 Compose 则部署原生 HTTP 接口。
 

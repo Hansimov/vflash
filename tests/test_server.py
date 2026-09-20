@@ -41,6 +41,33 @@ def _sm89_devices() -> tuple[NvidiaDevice, ...]:
     return (NvidiaDevice(0, "test-uuid", "RTX 4090", 48.0, "8.9", 450.0),)
 
 
+def test_base16_readiness_reports_sol_and_missing_dependency_without_cuda(
+    tmp_path, monkeypatch
+):
+    settings = replace(_settings(tmp_path), profile_id="i2va-base16-bf16-sm89")
+    monkeypatch.setattr("vflash.attention.find_spec", lambda _: None)
+    with TestClient(create_app(settings, device_provider=_sm89_devices)) as client:
+        ready = client.get("/readyz")
+        assert ready.status_code == 503
+        assert ready.json()["attention_selection"] == {
+            "requested": "auto",
+            "resolved": "sol-sm89",
+            "exact": False,
+            "executed": False,
+        }
+        assert "python -m vflash.install_sol" in ready.json()["error"]
+        monkeypatch.setattr("vflash.attention.find_spec", lambda _: object())
+        assert client.get("/readyz").status_code == 200
+    dense = replace(settings, attention_backend="torch-flash")
+    monkeypatch.setattr("vflash.attention.find_spec", lambda _: None)
+    with TestClient(create_app(dense, device_provider=_sm89_devices)) as client:
+        assert client.get("/readyz").json()["attention_selection"]["resolved"] == "torch-flash"
+    assert (
+        ServerSettings.from_env({"VFLASH_ATTENTION_BACKEND": "torch-flash"}).attention_backend
+        == "torch-flash"
+    )
+
+
 def test_health_readiness_and_profiles_are_honest(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     app = create_app(settings, device_provider=_sm89_devices)
@@ -137,6 +164,7 @@ def test_native_executor_reuses_one_worker_and_closes_it(tmp_path: Path, monkeyp
 
     class Worker:
         def __init__(self, plan, **_options):
+            assert _options["attention_backend"] == settings.attention_backend
             self.plan = plan
             self.calls = 0
             self.closed = False

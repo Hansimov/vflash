@@ -13,7 +13,7 @@ Python 链路和 `vflash generate` 在 SM89 上支持**纯文字、一至三张�
 需要 Python 3.11 或更新版本。基础安装很轻量，不会下载模型权重或 PyTorch。
 
 ```bash
-git clone --branch v0.4.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.5.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate

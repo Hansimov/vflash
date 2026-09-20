@@ -3,10 +3,16 @@
 Generate a complete video with the [pipeline image](#pipeline), or run the native denoiser as a local HTTP service. The service accepts a compiled conditioning bundle and returns video and audio latents (tensors ready for decoding). It loads one profile and reuses it across serial requests.
 
 ::: warning Image version
-The latest prebuilt Docker images remain **0.3.2**. Version 0.4.0 is published as source and a
+The latest prebuilt Docker images remain **0.3.2**. Version 0.5.0 is published as source and a
 wheel; build its `runtime` or `pipeline` target locally to use Base16 keyframes, five-to-ten-second
-requests and the new exact two-GPU relayout. Do not infer 0.4.0 capabilities from a 0.3.2 image.
+requests and the new exact two-GPU relayout. Do not infer 0.5.0 capabilities from a 0.3.2 image.
 :::
+
+The standard `runtime` and `pipeline` builds now include pinned Sol dependencies. Single-SM89
+official Base16 defaults to approximate Sol; other profiles/pairs stay dense. Set
+`VFLASH_ATTENTION_BACKEND=torch-flash` for dense HTTP execution, or add `--attention-backend torch-flash`
+to `generate`/`denoise`. `/readyz` reports selection (not executed calls); job runtime metadata reports
+the actual backend. Missing dependencies make the service unready rather than silently falling back.
 
 ## Requirements {#requirements}
 
@@ -25,7 +31,7 @@ cp docker/.env.example docker/.env
 Edit `docker/.env`. Replace every example path with an absolute path on the Docker host:
 
 ```dotenv
-VFLASH_IMAGE=hansimov/vflash:0.3.2
+VFLASH_IMAGE=vflash:0.5.0
 VFLASH_PROFILE_ID=ref2va-turbo4-exact-sm89
 VFLASH_GPU_DEVICE=0
 
@@ -38,15 +44,15 @@ VFLASH_HOST_OUTPUTS=/path/to/outputs
 
 `VFLASH_GPU_DEVICE` selects one host GPU by index or UUID. The container sees the selected GPU as device `0`. For a 3080, use `ref2va-turbo4-exact-sm86` and matching SM86 resources. For 4090 Turbo8, use `ref2va-turbo8-exact-sm89` and its corresponding resources.
 
-The container runs as UID/GID `10001`. Create the output directory with write access for that user, then pull and start the released service:
+The container runs as UID/GID `10001`. Create the output directory with write access for that user, then build and start from the release checkout:
 
 ```bash
 sudo install -d -o 10001 -g 10001 /path/to/outputs
-docker compose --env-file docker/.env -f docker/compose.yaml pull
+docker compose --env-file docker/.env -f docker/compose.yaml build
 docker compose --env-file docker/.env -f docker/compose.yaml up -d --no-build
 ```
 
-Versioned images are published on [Docker Hub](https://hub.docker.com/r/hansimov/vflash/tags). Their immutable digests are recorded in [the image inventory](https://github.com/Hansimov/vflash/blob/v0.3.2/docker/images.json). Models stay mounted read-only; outputs and kernel caches use separate writable storage. To build version 0.4.0 locally, use `docker build --target runtime -t vflash:0.4.0 .` and select that image in your environment file.
+Versioned images are published on [Docker Hub](https://hub.docker.com/r/hansimov/vflash/tags). Their immutable digests are recorded in [the image inventory](https://github.com/Hansimov/vflash/blob/v0.3.2/docker/images.json). Models stay mounted read-only; outputs and kernel caches use separate writable storage. To build version 0.5.0 locally, use `docker build --target runtime -t vflash:0.5.0 .` and select that image in your environment file.
 
 The Compose configuration binds the API to **127.0.0.1:8000**. The engine has no built-in authentication. Keep this binding for local use, or put the API behind your application's authentication before allowing remote access.
 
@@ -54,10 +60,10 @@ The Compose configuration binds the API to **127.0.0.1:8000**. The engine has no
 
 The `pipeline` image includes the official encoder/VAE adapters, CUDA-matched Torchvision, FFmpeg and FFprobe. Its entry point is `vflash`; `generate` writes a complete video. The separate native image runs the HTTP latent service.
 
-Pull the released complete-pipeline image:
+Build the complete-pipeline image from the release checkout:
 
 ```bash
-docker pull hansimov/vflash:0.3.2-pipeline
+docker build --target pipeline -t vflash:0.5.0-pipeline .
 mkdir -p inputs outputs cache
 ```
 
@@ -71,7 +77,7 @@ docker run --rm --runtime=runc -e NVIDIA_VISIBLE_DEVICES=void \
   -v /absolute/model-directory:/models:ro \
   -v "$PWD/inputs:/inputs:ro" -v "$PWD/outputs:/outputs:rw" \
   -v "$PWD/cache:/cache:rw" \
-  hansimov/vflash:0.3.2-pipeline prepare-pipeline \
+  vflash:0.5.0-pipeline prepare-pipeline \
   --assets /inputs/pipeline-assets.json --receipt /outputs/prepared-assets.json
 ```
 
@@ -85,7 +91,7 @@ docker run --rm --gpus device=0 --shm-size 4g \
   -v /absolute/model-directory:/models:ro \
   -v "$PWD/inputs:/inputs:ro" -v "$PWD/outputs:/outputs:rw" \
   -v "$PWD/cache:/cache:rw" \
-  hansimov/vflash:0.3.2-pipeline generate \
+  vflash:0.5.0-pipeline generate \
   --prepared-assets /outputs/prepared-assets.json \
   --prompt-file /inputs/prompt.txt \
   --reference /inputs/subject.png --reference /inputs/setting.png \
@@ -96,7 +102,7 @@ Use one to three `--reference` arguments for Ref4. For T2VA, prepare Base4 asset
 
 For two RTX 3080 20 GB GPUs, use [SM86-compiled assets](../reference/pipeline-profiles#sm86) and add `--profile ref2va-turbo4-exact-sm86` to `prepare-pipeline`. In the generation command, replace `--gpus device=0` with `--gpus '"device=0,1"'` and add `--peer-gpu 1 --strategy sequence-head` after `--gpu 0`. Keep both cards assigned to this process until it exits. The primary owns encoding and decoding; the pair cooperates in denoising. These are complete-pipeline options, separate from the native HTTP Compose setup below.
 
-To build the complete image from the v0.4.0 tagged source, run `docker build --target pipeline -t vflash:0.4.0-pipeline .` and substitute that local image name in the commands.
+To build the complete image from the v0.5.0 tagged source, run `docker build --target pipeline -t vflash:0.5.0-pipeline .` and substitute that local image name in the commands.
 
 The published images reuse the immutable 0.3.1 image layers and install the 0.3.2 wheel. The [release assets](https://github.com/Hansimov/vflash/releases/tag/v0.3.2) include that wheel and `Dockerfile.release`; [the inventory](https://github.com/Hansimov/vflash/blob/v0.3.2/docker/images.json) records its hash, dependency images and qualification. This avoids redownloading unchanged dependencies; the source Dockerfile above remains the full build recipe. For the published small-layer build, check out the inventory’s `implementation_revision` and place the attached wheel in `dist/` before using `Dockerfile.release`. The release tag adds documentation and the image inventory without changing runtime source.
 

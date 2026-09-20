@@ -25,6 +25,11 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from vflash import __version__
+from vflash.attention import (
+    ATTENTION_BACKENDS,
+    require_attention_dependencies,
+    resolve_attention_backend,
+)
 from vflash.catalog import ProfileCatalog
 from vflash.contracts import ContractError
 from vflash.hardware import NvidiaDevice, discover_nvidia_devices
@@ -59,8 +64,11 @@ class ServerSettings:
     job_history_limit: int = 128
     peer_gpu_index: int | None = None
     parallel_strategy: str | None = None
+    attention_backend: str = "auto"
 
     def __post_init__(self) -> None:
+        if self.attention_backend not in ATTENTION_BACKENDS:
+            raise ContractError("unknown attention backend")
         if self.gpu_index < 0:
             raise ContractError("GPU index must be non-negative")
         if self.peer_gpu_index is not None and (
@@ -102,6 +110,7 @@ class ServerSettings:
                 else None
             ),
             parallel_strategy=values.get("VFLASH_PARALLEL_STRATEGY"),
+            attention_backend=values.get("VFLASH_ATTENTION_BACKEND", "auto"),
         )
 
 
@@ -157,6 +166,7 @@ class NativeDenoiseExecutor:
                 artifact=self.settings.artifact_path,
                 schedule_overlay=self.settings.schedule_overlay_path,
                 auxiliary_tensor=self.settings.auxiliary_tensor_path,
+                attention_backend=self.settings.attention_backend,
             )
         payload = self.worker.generate(bundle, output)
         generation = dict(payload["generation"])
@@ -312,7 +322,8 @@ def create_app(
                     "availability": profile.availability.value,
                     "nfe": profile.nfe,
                     "precision": profile.precision,
-                    "attention": profile.attention.backend,
+                    "baseline_attention": profile.attention.backend,
+                    "requested_attention_backend": resolved.attention_backend,
                     "capabilities": CAPABILITIES,
                 }
             ]
@@ -401,9 +412,11 @@ def _readiness(
         "output_root": settings.output_root.is_dir()
         and os.access(settings.output_root, os.W_OK),
         "gpu": False,
+        "attention": False,
     }
     gpu: dict[str, Any] | None = None
     parallel: dict[str, Any] | None = None
+    attention: dict[str, Any] | None = None
     error: str | None = None
     try:
         devices = {device.index: device for device in device_provider()}
@@ -417,6 +430,15 @@ def _readiness(
             strategy=settings.parallel_strategy,
         )
         checks["gpu"] = True
+        backend = resolve_attention_backend(plan, settings.attention_backend)
+        attention = {
+            "requested": settings.attention_backend,
+            "resolved": backend,
+            "exact": backend == "torch-flash",
+            "executed": False,
+        }
+        require_attention_dependencies(backend)
+        checks["attention"] = True
         gpu = {
             "index": device.index,
             "name": device.name,
@@ -438,6 +460,7 @@ def _readiness(
         "checks": checks,
         "gpu": gpu,
         "parallel": parallel,
+        "attention_selection": attention,
         "error": error,
     }
 

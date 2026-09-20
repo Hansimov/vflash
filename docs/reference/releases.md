@@ -1,6 +1,36 @@
 # Release notes
 
-The current release is **0.4.0**. It adds official Base16 first-frame, last-frame and first-plus-last-frame generation from five through ten seconds, raises the keyframe canvas ceiling to about one megapixel, and adds an opt-in two-SM89 latency path. The exact two-GPU path now uses direct destination-major relayouts measured independently on SM86 and SM89.
+The current release is **0.5.0**, with architecture-aware Sol defaults and the full binary-megapixel input budget.
+
+## 0.5.0 · Integrated single-SM89 Sol default {#v0-5-0}
+
+[Source tag](https://github.com/Hansimov/vflash/tree/v0.5.0) · [Sol evidence and limits](./sol-engine-alignment)
+
+`auto` now selects approximate `sol-sm89` for official Base16 on one SM89 GPU. SM86, cooperating
+pairs and Turbo profiles retain dense `torch-flash`. Python complete/native sessions, `generate`,
+`denoise`, `plan` and the native HTTP service use the same selection rule. Explicit `torch-flash`
+preserves dense behavior. Sol uses serial block-ring residency and reports `exact=false`, actual
+operator calls and protected modality rows; it does not silently fall back on dependency failure.
+
+`profiles` and `/v1/profiles` now name the model's dense policy `baseline_attention`; it is not
+the executed selection. Use `plan` or `/readyz`'s `attention_selection` for resolved configuration,
+and completed-job runtime metadata for actual execution. Update clients of those inspection fields.
+
+Standard `runtime` and `pipeline` Docker builds include fixed Sol 0.5.0 dependencies and the reviewed
+four-call CUTLASS stream ABI patch. Python users install GPU/pipeline extras, then run
+`python -m vflash.install_sol`. The former separate `pipeline-sol-sm89` target is removed.
+Model weights are unchanged and remain separate licensed inputs; no product configuration is packaged.
+
+The unchanged Sol kernel reuses earlier SM89 hardware evidence: one fixed ten-second 736 × 992
+Base16 A/B/A reduced local complete-request time by 19.584% and denoising by 21.078%, with 0.070%
+control drift and profiling enabled. Each Sol request made 800 real operator calls. This is not a
+new 0.5.0 benchmark, a universal speedup or a same-quality claim. Motion and audio-content quality,
+unprofiled accepted throughput and first-use compilation remain separate limitations.
+
+This release also includes the post-0.4.0 1,048,576-pixel validation/conditioning budget and explicit
+`silent-v1` media delivery. They do not expand every GPU's measured capacity. Source archives and
+a wheel are published; the historical 0.3.2 registry images are not relabeled as 0.5.0. Build current
+Docker targets from this tag. Existing deployments keep their pinned version until explicitly upgraded.
 
 ## 0.4.0 · Base16 keyframes and measured Sol-Engine alignment {#v0-4-0}
 

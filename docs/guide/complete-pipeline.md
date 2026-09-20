@@ -1,6 +1,6 @@
 # Generate a video
 
-Vflash 0.4.0 generates a five-second MP4 from text alone, or from a prompt and one to three ordered reference images. Version 0.4.0 supports official Base16 I2VA, L2VA and FL2VA requests with one first-frame anchor, one last-frame anchor, or both anchors. Use the Python API for repeated requests or the container CLI for a single generation. The complete pipeline supports T2VA Base4 and Ref2VA Turbo4 on one RTX 4090 48 GB; Ref4 also runs on two RTX 3080 20 GB GPUs. The Base16 keyframe profiles target one RTX 4090 48 GB, an optional cooperating pair of matching RTX 4090 48 GB GPUs, or a cooperating pair of RTX 3080 20 GB GPUs.
+Vflash 0.5.0 generates a five-second MP4 from text alone, or from a prompt and one to three ordered reference images. Version 0.4.0 supports official Base16 I2VA, L2VA and FL2VA requests with one first-frame anchor, one last-frame anchor, or both anchors. Use the Python API for repeated requests or the container CLI for a single generation. The complete pipeline supports T2VA Base4 and Ref2VA Turbo4 on one RTX 4090 48 GB; Ref4 also runs on two RTX 3080 20 GB GPUs. The Base16 keyframe profiles target one RTX 4090 48 GB, an optional cooperating pair of matching RTX 4090 48 GB GPUs, or a cooperating pair of RTX 3080 20 GB GPUs.
 
 On one 4090, Ref4 also accepts [a short reference video](#reference-video). The same instance can alternate images and video without switching weights.
 
@@ -8,13 +8,13 @@ On one 4090, Ref4 also accepts [a short reference video](#reference-video). The 
 
 Vflash owns the native denoiser, stage lifetimes, local image loading and MP4 delivery. The text and image encoders use pinned Diffusers and Transformers code; Turbo profiles additionally use PEFT adapters. Video and audio decoding use the official H3 VAE code. These components are explicit dependencies; they are not described as new native kernels. No LightX2V runtime or application server is needed.
 
-Turbo requests use four denoising evaluations and retain their five-second contract. The Base16 keyframe profiles use 16 evaluations and accept integer durations from five through ten seconds on the native 24 fps clock. The corresponding model/delivery frame pairs are 5s 124/120, 6s 158/144, 7s 175/168, 8s 192/192, 9s 226/216 and 10s 243/240. Width and height must be multiples of 32, with at most 1,032,192 canvas pixels (the `1344 × 768` area) and an aspect ratio between 1:4 and 4:1. A video-reference request retains its separate 475,136-pixel output limit. These are API ceilings; a serving system must still advertise only duration-and-canvas combinations qualified on its actual hardware. The prompt is used verbatim. For Ref2VA, the one to three images are numbered in the order supplied: `<Picture 1>`, `<Picture 2>` and `<Picture 3>`. Describe each image’s subject and role in your prompt. These are visual references, not frame positions or guaranteed keyframes. I2VA takes one distinct frame-zero anchor, L2VA takes one final-frame anchor, and either may call its single image `<Picture 1>`. FL2VA takes both anchors, exposed as `<Picture 1>` and `<Picture 2>` in temporal order. Five- and ten-second I2VA/FL2VA paths have bounded hardware evidence. One ten-second, 736 × 992 SM89 L2VA case now has bounded completion, media-integrity, endpoint and latency evidence; broader L2VA quality, other canvases and intermediate durations still require target-hardware qualification before a serving system can claim delivery.
+Turbo requests use four denoising evaluations and retain their five-second contract. The Base16 keyframe profiles use 16 evaluations and accept integer durations from five through ten seconds on the native 24 fps clock. The corresponding model/delivery frame pairs are 5s 124/120, 6s 158/144, 7s 175/168, 8s 192/192, 9s 226/216 and 10s 243/240. Width and height must be multiples of 32, with at most 1,048,576 canvas pixels and an aspect ratio between 1:4 and 4:1. A video-reference request retains its separate 475,136-pixel output limit. These are API ceilings; a serving system must still advertise only duration-and-canvas combinations qualified on its actual hardware. The prompt is used verbatim. For Ref2VA, the one to three images are numbered in the order supplied: `<Picture 1>`, `<Picture 2>` and `<Picture 3>`. Describe each image’s subject and role in your prompt. These are visual references, not frame positions or guaranteed keyframes. I2VA takes one distinct frame-zero anchor, L2VA takes one final-frame anchor, and either may call its single image `<Picture 1>`. FL2VA takes both anchors, exposed as `<Picture 1>` and `<Picture 2>` in temporal order. Five- and ten-second I2VA/FL2VA paths have bounded hardware evidence. One ten-second, 736 × 992 SM89 L2VA case now has bounded completion, media-integrity, endpoint and latency evidence; broader L2VA quality, other canvases and intermediate durations still require target-hardware qualification before a serving system can claim delivery.
 
 Choose the [fixed model profile](../reference/pipeline-profiles) before preparing assets. Ref2VA uses `transformer_ref` and Ref4 v0.1; T2VA uses `transformer` and Base4 v1.0; Base16 keyframe requests use the official `transformer` at 16 evaluations without an adapter. The paired Base16 I2VA and FL2VA profile identities for the same hardware share the exact model artifact and schedule, so either prepared keyframe pipeline can serve I2VA, L2VA and FL2VA serially without a profile restart or cold initialization. Conditioning metadata remains specific to the actual request. The result keeps the prepared identity in `profile_id` and records the actual input type in `request_mode`. Per-request stage residency still follows the selected memory strategy. Other profiles reject mode changes before execution.
 
-### Full binary-megapixel budget on source main
+### Full binary-megapixel budget in 0.5.0
 
-Source main (`53d6687` and later) raises the Base16 pipeline and native conditioning
+Version 0.5.0 (from `53d6687`) raises the Base16 pipeline and native conditioning
 ceiling to **1,048,576 pixels**: a 1024 × 1024 square is no longer reduced to 992 × 992.
 The existing 0.4.0 tag retains its 1,032,192-pixel ceiling. Dimensions remain multiples
 of 32; total area does not require either dimension to equal 1024. This does not
@@ -29,10 +29,17 @@ must retain their own serving qualification; API validation alone does not quali
 
 ## Installation and assets
 
+Version 0.5.0 defaults to approximate Sol on single-SM89 official Base16. Other profiles and pairs
+remain dense. Use `--attention-backend torch-flash` or `H3Pipeline(..., attention_backend="torch-flash")`
+for the previous dense behavior. [Selection, dependencies and quality limits](../reference/sol-engine-alignment#sol-default)
+are part of this changed default, not a promise of identical media.
+
 Install the pipeline extra from the release checkout and provide `ffmpeg` and `ffprobe` on `PATH`:
 
 ```bash
 python -m pip install '.[pipeline]'
+# For the single-SM89 Base16 default; needs Git and network access, no model downloads.
+python -m vflash.install_sol
 ```
 
 The extra pins the adapter implementation, including Diffusers commit `d035dcd7cc7c88e0a154609b62887d50bba9fdc2`. It does not download model weights.
@@ -86,7 +93,7 @@ from a prompt. Applications must request it only for explicit whole-video silenc
 unspecified audio or a request to omit music. The default remains `unchanged`.
 
 This is a deterministic delivery contract, not improved model audio understanding or a
-denoising acceleration claim. It is not part of the existing 0.4.0 tag.
+denoising acceleration claim. It is included in 0.5.0, not the 0.4.0 tag.
 
 Run a pipeline in a dedicated process before any other code initializes CUDA. Choose the device explicitly. This example expects exactly one visible compatible GPU:
 

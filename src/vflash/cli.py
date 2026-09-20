@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from dataclasses import asdict
 from pathlib import Path
 
+from vflash.attention import ATTENTION_BACKENDS, resolve_attention_backend
 from vflash.catalog import ProfileCatalog
 from vflash.contracts import ContractError
 from vflash.hardware import discover_nvidia_devices
@@ -37,6 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--peer-gpu", type=int, help="second physical GPU for cooperative execution"
     )
     plan.add_argument("--strategy", choices=("single", "tensor", "sequence-head"))
+    plan.add_argument("--attention-backend", choices=ATTENTION_BACKENDS, default="auto")
     denoise = commands.add_parser(
         "denoise",
         help="run a native H3 profile from a conditioning bundle",
@@ -47,6 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--peer-gpu", type=int, help="second physical GPU for cooperative execution"
     )
     denoise.add_argument("--strategy", choices=("single", "tensor", "sequence-head"))
+    denoise.add_argument("--attention-backend", choices=ATTENTION_BACKENDS, default="auto")
     denoise.add_argument("--bundle", type=Path, required=True)
     denoise.add_argument("--artifact", type=Path, required=True)
     denoise.add_argument("--schedule-overlay", type=Path, required=True)
@@ -86,8 +89,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "mode": profile.mode.value,
                     "availability": profile.availability.value,
                     "nfe": profile.nfe,
-                    "attention": profile.attention.backend,
-                    "exact_attention": profile.attention.exact,
+                    "baseline_attention": profile.attention.backend,
+                    "baseline_exact_attention": profile.attention.exact,
+                    "default_attention_backend": "auto",
                     "target_ids": list(profile.target_ids),
                 }
                 for profile in catalog.profiles
@@ -118,10 +122,25 @@ def main(argv: Sequence[str] | None = None) -> int:
                 weight_residency=args.weight_residency,
                 output_latents=args.output_latents,
                 profile_denoise=args.profile_denoise,
+                attention_backend=args.attention_backend,
             )
             print(json.dumps(result, indent=2))
             return 0
-        print(json.dumps(plan.to_dict(), indent=2))
+        backend = resolve_attention_backend(plan, args.attention_backend)
+        print(
+            json.dumps(
+                {
+                    **plan.to_dict(),
+                    "attention_selection": {
+                        "requested": args.attention_backend,
+                        "resolved": backend,
+                        "exact": backend == "torch-flash",
+                        "executed": False,
+                    },
+                },
+                indent=2,
+            )
+        )
         return 0
     except (ContractError, VflashNativeError, OSError, json.JSONDecodeError) as exc:
         raise SystemExit(f"vflash: {exc}") from exc

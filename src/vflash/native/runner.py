@@ -10,6 +10,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+from vflash.attention import require_attention_dependencies, resolve_attention_backend
 from vflash.contracts import ContractError, ExecutionPlan, GenerationMode
 from vflash.native.h3_conditioning_bundle import H3InMemoryConditioning
 
@@ -41,7 +42,7 @@ class NativeEngineSession:
         schedule_overlay: Path,
         auxiliary_tensor: Path,
         weight_residency: str = "default",
-        attention_backend: str | None = None,
+        attention_backend: str = "auto",
     ) -> None:
         started = time.perf_counter()
         profile = plan.profile
@@ -105,6 +106,13 @@ class NativeEngineSession:
             )
         ):
             raise ContractError("invalid physical GPU group for native parallel execution")
+        attention_backend = resolve_attention_backend(plan, attention_backend)
+        if attention_backend == "sol-sm89":
+            if weight_residency == "default":
+                weight_residency = "block-ring"
+            if weight_residency != "block-ring":
+                raise ContractError("Sol requires block-ring weight residency")
+        require_attention_dependencies(attention_backend)
         os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(plan.gpu_uuids)
 
         from vflash.native.h3_native_conditioning_runtime import H3NativeConditioningRuntime
@@ -115,7 +123,7 @@ class NativeEngineSession:
             schedule_overlay_path=schedule_overlay,
             auxiliary_tensor_path=auxiliary_tensor,
             device="cuda:0",
-            attention_backend=attention_backend or profile.attention.backend,
+            attention_backend=attention_backend,
             expected_task=profile.mode.value,
             expected_weight_profile=WEIGHT_PROFILES[profile.id],
             expected_model_repository=profile.model,
@@ -209,6 +217,7 @@ def denoise_conditioning_bundle(
     auxiliary_tensor: Path,
     output_latents: Path,
     weight_residency: str = "default",
+    attention_backend: str = "auto",
     profile_denoise: bool = False,
 ) -> dict[str, Any]:
     """One-shot CLI path; services retain a NativeEngineSession instead."""
@@ -218,5 +227,6 @@ def denoise_conditioning_bundle(
         schedule_overlay=schedule_overlay,
         auxiliary_tensor=auxiliary_tensor,
         weight_residency=weight_residency,
+        attention_backend=attention_backend,
     ) as session:
         return session.generate(bundle, output_latents, profile_denoise=profile_denoise)

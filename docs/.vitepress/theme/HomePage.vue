@@ -30,7 +30,7 @@ const text = computed(() => zh.value ? {
     { execution: '双卡协作 · 分块加载', profiles: 'Base16', note: '匹配的两张 4090 只在 peer 原本空闲时用于降低单请求延迟；有两个请求时仍使用独立 worker。' },
   ],
   boundary: '当前公开版的输入与输出',
-  boundaryText: 'Turbo profile 保持五秒合同；Base16 I2VA、L2VA 与 FL2VA 支持五至十秒。0.4.0 为 SM86/SM89 双卡加入精确直接重排，并把近似 attention、cache 与量化路径明确留在独立实验范围。',
+  boundaryText: 'Turbo 保持五秒，Base16 关键帧支持五至十秒。0.5.0 在单 SM89 Base16 默认使用近似 Sol attention；SM86、双卡与 Turbo 保持 dense，也可显式选择 dense。不宣称完整媒体质量等价。',
   inputs: '了解运行前提',
   next: '按你的任务开始',
   guides: [
@@ -61,7 +61,7 @@ const text = computed(() => zh.value ? {
     { execution: 'Two GPUs · streamed', profiles: 'Base16', note: 'Use matching 4090s to reduce one request\'s latency only when the peer would otherwise be idle; independent workers retain higher two-request throughput.' },
   ],
   boundary: 'The current public interface',
-  boundaryText: 'Turbo profiles retain a five-second contract. Base16 I2VA, L2VA and FL2VA accept five through ten seconds. Version 0.4.0 adds exact direct two-GPU relayouts on SM86/SM89 while keeping approximate attention, caches and quantization in separate research scope.',
+  boundaryText: 'Turbo retains five seconds; Base16 keyframes accept five through ten. Version 0.5.0 defaults to approximate Sol on single-SM89 Base16. SM86, pairs and Turbo stay dense; explicit dense remains available. Full media-quality equivalence is not claimed.',
   inputs: 'Check the prerequisites',
   next: 'Start with what you need',
   guides: [

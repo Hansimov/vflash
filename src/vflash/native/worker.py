@@ -15,7 +15,7 @@ from typing import Any
 from vflash.contracts import ExecutionPlan
 
 
-def _serve_session(connection: Connection, plan: ExecutionPlan, paths: dict[str, Path]) -> None:
+def _serve_session(connection: Connection, plan: ExecutionPlan, paths: dict[str, Any]) -> None:
     from vflash.native.runner import NativeEngineSession
 
     session = None
@@ -40,7 +40,7 @@ def _serve_session(connection: Connection, plan: ExecutionPlan, paths: dict[str,
 class ResidentDenoiseWorker:
     """One execution lane; calls must be serialized by its owner."""
 
-    def __init__(self, plan: ExecutionPlan, *, timeout_seconds: float, **paths: Path) -> None:
+    def __init__(self, plan: ExecutionPlan, *, timeout_seconds: float, **paths: Any) -> None:
         context = multiprocessing.get_context("spawn")
         self._connection, child = context.Pipe()
         self._process = context.Process(

@@ -4,17 +4,20 @@ Native **MiniMax H3 inference** for RTX 3080 20 GB and RTX 4090 48 GB. Vflash us
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
-**0.4.0.** Generate synchronized video and audio through a complete Python or container pipeline.
+**0.5.0.** Generate synchronized video and audio through a complete Python or container pipeline.
 Turbo profiles create five-second MP4s from text, one to three images, or
 [a short reference video](https://hansimov.github.io/vflash/guide/complete-pipeline#reference-video).
 Official Base16 keyframe profiles accept a first frame, a last frame, or both, at integer durations
 from five through ten seconds. One prepared keyframe pipeline can switch among I2VA, L2VA and FL2VA
 without reloading weights.
 
-The native core targets RTX 3080 20 GB (SM86) and RTX 4090 48 GB (SM89). Version 0.4.0 adds exact
-destination-major relayouts for two-GPU `sequence-head`, preserves the dense BF16 attention and
-collective wire contract, and documents a hardware-measured comparison with NVIDIA Sol-Engine.
-Sparse attention, cross-step caches and quantized communication remain outside the exact defaults.
+The native core targets RTX 3080 20 GB (SM86) and RTX 4090 48 GB (SM89). Version 0.5.0 defaults to
+**approximate Sol attention on single-SM89 official Base16**. SM86, cooperating pairs and Turbo
+profiles retain dense attention. Python, CLI and the native HTTP service share this policy;
+`--attention-backend torch-flash` explicitly retains dense execution. Standard Docker builds include
+the pinned Sol dependency. A Python install needs `python -m vflash.install_sol` after its GPU extras.
+Missing dependencies fail clearly, never silently select another backend. Cross-step caches and
+quantized communication remain outside the defaults. Full media-quality equivalence is not claimed.
 See [what was adopted, deferred or rejected](https://hansimov.github.io/vflash/reference/sol-engine-alignment).
 
 The ten-second Base16 boundary has bounded complete-request evidence on the listed hardware, but it
@@ -27,7 +30,7 @@ profiles retain their separate five-second contracts. [Read the qualification bo
 Python 3.11 or newer is required. The base install does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.4.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.5.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
@@ -40,7 +43,7 @@ vflash plan ref2va-turbo4-exact-sm89 --gpu 0
 
 | GPU configuration | Released profiles | Weight placement |
 | --- | --- | --- |
-| One RTX 4090 48 GB | Ref2VA Turbo4 / Turbo8; T2VA Turbo4; Base16 I2VA/L2VA/FL2VA | Resident native core; complete pipeline uses block streaming |
+| One RTX 4090 48 GB | Ref2VA Turbo4 / Turbo8; T2VA Turbo4; Base16 I2VA/L2VA/FL2VA | Base16 Sol uses block streaming; Turbo native core retains residency |
 | One RTX 3080 20 GB | Ref2VA Turbo4 | Streamed from host RAM |
 | Two RTX 3080 20 GB GPUs | Ref2VA Turbo4; T2VA Turbo4; Base16 I2VA/L2VA/FL2VA | Shared host weights; cooperative `sequence-head` |
 | Two RTX 4090 48 GB GPUs | Base16 I2VA/L2VA/FL2VA | Opt-in cooperative latency path; not the throughput default |

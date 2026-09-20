@@ -1,6 +1,31 @@
 # 版本更新
 
-当前版本为 **0.4.0 正式版**。它新增官方 Base16 首帧、尾帧和首尾帧生成，支持五至十秒；关键帧画布上限提升到约一百万像素，并新增可选的双 SM89 低延迟路径。精确双卡路径现使用 destination-major 直接重排，并分别在 SM86 和 SM89 上完成实测。
+当前版本为 **0.5.0 正式版**，新增按架构选择的Sol默认集成，并纳入完整二进制百万像素输入预算。
+
+## 0.5.0 · 单SM89默认集成Sol {#v0-5-0}
+
+[源码标签](https://github.com/Hansimov/vflash/tree/v0.5.0) · [Sol实测与边界](./sol-engine-alignment)
+
+`auto`现在为单SM89官方Base16选择近似`sol-sm89`；SM86、协作双卡及Turbo保持dense `torch-flash`。
+Python完整/原生会话、`generate`、`denoise`、`plan`和原生HTTP服务共享选择规则。
+显式`torch-flash`保留dense；Sol使用串行block-ring，报告`exact=false`、真实调用次数和受保护模态行。
+缺依赖不静默回退。
+
+`profiles`与`/v1/profiles`将模型dense基线字段命名为`baseline_attention`，不再与实际选择混淆。
+解析后的配置见`plan`或`/readyz`的`attention_selection`，实际执行见已完成任务runtime元数据；
+使用旧检查字段的客户端需要同步调整。
+
+标准`runtime`和`pipeline` Docker构建包含固定Sol 0.5.0依赖及已核查的四处CUTLASS stream ABI补丁。
+Python用户安装GPU/pipeline依赖后执行`python -m vflash.install_sol`，移除原独立`pipeline-sol-sm89` target。
+模型权重不变，仍为独立许可的外部输入，不打包产品配置。
+
+Sol内核未改变，复用既有SM89实证：固定十秒736×992 Base16同卡A/B/A的完整本地请求减少19.584%，
+去噪减少21.078%，控制漂移0.070%，开启了性能归因。各Sol请求有800次真实调用。这不是新0.5.0测速，
+不是普遍加速或同质量承诺；动作/声音语义、无profile合格吞吐及首用编译仍是独立边界。
+
+本版还纳入0.4.0之后的1,048,576像素校验/条件预算与显式`silent-v1`交付，不代表所有GPU的实测容量同步扩展。
+发布源码归档和wheel；历史0.3.2镜像不会改标为0.5.0，当前Docker target请从此tag构建。
+既有部署保持固定版本，只有显式升级才变化。
 
 ## 0.4.0 · Base16 关键帧与 Sol-Engine 实测对齐 {#v0-4-0}
 

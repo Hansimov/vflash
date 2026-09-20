@@ -2,7 +2,7 @@ name: vflash
 
 services:
   native-core:
-    image: "${VFLASH_IMAGE:-hansimov/vflash:0.3.2}"
+    image: "${VFLASH_IMAGE:-vflash:0.5.0}"
     build:
       context: ..
       target: runtime
@@ -16,6 +16,7 @@ services:
       - "127.0.0.1:${VFLASH_API_PORT:-8000}:8000"
     environment:
       VFLASH_PROFILE_ID: "${VFLASH_PROFILE_ID:-ref2va-turbo4-exact-sm89}"
+      VFLASH_ATTENTION_BACKEND: "${VFLASH_ATTENTION_BACKEND:-auto}"
       VFLASH_GPU_INDEX: "0"
       VFLASH_JOB_TIMEOUT_SECONDS: "${VFLASH_JOB_TIMEOUT_SECONDS:-1800}"
       VFLASH_MAX_PENDING_JOBS: "${VFLASH_MAX_PENDING_JOBS:-8}"

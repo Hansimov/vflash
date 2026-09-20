@@ -4,7 +4,7 @@
 
 使用 [pipeline 镜像](https://hansimov.github.io/vflash/zh/guide/docker#pipeline)，可以在 SM89 上用纯文字或提示词与一至三张参考图生成完整 MP4，也支持双 SM86 的参考图生成。下文介绍独立的原生 HTTP 服务。
 
-最新预构建镜像为 0.3.2。0.4.0 以源码和 wheel 发布；如需 Base16 关键帧、五至十秒请求
+最新预构建镜像为 0.3.2。0.5.0 以源码和 wheel 发布；如需 Base16 关键帧、五至十秒请求
 和精确直接双卡重排，请从该 tag 本地构建 Docker target。
 
 服务接收预编译条件包，返回视频和音频潜变量（latents，即解码前的张量）。它使用一张 GPU 或一组协作双卡，并在多个串行请求之间复用已加载的模型。
@@ -19,7 +19,8 @@
 cp docker/.env.example docker/.env
 ```
 
-编辑 `docker/.env`，填写资源的绝对路径并选择显卡。使用 `VFLASH_IMAGE=hansimov/vflash:0.3.2` 拉取已发布镜像。配置可选：
+编辑`docker/.env`，填写资源绝对路径并选择显卡。`VFLASH_IMAGE=vflash:0.5.0`是本地构建名，不是仓库镜像。
+`VFLASH_ATTENTION_BACKEND=auto`仅在单SM89官方Base16选择Sol，`torch-flash`显式保留dense。配置可选：
 
 | 显卡 | `VFLASH_PROFILE_ID` |
 | --- | --- |
@@ -33,7 +34,7 @@ cp docker/.env.example docker/.env
 
 ```bash
 sudo install -d -o 10001 -g 10001 /path/to/outputs
-docker compose --env-file docker/.env -f docker/compose.yaml pull
+docker compose --env-file docker/.env -f docker/compose.yaml build
 docker compose --env-file docker/.env -f docker/compose.yaml up -d --no-build
 curl -fsS http://127.0.0.1:8000/readyz
 ```

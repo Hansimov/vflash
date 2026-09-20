@@ -6,6 +6,14 @@ For process isolation and an HTTP queue, use the [Docker service](./docker) inst
 
 ## Create a session {#session}
 
+In 0.5.0 both `NativeEngineSession` and `H3Pipeline` default to `attention_backend="auto"`:
+single-SM89 official Base16 selects approximate `sol-sm89`; other supported profiles and pairs
+select `torch-flash`. Set `attention_backend="torch-flash"` explicitly for dense execution.
+Sol native sessions use block-ring residency (`default` resolves to it); an explicit `resident`
+request is incompatible with Sol. Install the pinned dependency with `python -m vflash.install_sol`
+after GPU/pipeline dependencies, or use the standard Docker build. Missing Sol fails without fallback.
+Prepared assets are unchanged; the result's attention policy identifies actual approximate execution.
+
 Install `.[gpu]` in the [supported environment](./getting-started#run-a-bundle), prepare the [four runtime inputs](../reference/runtime-assets), and replace the paths below. Select devices before your process initializes CUDA.
 
 ```python

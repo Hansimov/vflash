@@ -15,6 +15,7 @@ from typing import Any
 from vflash.adapters.diffusers_h3 import DiffusersConditioner, validate_adapter_dependencies
 from vflash.adapters.references import DecodedReference, read_reference
 from vflash.adapters.video_references import DecodedVideoReference, read_video_reference
+from vflash.attention import resolve_attention_backend
 from vflash.catalog import ProfileCatalog
 from vflash.contracts import ContractError
 from vflash.hardware import NvidiaDevice
@@ -52,7 +53,7 @@ class H3Pipeline:
         trust_local_code: bool = False,
         peer_device: NvidiaDevice | None = None,
         strategy: str | None = None,
-        attention_backend: str = "torch-flash",
+        attention_backend: str = "auto",
     ) -> None:
         if trust_local_code is not True:
             raise ContractError("the official decoder adapter requires trust_local_code=True")
@@ -76,16 +77,7 @@ class H3Pipeline:
                 "the complete SM86 pipeline requires two GPUs with sequence-head execution"
             )
         self.prepared = prepared
-        if attention_backend not in {"torch-flash", "sol-sm89"} or (
-            attention_backend == "sol-sm89"
-            and (
-                plan.target.compute_capability != "8.9"
-                or plan.parallel_strategy != "single"
-                or plan.profile.nfe != 16
-            )
-        ):
-            raise ContractError("Sol is an explicit single-SM89 Base16 approximate option")
-        self.attention_backend = attention_backend
+        self.attention_backend = resolve_attention_backend(plan, attention_backend)
         self.profile = model_profile(prepared.profile_id)
         self._plan = plan
         self._lock = threading.Lock()
@@ -149,11 +141,7 @@ class H3Pipeline:
             schedule_overlay=assets.schedule_overlay,
             auxiliary_tensor=assets.auxiliary_tensor,
             weight_residency="block-ring",
-            **(
-                {"attention_backend": self.attention_backend}
-                if self.attention_backend != "torch-flash"
-                else {}
-            ),
+            attention_backend=self.attention_backend,
         )
         self.initialization_stages["native"] = time.monotonic() - started
         started = time.monotonic()
