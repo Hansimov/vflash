@@ -162,3 +162,47 @@ def test_restoration_cli_requires_explicit_local_code_trust():
         parser.parse_args(flags)
     args = parser.parse_args([*flags, "--trust-local-code"])
     assert args.seed == 42 and args.trust_local_code is True
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        subprocess.CalledProcessError(1, "ffmpeg"),
+        subprocess.TimeoutExpired("ffmpeg", 120),
+    ],
+)
+def test_failed_decode_is_actionable_and_cleans_temporary_state(tmp_path, monkeypatch, failure):
+    import vflash.restoration as pipeline
+
+    monkeypatch.setattr(pipeline, "media_executables", lambda: ("ffmpeg", "ffprobe"))
+    monkeypatch.setattr(
+        pipeline,
+        "probe_mp4",
+        lambda *_a, **_k: {
+            "streams": [
+                {
+                    "codec_type": "video",
+                    "nb_frames": "24",
+                    "width": 32,
+                    "height": 32,
+                    "avg_frame_rate": "24/1",
+                    "r_frame_rate": "24/1",
+                }
+            ]
+        },
+    )
+
+    def failed(*_args, **_kwargs):
+        raise failure
+
+    monkeypatch.setattr(pipeline.subprocess, "run", failed)
+    with pytest.raises(MediaError, match="decoding failed or timed out"):
+        pipeline.restore_video(
+            tmp_path / "source.mp4",
+            tmp_path / "enhanced.mp4",
+            source=tmp_path,
+            weights=tmp_path,
+            caption="A scene.",
+            trust_local_code=True,
+        )
+    assert not list(tmp_path.iterdir())

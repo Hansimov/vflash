@@ -78,5 +78,21 @@ changes remained. Do not extrapolate this into a universal repair guarantee.
 
 The adapter's frozen-input 17-frame recheck matched the direct runtime's output
 RGB exactly. This proves the adapter did not alter that result, not that the
-baseline is fully repaired. Full-length runtime, other geometries, boundary
-playback and production integration remain separately qualified surfaces.
+baseline is fully repaired.
+
+A subsequent complete 240-frame, 864 × 864, 24 fps run on one RTX 4090 48 GB
+(450 W limit, BF16, ten evaluations, CFG 1, shift 5, native attention, CPU offload)
+completed model restoration in **1,090.70 seconds**. Model loading took 9.00 seconds;
+total loading/restoration/RGB-saving/MP4 delivery took **1,177.38 seconds**. Input
+decoding, captioning and service queueing are excluded from this latter measurement.
+The 101 motion segments covered all frames. Device occupancy samples peaked at
+13,059 MiB. The resulting MP4 decoded completely and retained identical decoded
+audio samples on the original ten-second clock. This is one full-video measurement,
+not independent-scene or SM86 qualification, and replaces a linear interval extrapolation.
+
+Labeled offline review of normal moments, four damaged intervals and cut boundaries
+found reduced broken texture but persistent blur during fast movement and repainted
+fine detail. Clear face close-ups remained recognizable; that is not identity or
+all-frame quality certification. This supports an opt-in comparison, not automatic
+replacement. Real-time playback quality, other geometries and service integration
+remain separate qualification surfaces.

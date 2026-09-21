@@ -1,6 +1,23 @@
 # Release notes
 
-The current release is **0.5.1**, removing unused H3 text-encoder layers without changing the consumed state.
+The current release is **0.5.2**, adding opt-in restoration without changing H3 generation defaults.
+
+## 0.5.2 · Optional video enhancement {#v0-5-2}
+
+[Source tag](https://github.com/Hansimov/vflash/tree/v0.5.2) · [Usage and evidence](../guide/restoration)
+
+`vflash restore-video` and `vflash.restoration.restore_video` use a caller-supplied,
+trusted STCDiT-tiny runtime and local weights. The owned loader, complete motion
+segmentation, step progress/cancellation and atomic output delivery keep the
+original video. Original audio packets are copied; enhanced H.264 video is lossy.
+The supported input boundary is 24 fps, up to ten seconds and one mebipixel on a
+32-aligned canvas. This is not a guarantee of restoration quality or all-GPU capacity.
+
+Restoration is off by default and may soften or repaint details. Existing H3
+Base16, Sol/dense policy, conditioning, weights and delivery remain unchanged.
+Install `[pipeline,restoration]` and explicitly trust the supplied runtime; no
+third-party source, weights, product accounts or service scheduling are vendored.
+Source/wheel are published separately from prebuilt registry images, which remain 0.3.2.
 
 ## 0.5.1 · Exact H3 text-encoder prefix {#v0-5-1}
 

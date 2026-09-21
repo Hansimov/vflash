@@ -13,7 +13,7 @@ Version 0.4.0 also supports official Base16 I2VA/L2VA/FL2VA complete requests at
 Use Python 3.11 or newer. The base installation is lightweight and does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.5.1 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.5.2 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate

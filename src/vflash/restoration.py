@@ -45,6 +45,8 @@ def restore_video(
     videos = [row for row in metadata["streams"] if row.get("codec_type") == "video"]
     if len(videos) != 1:
         raise MediaError("restoration requires one video stream")
+    if sum(row.get("codec_type") == "audio" for row in metadata["streams"]) > 1:
+        raise MediaError("restoration supports at most one original audio stream")
     video = videos[0]
     count = int(video.get("nb_frames", 0))
     width, height = int(video.get("width", 0)), int(video.get("height", 0))
@@ -66,6 +68,8 @@ def restore_video(
     frames = []
     enhanced = ()
     try:
+        if on_progress is not None:
+            on_progress("preparing", 0, 10)
         with tempfile.TemporaryDirectory(
             prefix=".vflash-restore-input-", dir=output_path.parent
         ) as tmp:
@@ -125,6 +129,8 @@ def restore_video(
             },
             "total_seconds": time.monotonic() - began,
         }
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+        raise MediaError("restoration input decoding failed or timed out") from error
     finally:
         for frame in (*frames, *enhanced):
             frame.close()
