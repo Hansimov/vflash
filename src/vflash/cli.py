@@ -29,6 +29,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     add_pipeline_commands(commands)
 
+    from vflash.restoration import add_restoration_command
+
+    add_restoration_command(commands)
+
     plan = commands.add_parser(
         "plan", help="resolve a profile onto one physical GPU or a cooperating pair"
     )
@@ -72,6 +76,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        if args.command == "restore-video":
+            from vflash.restoration import run_restoration_command
+
+            return run_restoration_command(args)
         if args.command == "doctor":
             print(json.dumps([asdict(item) for item in discover_nvidia_devices()], indent=2))
             return 0
@@ -142,7 +150,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         )
         return 0
-    except (ContractError, VflashNativeError, OSError, json.JSONDecodeError) as exc:
+    except (ContractError, VflashNativeError, OSError, ValueError) as exc:
         raise SystemExit(f"vflash: {exc}") from exc
 
 
