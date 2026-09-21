@@ -20,6 +20,7 @@ from vflash.adapters.conditioning_prefix import (
     load_h3_conditioning_transformer,
 )
 from vflash.adapters.conditioning_vae import load_h3_image_conditioning_vae_components
+from vflash.adapters.h3_text_encoder import retain_h3_text_encoder_prefix
 from vflash.adapters.modular_config import local_modular_config
 from vflash.adapters.references import DecodedReference, install_match_reference_setup_block
 from vflash.adapters.video_references import DecodedVideoReference
@@ -165,6 +166,7 @@ class DiffusersConditioner:
             dtype=torch.bfloat16,
             local_files_only=True,
         )
+        retain_h3_text_encoder_prefix(encoder)
         vae = load_h3_image_conditioning_vae_components(
             video_component_path=model / "vae",
             audio_component_path=model / "audio_vae",

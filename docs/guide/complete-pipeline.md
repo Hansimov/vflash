@@ -27,6 +27,19 @@ decoded silent audio. This is a bounded capacity and media-contract screen, not
 a semantic-quality or end-to-end speed claim. Other duration/hardware combinations
 must retain their own serving qualification; API validation alone does not qualify them.
 
+## Exact text-encoder prefix
+
+Source main retains 51 Qwen3-VL decoder layers for H3 conditioning instead of executing all 64.
+The pinned H3 adapter consumes `hidden_states[50]`; keeping one extra layer preserves that raw
+intermediate state rather than substituting the final normalized state. The first 50 layers,
+vision encoder, weights and BF16 arithmetic are unchanged. The unused tail is removed before
+offloading hooks are installed. This is independent of Sol and does not change denoising.
+
+The ordinary official checkpoint still loads first, so this is not a smaller download or a
+guaranteed cold-start improvement. [Target-hardware conditioning checks](../reference/benchmarks#encoder-prefix)
+separate the local stage benefit from complete-request speed. No configuration flag or alternate
+checkpoint is needed.
+
 ## Installation and assets
 
 Version 0.5.0 defaults to approximate Sol on single-SM89 official Base16. Other profiles and pairs

@@ -2,6 +2,44 @@
 
 Each result belongs to its stated software version, hardware and workload. These published summaries preserve their original scope for reproduction; they are not a ranking of the current release. See [profiles and hardware](../guide/profiles) for current support and [performance and quality](./performance) for measurement guidance.
 
+## Exact H3 text-encoder prefix {#encoder-prefix}
+
+Pinned [Diffusers H3 encoding](https://github.com/huggingface/diffusers/blob/d035dcd7cc7c88e0a154609b62887d50bba9fdc2/src/diffusers/modular_pipelines/minimax_h3/encoders.py)
+reads Qwen3-VL `hidden_states[50]`, already bypassing the vocabulary head. Vflash now retains
+51 decoder layers before offloading instead of executing all 64. Keeping only 50 would expose
+the final normalized state and change conditioning. The same idea is described in the
+[author's pruned-model card](https://huggingface.co/multimodalart/MiniMax-H3-Pruned);
+this implementation does not use that model's low-rank or quantized weights.
+
+Frozen first-frame and last-frame requests each used 928 × 512, eight seconds and BF16
+conditioning. Each A/B/A2 sequence used the same physical device; A2 restores all 64 layers.
+The encoder screen did not run denoising. Baselines were `4910216` on SM89 and `53d6687`
+on SM86, with pinned Torch 2.11.0, Diffusers 0.40.0 and Transformers 5.9.0.
+
+| Encoding device / limit | Input | A capture | 51-layer capture | A2 capture |
+| --- | --- | ---: | ---: | ---: |
+| RTX 4090 48 GB / 350 W | First frame | 16.778 s | 11.006 s | 13.444 s |
+| RTX 4090 48 GB / 350 W | Last frame | 11.953 s | 9.862 s | 11.963 s |
+| RTX 3080 20 GB / 200 W | First frame | 18.834 s | 12.695 s | 15.622 s |
+| RTX 3080 20 GB / 200 W | Last frame | 13.666 s | 11.184 s | 13.557 s |
+
+Each candidate and A2 preserved all 14 conditioning tensors bit for bit on its architecture.
+The first A call includes first-use overhead; relative to A2 the local capture reduction is
+about 18–19%, not a complete-video or denoising speedup. The SM86 screen used the encoding
+device of a reserved pair; it was not parallel text encoding. Another GPU workload shared the
+host during the SM86 run, so these are bounded stage measurements, not isolated throughput.
+Removing the tail releases references to 6,338,778,368 BF16 parameters (11.81 GiB of tensor
+storage), not a measured process-RSS reduction; original checkpoint loading is unchanged.
+Private experiment ownership and receipts remain in the application repository at `73590e21`.
+
+A complete eight-second first-frame A/B on the same 350 W SM89 preserved all 192 delivered
+RGB frames (273,678,336 channel values) and all 512,000 decoded stereo PCM16 samples exactly.
+The baseline and candidate took 303.798 and 303.251 seconds; encoding took 18.309 and 16.443
+seconds. Denoising remained unchanged and dominant. This small total difference is not a formal
+latency claim or evidence that the stage percentage applies to a whole video. The last 64-layer
+control is recorded separately before publishing a final timing summary. The implementation
+does not claim to repair pre-existing semantic or visual defects.
+
 ## 4090 FFN fusion · promoted in 0.2.2 {#sm89-ffn}
 
 The implementation promoted in 0.2.2 was measured against the 0.1.0a6 native runtime on the same RTX 4090 48 GB at its default 450 W limit. The fixed workload used BF16 Ref4 v0.1 (rank 128, alpha 8, scale 0.0625), 928 × 512, 124 model frames, 20,828 packed tokens and four evaluations through all 50 layers. Both implementations used block streaming, the same conditioning bundle, cuBLAS GEMMs, Torch Flash attention, PyTorch 2.11.0+cu130 and Triton 3.6.0. Only FFN adapter merge plus SiLU changed. Encoding, VAE decoding, MP4 export and model initialization are outside this native request boundary.
