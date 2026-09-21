@@ -34,11 +34,13 @@ Private experiment ownership and receipts remain in the application repository a
 
 A complete eight-second first-frame A/B on the same 350 W SM89 preserved all 192 delivered
 RGB frames (273,678,336 channel values) and all 512,000 decoded stereo PCM16 samples exactly.
-The baseline and candidate took 303.798 and 303.251 seconds; encoding took 18.309 and 16.443
-seconds. Denoising remained unchanged and dominant. This small total difference is not a formal
-latency claim or evidence that the stage percentage applies to a whole video. The last 64-layer
-control is recorded separately before publishing a final timing summary. The implementation
-does not claim to repair pre-existing semantic or visual defects.
+The final 64-layer control also preserved every pixel and decoded PCM16 sample. The preloaded
+`generate` calls took 303.798 / 303.251 / 305.163 seconds (A/B/A2); encoding took
+18.309 / 16.443 / 18.421 seconds. Denoising remained unchanged and dominant. This small total
+difference is not a formal latency claim or evidence that the stage percentage applies to a
+whole video. Preloading, queueing and network delivery are outside these call times. Preloading
+itself took 79.601 / 74.667 / 72.101 seconds, without establishing a cold-start speedup. The
+implementation does not claim to repair pre-existing semantic or visual defects.
 
 ## 4090 FFN fusion · promoted in 0.2.2 {#sm89-ffn}
 

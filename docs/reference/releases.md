@@ -1,6 +1,30 @@
 # Release notes
 
-The current release is **0.5.0**, with architecture-aware Sol defaults and the full binary-megapixel input budget.
+The current release is **0.5.1**, removing unused H3 text-encoder layers without changing the consumed state.
+
+## 0.5.1 · Exact H3 text-encoder prefix {#v0-5-1}
+
+[Source tag](https://github.com/Hansimov/vflash/tree/v0.5.1) · [Measured scope](./benchmarks#encoder-prefix)
+
+The pinned H3 conditioner reads `hidden_states[50]`. Retaining 51 of its 64 decoder layers
+preserves that raw intermediate state and avoids executing the unused tail. Keeping only 50
+would incorrectly substitute the final normalized state. The vision encoder, retained weights,
+precision, denoiser, scheduler, Sol policy and audio/video delivery are unchanged.
+
+First-frame and last-frame A/B/A2 checks preserved all 14 conditioning tensors on both SM86
+and SM89. A complete SM89 eight-second A/B/A2 preserved every delivered RGB pixel and decoded
+PCM16 sample. Local warm capture improved by about 18–19%, but the complete-video difference
+was small: denoising still dominates. This is not an 18% whole-video speedup or a repair for
+existing generation defects. Removing the tail releases references to 6.34B BF16 parameters;
+it is not a measured RSS reduction or a smaller model download.
+
+No new model files or configuration option are required. Source and wheel are released;
+prebuilt registry images remain 0.3.2. Existing serving deployments keep their explicit pins.
+The 0.5.0 approximate single-SM89 Sol default and its quality limits remain unchanged.
+
+The default test suite now hides CUDA devices; hardware tests require explicit allocation and
+opt-in. A stream-order race in the profiling test's artificial zero-filled slots was removed
+by matching the runtime's uninitialized slots. No production ring arithmetic changed.
 
 ## 0.5.0 · Integrated single-SM89 Sol default {#v0-5-0}
 

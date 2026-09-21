@@ -1,6 +1,6 @@
 # Generate a video
 
-Vflash 0.5.0 generates a five-second MP4 from text alone, or from a prompt and one to three ordered reference images. Version 0.4.0 supports official Base16 I2VA, L2VA and FL2VA requests with one first-frame anchor, one last-frame anchor, or both anchors. Use the Python API for repeated requests or the container CLI for a single generation. The complete pipeline supports T2VA Base4 and Ref2VA Turbo4 on one RTX 4090 48 GB; Ref4 also runs on two RTX 3080 20 GB GPUs. The Base16 keyframe profiles target one RTX 4090 48 GB, an optional cooperating pair of matching RTX 4090 48 GB GPUs, or a cooperating pair of RTX 3080 20 GB GPUs.
+Vflash 0.5.1 generates a five-second MP4 from text alone, or from a prompt and one to three ordered reference images. Version 0.4.0 supports official Base16 I2VA, L2VA and FL2VA requests with one first-frame anchor, one last-frame anchor, or both anchors. Use the Python API for repeated requests or the container CLI for a single generation. The complete pipeline supports T2VA Base4 and Ref2VA Turbo4 on one RTX 4090 48 GB; Ref4 also runs on two RTX 3080 20 GB GPUs. The Base16 keyframe profiles target one RTX 4090 48 GB, an optional cooperating pair of matching RTX 4090 48 GB GPUs, or a cooperating pair of RTX 3080 20 GB GPUs.
 
 On one 4090, Ref4 also accepts [a short reference video](#reference-video). The same instance can alternate images and video without switching weights.
 
@@ -29,7 +29,7 @@ must retain their own serving qualification; API validation alone does not quali
 
 ## Exact text-encoder prefix
 
-Source main retains 51 Qwen3-VL decoder layers for H3 conditioning instead of executing all 64.
+Version 0.5.1 retains 51 Qwen3-VL decoder layers for H3 conditioning instead of executing all 64.
 The pinned H3 adapter consumes `hidden_states[50]`; keeping one extra layer preserves that raw
 intermediate state rather than substituting the final normalized state. The first 50 layers,
 vision encoder, weights and BF16 arithmetic are unchanged. The unused tail is removed before

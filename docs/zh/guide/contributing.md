@@ -17,7 +17,8 @@ npm ci
 npm run docs:build
 ```
 
-CPU 测试不能初始化 CUDA。硬件测试在独立进程中运行，并显式选择单卡或卡组。模型文件和生成媒体不能进入 Git。
+默认测试在收集用例前隐藏CUDA设备。硬件测试必须设置`VFLASH_TEST_CUDA=1`，并通过
+`CUDA_VISIBLE_DEVICES`明确选择已分配的单卡或卡组，在独立进程中执行；模型文件和生成媒体不能进入Git。
 
 ## 一次只改变一个合同
 

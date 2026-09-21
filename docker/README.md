@@ -4,7 +4,7 @@
 
 Use the [pipeline image](https://hansimov.github.io/vflash/guide/docker#pipeline) to generate a complete MP4 from text alone or a prompt and one to three references on SM89, or from references on two SM86 GPUs. The separate native HTTP service is described below.
 
-The latest prebuilt images are 0.3.2. Version 0.5.0 is available as source and a wheel; build the
+The latest prebuilt images are 0.3.2. Version 0.5.1 is available as source and a wheel; build the
 Docker targets from its tag for Base16 keyframes, five-to-ten-second requests and exact direct
 two-GPU relayouts.
 
@@ -20,7 +20,7 @@ From the repository root:
 cp docker/.env.example docker/.env
 ```
 
-Edit `docker/.env` with your absolute asset paths and selected GPU. `VFLASH_IMAGE=vflash:0.5.0` names the local build, not a registry image. `VFLASH_ATTENTION_BACKEND=auto` selects Sol only for single-SM89 official Base16; `torch-flash` explicitly retains dense. Choose one of:
+Edit `docker/.env` with your absolute asset paths and selected GPU. `VFLASH_IMAGE=vflash:0.5.1` names the local build, not a registry image. `VFLASH_ATTENTION_BACKEND=auto` selects Sol only for single-SM89 official Base16; `torch-flash` explicitly retains dense. Choose one of:
 
 | GPU | `VFLASH_PROFILE_ID` |
 | --- | --- |

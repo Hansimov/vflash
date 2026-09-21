@@ -18,8 +18,9 @@ npm ci
 npm run docs:build
 ```
 
-CPU tests must not initialize CUDA. Hardware tests run in a dedicated process with an explicitly
-selected device or pair. Keep model payloads and generated media outside Git.
+The default suite hides CUDA devices before collection. Hardware tests require
+`VFLASH_TEST_CUDA=1` and an explicit `CUDA_VISIBLE_DEVICES` for an allocated device or pair.
+Run them in a dedicated process. Keep model payloads and generated media outside Git.
 
 ## Change one contract at a time
 

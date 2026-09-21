@@ -115,7 +115,9 @@ def test_opt_in_ring_profile_reports_copy_wait_and_compute_without_changing_outp
 
     class Slot:
         def __init__(self):
-            self.weights = torch.zeros(1, device="cuda")
+            # Match real uninitialized ring slots. An asynchronous zero-fill on
+            # the default stream would race the fixture's first copy stream.
+            self.weights = torch.empty(1, device="cuda")
 
         def forward_prevalidated(self, value, _invocation):
             return value * self.weights
