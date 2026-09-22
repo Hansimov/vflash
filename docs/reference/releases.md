@@ -1,6 +1,21 @@
 # Release notes
 
-The current release is **0.5.2**, adding opt-in restoration without changing H3 generation defaults.
+The current release is **0.5.3**, adding explicit restoration acceleration without changing H3 generation defaults.
+
+## 0.5.3 · Explicit restoration acceleration {#v0-5-3}
+
+[Source tag](https://github.com/Hansimov/vflash/tree/v0.5.3) · [Measured scope and limits](../guide/restoration)
+
+Optional `resident` placement avoids repeated model transfers. Optional SM89
+`sage-int8-fp16` attention uses a separately installed, ABI-compatible SageAttention 2.
+CLI/Python report both selections. Defaults remain native attention and CPU offload;
+H3 generation, ten-step restoration, motion segments and original audio are unchanged.
+Residency preserved exact decoded RGB on a 17-frame window and two complete normal
+clips. Sage is approximate: one full ten-second run observed 25.4% less restoration
+compute, with differing total timing boundaries. Selected-frame review found no
+additional obvious structural failures, but existing blur/repainting remained.
+These are bounded exploratory results, not universal quality or service-speed guarantees.
+Source/wheel are released; prebuilt registry images remain 0.3.2.
 
 ## 0.5.2 · Optional video enhancement {#v0-5-2}
 

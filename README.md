@@ -4,7 +4,8 @@ Native **MiniMax H3 inference** for RTX 3080 20 GB and RTX 4090 48 GB. Vflash us
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
-**0.5.2.** Adds [optional STCDiT video enhancement](https://hansimov.github.io/vflash/guide/restoration)
+**0.5.3.** Adds explicit model residency and SM89 Sage attention for
+[optional STCDiT video enhancement](https://hansimov.github.io/vflash/guide/restoration)
 through Python and CLI, retaining the original video and copying its audio to a separate result.
 It can soften or repaint details; it is not a root-cause repair or a generation default.
 
@@ -15,7 +16,7 @@ Official Base16 keyframe profiles accept a first frame, a last frame, or both, a
 from five through ten seconds. One prepared keyframe pipeline can switch among I2VA, L2VA and FL2VA
 without reloading weights.
 
-The native core targets RTX 3080 20 GB (SM86) and RTX 4090 48 GB (SM89). Version 0.5.2 defaults to
+The native core targets RTX 3080 20 GB (SM86) and RTX 4090 48 GB (SM89). Version 0.5.3 defaults to
 **approximate Sol attention on single-SM89 official Base16**. SM86, cooperating pairs and Turbo
 profiles retain dense attention. Python, CLI and the native HTTP service share this policy;
 `--attention-backend torch-flash` explicitly retains dense execution. Standard Docker builds include
@@ -34,7 +35,7 @@ profiles retain their separate five-second contracts. [Read the qualification bo
 Python 3.11 or newer is required. The base install does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.5.2 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.5.3 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate

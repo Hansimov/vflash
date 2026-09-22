@@ -56,7 +56,7 @@ with LocalStcditTiny(
 ```
 
 The recipe fixes BF16, ten evaluations, CFG 1, shift 5, native PyTorch attention,
-CPU model offload and same-size output. H3's Sol/dense selection is unaffected.
+CPU model offload and same-size output by default. H3's Sol/dense selection is unaffected.
 The adapter rejects missing/overlapping segments, changed frame counts and changed
 canvases. It copies input images before calling the backend. It does not detect
 bad frames, write account data, charge credits, modify audio or approve quality.
@@ -66,6 +66,55 @@ Up to 240 frames and 32-aligned canvases up to 1,048,576 pixels are input limits
 Applications with an already loaded compatible pipeline may instead use
 `StcditTinyRestorer(pipeline)`. That adapter does not own the supplied model's CUDA
 lifetime; the application must provide inference mode and serial access.
+
+### Explicit high-memory residency
+
+`--memory-policy resident` (Python: `memory_policy="resident"`) retains the VAE,
+text encoder and DiT on the allocated GPU until the runtime closes. It changes
+placement, not the ten-step trajectory, attention, segments or precision. It
+uses more VRAM; there is no automatic fallback or claim of 24 GB qualification.
+The default remains `offload`.
+
+An exploratory matched 17-frame, 864-square run on one RTX 4090 48 GB at a 350 W
+limit took 107.76 seconds versus 124.87 seconds with offload. All 17 output RGB
+frames matched exactly; peak allocated tensor memory was 18.23 GiB. This is one
+short-window comparison, not a repeated latency benchmark or a full-video ratio.
+Two additional complete five-second, 928 × 512 normal-motion clips retained
+exact decoded RGB equality over 120/120 frames each, with unchanged source audio
+and clocks. This establishes placement parity for those cases, not universal
+quality or a matched full-length speed ratio.
+
+### Explicit approximate SM89 attention
+
+`--attention-backend sage-int8-fp16` (Python: `attention_backend="sage-int8-fp16"`)
+uses SageAttention 2 INT8 Q/K quantization and FP16 P/V computation, including
+key smoothing. This is approximate, SM89-only, and independent of H3 Sol.
+The default stays `torch`. Only the isolated STCDiT provider modules are changed;
+global PyTorch attention and other model instances are not patched. Out-of-range
+FP16 values fail explicitly rather than silently changing the requested backend.
+
+Install an ABI-compatible [SageAttention 2](https://github.com/thu-ml/SageAttention)
+separately; the tested source revision is
+`d9704247a5139ab4c03bf7fc6b35cc0e2cbb5ea4`. It is not vendored or downloaded by
+Vflash. Do not substitute Blackwell-only SageAttention 3 on Ada GPUs.
+Combine with `--memory-policy resident` only when the allocated VRAM permits it.
+
+A matched exploratory 17-frame 864-square run on one RTX 4090 48 GB at 350 W
+took 103.33 seconds versus 124.87 seconds with native attention and CPU offload
+(17.2% less restoration time). Ten evaluations, seed, caption and motion segments
+were unchanged. A complete ten-second, 864-square, 240-frame run at 450 W with
+Sage plus residency took 813.45 seconds for restoration and 851.63 seconds for
+the file-to-file pipeline. The earlier native/offload restoration stage took
+1,090.70 seconds: an observed 25.4% compute-time reduction, **not** a matched
+end-to-end service claim. The runs were not repeated; the full candidate shared
+host resources with another GPU experiment, and the older total used a different
+decode/RGB-saving boundary. Peak allocated tensor memory was 20.40 GiB.
+
+All 240 frames decoded and retained the source clock and identical decoded audio.
+Non-blind original/native/candidate review at 76 selected frames found no obvious
+additional structural failure; baseline fast-motion blur and repainted detail
+remained. RGB is not identical. This is limited opt-in evidence, not a universal
+same-quality guarantee or resolution of the source model's damaged frames.
 
 ## Evidence boundary
 

@@ -15,6 +15,7 @@ from typing import Any
 from uuid import uuid4
 
 from vflash.adapters.stcdit import StcditTinyRestorer
+from vflash.adapters.stcdit_attention import ATTENTION_BACKENDS, configure_attention
 
 _WEIGHT_BYTES = {
     "diffusion_pytorch_model.safetensors": 5676070424,
@@ -93,9 +94,15 @@ class LocalStcditTiny(StcditTinyRestorer):
         source: Path,
         trust_local_code: bool = False,
         device: str = "cuda:0",
+        memory_policy: str = "offload",
+        attention_backend: str = "torch",
     ) -> None:
         if trust_local_code is not True:
             raise ValueError("STCDiT requires explicit trust_local_code=True")
+        if memory_policy not in {"offload", "resident"}:
+            raise ValueError("STCDiT memory_policy must be offload or resident")
+        if attention_backend not in ATTENTION_BACKENDS:
+            raise ValueError("STCDiT attention must be torch or sage-int8-fp16")
         validate_local_assets(weights, source)
         import torch
         from peft import LoraConfig
@@ -107,9 +114,18 @@ class LocalStcditTiny(StcditTinyRestorer):
         self._closed = False
         self.pipeline = None
         self.device = device
+        self.memory_policy = memory_policy
+        self._resident_models: set[str] = set()
         try:
             provider = _provider_namespace(source, self._prefix)
             models = self._prefix + ".models."
+            configure_attention(
+                [
+                    importlib.import_module(models + name)
+                    for name in ("wan_video_dit_t2v_tiny", "wan_video_dit")
+                ],
+                attention_backend,
+            )
             initializer = importlib.import_module(models + "utils").init_weights_on_device
 
             def load(module_name: str, class_name: str, filename: str) -> Any:
@@ -171,10 +187,20 @@ class LocalStcditTiny(StcditTinyRestorer):
             pipe.dit.to(dtype=torch.bfloat16)
             pipe.eval()
             pipe.enable_cpu_offload()
+            if memory_policy == "resident":
+                # Only remove repeated transfers; numerical operations are unchanged.
+                pipe.load_models_to_device = self._load_retained_models
             super().__init__(pipe)
         except BaseException:
             self.close()
             raise
+
+    def _load_retained_models(self, names: Any = ()) -> None:
+        for name in names:
+            model = getattr(self.pipeline, name)
+            if model is not None and name not in self._resident_models:
+                model.to(self.device)
+                self._resident_models.add(name)
 
     def restore(self, *args: Any, **kwargs: Any) -> Any:
         if self._closed:
@@ -193,6 +219,7 @@ class LocalStcditTiny(StcditTinyRestorer):
             if torch.cuda.is_initialized():
                 torch.cuda.synchronize(self.device)
             self.pipeline = None
+        self._resident_models.clear()
         for name in tuple(sys.modules):
             if name == self._prefix or name.startswith(self._prefix + "."):
                 del sys.modules[name]

@@ -76,8 +76,9 @@ def test_refuses_existing_destination_before_work(tmp_path):
     assert output.read_bytes() == b"keep this output"
 
 
+@pytest.mark.parametrize("memory_policy", ["offload", "resident"])
 def test_complete_python_path_decodes_and_publishes_without_mutating_source(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, memory_policy
 ):
     pytest.importorskip("cv2")
     from types import SimpleNamespace
@@ -134,8 +135,10 @@ def test_complete_python_path_decodes_and_publishes_without_mutating_source(
         weights=tmp_path,
         caption="A blue scene.",
         trust_local_code=True,
+        memory_policy=memory_policy,
     )
     assert result["media"]["frames"] == 24
+    assert result["memory_policy"] == observed["memory_policy"] == memory_policy
     assert result["media"]["audio_delivery"] == "no-source-audio"
     assert observed["closed"] and source.read_bytes() == original
     assert not list(output.parent.glob(".vflash-*"))
@@ -162,6 +165,13 @@ def test_restoration_cli_requires_explicit_local_code_trust():
         parser.parse_args(flags)
     args = parser.parse_args([*flags, "--trust-local-code"])
     assert args.seed == 42 and args.trust_local_code is True
+    assert args.memory_policy == "offload"
+    assert (
+        parser.parse_args(
+            [*flags, "--trust-local-code", "--memory-policy", "resident"]
+        ).memory_policy
+        == "resident"
+    )
 
 
 @pytest.mark.parametrize(

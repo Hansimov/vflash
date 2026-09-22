@@ -104,6 +104,28 @@ def test_local_runtime_rejects_incomplete_inventory_before_model_loading(tmp_pat
         validate_local_assets(tmp_path, tmp_path)
 
 
+def test_residency_is_explicit_and_only_moves_each_model_once(tmp_path):
+    from vflash.adapters.stcdit_runtime import LocalStcditTiny
+
+    with pytest.raises(ValueError, match="memory_policy"):
+        LocalStcditTiny(
+            source=tmp_path, weights=tmp_path, trust_local_code=True, memory_policy="guess"
+        )
+    calls = []
+    runtime = object.__new__(LocalStcditTiny)
+    runtime.pipeline = SimpleNamespace(
+        vae=SimpleNamespace(to=lambda device: calls.append(("vae", device))),
+        dit=SimpleNamespace(to=lambda device: calls.append(("dit", device))),
+        absent=None,
+    )
+    runtime.device = "cuda:0"
+    runtime._resident_models = set()
+    runtime._load_retained_models(["vae"])
+    runtime._load_retained_models(["dit", "vae", "absent"])
+    runtime._load_retained_models([])
+    assert calls == [("vae", "cuda:0"), ("dit", "cuda:0")]
+
+
 def test_cancellation_between_steps_leaves_original_images_usable():
     from PIL import Image
 

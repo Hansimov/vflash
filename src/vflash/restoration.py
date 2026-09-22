@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from vflash.adapters.restoration_motion import restoration_segments
+from vflash.adapters.stcdit_attention import ATTENTION_BACKENDS
 from vflash.adapters.stcdit_runtime import LocalStcditTiny
 from vflash.media.encoding import MediaError, media_executables, probe_mp4
 from vflash.media.restoration import encode_restored_video
@@ -27,6 +28,8 @@ def restore_video(
     seed: int = 42,
     trust_local_code: bool = False,
     device: str = "cuda:0",
+    memory_policy: str = "offload",
+    attention_backend: str = "torch",
     on_progress: Callable[[str, int, int], None] | None = None,
 ) -> dict[str, Any]:
     """Decode, segment, enhance and atomically publish a separate complete video."""
@@ -34,6 +37,10 @@ def restore_video(
 
     if trust_local_code is not True:
         raise ValueError("restoration requires trust_local_code=True")
+    if memory_policy not in {"offload", "resident"}:
+        raise ValueError("restoration memory_policy must be offload or resident")
+    if attention_backend not in ATTENTION_BACKENDS:
+        raise ValueError("restoration attention must be torch or sage-int8-fp16")
     if not isinstance(caption, str) or not caption.strip() or len(caption) > 10000:
         raise ValueError("supply an observation caption of one to 10000 characters")
     if type(seed) is not int or not 0 <= seed < 2**32:
@@ -108,7 +115,12 @@ def restore_video(
         segments = restoration_segments(frames)
         prepared = time.monotonic()
         with LocalStcditTiny(
-            source=source, weights=weights, device=device, trust_local_code=trust_local_code
+            source=source,
+            weights=weights,
+            device=device,
+            trust_local_code=trust_local_code,
+            memory_policy=memory_policy,
+            attention_backend=attention_backend,
         ) as restorer:
             loaded = time.monotonic()
             result = restorer.restore(
@@ -120,6 +132,8 @@ def restore_video(
         media = encode_restored_video(enhanced, source_video, output_path)
         return {
             "profile": result.profile,
+            "memory_policy": memory_policy,
+            "attention_backend": attention_backend,
             "media": media,
             "segments": len(segments),
             "stages": {
@@ -147,6 +161,8 @@ def add_restoration_command(commands: Any) -> None:
     parser.add_argument("--caption-file", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", default="cuda:0")
+    parser.add_argument("--memory-policy", choices=("offload", "resident"), default="offload")
+    parser.add_argument("--attention-backend", choices=ATTENTION_BACKENDS, default="torch")
     parser.add_argument("--trust-local-code", action="store_true", required=True)
 
 
@@ -161,6 +177,8 @@ def run_restoration_command(args: argparse.Namespace) -> int:
         caption=args.caption_file.read_text(),
         seed=args.seed,
         device=args.device,
+        memory_policy=args.memory_policy,
+        attention_backend=args.attention_backend,
         trust_local_code=args.trust_local_code,
     )
     print(json.dumps(result, indent=2))
