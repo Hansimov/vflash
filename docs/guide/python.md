@@ -96,4 +96,4 @@ Use `with`, as above, or call `session.close()` when its owner stops. Closing wa
 
 The process still owns its CUDA context and allocator caches; process exit releases them. A closed session rejects new requests. After failed inference, close the session rather than trying to resume it. If device completion or cleanup fails, stop its worker process instead of reusing that CUDA context.
 
-Use a separate spawned process for each independently owned GPU group. Do not call one session concurrently, initialize CUDA before device selection, or attempt to change its profile between requests. Changing models or adapters requires a new session with matching assets.
+Use a separate spawned process for each independently owned GPU group. Do not call one session concurrently, initialize CUDA before device selection, or attempt to change its profile between requests. Changing models or compiled adapters requires a new session with matching assets. The experimental [FP32 DiT attention LoRA context](../reference/attention-lora) is a separate, reversible low-level option for an exclusively owned single-SM89 Base16 session; it does not change the compiled assets or defaults.

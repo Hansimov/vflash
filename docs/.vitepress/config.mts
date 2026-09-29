@@ -23,6 +23,7 @@ const sidebar = (zh = false) => {
         { text: zh ? 'Python 集成' : 'Python integration', link: `${prefix}/guide/python` },
         { text: zh ? '生成视频' : 'Generate a video', link: `${prefix}/guide/complete-pipeline` },
         { text: zh ? '按需画质增强' : 'Optional restoration', link: `${prefix}/guide/restoration` },
+        { text: zh ? '可选注意力 LoRA' : 'Optional attention LoRA', link: `${prefix}/reference/attention-lora` },
         { text: zh ? '编译官方权重' : 'Compile official weights', link: `${prefix}/guide/compile-weights` },
         { text: zh ? '测量性能与质量' : 'Measure speed and quality', link: `${prefix}/reference/performance` },
         { text: zh ? 'Sol-Engine 对齐' : 'Sol-Engine alignment', link: `${prefix}/reference/sol-engine-alignment` },
