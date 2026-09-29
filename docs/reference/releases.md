@@ -1,6 +1,24 @@
 # Release notes
 
-The current release is **0.5.3**, adding explicit restoration acceleration without changing H3 generation defaults.
+The current release is **0.5.4**, adding an explicit experimental attention adapter without changing H3 generation defaults.
+
+## 0.5.4 · Optional FP32 DiT attention LoRA {#v0-5-4}
+
+[Source tag](https://github.com/Hansimov/vflash/tree/v0.5.4) · [Interface and limits](./attention-lora)
+
+The low-level `apply_dit_attention_lora` context attaches caller-provided FP32 PEFT attention
+weights to an exclusively owned single-SM89 Base16 runtime. It validates the complete layout,
+applies only the 50 DiT blocks, binds logical layers correctly across ring slots, and restores
+methods on exit. Explicit signed scale includes alpha/rank; do not negate an update twice.
+Base weights, conditioning, scheduler and generation/restoration defaults remain unchanged.
+There is no new CLI, pipeline or HTTP loading option, automatic download or bundled model.
+
+A same-input 672×384, six-second, 24 fps RTX 4090 48 GB control completed both videos and
+preserved the old implementation's final AV latents exactly, separately for Base and reverse.
+This is migration evidence, not proof of universal quality, speedup or full-adapter equivalence.
+TokenRefiner is intentionally not applied; other architectures, multi-GPU and step schedules
+are outside this interface. Face/action artifacts can remain. Model licenses are separate.
+Source and wheel are released; prebuilt registry images remain 0.3.2. Serving pins do not change.
 
 ## 0.5.3 · Explicit restoration acceleration {#v0-5-3}
 

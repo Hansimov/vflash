@@ -56,9 +56,11 @@ context. Exit restores original methods, including after exceptions. As with any
 request, close the runtime instead of assuming its device state is reusable.
 
 Focused checks cover FP32 arithmetic, QKV layout, ring traversal, repeated invocations and
-exception cleanup. The mechanism has prior single-SM89 complete-video evidence at small and
-large canvases; the public extraction is undergoing a same-input migration check. None of this
+exception cleanup. On one RTX 4090 48 GB, a frozen 672×384, six-second, 24 fps, Base16/Sol
+block-ring control produced complete videos; both adapter-free and reverse-adapter final AV
+latents matched the prior implementation exactly. This qualifies the extraction, not equivalence
+between Base and adapter output. Prior mechanism evidence also includes an 864×864 ten-second
+control and independent held-out scenes; that larger canvas was not rerun for this extraction. None of this
 guarantees every face, action or soundtrack improves. Some existing artifacts remain, and the
 generated composition can change. Assess against the input brief, not pixel similarity to Base.
 The interface does not enable an adapter in production or change Base16/Sol defaults.
-
