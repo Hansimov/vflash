@@ -5,6 +5,7 @@ from __future__ import annotations
 from importlib import import_module
 from typing import Any
 
+from vflash.pipeline.attention_adapter import AttentionAdapter
 from vflash.pipeline.contracts import (
     ConditioningReuseScope,
     PipelineAssets,
@@ -14,6 +15,7 @@ from vflash.pipeline.contracts import (
 )
 
 __all__ = [
+    "AttentionAdapter",
     "ConditioningReuseScope",
     "H3Pipeline",
     "PipelineAssets",

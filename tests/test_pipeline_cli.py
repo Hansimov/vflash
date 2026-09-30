@@ -279,6 +279,64 @@ def test_generate_cli_requires_explicit_official_code_consent(tmp_path):
         )
 
 
+@pytest.mark.parametrize("complete", [False, True])
+def test_generate_cli_requires_and_forwards_complete_adapter(tmp_path, monkeypatch, complete):
+    import vflash.pipeline
+
+    prompt = tmp_path / "prompt.txt"
+    prompt.write_text("A slow camera move.")
+    adapter = tmp_path / "adapter.safetensors"
+    adapter.touch()
+    output = tmp_path / "result.mp4"
+    args = [
+        "generate",
+        "--prepared-assets",
+        "receipt.json",
+        "--prompt-file",
+        str(prompt),
+        "--first-frame",
+        "first.png",
+        "--gpu",
+        "0",
+        "--output",
+        str(output),
+        "--trust-local-code",
+        "--attention-adapter",
+        str(adapter),
+    ]
+    if not complete:
+        with pytest.raises(SystemExit, match="supplied together"):
+            main(args)
+        return
+    args += ["--attention-adapter-rank", "8", "--attention-adapter-scale", "-1"]
+    monkeypatch.setattr(
+        "vflash.hardware.discover_nvidia_devices", lambda: (SimpleNamespace(index=0),)
+    )
+    monkeypatch.setattr(
+        vflash.pipeline,
+        "load_prepared_pipeline_assets",
+        lambda _: SimpleNamespace(profile_id="i2va-base16-bf16-sm89"),
+    )
+    seen = []
+
+    class Pipeline:
+        def __init__(self, prepared, **kwargs):
+            seen.append(kwargs["attention_adapter"])
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def generate(self, request, path, **kwargs):
+            return VideoResult(path, "i2va-base16-bf16-sm89", request.seed, 1, {}, {})
+
+    monkeypatch.setattr(vflash.pipeline, "H3Pipeline", Pipeline)
+    assert main(args) == 0
+    assert seen == [vflash.pipeline.AttentionAdapter(adapter, rank=8, scale=-1)]
+
+
 def test_text_only_and_dual_gpu_flags_are_explicit_cli_contracts():
     args = build_parser().parse_args(
         [

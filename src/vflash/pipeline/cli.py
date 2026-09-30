@@ -59,6 +59,11 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
     )
     generate.add_argument("--seed", type=int, default=0)
     generate.add_argument(
+        "--attention-adapter", type=Path, help="local FP32 DiT attention LoRA"
+    )
+    generate.add_argument("--attention-adapter-rank", type=int)
+    generate.add_argument("--attention-adapter-scale", type=float)
+    generate.add_argument(
         "--attention-backend",
         choices=("auto", "torch-flash", "sol-sm89"),
         default="auto",
@@ -120,6 +125,20 @@ def run_pipeline_command(args: argparse.Namespace) -> int:
 
     if not args.trust_local_code:
         raise ContractError("review the official decoder code and pass --trust-local-code")
+    adapter = None
+    adapter_values = (
+        args.attention_adapter,
+        args.attention_adapter_rank,
+        args.attention_adapter_scale,
+    )
+    if any(value is not None for value in adapter_values):
+        if not all(value is not None for value in adapter_values):
+            raise ContractError(
+                "adapter path, rank and effective scale must be supplied together"
+            )
+        from vflash.pipeline import AttentionAdapter
+
+        adapter = AttentionAdapter(*adapter_values)
     with args.prompt_file.open(encoding="utf-8") as handle:
         prompt = handle.read(65537)
     request = VideoRequest(
@@ -157,6 +176,8 @@ def run_pipeline_command(args: argparse.Namespace) -> int:
         options = {"peer_device": devices[args.peer_gpu], "strategy": args.strategy}
     if args.attention_backend != "auto":
         options["attention_backend"] = args.attention_backend
+    if adapter is not None:
+        options["attention_adapter"] = adapter
     with H3Pipeline(
         prepared, device=devices[args.gpu], trust_local_code=True, **options
     ) as pipeline:

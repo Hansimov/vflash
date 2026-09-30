@@ -1,8 +1,35 @@
 # Optional FP32 attention LoRA
 
-This experimental **low-level** interface applies a reversible DiT-only attention adapter to a
-serial, single-SM89, official H3 Base16 runtime. It is off by default. It does not change prepared
-assets, merge the base weights, select a model automatically, or add a pipeline/HTTP parameter.
+The native context and complete Python/CLI pipeline can apply a reversible DiT-only attention
+adapter to a serial, single-SM89, official H3 Base16 runtime. It is off by default. Neither interface
+changes prepared assets, merges base weights, downloads weights, or selects a model automatically.
+
+## Generate complete videos
+
+Pass an explicit local adapter to the same pipeline that owns encoding, denoising and decoding:
+
+```python
+from pathlib import Path
+from vflash.pipeline import AttentionAdapter, H3Pipeline
+
+with H3Pipeline(
+    prepared, device=device, trust_local_code=True,
+    attention_adapter=AttentionAdapter(Path("attention-adapter.safetensors"), rank=8, scale=-1),
+) as pipeline:
+    result = pipeline.generate(request, Path("result.mp4"))
+```
+
+For `vflash generate`, supply all three options together:
+`--attention-adapter attention-adapter.safetensors --attention-adapter-rank 8 --attention-adapter-scale -1`.
+Use a Base16 I2VA/FL2VA prepared profile; L2VA uses the same supported keyframe profile contract.
+SM86 and cooperating pairs are not supported by this adapter. HTTP configuration is unchanged.
+The adapter is loaded once during preparation, reused across serial requests, and detached before
+closing the native core on normal exit or failure. Results identify its scope, precision, rank and
+scale under `stages.denoising.attention_adapter`; callers must also preserve the weight identity.
+Omit the configuration to return to the base model; no model payload is modified.
+
+The pipeline wrapper has CPU lifecycle coverage; new full-pipeline GPU validation is pending.
+The existing native GPU evidence below remains valid and is not relabeled as wrapper validation.
 
 ## Use an existing native session
 

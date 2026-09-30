@@ -7,6 +7,7 @@ import tempfile
 import threading
 import time
 from collections.abc import Callable
+from contextlib import ExitStack
 from dataclasses import asdict, replace
 from pathlib import Path
 from traceback import clear_frames
@@ -24,6 +25,7 @@ from vflash.media.runtime import OfficialMediaDecoder
 from vflash.model_assets import model_profile, supported_request_modes
 from vflash.native.runner import NativeEngineSession
 from vflash.pipeline.assets import PreparedPipelineAssets
+from vflash.pipeline.attention_adapter import AttentionAdapter, open_attention_adapter
 from vflash.pipeline.contracts import (
     ConditioningReuseScope,
     PipelineProgress,
@@ -54,6 +56,7 @@ class H3Pipeline:
         peer_device: NvidiaDevice | None = None,
         strategy: str | None = None,
         attention_backend: str = "auto",
+        attention_adapter: AttentionAdapter | None = None,
     ) -> None:
         if trust_local_code is not True:
             raise ContractError("the official decoder adapter requires trust_local_code=True")
@@ -79,6 +82,17 @@ class H3Pipeline:
         self.prepared = prepared
         self.attention_backend = resolve_attention_backend(plan, attention_backend)
         self.profile = model_profile(prepared.profile_id)
+        if attention_adapter is not None and (
+            not isinstance(attention_adapter, AttentionAdapter)
+            or plan.target.compute_capability != "8.9"
+            or plan.parallel_strategy != "single"
+            or prepared.profile_id not in {"i2va-base16-bf16-sm89", "fl2va-base16-bf16-sm89"}
+        ):
+            raise ContractError(
+                "attention adapter requires a single-SM89 Base16 keyframe pipeline"
+            )
+        self.attention_adapter = attention_adapter
+        self._adapter_stack = None
         self._plan = plan
         self._lock = threading.Lock()
         self._active_thread_id: int | None = None
@@ -144,6 +158,13 @@ class H3Pipeline:
             attention_backend=self.attention_backend,
         )
         self.initialization_stages["native"] = time.monotonic() - started
+        if self.attention_adapter is not None:
+            started = time.monotonic()
+            self._adapter_stack = ExitStack()
+            self._adapter_stack.enter_context(
+                open_attention_adapter(self._core.runtime, self.attention_adapter)
+            )
+            self.initialization_stages["attention_adapter"] = time.monotonic() - started
         started = time.monotonic()
         self._conditioner = DiffusersConditioner(self.prepared)
         self.initialization_stages["conditioning"] = time.monotonic() - started
@@ -340,6 +361,8 @@ class H3Pipeline:
                 for key, value in native["generation"].items()
                 if key != "output_path"
             }
+            if self.attention_adapter is not None:
+                stages["denoising"]["attention_adapter"] = self.attention_adapter.metadata()
             stage_started = time.monotonic()
             report("decoding", 0, 1)
             weight_resume_seconds = self._media.resume_cuda()
@@ -396,7 +419,7 @@ class H3Pipeline:
             return
         self._closed = True
         failures: list[BaseException] = []
-        for name in ("_conditioner", "_media", "_core"):
+        for name in ("_adapter_stack", "_conditioner", "_media", "_core"):
             owner = getattr(self, name)
             if owner is not None:
                 try:

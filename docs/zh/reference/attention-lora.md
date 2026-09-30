@@ -1,8 +1,32 @@
 # 可选 FP32 注意力 LoRA
 
-这是默认关闭的实验性**底层接口**，为单 SM89、串行的官方 H3 Base16 运行时临时附加
-仅 DiT 主干的注意力残差。不改准备资源、不合并底模、不自动选择模型，也不新增
-pipeline/HTTP 参数。
+原生上下文和完整 Python/CLI 管线均可为单 SM89、串行的官方 H3 Base16 运行时附加
+仅 DiT 主干的注意力残差，默认关闭。不改准备资源、不合并底模、不下载权重或自动选择模型。
+
+## 生成完整视频
+
+把本地 adapter 显式传给拥有编码、去噪和解码的完整管线：
+
+```python
+from pathlib import Path
+from vflash.pipeline import AttentionAdapter, H3Pipeline
+
+with H3Pipeline(
+    prepared, device=device, trust_local_code=True,
+    attention_adapter=AttentionAdapter(Path("attention-adapter.safetensors"), rank=8, scale=-1),
+) as pipeline:
+    result = pipeline.generate(request, Path("result.mp4"))
+```
+
+`vflash generate` 同时传入三个参数：
+`--attention-adapter attention-adapter.safetensors --attention-adapter-rank 8 --attention-adapter-scale -1`。
+使用 Base16 I2VA/FL2VA 准备资源，L2VA 沿用其关键帧 profile 合同。
+该 adapter 尚不支持 SM86 或协同双卡；HTTP 配置不变。
+准备时只加载一次，连续请求复用；正常关闭或失败时先卸载 adapter，再关闭原生核心。
+结果的 `stages.denoising.attention_adapter` 标明范围、精度、rank 和倍率，调用方还需保留权重身份。
+省略该配置即可回到原模型，不修改任何底模文件。
+
+管线包装的 CPU 生命周期检查已通过，新完整管线 GPU 验证待执行；下方既有原生实测不冒充包装验证。
 
 ## 在已有原生 session 中使用
 

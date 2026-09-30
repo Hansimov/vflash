@@ -129,6 +129,8 @@ def _pipeline(*, fail: str | None = None) -> tuple[H3Pipeline, list[str]]:
     pipeline = H3Pipeline.__new__(H3Pipeline)
     pipeline._lock = threading.Lock()
     pipeline._closed = pipeline._released = False
+    pipeline.attention_adapter = None
+    pipeline._adapter_stack = None
     pipeline._core, pipeline._conditioner, pipeline._media = (
         Stage("native"),
         Stage("conditioning"),
@@ -834,3 +836,109 @@ def test_video_requires_single_sm89_ref4_before_decoding(
             VideoRequest("<Video 1>", reference_video=Path("ref.mp4")), tmp_path / "out.mp4"
         )
     assert not events and not pipeline._closed
+
+
+@pytest.mark.parametrize(
+    "rank,scale", [(True, -1), (0, -1), (257, -1), (8, True), (8, float("nan")), (8, 1.1)]
+)
+def test_attention_adapter_rejects_invalid_settings_before_file_access(tmp_path, rank, scale):
+    from vflash.pipeline import AttentionAdapter
+
+    with pytest.raises(ContractError):
+        AttentionAdapter(tmp_path / "missing.safetensors", rank, scale)
+
+
+@pytest.mark.parametrize("profile", ["ref2va-turbo4-exact-sm89", "i2va-base16-bf16-sm89"])
+def test_pipeline_adapter_profile_checked_before_cuda(tmp_path, monkeypatch, profile):
+    from vflash.hardware import NvidiaDevice
+    from vflash.pipeline import AttentionAdapter
+    from vflash.pipeline.assets import PreparedPipelineAssets
+    from vflash.pipeline.contracts import PipelineAssets
+
+    path = tmp_path / "adapter.safetensors"
+    path.write_bytes(b"not loaded by CPU configuration")
+    adapter = AttentionAdapter(path, 8, -1)
+    prepared = PreparedPipelineAssets(
+        PipelineAssets(**{name: tmp_path for name in PipelineAssets.__dataclass_fields__}),
+        tmp_path / "receipt.json",
+        "a" * 64,
+        (),
+        profile,
+    )
+    monkeypatch.setattr("vflash.pipeline.runtime.media_executables", lambda: None)
+    monkeypatch.setattr("vflash.pipeline.runtime.validate_adapter_dependencies", lambda: None)
+    monkeypatch.setattr(H3Pipeline, "_load_stages", lambda *_: pytest.fail("CUDA load"))
+    options = dict(
+        device=NvidiaDevice(0, "first", "RTX 4090", 48, "8.9", 320),
+        trust_local_code=True,
+        attention_adapter=adapter,
+    )
+    if profile.startswith("ref2va"):
+        with pytest.raises(ContractError, match="single-SM89 Base16"):
+            H3Pipeline(prepared, **options)
+    else:
+        with H3Pipeline(prepared, **options) as pipeline:
+            assert pipeline.attention_adapter == adapter
+            assert pipeline._adapter_stack is None
+
+
+@pytest.mark.parametrize("fail", [None, "native:generate", "load-conditioning"])
+def test_pipeline_owns_adapter_and_restores_it_before_core_exit(
+    tmp_path, monkeypatch, video_request, fail
+):
+    from contextlib import contextmanager
+
+    from vflash.pipeline import AttentionAdapter
+
+    pipeline, events = _pipeline(fail=fail)
+    adapter_path = tmp_path / "adapter.safetensors"
+    adapter_path.write_bytes(b"adapter loaded through test double")
+    pipeline.attention_adapter = AttentionAdapter(adapter_path, 8, -1)
+    core, conditioner, media = pipeline._core, pipeline._conditioner, pipeline._media
+    core.runtime = object()
+    pipeline.prepared.assets = SimpleNamespace(
+        artifact=None,
+        schedule_overlay=None,
+        auxiliary_tensor=None,
+        decoder_directory=tmp_path,
+    )
+    pipeline.attention_backend = "torch-flash"
+    pipeline._loaded = False
+
+    @contextmanager
+    def adapter_context(runtime, configuration):
+        assert runtime is core.runtime and configuration is pipeline.attention_adapter
+        events.append("adapter:attach")
+        try:
+            yield {}
+        finally:
+            events.append("adapter:detach")
+
+    def load_conditioner(*_):
+        if fail == "load-conditioning":
+            raise RuntimeError("load-conditioning")
+        return conditioner
+
+    monkeypatch.setattr("vflash.pipeline.runtime.open_attention_adapter", adapter_context)
+    monkeypatch.setattr("vflash.pipeline.runtime.NativeEngineSession", lambda *a, **k: core)
+    monkeypatch.setattr("vflash.pipeline.runtime.DiffusersConditioner", load_conditioner)
+    monkeypatch.setattr("vflash.pipeline.runtime.OfficialMediaDecoder", lambda **k: media)
+    if fail:
+        with pytest.raises(RuntimeError, match=fail):
+            pipeline.generate(video_request, tmp_path / "failed.mp4")
+        assert not (tmp_path / "failed.mp4").exists()
+    else:
+        for i in range(2):
+            result = pipeline.generate(video_request, tmp_path / f"result-{i}.mp4")
+            assert result.stages["denoising"]["attention_adapter"] == {
+                "rank": 8,
+                "scale": -1,
+                "scope": "dit-only",
+                "precision": "fp32-residual",
+            }
+        assert events.count("adapter:attach") == 1
+        assert "adapter:detach" not in events
+        pipeline.close()
+    assert events.count("adapter:detach") == 1
+    assert events.index("adapter:detach") < events.index("native:close")
+    assert pipeline._adapter_stack is None
