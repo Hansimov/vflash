@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from vflash.adapters.h3_tile_composition import install_spatial_composition
 from vflash.native.errors import VflashNativeError
 
 
@@ -190,6 +191,7 @@ def prepare_official_h3_video_decoder(
     # decoder GEMM path in FP16. This mirrors the released consumer-GPU VAE
     # precision split without importing a framework-specific VAE wrapper.
     remote.eval().requires_grad_(False)
+    install_spatial_composition(model)
     post_quant_conv = getattr(model, "post_quant_conv", None)
     if post_quant_conv is not None:
         post_quant_conv.to(dtype=torch_module.float16)

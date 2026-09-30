@@ -2,6 +2,23 @@
 
 The current release is **0.5.4**, adding an explicit experimental attention adapter without changing H3 generation defaults.
 
+## Unreleased · H3 spatial VAE composition
+
+The owned media decoder composes horizontal tile strips before vertical crossfades,
+preserving the diagonal contribution at overlap intersections. Model weights, decoded
+tile inputs, local position coordinates, precision, temporal chunks and audio are unchanged.
+The correction is instance-local and applies only to the single-device media decoder;
+the denoiser may still use its existing multi-device profiles.
+
+Frozen-latent RTX 4090 48 GB checks cover 5/6-second landscape clips and a 10-second
+864×864 clip, including optional-adapter output. They show small pixel changes, not a
+general cure for face distortion or high-motion ghosting. Decode/assembly cost of the
+large clip remained about 56–58 seconds; this is not an end-to-end speed claim.
+The overlap defect has also been reported in
+[ComfyUI's independent correction](https://github.com/Comfy-Org/ComfyUI/pull/16436).
+Sequential triple-overlap weights are not normalized all-contributor overlap-add.
+Release and serving pins remain unchanged pending public-adapter verification.
+
 ## 0.5.4 · Optional FP32 DiT attention LoRA {#v0-5-4}
 
 [Source tag](https://github.com/Hansimov/vflash/tree/v0.5.4) · [Interface and limits](./attention-lora)
