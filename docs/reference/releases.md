@@ -1,8 +1,10 @@
 # Release notes
 
-The current release is **0.5.4**, adding an explicit experimental attention adapter without changing H3 generation defaults.
+The current release is **0.5.5**, correcting spatial VAE composition without changing denoising defaults.
 
-## Unreleased · H3 spatial VAE composition
+## 0.5.5 · H3 spatial VAE composition {#v0-5-5}
+
+[Source tag](https://github.com/Hansimov/vflash/tree/v0.5.5)
 
 The owned media decoder composes horizontal tile strips before vertical crossfades,
 preserving the diagonal contribution at overlap intersections. Model weights, decoded
@@ -17,7 +19,10 @@ large clip remained about 56–58 seconds; this is not an end-to-end speed claim
 The overlap defect has also been reported in
 [ComfyUI's independent correction](https://github.com/Comfy-Org/ComfyUI/pull/16436).
 Sequential triple-overlap weights are not normalized all-contributor overlap-add.
-Release and serving pins remain unchanged pending public-adapter verification.
+The public adapter additionally reproduced every qualified raw RGB pixel of a complete
+five-second clip on SM89. This release has no new SM86 GPU measurement or independent
+audio determinism claim. No new weights, precision profile or decoder option is needed.
+Source and wheel are released; prebuilt registry images remain 0.3.2. Serving pins do not change.
 
 ## 0.5.4 · Optional FP32 DiT attention LoRA {#v0-5-4}
 

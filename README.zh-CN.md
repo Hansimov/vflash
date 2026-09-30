@@ -4,17 +4,18 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
-**0.5.4 正式版。** 新增实验性的显式
-[FP32 DiT 注意力 LoRA 上下文](https://hansimov.github.io/vflash/zh/reference/attention-lora)，
-用于单 SM89 Base16 原生会话。底模不改，退出恢复原运行时；不自动选择 adapter，
-不是 pipeline/HTTP 参数，也不承诺普遍修复人脸或动作。H3 生成与增强默认值均不变。
+**0.5.5 正式版。** 修正空间 VAE 图块交叉区的贡献丢失，权重、单块输入及时间解码不变。
+完整冻结 latent 实测确认公开 adapter 与已验证拼接实现的原始 RGB 逐值一致。
+这是实现缺陷修正，不是人脸失真或动作伪影的普遍修复。
+[实验性 FP32 注意力 adapter](https://hansimov.github.io/vflash/zh/reference/attention-lora)
+仍显式启用、默认关闭；去噪和增强策略不变。
 
 通过完整 Python 或容器 pipeline 生成同步视频和音频。Turbo profile 使用纯文字、
 一至三张图片或[一段短参考视频](https://hansimov.github.io/vflash/zh/guide/complete-pipeline#reference-video)
 生成五秒 MP4；官方 Base16 关键帧 profile 接受首帧、尾帧或两者，并支持五至十秒的整数时长。同一个
 prepared keyframe pipeline 可以在 I2VA、L2VA 和 FL2VA 之间切换，不重新加载权重。
 
-原生核心面向 RTX 3080 20 GB（SM86）和 RTX 4090 48 GB（SM89）。0.5.4 在**单SM89官方Base16默认
+原生核心面向 RTX 3080 20 GB（SM86）和 RTX 4090 48 GB（SM89）。0.5.5 在**单SM89官方Base16默认
 使用近似Sol attention**；SM86、协作双卡及Turbo仍为dense。Python、CLI与原生HTTP服务共享该策略，
 可显式用`--attention-backend torch-flash`保留dense。标准Docker构建包含固定Sol依赖；Python安装
 GPU依赖后执行`python -m vflash.install_sol`。缺依赖明确报错，不静默切换后端。
@@ -30,7 +31,7 @@ SM89 双卡是显式的单请求低延迟选项；两个独立 worker 仍是吞�
 需要 Python 3.11 或更新版本。基础安装不会下载模型权重或 PyTorch。
 
 ```bash
-git clone --branch v0.5.4 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.5.5 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
