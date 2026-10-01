@@ -1,6 +1,30 @@
 # Release notes
 
-The current release is **0.5.5**, correcting spatial VAE composition without changing denoising defaults.
+The current release is **0.5.6**, adding explicit complete-pipeline attention adapters while retaining the VAE correction and denoising defaults.
+
+## 0.5.6 · Complete-pipeline attention adapter {#v0-5-6}
+
+[Source tag](https://github.com/Hansimov/vflash/tree/v0.5.6) · [Usage and limits](./attention-lora)
+
+The complete Python/CLI pipeline now accepts the same explicit FP32 DiT-only attention
+adapter as the native context. A prepared pipeline loads it once, reuses it across serial
+requests, records its scope/rank/scale in each result, and detaches it before releasing the
+native core, including on failure. All three CLI adapter options must be supplied together.
+
+This is a single-SM89 official Base16 interface. It does not merge base weights, download
+adapters, enable an adapter by default, or add HTTP adapter configuration. TokenRefiner,
+SM86 and cooperating-pair application remain outside the supported adapter scope.
+The VAE overlap correction, exact text-encoder prefix and Sol selection policy are retained.
+Package and runtime versions are checked together to prevent stale reported versions.
+
+Three serial 672×384, six-second, 24 fps complete requests passed on one RTX 4090 48 GB,
+using Base16/Sol and an explicit rank-8, scale −1 adapter. They reused one owner, delivered
+144 frames each and closed cleanly. A cached candidate and its same-seed uncached control
+produced identical decoded RGB and PCM; the hit avoided the conditioning encoder call.
+This bounded cache control took 107.1 versus 115.8 seconds, not a general speed guarantee.
+CPU failure-path coverage and minimal-install CI also pass. Existing native quality evidence
+remains scoped; residual face/motion defects are not claimed solved.
+Source and wheel are released; prebuilt registry images remain 0.3.2.
 
 ## 0.5.5 · H3 spatial VAE composition {#v0-5-5}
 

@@ -4,12 +4,11 @@ Native **MiniMax H3 inference** for RTX 3080 20 GB and RTX 4090 48 GB. Vflash us
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
-**0.5.5.** Corrects spatial VAE tile composition at overlap intersections, without
-changing model weights, tile inputs or temporal decoding. Complete frozen-latent checks
-preserve the qualified compositor's raw RGB exactly through the public adapter.
-This fixes an implementation defect, not general face distortion or motion artifacts.
-The [experimental FP32 attention adapter](https://hansimov.github.io/vflash/reference/attention-lora)
-remains explicit and off by default; denoising and restoration policies are unchanged.
+**0.5.6.** The complete Python/CLI pipeline now supports an explicit, reversible
+[FP32 DiT attention adapter](https://hansimov.github.io/vflash/reference/attention-lora)
+on single-SM89 Base16. Three serial six-second requests verified lifecycle and exact
+cached/uncached media output. The spatial VAE correction and encoder savings are retained.
+Adapters remain off by default; Sol, denoising and restoration policies are unchanged.
 
 Generate synchronized video and audio through a complete Python or container pipeline.
 Turbo profiles create five-second MP4s from text, one to three images, or
@@ -18,7 +17,7 @@ Official Base16 keyframe profiles accept a first frame, a last frame, or both, a
 from five through ten seconds. One prepared keyframe pipeline can switch among I2VA, L2VA and FL2VA
 without reloading weights.
 
-The native core targets RTX 3080 20 GB (SM86) and RTX 4090 48 GB (SM89). Version 0.5.5 defaults to
+The native core targets RTX 3080 20 GB (SM86) and RTX 4090 48 GB (SM89). Version 0.5.6 defaults to
 **approximate Sol attention on single-SM89 official Base16**. SM86, cooperating pairs and Turbo
 profiles retain dense attention. Python, CLI and the native HTTP service share this policy;
 `--attention-backend torch-flash` explicitly retains dense execution. Standard Docker builds include
@@ -37,7 +36,7 @@ profiles retain their separate five-second contracts. [Read the qualification bo
 Python 3.11 or newer is required. The base install does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.5.5 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.5.6 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate

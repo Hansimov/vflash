@@ -28,8 +28,11 @@ closing the native core on normal exit or failure. Results identify its scope, p
 scale under `stages.denoising.attention_adapter`; callers must also preserve the weight identity.
 Omit the configuration to return to the base model; no model payload is modified.
 
-The pipeline wrapper has CPU lifecycle coverage; new full-pipeline GPU validation is pending.
-The existing native GPU evidence below remains valid and is not relabeled as wrapper validation.
+Version 0.5.6 completed three serial 672×384, six-second, 24 fps requests on one RTX 4090
+48 GB with Base16/Sol and rank 8, scale −1: one owner, 144 frames per output, clean close.
+A same-seed cached/uncached pair produced identical decoded RGB and PCM. CPU tests separately
+cover failure cleanup. This qualifies the wrapper on that workload, not every adapter, canvas,
+conditioning mode or audio-quality claim. The native evidence below has its own scope.
 
 ## Use an existing native session
 
