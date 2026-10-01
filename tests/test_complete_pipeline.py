@@ -886,6 +886,7 @@ def test_pipeline_adapter_profile_checked_before_cuda(tmp_path, monkeypatch, pro
 def test_pipeline_owns_adapter_and_restores_it_before_core_exit(
     tmp_path, monkeypatch, video_request, fail
 ):
+    import sys
     from contextlib import contextmanager
 
     from vflash.pipeline import AttentionAdapter
@@ -904,6 +905,13 @@ def test_pipeline_owns_adapter_and_restores_it_before_core_exit(
     )
     pipeline.attention_backend = "torch-flash"
     pipeline._loaded = False
+    # All compute stages are test doubles. Keep their lifecycle test available
+    # in the minimal install too, without changing real Torch thread settings.
+    monkeypatch.setitem(
+        sys.modules,
+        "torch",
+        SimpleNamespace(set_num_threads=lambda count: None, get_num_interop_threads=lambda: 1),
+    )
 
     @contextmanager
     def adapter_context(runtime, configuration):
