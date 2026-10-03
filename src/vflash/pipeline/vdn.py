@@ -219,9 +219,11 @@ class VDNKeyframePipeline:
     ) -> None:
         if trust_local_code is not True:
             raise ContractError("Official media components require trust_local_code=True")
-        if strategy not in {"full8", "pixel8+2", "selflift6+2"}:
-            raise ContractError("VDN strategy must be full8, pixel8+2 or selflift6+2")
-        assets.validate(strategy == "pixel8+2")
+        if strategy not in {"full8", "pixel8+2", "selflift6+2", "learned6+2"}:
+            raise ContractError(
+                "VDN strategy must be full8, pixel8+2, selflift6+2 or learned6+2"
+            )
+        assets.validate(strategy in {"pixel8+2", "learned6+2"})
         self.assets, self.strategy = assets, strategy
         self._lock, self._closed, self._decoder = threading.Lock(), False, None
         self._conditioning_cache = VDNCleanConditioningCache()
@@ -240,7 +242,7 @@ class VDNKeyframePipeline:
             conditioning_reuse_scope, ConditioningReuseScope
         ):
             raise ContractError("VDN reuse requires an explicit caller-owned scope")
-        progressive = self.strategy == "selflift6+2"
+        progressive = self.strategy in {"selflift6+2", "learned6+2"}
         if progressive and (
             request.mode != "i2va"
             or request.duration_seconds != 5
@@ -331,6 +333,13 @@ class VDNKeyframePipeline:
                             directory / "first.pt",
                             request.seed,
                             step_callback=on_step,
+                            upscale=(
+                                lambda v, w, h: upscale_bf16(
+                                    v, self.assets.upscaler_checkpoint, w, h
+                                )
+                            )
+                            if self.strategy == "learned6+2"
+                            else None,
                         )
                     else:
                         video, audio, sampling = engine.sample(

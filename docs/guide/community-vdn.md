@@ -223,3 +223,29 @@ speckles on the face and clothing. A 640-pixel short side is therefore an execut
 limit, **not** sufficient quality qualification for automatic selection. The clean
 controls above used 992×992 and 1536×640; retain full8 for smaller unqualified
 canvases. Do not use successful decoding as evidence of visual quality.
+
+## Optional learned latent lift 6+2
+
+`strategy="learned6+2"` keeps the same six-low/two-high eight-step video/audio
+clock, but replaces the zero variant's pixel/VAE correction with the explicit
+local BF16 [LBH H3 latent upscaler](https://huggingface.co/LBH-123-AI/Minimax_h3_latent_Upscaler).
+Set `VDNAssets.upscaler_checkpoint`; missing weights are an error, not a download
+or fallback. Channel normalization, alignment crop and the final two original
+steps are retained. The report distinguishes `rho=0`, `pixel_vae_roundtrip=False`
+and the upscaler load/compute timings. This is not the ten-step `pixel8+2` path
+and does not combine the VDN model with a LightX adapter.
+
+The execution boundary is the same five-second I2VA, minimum short side 640,
+single SM89 48 GB contract as `selflift6+2`. Keep selection explicit: successful
+execution is not automatic quality qualification for all canvases.
+
+Three local five-second controls reused frozen six-step estimates, evolved audio
+and clean target conditioning. Loading and learned lifting took 0.832–1.606 s,
+versus 39.758–42.212 s for the earlier full-video VAE round trip. These are stage
+costs, **not uncached end-to-end speedups**. All three complete outputs decoded.
+Sparse full-video views and native consecutive face crops retained the subjects
+and fine detail without the old strong soft/sharp pulsing. Some temporal edge
+diagnostics worsened in action/animation; unchanged motion/physics and small-face
+defects remain, and audio semantics were not assessed. The supported net benefit
+is removed VAE work with no new major defect observed in this bounded screen,
+not a universal fidelity guarantee. Integration source: `9a235f0b`.

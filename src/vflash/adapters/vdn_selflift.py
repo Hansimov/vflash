@@ -1,7 +1,8 @@
-"""Opt-in SelfLift-zero I2VA: six low-resolution and two target-resolution steps.
+"""Opt-in progressive I2VA: six low-resolution and two target-resolution steps.
 
 Each stage owns its engine. VAE round-trip ownership is explicit; no global
-sampler patch, downloaded restoration model, frame paste or hidden extra NFE.
+sampler patch, automatic download, frame paste or hidden extra NFE. An explicit
+learned lifter replaces the zero-variant's full-video VAE round trip.
 """
 
 import gc
@@ -162,6 +163,7 @@ def sample_selflift(
     seed,
     *,
     step_callback=None,
+    upscale=None,
 ):
     import torch
     from freevideo_engine.geometry import geometry
@@ -193,13 +195,27 @@ def sample_selflift(
     state = dict(phase="prefix", width=low_canvas["width"], height=low_canvas["height"])
     low, audio, prefix = execute(first_conditioning, state, low_canvas, seed)
     tick = time.monotonic()
-    pixel = pixel_vae_anchor(
-        low, geometry(**selected["upscale_target"]), Path(official_model), decoder
-    )
-    direct = torch.nn.functional.interpolate(low, size=pixel.shape[2:], mode="nearest")
-    pixel, direct = crop_latents(pixel, selected), crop_latents(direct, selected)
-    corrected, stats = consistency_lift(direct, pixel, rho=0.6)
-    del low, direct, pixel
+    if upscale is None:
+        pixel = pixel_vae_anchor(
+            low, geometry(**selected["upscale_target"]), Path(official_model), decoder
+        )
+        direct = torch.nn.functional.interpolate(low, size=pixel.shape[2:], mode="nearest")
+        pixel, direct = crop_latents(pixel, selected), crop_latents(direct, selected)
+        corrected, stats = consistency_lift(direct, pixel, rho=0.6)
+        stats.update(rho=0.6, strategy="selflift6+2", pixel_vae_roundtrip=True)
+        del direct, pixel
+    else:
+        target = selected["upscale_target"]
+        lifted, report = upscale(low, target["width"], target["height"])
+        corrected = crop_latents(lifted, selected).cpu().contiguous()
+        if (
+            corrected.shape != (*low.shape[:3], canvas["height"] // 16, canvas["width"] // 16)
+            or not torch.isfinite(corrected).all()
+        ):
+            raise ContractError("Learned lift has invalid geometry or values")
+        stats = dict(rho=0.0, strategy="learned6+2", pixel_vae_roundtrip=False, upscaler=report)
+        del lifted
+    del low
     anchor_seconds = time.monotonic() - tick
     state = dict(
         phase="suffix",
@@ -213,11 +229,9 @@ def sample_selflift(
         video,
         audio,
         dict(
-            strategy="selflift6+2",
             nfe=8,
             prefix=prefix,
             tail=tail,
-            rho=0.6,
             **stats,
             anchor_seconds=anchor_seconds,
             elapsed_seconds=time.monotonic() - began,

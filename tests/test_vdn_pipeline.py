@@ -227,25 +227,40 @@ def test_invalid_inputs_do_not_start_model(prepared, tmp_path):
     pipeline.close()
 
 
-def test_selflift_owns_roundtrip_and_eight_steps(prepared, tmp_path, monkeypatch):
+@pytest.mark.parametrize("strategy", ["selflift6+2", "learned6+2"])
+def test_selflift_owns_roundtrip_and_eight_steps(prepared, tmp_path, monkeypatch, strategy):
     import torch
 
     from vflash.adapters import vdn_selflift
 
     assets, events, _ = prepared
 
-    def sample(weights, model, decoder, canvas, target, first, seed, *, step_callback):
+    def sample(weights, model, decoder, canvas, target, first, seed, *, step_callback, upscale):
         assert target.name == "target.pt" and first.name == "first.pt"
         assert canvas["width"] == 640
-        decoder.resume_cuda()
-        decoder.suspend_cuda()
+        if strategy == "selflift6+2":
+            assert upscale is None
+            decoder.resume_cuda()
+            decoder.suspend_cuda()
+        else:
+            assert callable(upscale)
+            assert upscale("low", 1280, 1280) == ("lifted", {"precision": "bf16"})
         for _ in range(8):
             step_callback(1.0)
         return torch.zeros(1, 24, 2, 2, 2), torch.zeros(1, 8, 3), {"nfe": 8}
 
     monkeypatch.setattr(vdn_selflift, "sample_selflift", sample)
-    assets = VDNAssets(assets.official_model, assets.weights, assets.decoder)
-    pipeline = VDNKeyframePipeline(assets, strategy="selflift6+2", trust_local_code=True)
+    from vflash.pipeline import vdn
+
+    def lift(low, checkpoint, width, height):
+        assert checkpoint == assets.upscaler_checkpoint
+        assert (low, width, height) == ("low", 1280, 1280)
+        return "lifted", {"precision": "bf16"}
+
+    monkeypatch.setattr(vdn, "upscale_bf16", lift)
+    if strategy == "selflift6+2":
+        assets = VDNAssets(assets.official_model, assets.weights, assets.decoder)
+    pipeline = VDNKeyframePipeline(assets, strategy=strategy, trust_local_code=True)
     progress = []
     result = pipeline.generate(
         VideoRequest(
@@ -255,6 +270,8 @@ def test_selflift_owns_roundtrip_and_eight_steps(prepared, tmp_path, monkeypatch
         progress=progress.append,
     )
     assert result.stages["denoising"]["nfe"] == 8
+    assert result.profile_id == f"i2va-vdn-{strategy}-fp8-sm89"
+    assert events.count(("resume",)) == (2 if strategy == "selflift6+2" else 1)
     assert events.count(("decoder",)) == 1 and ("engine",) not in events
     assert ("encode", True) in events
     assert [(p.completed, p.total) for p in progress if p.stage == "denoising"] == [
@@ -266,12 +283,23 @@ def test_selflift_owns_roundtrip_and_eight_steps(prepared, tmp_path, monkeypatch
 @pytest.mark.parametrize(
     "changes", [{"width": 512}, {"duration_seconds": 8}, {"last_frame": Path("last.png")}]
 )
-def test_selflift_rejects_unqualified_modes_before_loading(prepared, tmp_path, changes):
+@pytest.mark.parametrize("strategy", ["selflift6+2", "learned6+2"])
+def test_selflift_rejects_unqualified_modes_before_loading(
+    prepared, tmp_path, changes, strategy
+):
     assets, events, _ = prepared
-    pipeline = VDNKeyframePipeline(assets, strategy="selflift6+2", trust_local_code=True)
+    pipeline = VDNKeyframePipeline(assets, strategy=strategy, trust_local_code=True)
     args = dict(first_frame=tmp_path / "first.png", width=640, height=640)
     args.update(changes)
     with pytest.raises(ContractError, match="five-second I2VA"):
         pipeline.generate(VideoRequest("Motion.", **args), tmp_path / "unqualified.mp4")
     assert not events
     pipeline.close()
+
+
+def test_learned_lift_requires_explicit_checkpoint(prepared):
+    assets, events, _ = prepared
+    assets = VDNAssets(assets.official_model, assets.weights, assets.decoder)
+    with pytest.raises(ContractError, match="explicit local upscaler"):
+        VDNKeyframePipeline(assets, strategy="learned6+2", trust_local_code=True)
+    assert not events
