@@ -1,7 +1,8 @@
 import pytest
-import torch
 
 from vflash.adapters.selflift import consistency_lift
+
+torch = pytest.importorskip("torch")
 
 
 def test_selection_and_pure_routes():
