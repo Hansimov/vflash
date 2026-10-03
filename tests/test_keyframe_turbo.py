@@ -34,7 +34,6 @@ def test_keyframe_adapter_execution_contract(nfe, mode, validate, endpoints):
     assert model.adapter.rank == 128
     assert model.adapter_execution == "runtime-residual"
     assert model.weight_profile == WEIGHT_PROFILES[profile_id]
-    assert model_schedule(profile_id).nfe == nfe
     p = SimpleNamespace(
         task=mode,
         nfe=nfe,
@@ -56,6 +55,13 @@ def test_keyframe_adapter_execution_contract(nfe, mode, validate, endpoints):
     p.video_flow_shift = 12
     with pytest.raises(H3ConditioningBundleError):
         validate(p, request)
+
+
+@pytest.mark.parametrize("nfe", [4, 8])
+@pytest.mark.parametrize("mode", ["i2va", "fl2va"])
+def test_keyframe_runtime_schedule(nfe, mode):
+    pytest.importorskip("torch")
+    assert model_schedule(f"{mode}-turbo{nfe}-exact-sm89").nfe == nfe
 
 
 def test_ref_and_keyframe_eight_step_weights_are_not_interchangeable():
