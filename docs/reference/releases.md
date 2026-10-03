@@ -1,6 +1,18 @@
 # Release notes
 
-Version **0.6.1** adds opt-in SelfLift-zero progressive sampling. Existing defaults remain unchanged.
+Version **0.6.2** fixes artifact loading for the existing preview keyframe Turbo profiles. Defaults remain unchanged.
+
+## 0.6.2 · Preview keyframe artifact loading {#v0-6-2}
+
+The native artifact loader now accepts the pinned I2VA/FL2VA adapter identities already declared
+by the four SM89 Turbo4/Turbo8 preview profiles. Previously the compiler and profile resolver
+accepted them but a later loader allowlist still rejected them as unknown oracle identities.
+Regression tests exercise complete artifact loading, not just source-metadata validation.
+
+Adapter revisions, schedules, NFE, precision and hardware checks remain enforced. This is a CPU
+contract correction, not new GPU media qualification or a quality/speed claim. It does not enable
+the 544p adapter, PDD, tail-only Turbo, change Base16/VDN defaults or replace deployed engines.
+Source and wheel are released; existing prebuilt container images are unchanged.
 
 ## 0.6.1 · SelfLift-zero progressive I2VA {#v0-6-1}
 

@@ -169,6 +169,10 @@ def test_adaln_padding_does_not_influence_real_rows():
         "t2va-turbo4-exact-sm89",
         "ref2va-turbo4-exact-sm86",
         "t2va-turbo4-exact-sm86",
+        "i2va-turbo4-exact-sm89",
+        "fl2va-turbo4-exact-sm89",
+        "i2va-turbo8-exact-sm89",
+        "fl2va-turbo8-exact-sm89",
     ],
 )
 def test_artifact_schema_five_loads_with_no_replay_and_keeps_schema_four(
@@ -207,7 +211,7 @@ def test_artifact_schema_five_loads_with_no_replay_and_keeps_schema_four(
         "layout": runtime.H3_RUNTIME_ARTIFACT_LAYOUT,
         "target": asdict(TARGET),
         "spec": asdict(SPEC),
-        "nfe": 4,
+        "nfe": profile.definition.nfe,
         "source": source,
         "weight_profile": profile.adapter.profile_id,
         "adapter_execution": "runtime-residual",
