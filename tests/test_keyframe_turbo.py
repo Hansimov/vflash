@@ -90,9 +90,16 @@ def test_544_weights_and_schedule_are_distinct_from_768(mode):
     assert model.adapter != LIGHTX_H3_TURBO8_CONTRACT
     assert model.weight_profile == WEIGHT_PROFILES[profile_id]
     assert (model.definition.video_flow_shift, model.definition.audio_flow_shift) == (12, 3)
-    assert model_schedule(profile_id) != model_schedule(f"{mode}-turbo8-exact-sm89")
     assert supported_request_modes(profile_id) == ("i2va", "l2va", "fl2va")
     assert conditioning_profile_for_request(profile_id, "l2va") == "fl2va-turbo8-544-exact-sm89"
+
+
+@pytest.mark.parametrize("mode", ["i2va", "fl2va"])
+def test_544_runtime_schedule_is_distinct_from_768(mode):
+    pytest.importorskip("torch")
+    assert model_schedule(f"{mode}-turbo8-544-exact-sm89") != model_schedule(
+        f"{mode}-turbo8-exact-sm89"
+    )
 
 
 @pytest.mark.parametrize(
