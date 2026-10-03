@@ -1,5 +1,17 @@
 # 运行资源
 
+## 可信本地快照：免大文件哈希
+
+Python接口 `prepare_weights`、`compile_assets` 和 `prepare_pipeline_assets`
+可显式传入 `verify_content_hashes=False`，三阶段保持一致，用于操作者持有的不可变快照。
+这会避免重复读取模型大文件，并不宣称完成下载文件的密码学校验；默认调用仍执行内容校验。
+
+元数据模式输入记录明确标记 `source-inventory-and-file-identity`，上游摘要只作为来源身份，
+不是本机计算的哈希。编译工件使用schema6、时间表使用schema3，未计算的payload摘要为null。
+固定模型/LoRA、文件尺寸、全张量头、形状、时间表和首尾帧合同仍需通过；inode/mtime变化使
+准备记录失效。严格工件读取会拒绝缺失摘要，可信读取必须显式关闭内容哈希；不得把null冒充
+发布校验值或用伪造摘要绕过验证。
+
 latent 命令行从编译后的输入开始执行。SM89 的 Ref4 和 T2VA Base4 还提供[完整 Python 视频链路](../guide/complete-pipeline)和[官方权重编译器](../guide/compile-weights)。安装 Python 包不会自动下载权重或示例条件包。
 
 下列命令行合同面向已经提供兼容编译资源的开发者。

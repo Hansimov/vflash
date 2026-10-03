@@ -61,9 +61,11 @@ COMPLETE_MODEL_PROFILES = (
     "fl2va-turbo4-exact-sm89",
     "i2va-turbo8-exact-sm89",
     "fl2va-turbo8-exact-sm89",
+    "i2va-turbo8-544-exact-sm89",
+    "fl2va-turbo8-544-exact-sm89",
 )
 
-_BASE16_KEYFRAME_PROFILE_BY_MODE = {
+_KEYFRAME_PROFILE_BY_MODE = {
     "i2va-base16-bf16-sm89": {
         "i2va": "i2va-base16-bf16-sm89",
         "l2va": "fl2va-base16-bf16-sm89",
@@ -84,6 +86,16 @@ _BASE16_KEYFRAME_PROFILE_BY_MODE = {
         "l2va": "fl2va-base16-bf16-sm86",
         "fl2va": "fl2va-base16-bf16-sm86",
     },
+    "i2va-turbo8-544-exact-sm89": {
+        "i2va": "i2va-turbo8-544-exact-sm89",
+        "l2va": "fl2va-turbo8-544-exact-sm89",
+        "fl2va": "fl2va-turbo8-544-exact-sm89",
+    },
+    "fl2va-turbo8-544-exact-sm89": {
+        "i2va": "i2va-turbo8-544-exact-sm89",
+        "l2va": "fl2va-turbo8-544-exact-sm89",
+        "fl2va": "fl2va-turbo8-544-exact-sm89",
+    },
 }
 
 
@@ -91,7 +103,7 @@ def supported_request_modes(profile_id: str) -> tuple[str, ...]:
     """Return request modes that reuse this profile's exact loaded model."""
 
     profile = model_profile(profile_id)
-    paired = _BASE16_KEYFRAME_PROFILE_BY_MODE.get(profile_id)
+    paired = _KEYFRAME_PROFILE_BY_MODE.get(profile_id)
     if paired is not None:
         candidates = tuple(model_profile(paired[mode]) for mode in ("i2va", "fl2va"))
         invariant = tuple(
@@ -122,7 +134,7 @@ def supported_request_modes(profile_id: str) -> tuple[str, ...]:
         if candidates[0].definition.mode.value != "i2va" or (
             candidates[1].definition.mode.value != "fl2va" or invariant[0] != invariant[1]
         ):
-            raise ContractError("paired Base16 keyframe profiles differ")
+            raise ContractError("paired keyframe profiles differ")
         return ("i2va", "l2va", "fl2va")
     return (profile.definition.mode.value,)
 
@@ -133,7 +145,7 @@ def conditioning_profile_for_request(profile_id: str, request_mode: str) -> str:
     modes = supported_request_modes(profile_id)
     if request_mode not in modes:
         raise ContractError("the request mode differs from the prepared pipeline profile")
-    return _BASE16_KEYFRAME_PROFILE_BY_MODE.get(profile_id, {}).get(request_mode, profile_id)
+    return _KEYFRAME_PROFILE_BY_MODE.get(profile_id, {}).get(request_mode, profile_id)
 
 
 @dataclass(frozen=True)
@@ -197,6 +209,8 @@ def model_profile(profile_id: str = DEFAULT_MODEL_PROFILE) -> H3ModelProfile:
         adapter_id = (
             "lightx-ref-turbo4-v0.1"
             if definition.mode.value == "ref2va"
+            else "lightx-turbo8-v1.0-544"
+            if profile_id in {"i2va-turbo8-544-exact-sm89", "fl2va-turbo8-544-exact-sm89"}
             else f"lightx-turbo{definition.nfe}-v1.0"
         )
         adapter = h3_distilled_lora_contract_for_profile(

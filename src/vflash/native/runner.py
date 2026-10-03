@@ -19,6 +19,8 @@ WEIGHT_PROFILES = {
     "fl2va-turbo4-exact-sm89": "lightx-turbo4-v1.0",
     "i2va-turbo8-exact-sm89": "lightx-turbo8-v1.0",
     "fl2va-turbo8-exact-sm89": "lightx-turbo8-v1.0",
+    "i2va-turbo8-544-exact-sm89": "lightx-turbo8-v1.0-544",
+    "fl2va-turbo8-544-exact-sm89": "lightx-turbo8-v1.0-544",
     "t2va-turbo4-exact-sm89": "lightx-turbo4-v1.0",
     "t2va-turbo4-exact-sm86": "lightx-turbo4-v1.0",
     "ref2va-turbo4-exact-sm86": "lightx-ref-turbo4-v0.1",

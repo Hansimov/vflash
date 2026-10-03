@@ -19,6 +19,54 @@
   ],
   "profiles": [
     {
+      "id": "i2va-turbo8-544-exact-sm89",
+      "mode": "i2va",
+      "availability": "preview",
+      "model": "MiniMaxAI/MiniMax-H3",
+      "model_revision": "42ed227ee7df40d41602854ae760620d6eb651fe",
+      "adapter": "lightx2v/Minimax-h3-Turbo",
+      "adapter_revision": "3ec17a324ced54151364f24f8b5fb6bf7e26414f",
+      "nfe": 8,
+      "scheduler": "h3-training-euler",
+      "video_flow_shift": 12,
+      "audio_flow_shift": 3,
+      "precision": "bf16-runtime-residual",
+      "attention": {
+        "backend": "torch-flash",
+        "exact": true,
+        "backend_by_evaluation": [
+          "torch-flash", "torch-flash", "torch-flash", "torch-flash",
+          "torch-flash", "torch-flash", "torch-flash", "torch-flash"
+        ]
+      },
+      "target_ids": ["sm89-48g-resident"],
+      "quality_statement": "Experimental 544p-trained keyframe adapter with its own pinned weights and 12/3 schedule. Exact describes attention only. Native SM89 qualification is pending; this is not a production default or a general quality claim."
+    },
+    {
+      "id": "fl2va-turbo8-544-exact-sm89",
+      "mode": "fl2va",
+      "availability": "preview",
+      "model": "MiniMaxAI/MiniMax-H3",
+      "model_revision": "42ed227ee7df40d41602854ae760620d6eb651fe",
+      "adapter": "lightx2v/Minimax-h3-Turbo",
+      "adapter_revision": "3ec17a324ced54151364f24f8b5fb6bf7e26414f",
+      "nfe": 8,
+      "scheduler": "h3-training-euler",
+      "video_flow_shift": 12,
+      "audio_flow_shift": 3,
+      "precision": "bf16-runtime-residual",
+      "attention": {
+        "backend": "torch-flash",
+        "exact": true,
+        "backend_by_evaluation": [
+          "torch-flash", "torch-flash", "torch-flash", "torch-flash",
+          "torch-flash", "torch-flash", "torch-flash", "torch-flash"
+        ]
+      },
+      "target_ids": ["sm89-48g-resident"],
+      "quality_statement": "Experimental 544p-trained first/last-frame adapter; also accepts true last-only conditioning through the matched I2/FL pair. Native SM89 qualification is pending. It must not reuse the 768p adapter or its 6/3 schedule."
+    },
+    {
       "id": "i2va-turbo4-exact-sm89",
       "mode": "i2va",
       "availability": "preview",

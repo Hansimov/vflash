@@ -63,8 +63,14 @@ def prepare_weights(
     *,
     profile_id: str = DEFAULT_MODEL_PROFILE,
     progress: Callable[[int, int], None] | None = None,
+    verify_content_hashes: bool = True,
 ) -> PreparedWeights:
-    """Hash the pinned transformer shards and LoRA without importing CUDA libraries."""
+    """Bind pinned files, optionally trusting an operator's immutable source snapshot.
+
+    The explicit metadata-only mode records that no local digest was checked;
+    upstream digests remain provenance, not a claim about bytes read locally.
+    Header validation still runs before compilation in either mode.
+    """
     if receipt.exists() or receipt.is_symlink():
         raise ContractError("the weights receipt already exists")
     transformer_directory = transformer_directory.resolve(strict=True)
@@ -76,14 +82,17 @@ def prepare_weights(
         before = file_identity(path)
         if before["size"] != expected["size"]:
             raise ContractError(f"raw weight size differs from its official source: {role}")
-        digest = hashlib.sha256()
-        with path.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(8 * 1024 * 1024), b""):
-                digest.update(chunk)
-        if file_identity(path) != before or digest.hexdigest() != expected["sha256"]:
+        actual_digest = expected["sha256"]
+        if verify_content_hashes:
+            digest = hashlib.sha256()
+            with path.open("rb") as handle:
+                for chunk in iter(lambda: handle.read(8 * 1024 * 1024), b""):
+                    digest.update(chunk)
+            actual_digest = digest.hexdigest()
+        if file_identity(path) != before or actual_digest != expected["sha256"]:
             raise ContractError(f"raw weight bytes differ from their official source: {role}")
         rows.append(
-            {"role": role, "path": str(path), "sha256": digest.hexdigest(), "identity": before}
+            {"role": role, "path": str(path), "sha256": actual_digest, "identity": before}
         )
         if progress is not None:
             progress(index, len(required))
@@ -96,6 +105,8 @@ def prepare_weights(
         "adapter_path": str(adapter_path) if adapter_path is not None else None,
         "files": rows,
     }
+    if not verify_content_hashes:
+        value.update(schema_version=2, verification="source-inventory-and-file-identity")
     receipt.parent.mkdir(parents=True, exist_ok=True)
     temporary = receipt.with_name(f".{receipt.name}.{uuid.uuid4().hex}.tmp")
     try:
@@ -125,9 +136,13 @@ def load_prepared_weights(receipt: Path) -> PreparedWeights:
     }
     profile_id = DEFAULT_MODEL_PROFILE if legacy else value.get("profile_id")
     model_profile(profile_id)
+    metadata_only = value.get("schema_version") == 2
+    if metadata_only:
+        fields.add("verification")
     if (
         set(value) != (fields if legacy else fields | {"profile_id"})
-        or value["schema_version"] != 1
+        or value["schema_version"] not in {1, 2}
+        or (metadata_only and value.get("verification") != "source-inventory-and-file-identity")
         or value["kind"] != ("h3-ref4-official-weights" if legacy else "h3-official-weights")
         or value["source"] != weights_source(profile_id)
         or not isinstance(value["files"], list)

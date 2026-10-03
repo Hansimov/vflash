@@ -244,7 +244,11 @@ def _planned_files(
 
 
 def prepare_pipeline_assets(
-    assets: PipelineAssets, receipt: Path, *, profile_id: str = PIPELINE_PROFILE
+    assets: PipelineAssets,
+    receipt: Path,
+    *,
+    profile_id: str = PIPELINE_PROFILE,
+    verify_content_hashes: bool = True,
 ) -> PreparedPipelineAssets:
     """Verify consumed official files and compiled blocks at an explicit ingestion boundary.
 
@@ -260,24 +264,32 @@ def prepare_pipeline_assets(
         before = _stamp(path)
         if expected.get("size", before["size"]) != before["size"]:
             raise ContractError(f"asset size differs from its pinned source: {role}")
-        digest = hashlib.sha256()
-        blob = hashlib.sha1(f"blob {before['size']}\0".encode())
-        with path.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(8 * 1024 * 1024), b""):
-                digest.update(chunk)
-                if "git_blob_sha1" in expected:
-                    blob.update(chunk)
-        if (
-            _stamp(path) != before
-            or expected.get("sha256", digest.hexdigest()) != digest.hexdigest()
-            or expected.get("git_blob_sha1", blob.hexdigest()) != blob.hexdigest()
-        ):
+        actual_digest = expected.get("sha256")
+        if verify_content_hashes:
+            if "sha256" in expected and expected["sha256"] is None:
+                raise ContractError(
+                    "metadata-only artifact needs explicit metadata-only preparation"
+                )
+            digest = hashlib.sha256()
+            blob = hashlib.sha1(f"blob {before['size']}\0".encode())
+            with path.open("rb") as handle:
+                for chunk in iter(lambda: handle.read(8 * 1024 * 1024), b""):
+                    digest.update(chunk)
+                    if "git_blob_sha1" in expected:
+                        blob.update(chunk)
+            actual_digest = digest.hexdigest()
+            if (
+                expected.get("sha256", actual_digest) != actual_digest
+                or expected.get("git_blob_sha1", blob.hexdigest()) != blob.hexdigest()
+            ):
+                raise ContractError(f"asset bytes differ from their pinned source: {role}")
+        if _stamp(path) != before:
             raise ContractError(f"asset bytes differ from their pinned source: {role}")
         inventory.append(
             {
                 "role": role,
                 "path": str(path.resolve(strict=True)),
-                "sha256": digest.hexdigest(),
+                "sha256": actual_digest,
                 "stamp": before,
             }
         )
@@ -287,6 +299,8 @@ def prepare_pipeline_assets(
         "assets": assets.to_mapping(),
         "inventory": inventory,
     }
+    if not verify_content_hashes:
+        value.update(schema_version=2, verification="source-inventory-and-file-identity")
     receipt.parent.mkdir(parents=True, exist_ok=True)
     temporary = receipt.with_name(f".{receipt.name}.{uuid.uuid4().hex}.tmp")
     try:
@@ -303,16 +317,21 @@ def load_prepared_pipeline_assets(receipt: Path) -> PreparedPipelineAssets:
         value = json.loads(data)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ContractError("the pipeline asset receipt is invalid") from exc
+    metadata_only = isinstance(value, dict) and value.get("schema_version") == 2
     if (
         not isinstance(value, dict)
         or set(value)
-        != {
-            "schema_version",
-            "profile_id",
-            "assets",
-            "inventory",
-        }
-        or value["schema_version"] != 1
+        != (
+            {
+                "schema_version",
+                "profile_id",
+                "assets",
+                "inventory",
+            }
+            | ({"verification"} if metadata_only else set())
+        )
+        or value["schema_version"] not in {1, 2}
+        or (metadata_only and value.get("verification") != "source-inventory-and-file-identity")
         or not isinstance(value["profile_id"], str)
         or not isinstance(value["inventory"], list)
         or not value["inventory"]
@@ -337,9 +356,14 @@ def load_prepared_pipeline_assets(receipt: Path) -> PreparedPipelineAssets:
             or row["role"] not in planned
             or not isinstance(row["path"], str)
             or not Path(row["path"]).is_absolute()
-            or not isinstance(row["sha256"], str)
-            or len(row["sha256"]) != 64
-            or any(char not in "0123456789abcdef" for char in row["sha256"])
+            or not (
+                (metadata_only and row["sha256"] is None)
+                or (
+                    isinstance(row["sha256"], str)
+                    and len(row["sha256"]) == 64
+                    and all(char in "0123456789abcdef" for char in row["sha256"])
+                )
+            )
             or not isinstance(row["stamp"], dict)
             or set(row["stamp"]) != {"size", "device", "inode", "mtime_ns", "ctime_ns"}
             or any(type(item) is not int for item in row["stamp"].values())

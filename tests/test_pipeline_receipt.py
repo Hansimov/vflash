@@ -52,6 +52,37 @@ def test_prepared_asset_replacement_invalidates_receipt(receipt):
         prepared.check_unchanged()
 
 
+def test_explicit_metadata_pipeline_receipt_preserves_null_digest(receipt, monkeypatch):
+    from pathlib import Path
+
+    from vflash.pipeline.assets import prepare_pipeline_assets
+
+    old_path, asset, value = receipt
+    monkeypatch.setattr(
+        "vflash.pipeline.assets._planned_files",
+        lambda assets, profile_id: [
+            ("test-weight", asset, {"size": asset.stat().st_size, "sha256": None})
+        ],
+    )
+    original_open = Path.open
+
+    def guarded_open(path, *args, **kwargs):
+        assert path != asset, "metadata preparation must not scan payloads"
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", guarded_open)
+    assets = PipelineAssets.from_mapping(value["assets"])
+    path = old_path.with_name("metadata.json")
+    prepared = prepare_pipeline_assets(assets, path, verify_content_hashes=False)
+    assert prepared.inventory[0]["sha256"] is None
+    assert prepared == load_prepared_pipeline_assets(path)
+    with pytest.raises(ContractError, match="explicit metadata-only"):
+        prepare_pipeline_assets(assets, old_path.with_name("strict.json"))
+    asset.touch()
+    with pytest.raises(ContractError, match="changed"):
+        prepared.check_unchanged()
+
+
 @pytest.mark.parametrize(
     "mutation", ["duplicate", "missing", "wrong-path", "wrong-hash", "bad-stamp"]
 )

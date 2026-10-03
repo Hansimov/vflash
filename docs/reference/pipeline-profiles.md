@@ -14,6 +14,19 @@ A prepared pipeline uses one fixed model, adapter and scheduler. The current sou
 
 The released Turbo profiles use four evaluations, BF16 weights and separate adapter residuals and retain their five-second contract. The Base16 profile identities use the official Base transformer for 16 evaluations in BF16 without an adapter and accept five seconds (`124 → 120` frames) or ten seconds (`243 → 240` frames), both at 24 fps. The default remains SM89 Ref4. The paired Base16 I2VA and FL2VA profiles for one hardware target have identical model artifacts, scheduler and official FL2VA conditioning workflow. A prepared Base16 keyframe pipeline can therefore accept I2VA, L2VA and FL2VA requests serially without a profile restart or cold initialization; each request emits its mode-specific conditioning schema and provenance. L2VA deliberately reuses the FL2VA weight profile instead of adding a duplicate identity. The prepared profile ID remains the pipeline and result identity. Per-request stage residency still follows the complete pipeline's selected memory strategy. Turbo, Ref2VA and T2VA profiles remain single-mode. Native single-SM86 and Turbo8 interfaces have a different [validation scope](../guide/profiles).
 
+## 544p-trained eight-step keyframes (preview)
+
+`i2va-turbo8-544-exact-sm89` and `fl2va-turbo8-544-exact-sm89` bind the distinct
+LightX revision `3ec17a324ced54151364f24f8b5fb6bf7e26414f`, file
+`minimax_h3_fl2v_turbo_8step_v1.0_bf16.safetensors`, rank 128 / alpha 8 and
+video/audio shifts **12 / 3**. They do not reuse the 768p adapter or its 6 / 3 grid.
+Both profiles share the same model identity and accept first-only, last-only and
+true first/last requests. Last-only conditioning is not video reversal.
+
+These are implementation previews, pending native SM89 complete-video qualification;
+they do not change the default. Exact names describe attention, not Base16 equivalence
+or a blanket quality guarantee. Do not infer a single-SM86 complete pipeline from them.
+
 ## Prepare Base16 I2VA
 
 Prepare and compile the pinned official Base transformer without `--adapter`, then build the ordinary six-field pipeline receipt. Its asset JSON sets `adapter_path` to `null` and supplies the official model and decoder directories plus the three compiled outputs.

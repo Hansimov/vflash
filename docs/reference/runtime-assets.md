@@ -36,6 +36,22 @@ Vflash validates the declared resource metadata. A file with the expected name i
 
 ## Store inputs and outputs {#storage}
 
+### Trusted local snapshots without payload hashing
+
+The Python APIs `prepare_weights`, `compile_assets` and `prepare_pipeline_assets`
+accept explicit `verify_content_hashes=False` for operator-owned immutable snapshots.
+Use all three consistently. This avoids rereading model-sized files during preparation
+and compilation; it is **not** cryptographic verification of a download. Default callers
+still request content verification.
+
+Metadata-only input receipts explicitly record `source-inventory-and-file-identity`:
+upstream digests are source identities, not locally measured hashes. Compiler artifacts
+use schema 6 and overlays schema 3 with null payload digests. Readers still validate
+the pinned model/adapter, sizes, full tensor headers, dimensions, schedule and endpoints.
+File identity/mtime changes invalidate prepared receipts. Strict artifact loading rejects
+an absent digest instead of silently claiming verification; trusted loading must explicitly
+use `verify_content_hashes=False`. Do not publish a null digest as a release checksum.
+
 Keep model assets and bundles outside the source checkout. In Docker, mount them read-only and give the service a separate writable output directory. The [Docker guide](../guide/docker) shows the relevant settings.
 
 The latent CLI returns a safetensors file with video and audio tensors. The complete Python pipelines handle encoding and official VAE decoding internally, then publish an MP4.

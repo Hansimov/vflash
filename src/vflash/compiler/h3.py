@@ -148,15 +148,19 @@ def validate_weight_headers(prepared: PreparedWeights) -> dict[str, int]:
     }
 
 
-def _file_record(path: Path, root: Path) -> dict[str, Any]:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(8 * 1024 * 1024), b""):
-            digest.update(chunk)
+def _file_record(
+    path: Path, root: Path, *, verify_content_hashes: bool = True
+) -> dict[str, Any]:
+    digest = None
+    if verify_content_hashes:
+        digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(8 * 1024 * 1024), b""):
+                digest.update(chunk)
     return {
         "path": str(path.relative_to(root)),
         "size_bytes": path.stat().st_size,
-        "sha256": digest.hexdigest(),
+        "sha256": digest.hexdigest() if digest is not None else None,
     }
 
 
@@ -231,6 +235,7 @@ def _write_assets(
     staging: Path,
     device: Any,
     progress: Callable[[str, int, int], None] | None,
+    verify_content_hashes: bool = True,
 ) -> None:
     import torch
 
@@ -274,7 +279,9 @@ def _write_assets(
         records.append(
             {
                 "index": index,
-                **_file_record(path, artifact_directory),
+                **_file_record(
+                    path, artifact_directory, verify_content_hashes=verify_content_hashes
+                ),
                 "adaln_rows": 3 * timestep_rows,
                 "tensors": sorted(block),
             }
@@ -303,7 +310,7 @@ def _write_assets(
         metadata={"layout": H3_RUNTIME_AUXILIARY_LAYOUT},
     )
     artifact = {
-        "schema_version": 5,
+        "schema_version": 5 if verify_content_hashes else 6,
         "artifact_id": artifact_id,
         "created_at": created_at,
         "status": "complete-block-stack",
@@ -339,7 +346,7 @@ def _write_assets(
         json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
     )
     overlay = {
-        "schema_version": 2,
+        "schema_version": 2 if verify_content_hashes else 3,
         "overlay_id": f"h3-schedule-{family}-" + canonical_sha256(source)[:12],
         "created_at": created_at,
         "status": "source-schedule-exact",
@@ -358,7 +365,11 @@ def _write_assets(
             "compile_recipe": source["compile_recipe"],
         },
         "auxiliary": {
-            **_file_record(overlay_directory / "schedule.safetensors", overlay_directory),
+            **_file_record(
+                overlay_directory / "schedule.safetensors",
+                overlay_directory,
+                verify_content_hashes=verify_content_hashes,
+            ),
             "timestep_rows": timestep_rows,
         },
         "blocks": [],
@@ -366,8 +377,8 @@ def _write_assets(
     (overlay_directory / "overlay.json").write_text(
         json.dumps(overlay, indent=2) + "\n", encoding="utf-8"
     )
-    # The writer already hashed every block. Validate headers, schema and small
-    # schedule payloads without reading another forty gigabytes here.
+    # Validate headers/schema without a second full payload pass. Metadata-only
+    # output publishes null digests, never fabricated or stale payload hashes.
     loaded = load_h3_runtime_artifact(artifact_directory, verify_content_hashes=False)
     load_h3_schedule_overlay(overlay_directory, artifact=loaded)
     load_h3_runtime_auxiliary(staging / "auxiliary.safetensors")
@@ -379,7 +390,11 @@ def _write_assets(
         "source": source,
         "artifact": "artifact",
         "schedule_overlay": "schedule",
-        "auxiliary_tensor": _file_record(staging / "auxiliary.safetensors", staging),
+        "auxiliary_tensor": _file_record(
+            staging / "auxiliary.safetensors",
+            staging,
+            verify_content_hashes=verify_content_hashes,
+        ),
         "input_receipt_sha256": prepared.receipt_sha256,
     }
     (staging / "compiled.json").write_text(
@@ -393,6 +408,7 @@ def compile_assets(
     *,
     device: NvidiaDevice,
     progress: Callable[[str, int, int], None] | None = None,
+    verify_content_hashes: bool = True,
 ) -> CompiledAssets:
     """Compile in a fresh process on an exclusively assigned matching GPU.
 
@@ -440,7 +456,7 @@ def compile_assets(
     )
     try:
         with torch.inference_mode():
-            _write_assets(prepared, staging, runtime_device, progress)
+            _write_assets(prepared, staging, runtime_device, progress, verify_content_hashes)
         torch.cuda.synchronize(runtime_device)
         _publish_directory(staging, destination)
     finally:

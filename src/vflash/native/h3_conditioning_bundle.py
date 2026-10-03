@@ -720,6 +720,7 @@ def _keyframe_schedule_supported(profile: H3ConditioningProfile) -> bool:
         (16, 12, 3),
         (4, 6, 3),
         (8, 6, 3),
+        (8, 12, 3),
     }
 
 
@@ -768,16 +769,17 @@ def _validate_last_frame_profile(
     delivery_profile = _complete_delivery_profile(profile.frames)
     if (
         profile.task != "l2va"
-        or profile.nfe != 16
+        or (profile.nfe, profile.video_flow_shift, profile.audio_flow_shift)
+        not in {(16, 12, 3), (8, 12, 3)}
         or delivery_profile is None
-        or (profile.video_flow_shift, profile.audio_flow_shift) != (12, 3)
         or profile.width * profile.height > H3_BASE16_MAX_CANVAS_PIXELS
         or profile.num_condition_audio_rows != 0
         or profile.num_condition_video_rows != expected_rows
         or request["delivery_profiles"] != delivery_profile
     ):
         raise H3ConditioningBundleError(
-            "last-frame conditioning requires Base16 L2VA at 5-10s24 within its canvas budget"
+            "last-frame conditioning requires a supported L2VA schedule at 5-10s24 "
+            "within its canvas budget"
         )
 
 

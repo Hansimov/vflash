@@ -61,7 +61,7 @@ class H3ScheduleOverlayBlock:
     index: int
     path: str
     size_bytes: int
-    sha256: str
+    sha256: str | None
     adaln_rows: int
 
 
@@ -69,7 +69,7 @@ class H3ScheduleOverlayBlock:
 class H3ScheduleOverlayAuxiliary:
     path: str
     size_bytes: int
-    sha256: str
+    sha256: str | None
     timestep_rows: int
 
 
@@ -134,7 +134,8 @@ def _validated_file_record(
     value: Any,
     *,
     name: str,
-) -> tuple[Path, int, str]:
+    allow_unhashed: bool = False,
+) -> tuple[Path, int, str | None]:
     if not isinstance(value, dict):
         raise H3ScheduleOverlayError(f"H3 schedule-overlay {name} record is invalid")
     path_value = value.get("path")
@@ -144,13 +145,15 @@ def _validated_file_record(
         not isinstance(size_bytes, int)
         or isinstance(size_bytes, bool)
         or size_bytes <= 0
-        or not isinstance(sha256, str)
-        or _SHA256.fullmatch(sha256) is None
+        or not (
+            (allow_unhashed and sha256 is None)
+            or (isinstance(sha256, str) and _SHA256.fullmatch(sha256))
+        )
     ):
         raise H3ScheduleOverlayError(f"H3 schedule-overlay {name} metadata is invalid")
     path = _safe_relative_file(directory, path_value, name=name)
     actual = _regular_file(path)
-    if actual.st_size != size_bytes or _sha256(path) != sha256:
+    if actual.st_size != size_bytes or (sha256 is not None and _sha256(path) != sha256):
         raise H3ScheduleOverlayError(f"H3 schedule-overlay {name} integrity check failed")
     return path, size_bytes, sha256
 
@@ -196,6 +199,7 @@ def load_h3_schedule_overlay(
     if value.get("schema_version") not in {
         H3_LEGACY_SCHEDULE_OVERLAY_SCHEMA_VERSION,
         H3_SCHEDULE_OVERLAY_SCHEMA_VERSION,
+        3,
     }:
         raise H3ScheduleOverlayError("H3 schedule-overlay schema version is unsupported")
     overlay_id = value.get("overlay_id")
@@ -225,7 +229,7 @@ def load_h3_schedule_overlay(
             "adapted H3 artifacts accept only their exact source schedule"
         )
     source = value.get("source")
-    if value["schema_version"] == 2:
+    if value["schema_version"] >= 2:
         from vflash.model_assets import model_schedule, weights_source_profile
 
         try:
@@ -283,6 +287,7 @@ def load_h3_schedule_overlay(
         resolved,
         auxiliary_value,
         name="auxiliary",
+        allow_unhashed=value["schema_version"] == 3,
     )
     timestep_rows = auxiliary_value.get("timestep_rows")
     if (
@@ -291,7 +296,7 @@ def load_h3_schedule_overlay(
         or timestep_rows <= 0
     ):
         raise H3ScheduleOverlayError("H3 schedule-overlay timestep row count is invalid")
-    if value["schema_version"] == 2 and timestep_rows != (
+    if value["schema_version"] >= 2 and timestep_rows != (
         2 if profile.definition.mode.value == "t2va" else 3
     ):
         raise H3ScheduleOverlayError("weights-only timestep rows differ from the model profile")
@@ -344,6 +349,7 @@ def load_h3_schedule_overlay(
             resolved,
             row,
             name=f"block {index}",
+            allow_unhashed=value["schema_version"] == 3,
         )
         header = inspect_safetensors_header(path)
         expected_shape = (schedule.nfe, adaln_rows, 6, base.spec.hidden_size)

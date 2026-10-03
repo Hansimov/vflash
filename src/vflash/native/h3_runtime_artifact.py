@@ -25,7 +25,7 @@ from vflash.native.h3_tensor_file import (
     inspect_safetensors_header,
 )
 
-H3_RUNTIME_ARTIFACT_SCHEMA_VERSION = 5
+H3_RUNTIME_ARTIFACT_SCHEMA_VERSION = 6
 H3_LEGACY_ARTIFACT_SCHEMA_VERSION = 4
 H3_RUNTIME_ARTIFACT_LAYOUT = "row-major-reference-v1"
 
@@ -77,7 +77,7 @@ class H3RuntimeArtifactBlock:
     index: int
     path: str
     size_bytes: int
-    sha256: str
+    sha256: str | None
     adaln_rows: int
     tensors: tuple[str, ...]
 
@@ -157,7 +157,7 @@ def _validate_source(
     weight_profile: str,
     schema_version: int,
 ) -> dict[str, str]:
-    if schema_version == 5:
+    if schema_version >= 5:
         from vflash.model_assets import weights_source_profile
 
         try:
@@ -201,6 +201,7 @@ def _validate_source(
     has_adapter = weight_profile in {
         "lightx-turbo4-v1.0",
         "lightx-turbo8-v1.0",
+        "lightx-turbo8-v1.0-544",
         "lightx-ref-turbo4-v0.1",
     }
     expected = base_fields | adapter_fields if has_adapter else base_fields
@@ -221,7 +222,7 @@ def _validate_source(
             or (name in digests and not _SHA256.fullmatch(item))
         ):
             raise H3RuntimeArtifactError(f"H3 RuntimeArtifact source field is invalid: {name}")
-    if weight_profile in {"lightx-turbo8-v1.0", "lightx-ref-turbo4-v0.1", "lightx-turbo4-v1.0"}:
+    if has_adapter:
         oracle_profile = value.get("oracle_profile", "")
         workflow, separator, _suffix = oracle_profile.partition("-adapter-")
         if not separator:
@@ -414,7 +415,7 @@ def load_h3_runtime_artifact(
     }
     if (
         schema_version
-        not in {H3_LEGACY_ARTIFACT_SCHEMA_VERSION, H3_RUNTIME_ARTIFACT_SCHEMA_VERSION}
+        not in {H3_LEGACY_ARTIFACT_SCHEMA_VERSION, 5, H3_RUNTIME_ARTIFACT_SCHEMA_VERSION}
         or set(value) != expected_fields
     ):
         raise H3RuntimeArtifactError("H3 RuntimeArtifact manifest schema is invalid")
@@ -427,7 +428,7 @@ def load_h3_runtime_artifact(
     adapter_execution = value.get("adapter_execution")
     expected_status = (
         "complete-block-stack"
-        if schema_version == 5
+        if schema_version >= 5
         else "complete-block-stack-missing-auxiliary-runtime"
     )
     if (
@@ -443,6 +444,7 @@ def load_h3_runtime_artifact(
         or weight_profile
         not in {
             "lightx-turbo8-v1.0",
+            "lightx-turbo8-v1.0-544",
             "lightx-ref-turbo4-v0.1",
             "lightx-turbo4-v1.0",
             "minimax-h3-base",
@@ -450,6 +452,7 @@ def load_h3_runtime_artifact(
         or (weight_profile, adapter_execution)
         not in {
             ("lightx-turbo8-v1.0", "runtime-residual"),
+            ("lightx-turbo8-v1.0-544", "runtime-residual"),
             ("lightx-ref-turbo4-v0.1", "runtime-residual"),
             ("lightx-turbo4-v1.0", "runtime-residual"),
             ("minimax-h3-base", "none"),
@@ -479,7 +482,7 @@ def load_h3_runtime_artifact(
         weight_profile=weight_profile,
         schema_version=schema_version,
     )
-    if schema_version == 5:
+    if schema_version >= 5:
         from vflash.model_assets import weights_source_profile
 
         profile = weights_source_profile(source)
@@ -494,6 +497,7 @@ def load_h3_runtime_artifact(
             )
     if weight_profile in {
         "lightx-turbo8-v1.0",
+        "lightx-turbo8-v1.0-544",
         "lightx-ref-turbo4-v0.1",
         "lightx-turbo4-v1.0",
     } and (
@@ -549,8 +553,10 @@ def load_h3_runtime_artifact(
             or not isinstance(size_bytes, int)
             or isinstance(size_bytes, bool)
             or size_bytes <= 0
-            or not isinstance(digest, str)
-            or not _SHA256.fullmatch(digest)
+            or not (
+                (schema_version == 6 and digest is None)
+                or (isinstance(digest, str) and _SHA256.fullmatch(digest))
+            )
             or not isinstance(adaln_rows, int)
             or isinstance(adaln_rows, bool)
             or adaln_rows <= 0
@@ -558,13 +564,18 @@ def load_h3_runtime_artifact(
             or tuple(tensors) != tuple(sorted(expected_tensor_names))
         ):
             raise H3RuntimeArtifactError("H3 RuntimeArtifact block row is invalid")
-        if schema_version == 5 and adaln_rows != (
+        if schema_version >= 5 and adaln_rows != (
             6 if profile.definition.mode.value == "t2va" else 9
         ):
             raise H3RuntimeArtifactError(
                 "weights-only AdaLN rows differ from the model profile"
             )
         path = directory / relative
+        if verify_content_hashes and digest is None:
+            raise H3RuntimeArtifactError(
+                "metadata-only artifact has no payload digest; explicitly select "
+                "verify_content_hashes=False for a trusted local snapshot"
+            )
         file_stat = _regular_file(path)
         if file_stat.st_size != size_bytes or (
             verify_content_hashes and _sha256(path) != digest

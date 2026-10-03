@@ -61,6 +61,36 @@ def test_raw_verification_does_not_publish_a_bad_hash(monkeypatch, tmp_path):
     assert not receipt.exists()
 
 
+def test_metadata_preparation_does_not_read_weight_payload(monkeypatch, tmp_path):
+    from pathlib import Path
+
+    from vflash.compiler.h3 import _file_record
+
+    weight = tmp_path / "weight.bin"
+    weight.write_bytes(b"trusted immutable source")
+    expected = {"size": weight.stat().st_size, "sha256": "a" * 64}
+    monkeypatch.setattr(
+        assets, "_required_files", lambda _a, _b, _profile: {"weight": (weight, expected)}
+    )
+    original_open = Path.open
+
+    def guarded_open(path, *args, **kwargs):
+        assert path != weight, "metadata mode must not scan weight bytes"
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", guarded_open)
+    receipt = tmp_path / "metadata.json"
+    prepared = assets.prepare_weights(tmp_path, weight, receipt, verify_content_hashes=False)
+    assert prepared == assets.load_prepared_weights(receipt)
+    assert (
+        json.loads(receipt.read_text())["verification"] == "source-inventory-and-file-identity"
+    )
+    assert _file_record(weight, tmp_path, verify_content_hashes=False)["sha256"] is None
+    weight.touch()
+    with pytest.raises(ContractError, match="changed"):
+        prepared.check_unchanged()
+
+
 def test_compiled_directory_publication_never_replaces_concurrent_destination(tmp_path):
     staging, destination = tmp_path / "staging", tmp_path / "published"
     staging.mkdir()
@@ -173,10 +203,13 @@ def test_adaln_padding_does_not_influence_real_rows():
         "fl2va-turbo4-exact-sm89",
         "i2va-turbo8-exact-sm89",
         "fl2va-turbo8-exact-sm89",
+        "i2va-turbo8-544-exact-sm89",
+        "fl2va-turbo8-544-exact-sm89",
     ],
 )
+@pytest.mark.parametrize("schema_version", [5, 6])
 def test_artifact_schema_five_loads_with_no_replay_and_keeps_schema_four(
-    monkeypatch, tmp_path, profile_id
+    monkeypatch, tmp_path, profile_id, schema_version
 ):
     from vflash.compiler.h3 import SPEC, compile_target
     from vflash.model_assets import model_profile, weights_source
@@ -198,13 +231,13 @@ def test_artifact_schema_five_loads_with_no_replay_and_keeps_schema_four(
                 "index": index,
                 "path": relative,
                 "size_bytes": 1,
-                "sha256": "a" * 64,
+                "sha256": "a" * 64 if schema_version == 5 else None,
                 "adaln_rows": 6 if profile.definition.mode.value == "t2va" else 9,
                 "tensors": names,
             }
         )
     manifest = {
-        "schema_version": 5,
+        "schema_version": schema_version,
         "artifact_id": "h3-runtime-test",
         "created_at": "test",
         "status": "complete-block-stack",
@@ -243,6 +276,9 @@ def test_artifact_schema_five_loads_with_no_replay_and_keeps_schema_four(
     assert runtime.load_h3_runtime_artifact(
         tmp_path, verify_content_hashes=False
     ).is_complete_block_stack
+    if schema_version == 6:
+        with pytest.raises(ValueError, match="no payload digest"):
+            runtime.load_h3_runtime_artifact(tmp_path)
     manifest["source"] = {**source, "replay_case_id": "not-allowed"}
     path.write_text(json.dumps(manifest))
     with pytest.raises(ValueError, match="fixed Ref4"):

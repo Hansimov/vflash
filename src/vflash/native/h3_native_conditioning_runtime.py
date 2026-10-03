@@ -128,6 +128,13 @@ def validate_conditioning_source(source: dict, artifact_source: dict) -> None:
     }
     if expected_profile in keyframe_profiles and profile in keyframe_profiles:
         expected_profile = profile = "keyframe-base-bf16-torch-sdpa"
+    adapter_keyframe_profiles = {
+        "i2va-adapter-bf16-torch-sdpa",
+        "fl2va-adapter-bf16-torch-sdpa",
+    }
+    if expected_profile in adapter_keyframe_profiles and profile in adapter_keyframe_profiles:
+        # transformer_sha256 below includes the pinned adapter identity.
+        expected_profile = profile = "keyframe-adapter-bf16-torch-sdpa"
     if (
         any(source.get(key) != artifact_source.get(key) for key in identity)
         or profile != expected_profile
@@ -143,8 +150,11 @@ def _conditioning_task_matches(bundle_task: str, artifact: Any) -> bool:
         return True
     return bool(
         {bundle_task, artifact_task} <= {"i2va", "l2va", "fl2va"}
-        and artifact.weight_profile == "minimax-h3-base"
-        and artifact.adapter_execution == "none"
+        and (artifact.weight_profile, artifact.adapter_execution)
+        in {
+            ("minimax-h3-base", "none"),
+            ("lightx-turbo8-v1.0-544", "runtime-residual"),
+        }
     )
 
 
@@ -274,6 +284,7 @@ class H3NativeConditioningRuntime:
         supported_weights = (artifact.weight_profile, artifact.adapter_execution) in {
             ("lightx-turbo4-v1.0", "runtime-residual"),
             ("lightx-turbo8-v1.0", "runtime-residual"),
+            ("lightx-turbo8-v1.0-544", "runtime-residual"),
             ("lightx-ref-turbo4-v0.1", "runtime-residual"),
             ("minimax-h3-base", "none"),
         }
