@@ -22,16 +22,28 @@ def consistency_lift(direct, pixel, *, rho=0.6, minimum=1.0, maximum=1.0):
     score = delta.abs().mean(dim=1, keepdim=True)
     if rho == 0:
         return direct.float(), dict(selected_fraction=0.0)
-    flat = score.flatten(1)
-    threshold = torch.quantile(flat, 1 - rho, dim=1).view(-1, 1, 1, 1, 1)
+    # H3 temporal latents have phase-dependent scales. A T*H*W quantile
+    # switches correction density by temporal phase and makes decoded detail
+    # pulse. Select spatial risk independently at each latent time instead;
+    # no temporal averaging, changed sampling clock or frame interpolation.
+    flat = score.flatten(-2)
+    threshold = torch.quantile(flat, 1 - rho, dim=-1, keepdim=True).unsqueeze(-1)
     selected = score >= threshold
-    lo = score.masked_fill(~selected, float("inf")).flatten(1).amin(1).view(-1, 1, 1, 1, 1)
-    hi = flat.amax(1).view(-1, 1, 1, 1, 1)
+    lo = (
+        score.masked_fill(~selected, float("inf"))
+        .flatten(-2)
+        .amin(-1, keepdim=True)
+        .unsqueeze(-1)
+    )
+    hi = flat.amax(-1, keepdim=True).unsqueeze(-1)
     weights = selected * (
         minimum + (maximum - minimum) * ((score - lo) / (hi - lo).clamp_min(1e-8)).clamp(0, 1)
     )
     corrected = direct.float() + weights * delta
-    return corrected, dict(selected_fraction=float(selected.float().mean()))
+    return corrected, dict(
+        selected_fraction=float(selected.float().mean()),
+        selection="spatial_per_time",
+    )
 
 
 def sampler(state):

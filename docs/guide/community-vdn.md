@@ -177,7 +177,8 @@ implemented [SelfLift-zero](https://arxiv.org/abs/2609.02036) transition. It run
 six original-schedule evaluations at half spatial resolution, corrects the clean
 prediction using an all-frame pixel/VAE round trip, and continues the original
 video/audio clocks for two full-resolution evaluations. The correction selects
-the 60% largest channel-mean disagreements, at unit strength. This is **eight**
+the 60% largest channel-mean spatial disagreements **independently at each latent
+time**, at unit strength. This is **eight**
 NFE, not a completed eight-step low-resolution clip plus two restarted steps.
 
 The initial supported scope is five-second I2VA with short side at least 640 on
@@ -195,6 +196,27 @@ every scene improves over full8: motion differs, small faces remain imperfect,
 and this is an H3 adaptation, not one of the paper's evaluated image models.
 Keep it explicit and compare complete videos. No unlicensed community node code,
 private media or trained restoration weights are included.
+
+### Temporal detail pulsing fixed in 0.6.5
+
+The earlier image-style global time/space threshold selected very different
+correction fractions at H3's temporal latent phases. Local video controls exposed
+periodic sharp/soft transitions that sparse contact sheets had missed. Version
+0.6.5 uses per-time spatial quantiles (and per-time strength normalization), without
+averaging adjacent frames, adding NFE, or changing model weights and sampling clocks.
+
+Three five-second SM89 cases reused the same six-step prefix and pixel/VAE anchor,
+then regenerated only the final two steps. The 17-frame phase span of log edge
+energy fell from 1.175 to 0.119 (live action), 1.172 to 0.123 (action), and 0.288
+to 0.051 (animation). This is a diagnostic, not a perceptual quality score. Native
+consecutive crops showed reduced soft/sharp switching with retained fabric,
+background and character detail. Global time-consensus masks also reduced pulsing;
+per-time selection is retained because it preserves spatial adaptation to movement.
+The reusable implementation was derived from integration source `7855b6b5`.
+
+Motion/physics and small-face defects remain, and this does not guarantee the
+absence of every kind of flicker. The original sparse-frame quality observations
+above are superseded for temporal stability. Full8 remains a separate option.
 
 A later 640×640 complete request executed successfully but showed new transient
 speckles on the face and clothing. A 640-pixel short side is therefore an execution

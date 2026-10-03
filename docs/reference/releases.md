@@ -1,6 +1,16 @@
 # Release notes
 
-Version **0.6.4** adds explicit request-scoped VDN clean-conditioning reuse.
+Version **0.6.5** fixes temporal detail pulsing in optional SelfLift inference.
+
+## 0.6.5 · Video-aware SelfLift correction {#v0-6-5}
+
+Select and normalize spatial correction independently at each latent time, rather
+than across the whole video. This avoids confounding H3 temporal phase scales with
+spatial errors. Three frozen-prefix SM89 controls showed much smaller periodic
+soft/sharp jumps with useful detail retained. No frame averaging, extra NFE, model
+or schedule change; broader motion and face limitations remain. See
+[evidence and limits](../guide/community-vdn#temporal-detail-pulsing-fixed-in-0-6-5).
+Source/wheel only; downstream deployments require an explicit runtime update.
 
 ## 0.6.4 · Bounded sibling-candidate conditioning reuse {#v0-6-4}
 
