@@ -1,7 +1,8 @@
 # VDN8 community sampling adapter
 
-`vflash.adapters.vdn_h3.VDNEngineSession` is an **opt-in latent backend**, not a
-replacement for the default `H3Pipeline`. It runs the trained VDN hybrid model,
+`vflash.adapters.vdn_h3.VDNEngineSession` is an **opt-in latent backend**, with
+an explicit `VDNKeyframePipeline` complete adapter. Neither replaces the default
+`H3Pipeline`. They run the trained VDN hybrid model,
 not the original H3 weights with an interchangeable attention switch.
 
 The current configuration is one SM89 GPU with 48 GB VRAM, rowwise FP8, eight
@@ -83,6 +84,52 @@ The adapter performs no account scheduling, quota changes or automatic retries.
 
 The RGB conditioning and thread-safe staging mechanisms were exercised by the
 private integration at source revision `92bd02c7`; only generic code and aggregate
-measurements are included here. The serial adapter has focused CPU lifecycle
-tests; its new packaged invocation is verified separately from that earlier
-standalone experiment. No private references or generated media are distributed.
+measurements are included here. The packaged serial adapter completed a separate
+1536×640/5-second two-pass GPU run; its video and audio latent tensors matched the
+earlier standalone execution exactly. That is a migration check, not a requirement
+that improved algorithms match a baseline. No private media are distributed.
+
+## Complete prompt and keyframe input
+
+The explicit complete adapter is being qualified separately from the exercised
+latent session. It consumes `VideoRequest` and returns `VideoResult`; it does not
+label the new model as Base16.
+
+```python
+from pathlib import Path
+from vflash.pipeline import VideoRequest
+from vflash.pipeline.vdn import VDNAssets, VDNKeyframePipeline
+
+pipeline = VDNKeyframePipeline(
+    VDNAssets(
+        official_model=Path("models/official-h3"),
+        weights=Path("models/vdn"),
+        decoder=Path("models/official-decoder"),
+        upscaler_checkpoint=Path("models/upscaler-bf16.safetensors"),
+    ),
+    strategy="pixel8+2",  # explicit; full8 is the other supported strategy
+    trust_local_code=True,
+)
+try:
+    result = pipeline.generate(
+        VideoRequest(
+            prompt="An uninterrupted shot of a bird taking flight.",
+            first_frame=Path("first.png"),
+            width=1280, height=704, duration_seconds=5,
+        ),
+        Path("output.mp4"),
+    )
+finally:
+    pipeline.close()
+```
+
+Both keyframes are center-cover resized to the same target geometry before text
+and VAE encoding. They remain ordered for FL2VA. `silent-v1` and explicit
+`exact-v1` delivery use the existing media layer; default `decoded` does not paste
+over endpoints. Output is published only after complete MP4 encoding, without
+overwriting another file. Temporary conditioning is removed.
+
+This initial complete adapter reloads text/keyframe encoding and sampling per
+request. It retains only the CPU media decoder between serial calls; do not
+claim full-model residency or use cached-text timings as request latency.
+Product routing, capabilities, configuration and rollout remain separate work.
