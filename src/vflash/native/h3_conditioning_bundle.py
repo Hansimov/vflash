@@ -719,6 +719,7 @@ def _keyframe_schedule_supported(profile: H3ConditioningProfile) -> bool:
     return (profile.nfe, profile.video_flow_shift, profile.audio_flow_shift) in {
         (16, 12, 3),
         (4, 6, 3),
+        (4, 12, 3),
         (8, 6, 3),
         (8, 12, 3),
     }
@@ -770,7 +771,7 @@ def _validate_last_frame_profile(
     if (
         profile.task != "l2va"
         or (profile.nfe, profile.video_flow_shift, profile.audio_flow_shift)
-        not in {(16, 12, 3), (8, 12, 3)}
+        not in {(16, 12, 3), (8, 12, 3), (4, 12, 3)}
         or delivery_profile is None
         or profile.width * profile.height > H3_BASE16_MAX_CANVAS_PIXELS
         or profile.num_condition_audio_rows != 0

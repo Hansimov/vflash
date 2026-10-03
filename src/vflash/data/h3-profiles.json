@@ -19,6 +19,62 @@
   ],
   "profiles": [
     {
+      "id": "i2va-turbo4-v01-544-exact-sm89",
+      "mode": "i2va",
+      "availability": "preview",
+      "model": "MiniMaxAI/MiniMax-H3",
+      "model_revision": "42ed227ee7df40d41602854ae760620d6eb651fe",
+      "adapter": "lightx2v/Minimax-h3-Turbo",
+      "adapter_revision": "3ec17a324ced54151364f24f8b5fb6bf7e26414f",
+      "nfe": 4,
+      "scheduler": "h3-training-euler",
+      "video_flow_shift": 12,
+      "audio_flow_shift": 3,
+      "precision": "bf16-runtime-residual",
+      "attention": {
+        "backend": "torch-flash",
+        "exact": true,
+        "backend_by_evaluation": [
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash"
+        ]
+      },
+      "target_ids": [
+        "sm89-48g-resident"
+      ],
+      "quality_statement": "Original LightX v0.1 544p keyframe adapter, alpha8/rank128 and strength1. Three 960x544 five-second I2VA requests completed on SM89. Exact describes attention only; endpoint modes, broad quality and product adoption require separate validation. Not a production default."
+    },
+    {
+      "id": "fl2va-turbo4-v01-544-exact-sm89",
+      "mode": "fl2va",
+      "availability": "preview",
+      "model": "MiniMaxAI/MiniMax-H3",
+      "model_revision": "42ed227ee7df40d41602854ae760620d6eb651fe",
+      "adapter": "lightx2v/Minimax-h3-Turbo",
+      "adapter_revision": "3ec17a324ced54151364f24f8b5fb6bf7e26414f",
+      "nfe": 4,
+      "scheduler": "h3-training-euler",
+      "video_flow_shift": 12,
+      "audio_flow_shift": 3,
+      "precision": "bf16-runtime-residual",
+      "attention": {
+        "backend": "torch-flash",
+        "exact": true,
+        "backend_by_evaluation": [
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash"
+        ]
+      },
+      "target_ids": [
+        "sm89-48g-resident"
+      ],
+      "quality_statement": "Original LightX v0.1 544p keyframe adapter, alpha8/rank128 and strength1. Paired I2VA execution has SM89 media evidence; true two-endpoint and last-only media validation is pending. Exact describes attention only. Not a production default."
+    },
+    {
       "id": "i2va-turbo8-544-exact-sm89",
       "mode": "i2va",
       "availability": "preview",

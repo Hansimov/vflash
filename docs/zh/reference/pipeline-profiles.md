@@ -12,7 +12,24 @@
 | `fl2va-base16-bf16-sm89` | 单张 RTX 4090 48 GB；可选匹配双卡 `sequence-head` | 提示词加明确的首帧和尾帧 | `transformer` | 无 | 12 / 3 |
 | `fl2va-base16-bf16-sm86` | 双张 RTX 3080 20 GB，`sequence-head` | 提示词加明确的首帧和尾帧 | `transformer` | 无 | 12 / 3 |
 
-已发布的 Turbo 配置使用四次计算、BF16 权重和独立的 LoRA 残差，并保留五秒合同；Base16 profile 身份使用官方 Base Transformer，以 BF16、无 LoRA 执行 16 次计算，支持五秒（`124 → 120` 帧）或十秒（`243 → 240` 帧），均为 24 fps。默认仍为 SM89 Ref4。同一硬件目标上的成对 Base16 I2VA/FL2VA 配置具有完全相同的模型工件、调度和官方 FL2VA 条件工作流，因此一个已准备的 Base16 关键帧 pipeline 可串行接受 I2VA、L2VA 与 FL2VA 请求，无需重启 profile 或执行冷初始化；每个请求仍生成与实际模式一致的条件 schema 和来源信息。L2VA 明确复用 FL2VA 权重 profile，不增加重复身份。已准备的 profile ID 继续作为 pipeline 与结果身份。每次请求的阶段驻留仍遵循完整 pipeline 选择的内存策略。Turbo、Ref2VA 和 T2VA 配置仍只接受各自模式。原生单 SM86 与 Turbo8 接口具有不同的[验证范围](../guide/profiles)。
+上表 Ref4 与 T2 Base4 配置使用四次计算、BF16 权重和独立的 LoRA 残差，保留五秒合同。Base16 使用官方 Base Transformer，BF16、无 LoRA、16 次计算，支持五到十秒，包括五秒（`124 → 120` 帧）与十秒（`243 → 240` 帧），均为 24 fps。默认仍为 SM89 Ref4。成对 Base16 关键帧配置共享模型工件与调度，可串行接受 I2VA、L2VA 和 FL2VA，无需重启。下述 544p Turbo 关键帧配置也在各自的一对内部共享工件，不能跨 LoRA 版本复用。请求记录实际条件模式；L2VA 复用对应 FL2VA 身份，不是倒放视频。已准备的 profile ID 仍为 pipeline/结果身份。Ref2VA 与 T2VA 仍只接受各自模式；原生接口有不同的[验证范围](../guide/profiles)。
+
+## 原始 LightX v0.1 四步关键帧配置（预览） {#lightx-v01}
+
+`i2va-turbo4-v01-544-exact-sm89` 与 `fl2va-turbo4-v01-544-exact-sm89` 固定
+LightX 修订 `3ec17a324ced54151364f24f8b5fb6bf7e26414f` 中的
+`minimax_h3_fl2v_turbo_4step_v0.1.safetensors`。这是**原始 v0.1 权重**，不是
+0.1 倍率，也不是 544p 八步 v1.0 或 768p 四步 v1.0。
+合同为 **4 NFE、视频/音频 shift 12 / 3、rank128、alpha8、倍率1**。
+独立运行时残差只应用一次 `strength × alpha / rank = 0.0625`，包括 TokenRefiner。
+默认 exact 注意力不代表与其他模型等价，也不是画质保证。
+
+按[编译指南](../guide/compile-weights)选择上述明确 profile 与准确的 LoRA 文件，
+不能复用其他 LoRA 的工件或只改清单。成对请求合同接受首帧、尾帧和真正首尾帧；
+目前实卡证据为单张 RTX 4090 48 GB 上的**三条 960×544 五秒 I2VA 视频**，
+均交付 24fps、120 帧与音轨。排除初始化后的请求分别 **77.51 / 72.01 / 72.02 秒**；
+初始化 **73.38 秒**，一次性编译 **278.95 秒**。这是有限执行证据，不代表全面画质认证
+或生产默认切换。真正首尾、仅尾、长时长和小脸仍需独立成片验证。
 
 ## 544p训练的八步关键帧配置（预览）
 

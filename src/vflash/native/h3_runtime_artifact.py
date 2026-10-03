@@ -202,6 +202,7 @@ def _validate_source(
         "lightx-turbo4-v1.0",
         "lightx-turbo8-v1.0",
         "lightx-turbo8-v1.0-544",
+        "lightx-turbo4-v0.1-544",
         "lightx-ref-turbo4-v0.1",
     }
     expected = base_fields | adapter_fields if has_adapter else base_fields
@@ -445,6 +446,7 @@ def load_h3_runtime_artifact(
         not in {
             "lightx-turbo8-v1.0",
             "lightx-turbo8-v1.0-544",
+            "lightx-turbo4-v0.1-544",
             "lightx-ref-turbo4-v0.1",
             "lightx-turbo4-v1.0",
             "minimax-h3-base",
@@ -453,6 +455,7 @@ def load_h3_runtime_artifact(
         not in {
             ("lightx-turbo8-v1.0", "runtime-residual"),
             ("lightx-turbo8-v1.0-544", "runtime-residual"),
+            ("lightx-turbo4-v0.1-544", "runtime-residual"),
             ("lightx-ref-turbo4-v0.1", "runtime-residual"),
             ("lightx-turbo4-v1.0", "runtime-residual"),
             ("minimax-h3-base", "none"),
@@ -498,6 +501,7 @@ def load_h3_runtime_artifact(
     if weight_profile in {
         "lightx-turbo8-v1.0",
         "lightx-turbo8-v1.0-544",
+        "lightx-turbo4-v0.1-544",
         "lightx-ref-turbo4-v0.1",
         "lightx-turbo4-v1.0",
     } and (

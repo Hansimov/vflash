@@ -154,6 +154,7 @@ def _conditioning_task_matches(bundle_task: str, artifact: Any) -> bool:
         in {
             ("minimax-h3-base", "none"),
             ("lightx-turbo8-v1.0-544", "runtime-residual"),
+            ("lightx-turbo4-v0.1-544", "runtime-residual"),
         }
     )
 
@@ -285,6 +286,7 @@ class H3NativeConditioningRuntime:
             ("lightx-turbo4-v1.0", "runtime-residual"),
             ("lightx-turbo8-v1.0", "runtime-residual"),
             ("lightx-turbo8-v1.0-544", "runtime-residual"),
+            ("lightx-turbo4-v0.1-544", "runtime-residual"),
             ("lightx-ref-turbo4-v0.1", "runtime-residual"),
             ("minimax-h3-base", "none"),
         }

@@ -20,7 +20,7 @@ Ref2VA 基于参考素材生成视频和音频；T2VA 使用文本条件，不�
 
 HTTP 服务默认使用 4090 Turbo4。切换配置时，需要同时更换匹配的资源并重启服务。
 
-完整 pipeline 的 Base16 I2VA 与 FL2VA profile 身份是一个成对例外：同一硬件上的两者使用完全相同的模型工件和调度，因此一个已经加载的 `H3Pipeline` 可以串行接收 I2VA、L2VA 和 FL2VA 请求，而无需重启 profile。L2VA 是请求合同，不是重复的权重 profile；已准备的 profile ID 继续作为来源身份。该例外不适用于 Turbo、Ref2VA 或 T2VA。
+Base16 与 [544p关键帧Turbo成对配置](../reference/pipeline-profiles#lightx-v01)在各自的一对内部共享工件，已加载的 `H3Pipeline` 可串行接受 I2VA、L2VA 和 FL2VA，无需重启。L2VA 是请求合同而非重复的权重身份；已准备的 profile ID 保留作为来源身份。不能跨 LoRA 版本复用工件，也不适用于 Ref2VA 和 T2VA。
 
 ```bash
 vflash profiles
@@ -63,8 +63,10 @@ Vflash 可以直接执行固定版本的 [LightX2V H3 Turbo](https://huggingface
 | --- | --- | --- |
 | Turbo4 v0.1 | 单/双 3080、单 4090 | `minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors` |
 | Turbo8 v1.0 768p | 单 4090 | `minimax_h3_ref2v_turbo_8step_v1.0_768p_bf16.safetensors` |
+| 关键帧 Turbo4 v0.1 544p（预览） | 单4090；已验证I2VA成片 | `minimax_h3_fl2v_turbo_4step_v0.1.safetensors` |
+| 关键帧 Turbo8 v1.0 544p（预览） | 单4090 | `minimax_h3_fl2v_turbo_8step_v1.0_bf16.safetensors` |
 
-固定修订与来源见[运行资源](../reference/runtime-assets#versions)。T2VA 还支持用于 SM89 或双 SM86 T2VA 的 `minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors`，alpha 128 / rank 128；FL2VA 配置使用不带该适配器的官方 Base 权重。仅支持明确列出的文件和修订；ComfyUI、任意自定义 LoRA 和未来上游版本需要单独适配。
+固定修订与来源见[运行资源](../reference/runtime-assets#versions)。T2VA 还支持用于 SM89 或双 SM86 T2VA 的 `minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors`，alpha128 / rank128。Base16关键帧不使用LoRA；上述544p Turbo成对配置则为rank128 / alpha8、shift12 / 3。仅支持明确列出的文件和修订；ComfyUI、自定义 LoRA 和未来上游版本需要单独适配。
 
 Turbo4 和 Turbo8 都是蒸馏配置。减少步数可以降低计算量，但不代表输出质量与 50 步基础模型相同。名称中的 `exact` 描述所用注意力路径和指定 LoRA 的执行方式，不承诺不同 GPU 上的张量完全一致。
 
@@ -74,4 +76,4 @@ Turbo4 和 Turbo8 都是蒸馏配置。减少步数可以降低计算量，但�
 
 ## 当前版本的边界 {#scope}
 
-[完整配置表](../reference/pipeline-profiles)列出已发布链路和Base16 关键帧 profile。L2VA 与 FL2VA 的 schema 和引擎合同已经实现。一个十秒、736 × 992 的 SM89 L2VA 案例已有目标显卡完成性、媒体完整性、端点和延迟对照的有界证据；更广泛的 L2VA 质量和其他形状仍未资格化。单 SM86 和 Turbo8 保留条件包到 latent 的接口。未列出的模式、LoRA、量化和时长帧率组合不在这些配置中。HTTP 接口一次串行执行一个任务；账号、计费和分布式 GPU 调度由接入 Vflash 的应用负责。
+[完整配置表](../reference/pipeline-profiles)记录各配置当前的成片验证范围，包括544p关键帧预览配置。单SM86与Ref Turbo8保留条件包到latent的原生接口；544p关键帧Turbo8成对配置另有完整pipeline。未列出的模式、LoRA、量化和时长帧率组合不在这些配置中。HTTP接口一次串行执行一个任务；账号、计费和分布式GPU调度由接入Vflash的应用负责。

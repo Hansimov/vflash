@@ -20,7 +20,7 @@ Ref2VA generates video and audio from reference conditioning. T2VA uses text con
 
 The HTTP service defaults to Turbo4 on a 4090. To change profiles, restart the service with the selected profile and its matching assets.
 
-The complete-pipeline Base16 I2VA and FL2VA profile identities are a paired exception: on the same hardware they use the exact same model artifact and schedule, so one loaded `H3Pipeline` can accept I2VA, L2VA and FL2VA requests serially without a profile restart. L2VA is a request contract, not a duplicate weight profile. The prepared profile ID remains its provenance identity. This exception does not apply to Turbo, Ref2VA or T2VA.
+Base16 and the [544p keyframe Turbo pairs](../reference/pipeline-profiles#lightx-v01) share artifacts within each matching pair, so one loaded `H3Pipeline` accepts I2VA, L2VA and FL2VA serially without a profile restart. L2VA is a request contract, not a duplicate weight profile. The prepared profile ID remains its provenance identity. This does not permit cross-version artifacts or apply to Ref2VA and T2VA.
 
 ```bash
 vflash profiles
@@ -63,8 +63,10 @@ Vflash runs the pinned [LightX2V H3 Turbo](https://huggingface.co/lightx2v/Minim
 | --- | --- | --- |
 | Ref Turbo4 v0.1 | One/two 3080s, one 4090 | `minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors` |
 | Ref Turbo8 v1.0 768p | One 4090 | `minimax_h3_ref2v_turbo_8step_v1.0_768p_bf16.safetensors` |
+| Keyframe Turbo4 v0.1 544p (preview) | One 4090; I2VA media validated | `minimax_h3_fl2v_turbo_4step_v0.1.safetensors` |
+| Keyframe Turbo8 v1.0 544p (preview) | One 4090 | `minimax_h3_fl2v_turbo_8step_v1.0_bf16.safetensors` |
 
-Pinned revisions and sources are listed under [runtime assets](../reference/runtime-assets#versions). T2VA also supports `minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors` for T2VA on SM89 or a cooperating SM86 pair, with alpha 128 / rank 128. The FL2VA profiles use official Base weights without this adapter. Only the named files and revisions are supported. ComfyUI, custom LoRAs and future upstream revisions need separate integration.
+Pinned revisions and sources are listed under [runtime assets](../reference/runtime-assets#versions). T2VA also supports `minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors` for T2VA on SM89 or a cooperating SM86 pair, with alpha 128 / rank 128. Base16 keyframe profiles have no adapter; the 544p Turbo pairs above use rank128 / alpha8 and shifts12 / 3. Only the named files and revisions are supported. ComfyUI, custom LoRAs and future upstream revisions need separate integration.
 
 Turbo4 and Turbo8 are distilled configurations. Fewer steps reduce compute, but they are not a promise of the same output quality as the 50-step base model. The `exact` name refers to the attention path and the selected adapter's execution; it does not promise identical tensors across different GPUs.
 
@@ -74,4 +76,4 @@ The single-device 3080 profile has been checked for capacity and repeatable resu
 
 ## What is outside this release {#scope}
 
-The [complete profile table](../reference/pipeline-profiles) lists the released paths and Base16 keyframe profiles. The L2VA and FL2VA schemas and engine contracts are implemented. One ten-second, 736 × 992 SM89 L2VA case has bounded target-GPU completion, media-integrity, endpoint and latency evidence; broader L2VA quality and other shapes remain unqualified. Single-SM86 and Turbo8 remain native bundle-to-latents interfaces. Unlisted modes, adapters, quantization and temporal settings are outside these profiles. The HTTP API provides one serial denoising lane; account management, billing and distributed GPU scheduling belong to the application.
+The [complete profile table](../reference/pipeline-profiles) owns each profile's current media-validation scope, including the 544p keyframe previews. Single-SM86 and Ref Turbo8 retain native bundle-to-latents interfaces; the 544p keyframe Turbo8 pair also has a complete pipeline. Unlisted modes, adapters, quantization and temporal settings are outside these profiles. The HTTP API provides one serial denoising lane; account management, billing and distributed GPU scheduling belong to the application.

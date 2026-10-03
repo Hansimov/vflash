@@ -12,7 +12,27 @@ A prepared pipeline uses one fixed model, adapter and scheduler. The current sou
 | `fl2va-base16-bf16-sm89` | One RTX 4090 48 GB; optional matching pair with `sequence-head` | Prompt and explicit first and last frames | `transformer` | None | 12 / 3 |
 | `fl2va-base16-bf16-sm86` | Two RTX 3080 20 GB, `sequence-head` | Prompt and explicit first and last frames | `transformer` | None | 12 / 3 |
 
-The released Turbo profiles use four evaluations, BF16 weights and separate adapter residuals and retain their five-second contract. The Base16 profile identities use the official Base transformer for 16 evaluations in BF16 without an adapter and accept five seconds (`124 → 120` frames) or ten seconds (`243 → 240` frames), both at 24 fps. The default remains SM89 Ref4. The paired Base16 I2VA and FL2VA profiles for one hardware target have identical model artifacts, scheduler and official FL2VA conditioning workflow. A prepared Base16 keyframe pipeline can therefore accept I2VA, L2VA and FL2VA requests serially without a profile restart or cold initialization; each request emits its mode-specific conditioning schema and provenance. L2VA deliberately reuses the FL2VA weight profile instead of adding a duplicate identity. The prepared profile ID remains the pipeline and result identity. Per-request stage residency still follows the complete pipeline's selected memory strategy. Turbo, Ref2VA and T2VA profiles remain single-mode. Native single-SM86 and Turbo8 interfaces have a different [validation scope](../guide/profiles).
+The Ref4 and T2 Base4 profiles above use four evaluations, BF16 weights and separate adapter residuals and retain their five-second contract. The Base16 profile identities use the official Base transformer for 16 evaluations in BF16 without an adapter and accept five through ten seconds, including five seconds (`124 → 120` frames) and ten seconds (`243 → 240` frames), at 24 fps. The default remains SM89 Ref4. Paired Base16 keyframe profiles share model artifacts and a scheduler, accepting I2VA, L2VA and FL2VA serially without a profile restart. The 544p Turbo keyframe pairs described below also share artifacts within their own pair, never across adapter versions. Each request records its actual conditioning mode; L2VA reuses the paired FL2VA identity, not video reversal. The prepared profile ID remains the pipeline/result identity. Ref2VA and T2VA remain single-mode. Native-only interfaces have a different [validation scope](../guide/profiles).
+
+## Original LightX v0.1 four-step keyframes (preview) {#lightx-v01}
+
+`i2va-turbo4-v01-544-exact-sm89` and `fl2va-turbo4-v01-544-exact-sm89` bind
+`minimax_h3_fl2v_turbo_4step_v0.1.safetensors` at LightX revision
+`3ec17a324ced54151364f24f8b5fb6bf7e26414f`. This is the original **v0.1 checkpoint**,
+not a 0.1 adapter multiplier, the 544p eight-step v1.0 checkpoint, or the 768p four-step v1.0 checkpoint.
+The contract is **4 NFE, video/audio shifts 12 / 3, rank 128, alpha 8, strength 1**.
+Separate runtime residuals apply `strength × alpha / rank = 0.0625` once, including TokenRefiner.
+The exact attention default does not assert equivalence to a different model or promise image quality.
+
+Prepare and compile using either explicit profile and that exact adapter filename, following the
+[compiler guide](../guide/compile-weights). Reusing a different adapter's artifact or just changing
+its manifest is not supported. The paired input contract accepts first-only, last-only and true
+first/last requests; current target-GPU evidence covers **three 960×544, five-second I2VA videos**
+on one RTX 4090 48 GB, all delivered as 120 frames at 24 fps with audio.
+Request times excluding initialization were **77.51 / 72.01 / 72.02 seconds**;
+initialization was **73.38 seconds** and one-time compilation **278.95 seconds**.
+These are bounded execution measurements, not a broad quality guarantee or a production-default change.
+True two-endpoint, last-only, long-duration and smaller-face quality need their own media checks.
 
 ## 544p-trained eight-step keyframes (preview)
 

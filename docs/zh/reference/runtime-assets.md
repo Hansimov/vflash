@@ -41,6 +41,7 @@ latent 命令行从编译后的输入开始执行。SM89 的 Ref4 和 T2VA Base4
 | [LightX2V Turbo4](https://huggingface.co/lightx2v/Minimax-h3-Turbo/tree/83b617309219e859c1c264520eba07492d22e958) | `83b617309219e859c1c264520eba07492d22e958` |
 | [LightX2V Turbo8](https://huggingface.co/lightx2v/Minimax-h3-Turbo/tree/0eebcc7e79f9cb200927c80b8e7595265b770e34) | `0eebcc7e79f9cb200927c80b8e7595265b770e34` |
 | [LightX2V Base4 v1.0](https://huggingface.co/lightx2v/Minimax-h3-Turbo/tree/ec01fa4c86263832faa0bd1d6d8f36a281eaabb2) | `ec01fa4c86263832faa0bd1d6d8f36a281eaabb2` |
+| [LightX2V 544p关键帧：原始四步v0.1与八步v1.0](https://huggingface.co/lightx2v/Minimax-h3-Turbo/tree/3ec17a324ced54151364f24f8b5fb6bf7e26414f) | `3ec17a324ced54151364f24f8b5fb6bf7e26414f` |
 
 Vflash 会检查资源声明的元数据。文件名正确并不代表兼容；重命名目录或修改清单不能转换不匹配的权重。
 

@@ -106,6 +106,8 @@ def test_turbo_and_reference_profiles_remain_single_mode():
         "fl2va-base16-bf16-sm86",
         "i2va-turbo8-544-exact-sm89",
         "fl2va-turbo8-544-exact-sm89",
+        "i2va-turbo4-v01-544-exact-sm89",
+        "fl2va-turbo4-v01-544-exact-sm89",
     }
     for profile_id in COMPLETE_MODEL_PROFILES:
         if profile_id not in paired:

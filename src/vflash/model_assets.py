@@ -63,9 +63,21 @@ COMPLETE_MODEL_PROFILES = (
     "fl2va-turbo8-exact-sm89",
     "i2va-turbo8-544-exact-sm89",
     "fl2va-turbo8-544-exact-sm89",
+    "i2va-turbo4-v01-544-exact-sm89",
+    "fl2va-turbo4-v01-544-exact-sm89",
 )
 
 _KEYFRAME_PROFILE_BY_MODE = {
+    "i2va-turbo4-v01-544-exact-sm89": {
+        "i2va": "i2va-turbo4-v01-544-exact-sm89",
+        "l2va": "fl2va-turbo4-v01-544-exact-sm89",
+        "fl2va": "fl2va-turbo4-v01-544-exact-sm89",
+    },
+    "fl2va-turbo4-v01-544-exact-sm89": {
+        "i2va": "i2va-turbo4-v01-544-exact-sm89",
+        "l2va": "fl2va-turbo4-v01-544-exact-sm89",
+        "fl2va": "fl2va-turbo4-v01-544-exact-sm89",
+    },
     "i2va-base16-bf16-sm89": {
         "i2va": "i2va-base16-bf16-sm89",
         "l2va": "fl2va-base16-bf16-sm89",
@@ -209,6 +221,9 @@ def model_profile(profile_id: str = DEFAULT_MODEL_PROFILE) -> H3ModelProfile:
         adapter_id = (
             "lightx-ref-turbo4-v0.1"
             if definition.mode.value == "ref2va"
+            else "lightx-turbo4-v0.1-544"
+            if profile_id
+            in {"i2va-turbo4-v01-544-exact-sm89", "fl2va-turbo4-v01-544-exact-sm89"}
             else "lightx-turbo8-v1.0-544"
             if profile_id in {"i2va-turbo8-544-exact-sm89", "fl2va-turbo8-544-exact-sm89"}
             else f"lightx-turbo{definition.nfe}-v1.0"
