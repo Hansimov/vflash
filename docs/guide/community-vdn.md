@@ -91,9 +91,11 @@ that improved algorithms match a baseline. No private media are distributed.
 
 ## Complete prompt and keyframe input
 
-The explicit complete adapter is being qualified separately from the exercised
-latent session. It consumes `VideoRequest` and returns `VideoResult`; it does not
-label the new model as Base16.
+The complete adapter consumes `VideoRequest` and returns `VideoResult`; it does
+not label the new model as Base16. Fresh prompt/keyframe encoding through MP4
+completed on single SM89: 1536×640/5s in 195.0s and true FL2VA 1280×704/10s in
+266.5s. The latter exercised explicit exact endpoints and silent delivery.
+These bounded trials do not qualify every input or imply all-model residency.
 
 ```python
 from pathlib import Path

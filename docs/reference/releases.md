@@ -1,6 +1,24 @@
 # Release notes
 
-The current release is **0.5.6**, adding explicit complete-pipeline attention adapters while retaining the VAE correction and denoising defaults.
+Version **0.6.0** adds an explicit complete VDN keyframe pipeline. Existing native Base16 defaults remain unchanged.
+
+## 0.6.0 · Complete VDN keyframe pipeline {#v0-6-0}
+
+The optional [VDN interface](../guide/community-vdn) accepts a raw prompt and first frame,
+or ordered first/last frames, and delivers MP4 through official conditioning and media components.
+Choose full-canvas eight steps or pixel-conditioned 8+2 explicitly. The two-pass route encodes
+the resized authoritative RGB keyframes independently, avoiding the observed discontinuities
+from interpolating high-resolution keyframe latents. It does not cut, drop or blend bad frames.
+
+On one RTX 4090 48 GB, complete fresh-encoding requests delivered 1536×640/5s in 195.0s
+and 1280×704/10s in 266.5s. The latter also exercised exact endpoint and silent delivery.
+These are bounded execution observations, not matched speed guarantees; residual motion,
+face and endpoint-hold defects remain. CPU decoder caching does not mean all models stay on GPU.
+
+Install the pinned upstream runtime described in the guide. This backend is separate from
+Sol/Base16 and from the preview LightX4/8 contracts. SM86, L2VA and arbitrary upstream combinations
+are not qualified for VDN. No weights are bundled or downloaded implicitly. Source origins,
+model licenses and hardware limits remain explicit. The established Base16 interface is preserved.
 
 ## 0.5.6 · Complete-pipeline attention adapter {#v0-5-6}
 
