@@ -249,3 +249,13 @@ diagnostics worsened in action/animation; unchanged motion/physics and small-fac
 defects remain, and audio semantics were not assessed. The supported net benefit
 is removed VAE work with no new major defect observed in this bounded screen,
 not a universal fidelity guarantee. Integration source: `9a235f0b`.
+
+The promoted complete Python interface subsequently generated a fresh-encoding
+1536×640 five-second request on one RTX 4090 48 GB in **196.599 s**, including
+first-use setup. Conditioning took 36.601 s; both sampling stages, loads and lift
+took 90.295 s (65.764 s sampling, 1.232 s complete lift); final media took 25.450 s.
+The remaining first-use/setup time is included in the request total, not omitted.
+The MP4 has 120 delivered frames at 24 fps and complete audio/video decode.
+Twenty full-video views and 18 consecutive native face crops retained visible
+detail without the earlier strong pulsing. This is one complete execution check,
+not a matched uncached speed ratio or a guarantee of rich-audio semantics.

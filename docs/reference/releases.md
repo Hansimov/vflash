@@ -1,6 +1,21 @@
 # Release notes
 
-Version **0.6.6** adds original LightX v0.1 four-step keyframes and explicit Sol comparison.
+Version **0.6.7** adds explicit learned latent lifting on the progressive eight-step clock.
+
+## 0.6.7 · Learned latent lift 6+2 {#v0-6-7}
+
+The complete VDN pipeline accepts `strategy="learned6+2"` with an explicit local
+BF16 LBH upscaler. It replaces SelfLift-zero's all-frame VAE round trip, preserves
+clean low/high conditioning and the original eight-step video/audio schedule,
+and adds no NFE. Missing weights fail clearly; there is no automatic download.
+The separate `selflift6+2`, `pixel8+2`, full8 and native H3 profiles remain available.
+
+Three frozen-prefix SM89 controls showed a substantial lift-stage cost reduction
+with no new major defect in the inspected video windows; some temporal diagnostics
+were worse, and motion/physics and small-face defects remain. See the
+[execution scope, observations and timing boundaries](../guide/community-vdn#optional-learned-latent-lift-6-2).
+This is explicit, not a changed application default. Source/wheel only; no weights
+or updated prebuilt images are included.
 
 ## 0.6.6 · Original LightX v0.1 keyframes {#v0-6-6}
 

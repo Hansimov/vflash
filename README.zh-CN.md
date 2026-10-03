@@ -4,7 +4,9 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
-**0.6.6。** [原始LightX v0.1四步关键帧](https://hansimov.github.io/vflash/zh/reference/pipeline-profiles#lightx-v01)
+**0.6.7。** 新增显式[学习型latent放大](https://hansimov.github.io/vflash/zh/guide/community-vdn)，
+消除渐进采样中的VAE往返，保留原6+2时钟。
+[原始LightX v0.1四步关键帧](https://hansimov.github.io/vflash/zh/reference/pipeline-profiles#lightx-v01)
 已有独立固定配置及SM89完整成片证据，默认保持dense；三条配对控制中可选Sol反而更慢。
 独立的[VDN/SelfLift管线](https://hansimov.github.io/vflash/zh/guide/community-vdn)、
 官方Base16、注意力adapter及VAE接口均保留。
@@ -32,7 +34,7 @@ SM89 双卡是显式的单请求低延迟选项；两个独立 worker 仍是吞�
 需要 Python 3.11 或更新版本。基础安装不会下载模型权重或 PyTorch。
 
 ```bash
-git clone --branch v0.6.6 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.6.7 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate

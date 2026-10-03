@@ -4,7 +4,9 @@ Native **MiniMax H3 inference** for RTX 3080 20 GB and RTX 4090 48 GB. Vflash us
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
-**0.6.6.** [Original LightX v0.1 four-step keyframes](https://hansimov.github.io/vflash/reference/pipeline-profiles#lightx-v01)
+**0.6.7.** Explicit [learned latent lifting](https://hansimov.github.io/vflash/guide/community-vdn#optional-learned-latent-lift-6-2)
+removes the progressive VAE round trip while retaining the original 6+2 clock.
+[Original LightX v0.1 four-step keyframes](https://hansimov.github.io/vflash/reference/pipeline-profiles#lightx-v01)
 have independent pinned profiles and complete SM89 media evidence. Dense remains their
 default; optional Sol was slower in three matched controls. The separate
 [VDN/SelfLift pipeline](https://hansimov.github.io/vflash/guide/community-vdn),
@@ -38,7 +40,7 @@ profiles retain their separate five-second contracts. [Read the qualification bo
 Python 3.11 or newer is required. The base install does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.6.6 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.6.7 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
