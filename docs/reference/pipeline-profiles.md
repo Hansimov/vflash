@@ -23,8 +23,11 @@ video/audio shifts **12 / 3**. They do not reuse the 768p adapter or its 6 / 3 g
 Both profiles share the same model identity and accept first-only, last-only and
 true first/last requests. Last-only conditioning is not video reversal.
 
-These are implementation previews, pending native SM89 complete-video qualification;
-they do not change the default. Exact names describe attention, not Base16 equivalence
+One RTX 4090 48 GB completed two 768×320 I2VA requests and a true 512×512 last-frame
+request, each five seconds / 120 delivered frames, in one reusable pipeline. See the
+[bounded comparison](./benchmarks#native544) for timings and quality limits. These optional
+profiles do not change defaults. A separate 640×352 true FL2VA request also delivered
+ten seconds / 240 frames using the same compiled artifact. Exact names describe attention, not Base16 equivalence
 or a blanket quality guarantee. Do not infer a single-SM86 complete pipeline from them.
 
 ## Prepare Base16 I2VA

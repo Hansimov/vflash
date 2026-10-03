@@ -1,6 +1,24 @@
 # Release notes
 
-Version **0.6.2** fixes artifact loading for the existing preview keyframe Turbo profiles. Defaults remain unchanged.
+Version **0.6.3** adds distinct native 544p-trained keyframe profiles and explicit trusted-snapshot compilation.
+
+## 0.6.3 · Native 544p keyframes and bounded asset preparation {#v0-6-3}
+
+Optional I2VA/FL2VA Turbo8-544 profiles use their own pinned LightX weights, rank/alpha
+and 12/3 schedule. One prepared native pipeline accepts first-only, last-only and true
+two-endpoint inputs. Three complete five-second requests passed on one RTX 4090 48 GB;
+two same-GPU small-canvas controls observed 45.6–47.6% less request time than Base16/Sol.
+A separate true FL2VA ten-second request also completed using the same compiled artifact.
+See [measurement boundaries and remaining quality limits](./benchmarks#native544).
+This does not change Base16/VDN defaults or qualify arbitrary hardware and canvases.
+
+Python preparation/compilation APIs accept explicit `verify_content_hashes=False` for
+trusted immutable local snapshots. Full tensor headers, sizes and file identities are
+still checked; provenance digests are not represented as newly measured checksums.
+Artifact schema 6 and overlay schema 3 permit missing content digests only when the
+caller explicitly disables content verification. Strict verification rejects those
+artifacts; the existing verified mode remains the default. See [assets](./runtime-assets).
+Source/wheel are separate from unchanged prebuilt images; serving pins require explicit updates.
 
 ## 0.6.2 · Preview keyframe artifact loading {#v0-6-2}
 

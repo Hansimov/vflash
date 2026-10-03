@@ -2,6 +2,46 @@
 
 Each result belongs to its stated software version, hardware and workload. These published summaries preserve their original scope for reproduction; they are not a ranking of the current release. See [profiles and hardware](../guide/profiles) for current support and [performance and quality](./performance) for measurement guidance.
 
+## Native 544p-trained keyframes · bounded screen {#native544}
+
+Core `ce23c10`, with application experiment source `3648270f`, completed a same-device
+comparison on one RTX 4090 48 GB. Each arm used BF16 block-ring execution, fresh prompt/image
+encoding, 768×320, five seconds at 24 fps, the same reference/prompt/seed per scene, and
+continuous decoded delivery. The candidate uses LightX544 eight evaluations / Torch Flash;
+the control uses official Base16 / Sol. This compares those combinations, not only step count.
+
+| Scene | Base16/Sol request | Native544/8 request | Base16/Sol sampling | Native544/8 sampling |
+| --- | ---: | ---: | ---: | ---: |
+| Human group | 113.886 s | 61.953 s | 89.009 s | 36.935 s |
+| Group action | 107.090 s | 56.165 s | 87.044 s | 36.152 s |
+
+Requests include fresh conditioning, sampling, video/audio decoding and MP4 delivery, but
+exclude process initialization and external queue/network time. Each arm ran these scenes
+serially; initialization was 76.873 / 76.087 seconds (control/candidate), charged additionally
+to its first result. Full first-result times were 190.759 / 138.040 seconds. This is one
+observation per scene and arm, not an interleaved drift-controlled benchmark or throughput test.
+The observed request reduction is 45.6–47.6%; do not transfer it to larger canvases or SM86.
+
+All four complete AV files decoded. Twenty whole-frame observations per video and twelve
+native face crops per human video retained subjects and action without the previously observed
+two-pass color speckles. Expressions and motion trajectories changed; background small faces
+remained soft. Exact dialogue, audio semantics and all instruction details were not qualified.
+This supports an optional small-canvas candidate, not universal equal quality or a face repair.
+
+The same candidate pipeline also completed true L2VA at 512×512 / five seconds in 60.630 seconds
+without reinitialization (sampling 39.783 seconds). Its input was a last-frame condition, not
+an I2VA reversal or endpoint paste. It is execution evidence, not a matched L2VA speed ratio.
+One-time native compilation took 278.153 seconds with explicit metadata-only verification;
+that cost is excluded from request times. Peak allocated GPU memory across these requests was
+about 8.3–8.4 GiB, not full device residency or host-RAM usage.
+
+A separate true FL2VA request at 640×352 / ten seconds completed 240 frames with both
+input anchors: 178.171 seconds including 75.407 seconds initialization, or 102.763 seconds
+for the request (72.219 seconds sampling). It reused the same compiled artifact without
+recompilation. Whole-video review retained the transition from a grounded animated subject
+to flight, with evolving appearance between the distinct endpoint designs. This is one
+longer execution/visual observation, not a matched quality or speed comparison.
+
 ## Exact H3 text-encoder prefix {#encoder-prefix}
 
 Pinned [Diffusers H3 encoding](https://github.com/huggingface/diffusers/blob/d035dcd7cc7c88e0a154609b62887d50bba9fdc2/src/diffusers/modular_pipelines/minimax_h3/encoders.py)
