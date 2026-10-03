@@ -171,3 +171,53 @@ def test_invalid_inputs_do_not_start_model(prepared, tmp_path):
         pipeline.generate(VideoRequest("Motion.", first_frame=Path("first.png")), output)
     assert output.read_bytes() == b"original" and not events
     pipeline.close()
+
+
+def test_selflift_owns_roundtrip_and_eight_steps(prepared, tmp_path, monkeypatch):
+    import torch
+
+    from vflash.adapters import vdn_selflift
+
+    assets, events, _ = prepared
+
+    def sample(weights, model, decoder, canvas, target, first, seed, *, step_callback):
+        assert target.name == "target.pt" and first.name == "first.pt"
+        assert canvas["width"] == 640
+        decoder.resume_cuda()
+        decoder.suspend_cuda()
+        for _ in range(8):
+            step_callback(1.0)
+        return torch.zeros(1, 24, 2, 2, 2), torch.zeros(1, 8, 3), {"nfe": 8}
+
+    monkeypatch.setattr(vdn_selflift, "sample_selflift", sample)
+    assets = VDNAssets(assets.official_model, assets.weights, assets.decoder)
+    pipeline = VDNKeyframePipeline(assets, strategy="selflift6+2", trust_local_code=True)
+    progress = []
+    result = pipeline.generate(
+        VideoRequest(
+            "A subject moves.", first_frame=tmp_path / "first.png", width=640, height=640
+        ),
+        tmp_path / "progressive.mp4",
+        progress=progress.append,
+    )
+    assert result.stages["denoising"]["nfe"] == 8
+    assert events.count(("decoder",)) == 1 and ("engine",) not in events
+    assert ("encode", True) in events
+    assert [(p.completed, p.total) for p in progress if p.stage == "denoising"] == [
+        (i, 8) for i in range(9)
+    ]
+    pipeline.close()
+
+
+@pytest.mark.parametrize(
+    "changes", [{"width": 512}, {"duration_seconds": 8}, {"last_frame": Path("last.png")}]
+)
+def test_selflift_rejects_unqualified_modes_before_loading(prepared, tmp_path, changes):
+    assets, events, _ = prepared
+    pipeline = VDNKeyframePipeline(assets, strategy="selflift6+2", trust_local_code=True)
+    args = dict(first_frame=tmp_path / "first.png", width=640, height=640)
+    args.update(changes)
+    with pytest.raises(ContractError, match="five-second I2VA"):
+        pipeline.generate(VideoRequest("Motion.", **args), tmp_path / "unqualified.mp4")
+    assert not events
+    pipeline.close()

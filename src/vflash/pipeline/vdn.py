@@ -201,7 +201,7 @@ def upscale_bf16(video: Any, checkpoint: Path, width: int, height: int) -> tuple
 
 
 class VDNKeyframePipeline:
-    """Serial complete I2VA/FL2VA, with explicit full8 or pixel8+2 strategy.
+    """Serial complete keyframe generation with an explicit sampling strategy.
 
     This initial complete adapter reloads encoding and sampling for each request;
     it does not pretend to be a preloaded Base16 pipeline. The CPU media decoder
@@ -213,8 +213,8 @@ class VDNKeyframePipeline:
     ) -> None:
         if trust_local_code is not True:
             raise ContractError("Official media components require trust_local_code=True")
-        if strategy not in {"full8", "pixel8+2"}:
-            raise ContractError("VDN strategy must be full8 or pixel8+2")
+        if strategy not in {"full8", "pixel8+2", "selflift6+2"}:
+            raise ContractError("VDN strategy must be full8, pixel8+2 or selflift6+2")
         assets.validate(strategy == "pixel8+2")
         self.assets, self.strategy = assets, strategy
         self._lock, self._closed, self._decoder = threading.Lock(), False, None
@@ -224,6 +224,13 @@ class VDNKeyframePipeline:
     ) -> VideoResult:
         if not isinstance(request, VideoRequest) or request.mode not in {"i2va", "fl2va"}:
             raise ContractError("VDN complete generation requires I2VA or true FL2VA")
+        progressive = self.strategy == "selflift6+2"
+        if progressive and (
+            request.mode != "i2va"
+            or request.duration_seconds != 5
+            or min(request.width, request.height) < 640
+        ):
+            raise ContractError("SelfLift currently accepts five-second I2VA, short side >=640")
         if (
             not isinstance(output_path, Path)
             or output_path.exists()
@@ -250,8 +257,10 @@ class VDNKeyframePipeline:
                 raise ContractError("This complete VDN adapter requires one SM89 GPU")
             torch.set_num_threads(4)
             canvas = geometry(request.width, request.height, frames=request.model_frames)
-            two_pass = self.strategy == "pixel8+2"
+            two_pass = self.strategy != "full8"
             selected = plan(canvas, enabled=two_pass, task=request.mode)
+            if progressive:
+                selected["total_steps"] = 8
             output_path.parent.mkdir(parents=True, exist_ok=True)
 
             def emit(stage, completed=0, total=1):
@@ -268,7 +277,11 @@ class VDNKeyframePipeline:
                 )
                 emit("conditioning", 1)
                 tick = time.monotonic()
-                engine = VDNEngineSession(self.assets.weights, task=request.mode, canvas=canvas)
+                engine = (
+                    None
+                    if progressive
+                    else VDNEngineSession(self.assets.weights, task=request.mode, canvas=canvas)
+                )
                 initialization = time.monotonic() - tick
                 steps = 0
 
@@ -279,19 +292,41 @@ class VDNKeyframePipeline:
 
                 emit("denoising", 0, selected["total_steps"])
                 try:
-                    video, audio, sampling = engine.sample(
-                        directory / "target.pt",
-                        request.seed,
-                        first_pass_conditioning=directory / "first.pt" if two_pass else None,
-                        upscale=(
-                            lambda v, w, h: upscale_bf16(
-                                v, self.assets.upscaler_checkpoint, w, h
+                    if progressive:
+                        from vflash.adapters.vdn_selflift import sample_selflift
+
+                        if self._decoder is None:
+                            self._decoder = OfficialMediaDecoder(
+                                video_component=self.assets.decoder / "video_vae",
+                                audio_component=self.assets.decoder / "audio_vae",
+                                trust_local_code=True,
                             )
+                        video, audio, sampling = sample_selflift(
+                            self.assets.weights,
+                            self.assets.official_model,
+                            self._decoder,
+                            canvas,
+                            directory / "target.pt",
+                            directory / "first.pt",
+                            request.seed,
+                            step_callback=on_step,
                         )
-                        if two_pass
-                        else None,
-                        step_callback=on_step,
-                    )
+                    else:
+                        video, audio, sampling = engine.sample(
+                            directory / "target.pt",
+                            request.seed,
+                            first_pass_conditioning=directory / "first.pt"
+                            if two_pass
+                            else None,
+                            upscale=(
+                                lambda v, w, h: upscale_bf16(
+                                    v, self.assets.upscaler_checkpoint, w, h
+                                )
+                            )
+                            if two_pass
+                            else None,
+                            step_callback=on_step,
+                        )
                     if not torch.isfinite(video).all() or not torch.isfinite(audio).all():
                         raise ContractError("VDN produced nonfinite latents")
                     latent = directory / "latents.safetensors"
@@ -304,7 +339,8 @@ class VDNKeyframePipeline:
                     )
                     del video, audio
                 finally:
-                    engine.close()
+                    if engine is not None:
+                        engine.close()
                 del engine
                 gc.collect()
                 torch.cuda.empty_cache()

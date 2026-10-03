@@ -109,7 +109,7 @@ pipeline = VDNKeyframePipeline(
         decoder=Path("models/official-decoder"),
         upscaler_checkpoint=Path("models/upscaler-bf16.safetensors"),
     ),
-    strategy="pixel8+2",  # explicit; full8 is the other supported strategy
+    strategy="pixel8+2",  # explicit; full8 remains the default
     trust_local_code=True,
 )
 try:
@@ -135,3 +135,29 @@ This initial complete adapter reloads text/keyframe encoding and sampling per
 request. It retains only the CPU media decoder between serial calls; do not
 claim full-model residency or use cached-text timings as request latency.
 Product routing, capabilities, configuration and rollout remain separate work.
+
+## Optional SelfLift-zero 6+2
+
+`VDNKeyframePipeline(..., strategy="selflift6+2")` selects an independently
+implemented [SelfLift-zero](https://arxiv.org/abs/2609.02036) transition. It runs
+six original-schedule evaluations at half spatial resolution, corrects the clean
+prediction using an all-frame pixel/VAE round trip, and continues the original
+video/audio clocks for two full-resolution evaluations. The correction selects
+the 60% largest channel-mean disagreements, at unit strength. This is **eight**
+NFE, not a completed eight-step low-resolution clip plus two restarted steps.
+
+The initial supported scope is five-second I2VA with short side at least 640 on
+one SM89 48GB. FL2VA, tail-only input, smaller canvases and longer durations are
+rejected by this strategy; full8 and pixel8+2 keep their separate contracts.
+No learned upscaler is required. VAE decoding/encoding is additional real work;
+the report includes it and both stage loads. Engines are closed before the VAE
+round trip and recreated for the suffix. No module-global sampler is patched.
+
+Three local animation/live-action/action cases showed substantial removal of
+the repeating contours caused by direct nearest latent lifting. Compared with
+correcting the entire latent from pixels, selective correction retained more
+face/fabric detail in the inspected live-action crops. This is not proof that
+every scene improves over full8: motion differs, small faces remain imperfect,
+and this is an H3 adaptation, not one of the paper's evaluated image models.
+Keep it explicit and compare complete videos. No unlicensed community node code,
+private media or trained restoration weights are included.
