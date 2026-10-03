@@ -58,11 +58,34 @@ def test_unknown_backend_and_missing_dependency_are_actionable(monkeypatch):
     require_attention_dependencies("torch-flash")
 
 
+@pytest.mark.parametrize("mode", ["i2va", "fl2va"])
+def test_original_lightx_v01_sol_is_explicit_without_changing_auto(mode):
+    selected = plan(f"{mode}-turbo4-v01-544-exact-sm89")
+    assert resolve_attention_backend(selected) == "torch-flash"
+    assert resolve_attention_backend(selected, "sol-sm89") == "sol-sm89"
+    changed = replace(selected, profile=replace(selected.profile, nfe=8))
+    with pytest.raises(ContractError, match="Sol requires"):
+        resolve_attention_backend(changed, "sol-sm89")
+
+
+@pytest.mark.parametrize("profile", ["i2va-turbo4-exact-sm89", "i2va-turbo8-544-exact-sm89"])
+def test_other_turbo_contracts_do_not_inherit_v01_sol_support(profile):
+    with pytest.raises(ContractError, match="Sol requires"):
+        resolve_attention_backend(plan(profile), "sol-sm89")
+
+
 @pytest.mark.parametrize(
-    "requested,expected", [("auto", "sol-sm89"), ("torch-flash", "torch-flash")]
+    "profile,requested,expected",
+    [
+        ("i2va-base16-bf16-sm89", "auto", "sol-sm89"),
+        ("i2va-base16-bf16-sm89", "torch-flash", "torch-flash"),
+        ("i2va-turbo4-v01-544-exact-sm89", "auto", "torch-flash"),
+        ("i2va-turbo4-v01-544-exact-sm89", "sol-sm89", "sol-sm89"),
+        ("fl2va-turbo4-v01-544-exact-sm89", "sol-sm89", "sol-sm89"),
+    ],
 )
 def test_complete_pipeline_forwards_resolved_backend_even_for_dense(
-    tmp_path, monkeypatch, requested, expected
+    tmp_path, monkeypatch, profile, requested, expected
 ):
     from vflash.pipeline.assets import PreparedPipelineAssets
     from vflash.pipeline.contracts import PipelineAssets
@@ -73,7 +96,7 @@ def test_complete_pipeline_forwards_resolved_backend_even_for_dense(
         tmp_path / "receipt.json",
         "a" * 64,
         (),
-        "i2va-base16-bf16-sm89",
+        profile,
     )
     monkeypatch.setattr("vflash.pipeline.runtime.media_executables", lambda: None)
     monkeypatch.setattr("vflash.pipeline.runtime.validate_adapter_dependencies", lambda: None)

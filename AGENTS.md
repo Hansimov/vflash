@@ -22,7 +22,9 @@ from five through ten seconds on one SM89 GPU or a cooperating SM86 pair. They m
 matching SM89 48 GB GPUs with block-ring `sequence-head` execution; this is a bounded single-request latency
 option, not automatic scheduling or the throughput default. A single SM89 Ref4 pipeline also accepts one
 2–5 second visual-only video reference, without mixing images. Complete SM86 uses `sequence-head`; single-SM86
-and Turbo8 retain their latent interface. The current profile guide owns the supported boundary; archived release
+and native-only Turbo profiles retain their latent interface. Optional 544p keyframe Turbo pairs have separate
+complete-pipeline evidence and artifact identities; original v0.1 defaults to dense with explicit single-SM89 Sol.
+The current profile guide owns the supported boundary; archived release
 notes describe their original versions, not additional requirements for a new release.
 The dual-SM86 T2 Turbo4 native profile additionally requires `sequence-head` and Base-specific SM86 compilation.
 Its application-stage integration is qualified at two fixed geometries; the standalone five-second `H3Pipeline`

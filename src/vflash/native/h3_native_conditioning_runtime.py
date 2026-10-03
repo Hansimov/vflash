@@ -216,11 +216,11 @@ class H3NativeConditioningRuntime:
         if attention_backend == "sol-sm89" and (
             capability != (8, 9)
             or parallel_strategy != "single"
-            or expected_weight_profile != "minimax-h3-base"
-            or expected_nfe != 16
+            or (expected_weight_profile, expected_nfe)
+            not in {("minimax-h3-base", 16), ("lightx-turbo4-v0.1-544", 4)}
         ):
             raise H3NativeConditioningRuntimeError(
-                "approximate Sol requires single-SM89 official Base16"
+                "approximate Sol requires single-SM89 Base16 or original LightX v0.1 keyframes"
             )
         if capability not in {(8, 6), (8, 9)}:
             raise H3NativeConditioningRuntimeError(

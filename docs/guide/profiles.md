@@ -63,7 +63,7 @@ Vflash runs the pinned [LightX2V H3 Turbo](https://huggingface.co/lightx2v/Minim
 | --- | --- | --- |
 | Ref Turbo4 v0.1 | One/two 3080s, one 4090 | `minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors` |
 | Ref Turbo8 v1.0 768p | One 4090 | `minimax_h3_ref2v_turbo_8step_v1.0_768p_bf16.safetensors` |
-| Keyframe Turbo4 v0.1 544p (preview) | One 4090; I2VA media validated | `minimax_h3_fl2v_turbo_4step_v0.1.safetensors` |
+| Keyframe Turbo4 v0.1 544p (preview) | One 4090; bounded I2VA/L2VA/FL2VA media evidence | `minimax_h3_fl2v_turbo_4step_v0.1.safetensors` |
 | Keyframe Turbo8 v1.0 544p (preview) | One 4090 | `minimax_h3_fl2v_turbo_8step_v1.0_bf16.safetensors` |
 
 Pinned revisions and sources are listed under [runtime assets](../reference/runtime-assets#versions). T2VA also supports `minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors` for T2VA on SM89 or a cooperating SM86 pair, with alpha 128 / rank 128. Base16 keyframe profiles have no adapter; the 544p Turbo pairs above use rank128 / alpha8 and shifts12 / 3. Only the named files and revisions are supported. ComfyUI, custom LoRAs and future upstream revisions need separate integration.

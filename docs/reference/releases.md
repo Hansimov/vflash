@@ -1,6 +1,20 @@
 # Release notes
 
-Version **0.6.5** fixes temporal detail pulsing in optional SelfLift inference.
+Version **0.6.6** adds original LightX v0.1 four-step keyframes and explicit Sol comparison.
+
+## 0.6.6 · Original LightX v0.1 keyframes {#v0-6-6}
+
+Independent preview I2VA/FL2VA profiles pin the original 544p v0.1 four-step adapter,
+12/3 schedule and rank128/alpha8 residual. A matching prepared pipeline accepts first-only,
+last-only and true two-endpoint requests; it never relabels a v1.0 adapter as v0.1.
+Three 960×544 five-second dense requests completed on one RTX 4090 48 GB in about
+72–78 seconds excluding initialization. Explicit Sol is supported for these profiles,
+but `auto` stays dense: matched Sol controls were about 20–24% slower and did not establish
+a compensating sampled quality benefit. Base16 defaults are unchanged.
+
+See [exact contracts, endpoint execution evidence and limitations](./pipeline-profiles#lightx-v01).
+This is not a universal face/action repair or a new downstream default. Source/wheel only;
+prebuilt images and application deployments require explicit updates. No weights are bundled.
 
 ## 0.6.5 · Video-aware SelfLift correction {#v0-6-5}
 

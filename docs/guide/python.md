@@ -14,6 +14,10 @@ request is incompatible with Sol. Install the pinned dependency with `python -m 
 after GPU/pipeline dependencies, or use the standard Docker build. Missing Sol fails without fallback.
 Prepared assets are unchanged; the result's attention policy identifies actual approximate execution.
 
+Since 0.6.6, the [original LightX v0.1 four-step keyframe pair](../reference/pipeline-profiles#lightx-v01)
+also accepts explicit `sol-sm89` on single SM89. Its `auto` remains dense: three matched
+complete requests were slower with Sol. Do not infer support for other Turbo profiles.
+
 Install `.[gpu]` in the [supported environment](./getting-started#run-a-bundle), prepare the [four runtime inputs](../reference/runtime-assets), and replace the paths below. Select devices before your process initializes CUDA.
 
 ```python

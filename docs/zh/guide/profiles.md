@@ -63,7 +63,7 @@ Vflash 可以直接执行固定版本的 [LightX2V H3 Turbo](https://huggingface
 | --- | --- | --- |
 | Turbo4 v0.1 | 单/双 3080、单 4090 | `minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors` |
 | Turbo8 v1.0 768p | 单 4090 | `minimax_h3_ref2v_turbo_8step_v1.0_768p_bf16.safetensors` |
-| 关键帧 Turbo4 v0.1 544p（预览） | 单4090；已验证I2VA成片 | `minimax_h3_fl2v_turbo_4step_v0.1.safetensors` |
+| 关键帧 Turbo4 v0.1 544p（预览） | 单4090；有限I2VA/L2VA/FL2VA成片证据 | `minimax_h3_fl2v_turbo_4step_v0.1.safetensors` |
 | 关键帧 Turbo8 v1.0 544p（预览） | 单4090 | `minimax_h3_fl2v_turbo_8step_v1.0_bf16.safetensors` |
 
 固定修订与来源见[运行资源](../reference/runtime-assets#versions)。T2VA 还支持用于 SM89 或双 SM86 T2VA 的 `minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors`，alpha128 / rank128。Base16关键帧不使用LoRA；上述544p Turbo成对配置则为rank128 / alpha8、shift12 / 3。仅支持明确列出的文件和修订；ComfyUI、自定义 LoRA 和未来上游版本需要单独适配。

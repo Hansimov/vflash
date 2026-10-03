@@ -31,8 +31,36 @@ first/last requests; current target-GPU evidence covers **three 960×544, five-s
 on one RTX 4090 48 GB, all delivered as 120 frames at 24 fps with audio.
 Request times excluding initialization were **77.51 / 72.01 / 72.02 seconds**;
 initialization was **73.38 seconds** and one-time compilation **278.95 seconds**.
-These are bounded execution measurements, not a broad quality guarantee or a production-default change.
-True two-endpoint, last-only, long-duration and smaller-face quality need their own media checks.
+The default dense path also completed true last-only **512×512/5s** and first/last
+**640×352/10s** controls, delivering 120 and 240 frames with audio. Request times were
+**48.04 / 61.25 seconds**, initialization separately **87.89 seconds**. The first/last
+example retained an approximately half-second endpoint hold; fine texture and motion
+limitations remain. These are bounded execution measurements, not a broad quality
+guarantee or a production-default change. Smaller-face and complex-action quality
+remain unqualified.
+
+### Explicit Sol comparison
+
+Only these original v0.1 keyframe profiles additionally accept
+`attention_backend="sol-sm89"` on a single SM89 GPU, with the pinned Sol dependency
+and block-ring residency. `auto` **still selects `torch-flash` for v0.1**;
+the single-SM89 official Base16 default is unchanged. Other Turbo models and SM86
+do not inherit this opt-in. Sol execution is approximate, reported explicitly and never
+silently falls back to dense.
+
+Three matched 960×544 five-second controls took **95.79 / 86.30 / 88.84 seconds**
+with Sol, excluding initialization (75.40 seconds). They took about **20–24% longer**
+than the dense controls above, including later warm requests. Each performed four
+evaluations and 200 Sol operator calls. Sampled visual review did not establish a
+compensating quality benefit; existing object-contact limitations remained.
+This is why Sol is optional here, not a speed recommendation. Do not extrapolate this
+bounded result to larger canvases or the official 16-step model.
+
+The same Sol session also completed true last-only 512×512/5s and first/last
+640×352/10s requests, delivering 120 and 240 frames with fully decodable audio/video
+in 61.82 and 80.10 seconds. Endpoints are passed as actual conditioning, not reversal
+or pasted frames. These are execution measurements, not blanket endpoint-fidelity,
+motion-quality or audio-semantic guarantees.
 
 ## 544p-trained eight-step keyframes (preview)
 

@@ -12,6 +12,10 @@
 先安装GPU/pipeline依赖，再执行`python -m vflash.install_sol`，或使用标准Docker构建。
 缺Sol依赖会报错，不会fallback；prepared assets不变，实际近似执行由结果attention policy标识。
 
+0.6.6起，[原始LightX v0.1四步关键帧配置](../reference/pipeline-profiles#lightx-v01)
+也允许单SM89显式`sol-sm89`。其`auto`仍为dense，三条配对完整请求中Sol反而更慢；
+不能据此推断其他Turbo配置也支持。
+
 在[支持的环境](./getting-started#run-a-bundle)中安装 `.[gpu]`，准备好[四类运行输入](../reference/runtime-assets)，再替换以下路径。必须在进程初始化 CUDA 之前选定显卡。
 
 ```python

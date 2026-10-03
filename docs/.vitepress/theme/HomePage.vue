@@ -30,7 +30,7 @@ const text = computed(() => zh.value ? {
     { execution: '双卡协作 · 分块加载', profiles: 'Base16', note: '匹配的两张 4090 只在 peer 原本空闲时用于降低单请求延迟；有两个请求时仍使用独立 worker。' },
   ],
   boundary: '当前公开版的输入与输出',
-  boundaryText: 'Turbo 保持五秒，Base16 关键帧支持五至十秒。0.5.0 在单 SM89 Base16 默认使用近似 Sol attention；SM86、双卡与 Turbo 保持 dense，也可显式选择 dense。不宣称完整媒体质量等价。',
+  boundaryText: 'Ref/T2 Turbo 保持五秒，Base16 与可选544p关键帧支持五至十秒。单SM89 Base16默认近似Sol；原始v0.1关键帧仅显式可选Sol，默认dense。各模式的成片证据单独列出，不宣称普遍画质等价。',
   inputs: '了解运行前提',
   next: '按你的任务开始',
   guides: [
@@ -61,7 +61,7 @@ const text = computed(() => zh.value ? {
     { execution: 'Two GPUs · streamed', profiles: 'Base16', note: 'Use matching 4090s to reduce one request\'s latency only when the peer would otherwise be idle; independent workers retain higher two-request throughput.' },
   ],
   boundary: 'The current public interface',
-  boundaryText: 'Turbo retains five seconds; Base16 keyframes accept five through ten. Version 0.5.0 defaults to approximate Sol on single-SM89 Base16. SM86, pairs and Turbo stay dense; explicit dense remains available. Full media-quality equivalence is not claimed.',
+  boundaryText: 'Ref/T2 Turbo retains five seconds; Base16 and optional 544p keyframes accept five through ten. Single-SM89 Base16 defaults to Sol. Original v0.1 keyframes permit explicit Sol but default to dense. Media evidence is scoped by mode, not a blanket quality guarantee.',
   inputs: 'Check the prerequisites',
   next: 'Start with what you need',
   guides: [

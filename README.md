@@ -4,22 +4,24 @@ Native **MiniMax H3 inference** for RTX 3080 20 GB and RTX 4090 48 GB. Vflash us
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
-**0.6.0.** An optional [complete VDN pipeline](https://hansimov.github.io/vflash/guide/community-vdn)
-now generates MP4 from prompts and first/last keyframes on SM89: full eight steps or
-pixel-conditioned 8+2. Five- and ten-second complete requests passed on RTX 4090 48 GB.
-The existing Base16, attention-adapter and VAE interfaces remain available; VDN uses
-its own pinned weights, trained hybrid attention and explicit runtime dependencies.
+**0.6.6.** [Original LightX v0.1 four-step keyframes](https://hansimov.github.io/vflash/reference/pipeline-profiles#lightx-v01)
+have independent pinned profiles and complete SM89 media evidence. Dense remains their
+default; optional Sol was slower in three matched controls. The separate
+[VDN/SelfLift pipeline](https://hansimov.github.io/vflash/guide/community-vdn),
+official Base16, attention-adapter and VAE interfaces remain available.
 
 Generate synchronized video and audio through a complete Python or container pipeline.
 Turbo profiles create five-second MP4s from text, one to three images, or
 [a short reference video](https://hansimov.github.io/vflash/guide/complete-pipeline#reference-video).
 Official Base16 keyframe profiles accept a first frame, a last frame, or both, at integer durations
-from five through ten seconds. One prepared keyframe pipeline can switch among I2VA, L2VA and FL2VA
-without reloading weights.
+from five through ten seconds. The optional 544p keyframe Turbo pairs also accept first-only,
+last-only and both endpoints with bounded five/ten-second evidence. One prepared keyframe pipeline
+switches among I2VA, L2VA and FL2VA without reloading weights, but not across adapter versions.
 
 The native core targets RTX 3080 20 GB (SM86) and RTX 4090 48 GB (SM89). Native Base16 defaults to
 **approximate Sol attention on single-SM89 official Base16**. SM86, cooperating pairs and Turbo
-profiles retain dense attention. Python, CLI and the native HTTP service share this policy;
+profiles default to dense attention. Original LightX v0.1 keyframes additionally permit explicit
+Sol on one SM89; other Turbo profiles do not. Python, CLI and the native HTTP service share this policy;
 `--attention-backend torch-flash` explicitly retains dense execution. Standard Docker builds include
 the pinned Sol dependency. A Python install needs `python -m vflash.install_sol` after its GPU extras.
 Missing dependencies fail clearly, never silently select another backend. Cross-step caches and
@@ -28,15 +30,15 @@ See [what was adopted, deferred or rejected](https://hansimov.github.io/vflash/r
 
 The ten-second Base16 boundary has bounded complete-request evidence on the listed hardware, but it
 is not a guarantee for every canvas or prompt. A matching SM89 pair is an explicit single-request
-latency option; two independent workers remain the throughput default. Turbo and reference-video
-profiles retain their separate five-second contracts. [Read the qualification boundary](https://hansimov.github.io/vflash/reference/releases#v0-4-0).
+latency option; two independent workers remain the throughput default. Ref/T2 and reference-video
+profiles retain their separate five-second contracts. [Read the qualification boundary](https://hansimov.github.io/vflash/reference/pipeline-profiles).
 
 ## Check your setup
 
 Python 3.11 or newer is required. The base install does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.6.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.6.6 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
@@ -49,7 +51,7 @@ vflash plan ref2va-turbo4-exact-sm89 --gpu 0
 
 | GPU configuration | Released profiles | Weight placement |
 | --- | --- | --- |
-| One RTX 4090 48 GB | Ref2VA Turbo4 / Turbo8; T2VA Turbo4; Base16 I2VA/L2VA/FL2VA | Base16 Sol uses block streaming; Turbo native core retains residency |
+| One RTX 4090 48 GB | Ref2VA Turbo4 / Turbo8; T2VA Turbo4; Base16 and 544p Turbo keyframes | Sol uses block streaming; dense native execution supports residency |
 | One RTX 3080 20 GB | Ref2VA Turbo4 | Streamed from host RAM |
 | Two RTX 3080 20 GB GPUs | Ref2VA Turbo4; T2VA Turbo4; Base16 I2VA/L2VA/FL2VA | Shared host weights; cooperative `sequence-head` |
 | Two RTX 4090 48 GB GPUs | Base16 I2VA/L2VA/FL2VA | Opt-in cooperative latency path; not the throughput default |
@@ -68,7 +70,7 @@ For the native denoiser, allow **64 GiB or more of available system memory per w
 - [Compare Sol-Engine mechanisms](https://hansimov.github.io/vflash/reference/sol-engine-alignment) against the actual SM86/SM89 contract.
 - [Troubleshoot](https://hansimov.github.io/vflash/guide/troubleshooting) startup, memory, dual-GPU and output problems without weakening ownership checks.
 
-Turbo4 and Turbo8 are distilled adapters. Exact attention is not a base-model quality guarantee, and different GPU or parallel configurations need not produce bitwise-identical results. Complete generation uses fixed Ref4 or T2VA Base4 v1.0 assets and sessions. Dual-SM86 Ref4 requires `sequence-head`; single-SM86 and Turbo8 use the native latent interface. W8 and arbitrary adapter or mode switching are outside the supported profiles. Read [the validation scope](https://hansimov.github.io/vflash/guide/profiles).
+Turbo4 and Turbo8 are distilled adapters. Exact attention is not a base-model quality guarantee, and different GPU or parallel configurations need not produce bitwise-identical results. Complete generation uses explicit fixed-profile assets. Dual-SM86 Ref4 requires `sequence-head`; single-SM86 and other native-only Turbo profiles retain their latent interface. W8 and arbitrary adapter or mode switching are outside the supported profiles. Read [the validation scope](https://hansimov.github.io/vflash/guide/profiles).
 
 ## Contribute
 
