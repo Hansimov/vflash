@@ -161,3 +161,9 @@ every scene improves over full8: motion differs, small faces remain imperfect,
 and this is an H3 adaptation, not one of the paper's evaluated image models.
 Keep it explicit and compare complete videos. No unlicensed community node code,
 private media or trained restoration weights are included.
+
+A later 640×640 complete request executed successfully but showed new transient
+speckles on the face and clothing. A 640-pixel short side is therefore an execution
+limit, **not** sufficient quality qualification for automatic selection. The clean
+controls above used 992×992 and 1536×640; retain full8 for smaller unqualified
+canvases. Do not use successful decoding as evidence of visual quality.
