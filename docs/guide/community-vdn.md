@@ -164,9 +164,10 @@ and VAE encoding. They remain ordered for FL2VA. `silent-v1` and explicit
 over endpoints. Output is published only after complete MP4 encoding, without
 overwriting another file. Temporary conditioning is removed.
 
-This initial complete adapter reloads text/keyframe encoding and sampling per
-request. It retains only the CPU media decoder between serial calls; do not
-claim full-model residency or use cached-text timings as request latency.
+Without a reuse scope the adapter reloads text/keyframe encoding per request;
+sampling is always independent. It retains the CPU media decoder between serial
+calls. Explicit scope reuse is described above; neither is full-model residency.
+Do not use cached-text timings as uncached request latency.
 Product routing, capabilities, configuration and rollout remain separate work.
 
 ## Optional SelfLift-zero 6+2
