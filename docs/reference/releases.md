@@ -1,6 +1,21 @@
 # Release notes
 
-Version **0.6.0** adds an explicit complete VDN keyframe pipeline. Existing native Base16 defaults remain unchanged.
+Version **0.6.1** adds opt-in SelfLift-zero progressive sampling. Existing defaults remain unchanged.
+
+## 0.6.1 · SelfLift-zero progressive I2VA {#v0-6-1}
+
+The complete VDN pipeline accepts `strategy="selflift6+2"`: six low-resolution
+evaluations, an all-frame pixel/VAE consistency correction, and two evaluations
+at the target resolution. Independent paper-based code requires no new trained
+weights and never patches a global sampler. Stage loads and VAE costs are explicit.
+
+The initial scope is five-second I2VA, short side at least 640, on one SM89 48GB.
+Three local scene controls showed substantially fewer repeated-contour artifacts
+than nearest latent lifting, with a useful detail trade-off against pure pixel
+re-encoding. This does not establish universal superiority over full8, solve
+small-face defects or inherit the image paper's speed claims. See the
+[community guide](../guide/community-vdn) for pinned dependencies and limitations.
+Default full8, optional pixel8+2 and the separate native H3 pipeline are retained.
 
 ## 0.6.0 · Complete VDN keyframe pipeline {#v0-6-0}
 
