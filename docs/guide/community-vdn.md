@@ -10,6 +10,39 @@ trained steps, 50 resident DiT blocks and streamed TokenRefiner. Local complete
 I2VA and true FL2VA experiments cover 5–10 seconds. This is not a qualification
 for every geometry, other GPU architectures, Ref2VA, or a production default.
 
+## Scoped clean-conditioning reuse
+
+For sibling candidates executed serially by the **same pipeline**, pass the same
+caller-owned `ConditioningReuseScope` to `generate`. Use a new opaque scope for
+each accepted request and owner; never accept the scope directly from an untrusted
+client. Omitting the scope disables reuse and clears retained inputs.
+
+```python
+from vflash.pipeline import ConditioningReuseScope
+
+scope = ConditioningReuseScope("opaque-accepted-request")
+first = pipeline.generate(first_request, Path("first.mp4"), conditioning_reuse_scope=scope)
+second = pipeline.generate(second_request, Path("second.mp4"), conditioning_reuse_scope=scope)
+```
+
+Only raw encoder features and clean VAE anchors are retained in CPU memory, not
+TokenRefiner output, DiT states or noise. A different seed keeps independent
+sampling; changed prompt, ordered canonical RGB pixels, geometry, model path or
+sampling plan misses the cache. Assets must remain immutable. The cache is bounded
+to two entries and 256 MiB; one-hour idle expiry is checked on access, and scope
+change, generation failure and `close()` clear it. It is not a cross-process cache
+and does not accelerate the first candidate on another GPU.
+
+A local single RTX 4090 48 GB, SelfLift 6+2, 1536×640/5-second three-video control
+reduced conditioning from 36.954 s to 0.128/0.114 s, retaining 25.3 MiB. Same-seed
+decoded RGB matched across every frame; the next seed changed the video. The
+near-silent audio was **not bitwise equal** (maximum 6 PCM16 units, RMS difference
+0.581), so this is not a complete audio/video equivalence guarantee. Total times
+231.334/147.019/150.101 s also include cold/warm decoder and compute differences;
+only the roughly 36.8 s removed encoding is attributed to reuse. Rich-audio quality
+and other strategies have not received the same GPU control. The reusable core
+was promoted from integration source `83512f70`; no private media are distributed.
+
 ## Explicit dependencies and assets
 
 Use an isolated environment with the exact revisions below. No code or model

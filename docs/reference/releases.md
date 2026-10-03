@@ -1,6 +1,17 @@
 # Release notes
 
-Version **0.6.3** adds distinct native 544p-trained keyframe profiles and explicit trusted-snapshot compilation.
+Version **0.6.4** adds explicit request-scoped VDN clean-conditioning reuse.
+
+## 0.6.4 · Bounded sibling-candidate conditioning reuse {#v0-6-4}
+
+`VDNKeyframePipeline.generate` accepts an optional `ConditioningReuseScope`.
+Clean raw text/keyframe features are CPU-cached within that scope; seed-dependent
+sampling remains independent. Reuse is off without a scope, bounded to 256 MiB,
+and cleared on scope change, execution failure or close. No serving policy changes.
+One SelfLift SM89 control removed about 36.8 seconds of repeated encoding;
+video RGB matched at the same seed but near-silent PCM was not bitwise equal.
+See [evidence and limits](../guide/community-vdn#scoped-clean-conditioning-reuse).
+Source/wheel only; prebuilt images and downstream deployments require explicit updates.
 
 ## 0.6.3 · Native 544p keyframes and bounded asset preparation {#v0-6-3}
 

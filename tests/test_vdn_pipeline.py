@@ -30,6 +30,9 @@ def prepared(tmp_path, monkeypatch):
             Image.new("RGB", (request.width, request.height)).save(
                 directory / f"{anchor}-reference.png"
             )
+        (directory / "target.pt").write_bytes(b"owned-clean-encoding")
+        if plan["enabled"]:
+            (directory / "first.pt").write_bytes(b"owned-first-pass-encoding")
         events.append(("encode", plan["enabled"]))
         return {"elapsed_seconds": 1.0}
 
@@ -141,6 +144,33 @@ def test_true_fl2_preserves_two_normalized_endpoints(prepared, tmp_path):
     pipeline.close()
 
 
+def test_scoped_pipeline_cache_reuses_only_encoding_and_clears_on_close(prepared, tmp_path):
+    from dataclasses import replace
+
+    from PIL import Image
+
+    from vflash.pipeline.contracts import ConditioningReuseScope
+
+    assets, events, _ = prepared
+    reference = tmp_path / "input.png"
+    Image.new("RGB", (512, 512), "red").save(reference)
+    pipeline = VDNKeyframePipeline(assets, trust_local_code=True)
+    request = VideoRequest("Motion.", first_frame=reference, width=512, height=512)
+    scope = ConditioningReuseScope("accepted-request")
+    for i in range(2):
+        result = pipeline.generate(
+            replace(request, seed=i),
+            tmp_path / f"scoped-{i}.mp4",
+            conditioning_reuse_scope=scope,
+        )
+        assert result.stages["encoding"]["conditioning_cache_hit"] == bool(i)
+    assert events.count(("encode", False)) == 1
+    assert events.count(("engine",)) == 2
+    assert pipeline._conditioning_cache.retained_bytes > 0
+    pipeline.close()
+    assert pipeline._conditioning_cache.retained_bytes == 0
+
+
 def test_failure_never_publishes_partial_file(prepared, tmp_path, monkeypatch):
     assets, events, decoder = prepared
 
@@ -155,6 +185,30 @@ def test_failure_never_publishes_partial_file(prepared, tmp_path, monkeypatch):
         pipeline.generate(VideoRequest("Motion.", first_frame=tmp_path / "first.png"), output)
     assert not output.exists() and not list(tmp_path.glob("vflash-vdn-*"))
     assert ("suspend",) in events
+    pipeline.close()
+
+
+def test_scoped_failure_discards_cached_inputs(prepared, tmp_path, monkeypatch):
+    from PIL import Image
+
+    from vflash.pipeline.contracts import ConditioningReuseScope
+
+    assets, _, decoder = prepared
+    reference = tmp_path / "input.png"
+    Image.new("RGB", (512, 512)).save(reference)
+    pipeline = VDNKeyframePipeline(assets, trust_local_code=True)
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("cancelled")
+
+    monkeypatch.setattr(decoder, "generate_mp4", fail)
+    with pytest.raises(RuntimeError, match="cancelled"):
+        pipeline.generate(
+            VideoRequest("Motion.", first_frame=reference, width=512, height=512),
+            tmp_path / "cancelled.mp4",
+            conditioning_reuse_scope=ConditioningReuseScope("accepted-request"),
+        )
+    assert pipeline._conditioning_cache.retained_bytes == 0
     pipeline.close()
 
 

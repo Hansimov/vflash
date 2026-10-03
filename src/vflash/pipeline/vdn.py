@@ -19,7 +19,13 @@ from typing import Any
 
 from vflash.adapters.vdn_h3 import VDNEngineSession, first_pass_reference
 from vflash.contracts import ContractError
-from vflash.pipeline.contracts import PipelineProgress, VideoRequest, VideoResult
+from vflash.pipeline.contracts import (
+    ConditioningReuseScope,
+    PipelineProgress,
+    VideoRequest,
+    VideoResult,
+)
+from vflash.pipeline.vdn_conditioning_cache import VDNCleanConditioningCache
 
 
 @dataclass(frozen=True)
@@ -203,9 +209,9 @@ def upscale_bf16(video: Any, checkpoint: Path, width: int, height: int) -> tuple
 class VDNKeyframePipeline:
     """Serial complete keyframe generation with an explicit sampling strategy.
 
-    This initial complete adapter reloads encoding and sampling for each request;
-    it does not pretend to be a preloaded Base16 pipeline. The CPU media decoder
-    is retained between requests. No automatic fallback or hidden output resize.
+    Sampling is reloaded per request; clean encoding can be reused only within
+    an explicit caller scope. The CPU media decoder is retained between requests.
+    No automatic fallback or hidden output resize.
     """
 
     def __init__(
@@ -218,12 +224,22 @@ class VDNKeyframePipeline:
         assets.validate(strategy == "pixel8+2")
         self.assets, self.strategy = assets, strategy
         self._lock, self._closed, self._decoder = threading.Lock(), False, None
+        self._conditioning_cache = VDNCleanConditioningCache()
 
     def generate(
-        self, request: VideoRequest, output_path: Path, *, progress=None
+        self,
+        request: VideoRequest,
+        output_path: Path,
+        *,
+        progress=None,
+        conditioning_reuse_scope: ConditioningReuseScope | None = None,
     ) -> VideoResult:
         if not isinstance(request, VideoRequest) or request.mode not in {"i2va", "fl2va"}:
             raise ContractError("VDN complete generation requires I2VA or true FL2VA")
+        if conditioning_reuse_scope is not None and not isinstance(
+            conditioning_reuse_scope, ConditioningReuseScope
+        ):
+            raise ContractError("VDN reuse requires an explicit caller-owned scope")
         progressive = self.strategy == "selflift6+2"
         if progressive and (
             request.mode != "i2va"
@@ -272,8 +288,13 @@ class VDNKeyframePipeline:
             ) as temp:
                 directory = Path(temp)
                 emit("conditioning")
-                encoding = encode_conditioning(
-                    self.assets.official_model, request, selected, directory
+                encoding = self._conditioning_cache.encode(
+                    self.assets.official_model,
+                    request,
+                    selected,
+                    directory,
+                    encode_conditioning,
+                    scope=conditioning_reuse_scope,
                 )
                 emit("conditioning", 1)
                 tick = time.monotonic()
@@ -400,6 +421,9 @@ class VDNKeyframePipeline:
                 # another caller may have created while the GPU was working.
                 os.link(directory / "result.mp4", output_path)
                 return result
+        except BaseException:
+            self._conditioning_cache.clear()
+            raise
         finally:
             self._lock.release()
 
@@ -408,6 +432,7 @@ class VDNKeyframePipeline:
             raise ContractError("Cannot close a busy VDN pipeline")
         try:
             if not self._closed:
+                self._conditioning_cache.clear()
                 if self._decoder is not None:
                     self._decoder.close()
                 self._closed = True
