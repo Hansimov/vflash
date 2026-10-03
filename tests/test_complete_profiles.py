@@ -158,7 +158,7 @@ def test_weights_source_rejects_cross_adapter_and_partial_profile_changes(profil
     )
     other = (
         "lightx-ref-turbo4-v0.1"
-        if profile.definition.mode.value in {"t2va", "i2va"}
+        if profile.weight_profile != "lightx-ref-turbo4-v0.1"
         else "lightx-turbo4-v1.0"
     )
     with pytest.raises(ValueError, match="fixed"):

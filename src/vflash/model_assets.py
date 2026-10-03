@@ -57,6 +57,10 @@ COMPLETE_MODEL_PROFILES = (
     "i2va-base16-bf16-sm86",
     "fl2va-base16-bf16-sm89",
     "fl2va-base16-bf16-sm86",
+    "i2va-turbo4-exact-sm89",
+    "fl2va-turbo4-exact-sm89",
+    "i2va-turbo8-exact-sm89",
+    "fl2va-turbo8-exact-sm89",
 )
 
 _BASE16_KEYFRAME_PROFILE_BY_MODE = {
@@ -167,6 +171,11 @@ class H3ModelProfile:
 
     @property
     def recipe(self) -> str:
+        if self.adapter is not None and self.definition.mode.value in {"i2va", "fl2va"}:
+            return (
+                f"turbo{self.definition.nfe}-{self.definition.mode.value}-bf16-"
+                f"{self.adapter_execution}-{self.architecture}-v1"
+            )
         if self.definition.mode.value == "ref2va":
             family = "ref4"
         elif self.definition.mode.value == "t2va":
@@ -188,7 +197,7 @@ def model_profile(profile_id: str = DEFAULT_MODEL_PROFILE) -> H3ModelProfile:
         adapter_id = (
             "lightx-ref-turbo4-v0.1"
             if definition.mode.value == "ref2va"
-            else "lightx-turbo4-v1.0"
+            else f"lightx-turbo{definition.nfe}-v1.0"
         )
         adapter = h3_distilled_lora_contract_for_profile(
             adapter_id, workflow=definition.mode.value

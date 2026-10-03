@@ -714,6 +714,15 @@ def _complete_delivery_profile(model_frames: int) -> list[dict[str, str | int | 
     ]
 
 
+def _keyframe_schedule_supported(profile: H3ConditioningProfile) -> bool:
+    # Model/adapter identity and the complete sigma grid are also bound at runtime.
+    return (profile.nfe, profile.video_flow_shift, profile.audio_flow_shift) in {
+        (16, 12, 3),
+        (4, 6, 3),
+        (8, 6, 3),
+    }
+
+
 def _validate_first_frame_profile(
     profile: H3ConditioningProfile, request: Mapping[str, Any]
 ) -> None:
@@ -721,16 +730,16 @@ def _validate_first_frame_profile(
     delivery_profile = _complete_delivery_profile(profile.frames)
     if (
         profile.task != "i2va"
-        or profile.nfe != 16
+        or not _keyframe_schedule_supported(profile)
         or delivery_profile is None
-        or (profile.video_flow_shift, profile.audio_flow_shift) != (12, 3)
         or profile.width * profile.height > H3_BASE16_MAX_CANVAS_PIXELS
         or profile.num_condition_audio_rows != 0
         or profile.num_condition_video_rows != expected_rows
         or request["delivery_profiles"] != delivery_profile
     ):
         raise H3ConditioningBundleError(
-            "first-frame conditioning requires Base16 I2VA at 5-10s24 within its canvas budget"
+            "first-frame conditioning requires a supported I2VA schedule at 5-10s24 "
+            "within its canvas budget"
         )
 
 
@@ -739,16 +748,15 @@ def _validate_fl2va_profile(profile: H3ConditioningProfile, request: Mapping[str
     delivery_profile = _complete_delivery_profile(profile.frames)
     if (
         profile.task != "fl2va"
-        or profile.nfe != 16
+        or not _keyframe_schedule_supported(profile)
         or delivery_profile is None
-        or (profile.video_flow_shift, profile.audio_flow_shift) != (12, 3)
         or profile.width * profile.height > H3_BASE16_MAX_CANVAS_PIXELS
         or profile.num_condition_audio_rows != 0
         or profile.num_condition_video_rows != expected_rows
         or request["delivery_profiles"] != delivery_profile
     ):
         raise H3ConditioningBundleError(
-            "first-last-frame conditioning requires Base16 FL2VA at 5-10s24 "
+            "first-last-frame conditioning requires a supported FL2VA schedule at 5-10s24 "
             "within its canvas budget"
         )
 

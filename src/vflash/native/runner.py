@@ -15,6 +15,10 @@ from vflash.contracts import ContractError, ExecutionPlan, GenerationMode
 from vflash.native.h3_conditioning_bundle import H3InMemoryConditioning
 
 WEIGHT_PROFILES = {
+    "i2va-turbo4-exact-sm89": "lightx-turbo4-v1.0",
+    "fl2va-turbo4-exact-sm89": "lightx-turbo4-v1.0",
+    "i2va-turbo8-exact-sm89": "lightx-turbo8-v1.0",
+    "fl2va-turbo8-exact-sm89": "lightx-turbo8-v1.0",
     "t2va-turbo4-exact-sm89": "lightx-turbo4-v1.0",
     "t2va-turbo4-exact-sm86": "lightx-turbo4-v1.0",
     "ref2va-turbo4-exact-sm86": "lightx-ref-turbo4-v0.1",

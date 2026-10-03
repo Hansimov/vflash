@@ -53,13 +53,24 @@ LIGHTX_H3_TURBO4_CONTRACT = H3DistilledLoraContract(
     alpha=128.0,
 )
 
+LIGHTX_H3_TURBO8_CONTRACT = H3DistilledLoraContract(
+    profile_id="lightx-turbo8-v1.0",
+    revision="05ef678438e84933c406131b59abbf86919b3aac",
+    filename="minimax_h3_fl2v_turbo_8step_v1.0_768p_bf16.safetensors",
+    size_bytes=1_383_677_808,
+    sha256="9b0efe3613b43a84e30febaa43af27432ea9d0711eac7bba904b2556b175f6d4",
+    nfe=8,
+)
+
 
 def h3_distilled_lora_contract_for_profile(
     profile_id: str, *, workflow: str
 ) -> H3DistilledLoraContract:
     """Resolve the immutable task and release recorded by a runtime artifact."""
-    if workflow == "t2va" and profile_id == LIGHTX_H3_TURBO4_CONTRACT.profile_id:
-        return LIGHTX_H3_TURBO4_CONTRACT
+    if workflow in {"t2va", "i2va", "fl2va"}:
+        for contract in (LIGHTX_H3_TURBO4_CONTRACT, LIGHTX_H3_TURBO8_CONTRACT):
+            if profile_id == contract.profile_id:
+                return contract
     if workflow == "ref2va":
         for contract in (LIGHTX_H3_REF_TURBO4_CONTRACT, LIGHTX_H3_REF_TURBO8_CONTRACT):
             if profile_id == contract.profile_id:
