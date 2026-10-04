@@ -1,6 +1,6 @@
 # 生成视频
 
-## 源码 main：显式 hybrid 多参考模型
+## 0.6.8：显式 hybrid 多参考模型
 
 `H3Pipeline(..., hybrid_model=HybridModel(Path("models/MiniMax-H3/transformer_ref")))`
 在原始 FL LightX v0.1 四步配置上，仅替换第25–49块的官方 Ref AdaLN 投影。
@@ -15,9 +15,13 @@ FL 的时间 MLP、输出层及适配器不变，新增约55.4 MiB调制表，�
 结果以 `request_mode` 和 `stages.model_variant` 区分实际合同。
 官方权重通过清单/大小/头部与每请求文件标识检查，不反复哈希大文件；仓库不分发合并权重。
 
-私有原型已完成I2、FL及三参考完整视频；正式公共接口的连续跨模式实测正在进行。
-不能据此宣称网站已经部署，或人物、接触及动态瑕疵已修复。
-完整代码示例见[英文接口说明](../../guide/complete-pipeline#source-main-hybrid-reference-model-opt-in)。
+原生原型已完成I2、FL及三参考完整视频。公共Python接口又在同一RTX 4090 48 GB实例中
+连续执行Ref→I2→Ref：960×544、五秒、四次前向、BF16/dense/block-ring，
+每请求86.542/72.074/76.631秒，单次初始化104.094秒另列；均交付120帧/24fps并完整AV解码。
+两次Ref使用同一来源族的不同seed，是组件寿命检查，不是三个独立场景或配对速度比较。
+抽样中角色和场景保持，但起始停留、接触细节仍有瑕疵；声音语义与更广画质资格未外推。
+不能据此宣称网站已部署或人物、接触及动态瑕疵已修复。
+完整代码示例见[英文接口说明](../../guide/complete-pipeline#hybrid-reference-model-in-0-6-8-opt-in)。
 
 Vflash 0.5.1 支持纯文字生成，也支持提示词加一至三张有序参考图，输出五秒 MP4。0.4.0 支持官方 Base16 I2VA、L2VA 和 FL2VA 请求，分别输入一张明确的首帧、一张明确的尾帧，或同时输入首尾帧。连续请求使用 Python 接口，单次生成也可以使用容器命令行。完整链路支持单张 RTX 4090 48 GB 上的 T2VA Base4 和 Ref2VA Turbo4；Ref4 也支持双张 RTX 3080 20 GB。Base16 关键帧配置支持单张 RTX 4090 48 GB、可选的双张匹配 RTX 4090 48 GB 协作，或协作的双张 RTX 3080 20 GB。
 

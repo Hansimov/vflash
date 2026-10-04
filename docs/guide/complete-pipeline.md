@@ -27,9 +27,7 @@ decoded silent audio. This is a bounded capacity and media-contract screen, not
 a semantic-quality or end-to-end speed claim. Other duration/hardware combinations
 must retain their own serving qualification; API validation alone does not qualify them.
 
-## Exact text-encoder prefix
-
-### Source-main hybrid reference model (opt-in)
+## Hybrid reference model in 0.6.8 (opt-in)
 
 `HybridModel` keeps the original FL LightX v0.1 four-evaluation backbone and
 replaces only block 25–49 AdaLN projections with the pinned official Ref component.
@@ -64,10 +62,21 @@ Reference weight inventory/headers and per-request file stamps are checked witho
 rehashing large weights. The caller supplies the pinned official model files;
 no checkpoint or merged model is distributed.
 
-Private-prototype complete-video evidence covers I2VA, FL2VA and three-image Ref.
-Public-interface continuous cross-mode verification is in progress. This does not
-change the default profile or claim a fix for fine contact, faces or motion quality;
-do not infer a serving-system rollout from the presence of this option.
+Native prototype complete-video evidence covers I2VA, FL2VA and three-image Ref.
+The public Python interface also completed Ref → I2VA → Ref in one persistent
+RTX 4090 48 GB session: 960×544, five seconds, four evaluations, dense attention,
+BF16 trunk, block-ring residency. Request times were 86.542 / 72.074 / 76.631 seconds;
+one initialization took 104.094 seconds separately. All delivered 120 frames at
+24 fps and passed complete audio/video decode. Two reference requests use different
+seeds but the same source family; this is lifetime coverage, not three diverse scenes
+or a matched speed comparison. Existing pauses and imperfect object contacts remain;
+sampled identity/scene retention is not a universal quality guarantee.
+
+This option does not change the default profile or claim a fix for fine contact,
+faces or motion quality. Video/audio semantics and broader scenes require their own
+assessment; do not infer a serving-system rollout from the presence of this option.
+
+## Exact text-encoder prefix
 
 Version 0.5.1 retains 51 Qwen3-VL decoder layers for H3 conditioning instead of executing all 64.
 The pinned H3 adapter consumes `hidden_states[50]`; keeping one extra layer preserves that raw

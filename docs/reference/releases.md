@@ -1,6 +1,21 @@
 # Release notes
 
-Version **0.6.7** adds explicit learned latent lifting on the progressive eight-step clock.
+Version **0.6.8** adds an explicit hybrid reference graph sharing the original FL v0.1 backbone.
+
+## 0.6.8 · Shared-backbone hybrid references {#v0-6-8}
+
+Opt-in `HybridModel` replaces only official Ref block 25–49 modulation while retaining
+the FL trunk, prefix, final layer and original LightX v0.1 adapter. One single-SM89/dense
+Python pipeline accepts ordinary keyframes and real one-to-three-image Ref requests;
+Ref uses its own source identity and in-memory conditioning, not a generated first frame.
+The fixed model adds about 55.4 MiB of modulation tables rather than another backbone.
+
+Ref → I2VA → Ref complete requests passed in one RTX 4090 48 GB session, with full media
+decode and bounded cross-mode lifetime checks. Source/provenance, ownership/error cleanup
+and unchanged default paths have CPU regression coverage. See
+[scope, timings and quality limitations](../guide/complete-pipeline#hybrid-reference-model-in-0-6-8-opt-in).
+No claim of universal quality improvement, video-reference support or hybrid Sol qualification.
+Source/wheel only; no model weights, new prebuilt image or automatic downstream deployment.
 
 ## 0.6.7 · Learned latent lift 6+2 {#v0-6-7}
 
