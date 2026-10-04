@@ -199,6 +199,7 @@ class H3NativeConditioningRuntime:
         expected_audio_flow_shift: float | None = None,
         parallel_strategy: str = "single",
         weight_residency: str = "default",
+        hybrid_reference_directory: Path | None = None,
     ) -> None:
         import torch
 
@@ -357,9 +358,36 @@ class H3NativeConditioningRuntime:
         self._sol_attention = None
         self.input_packer = self.final_layer = self.denoiser = None
         self._closed = self._released = False
+        self.hybrid_reference_directory = hybrid_reference_directory
         try:
+            hybrid_seconds = 0.0
+            if hybrid_reference_directory is not None:
+                from vflash.adapters.checkpoints import IndexedCheckpoint
+                from vflash.native.h3_hybrid import compile_hybrid_modulation
+
+                if (
+                    capability != (8, 9)
+                    or parallel_strategy != "single"
+                    or attention_backend != "torch-flash"
+                ):
+                    raise H3NativeConditioningRuntimeError(
+                        "hybrid requires single-SM89 dense attention"
+                    )
+                hybrid_started = time.monotonic()
+                self.overlay = compile_hybrid_modulation(
+                    artifact,
+                    overlay,
+                    IndexedCheckpoint(hybrid_reference_directory),
+                    device=resolved_device,
+                )
+                hybrid_seconds = time.monotonic() - hybrid_started
             self.initialization_stages = {
                 "contract": contract_seconds,
+                **(
+                    {"hybrid_modulation": hybrid_seconds}
+                    if hybrid_reference_directory is not None
+                    else {}
+                ),
                 **self._load_components(auxiliary_store),
             }
         except BaseException as exc:
@@ -446,6 +474,11 @@ class H3NativeConditioningRuntime:
             "backend": self.backend_id,
             "artifact_id": self.artifact.artifact_id,
             "overlay_id": self.overlay.overlay_id,
+            **(
+                {"model_variant": dict(self.overlay.provenance)}
+                if getattr(self, "hybrid_reference_directory", None) is not None
+                else {}
+            ),
             "weight_profile": self.artifact.weight_profile,
             "adapter_execution": self.artifact.adapter_execution,
             "nfe": self.overlay.schedule.nfe,
@@ -491,7 +524,25 @@ class H3NativeConditioningRuntime:
             if isinstance(conditioning, H3InMemoryConditioning)
             else load_h3_conditioning_bundle(conditioning)
         )
-        if not _conditioning_task_matches(bundle.profile.task, self.artifact):
+        hybrid_reference = (
+            getattr(self, "hybrid_reference_directory", None) is not None
+            and bundle.profile.task == "ref2va"
+        )
+        if hybrid_reference:
+            from vflash.native.h3_hybrid import (
+                hybrid_reference_source,
+                validate_hybrid_reference_bundle,
+            )
+
+            validate_hybrid_reference_bundle(
+                bundle,
+                source=hybrid_reference_source(
+                    self.artifact.source,
+                    reference_revision=self.overlay.provenance["reference_checkpoint_revision"],
+                ),
+                schedule=self.overlay.schedule,
+            )
+        elif not _conditioning_task_matches(bundle.profile.task, self.artifact):
             raise H3NativeConditioningRuntimeError(
                 "the conditioning task differs from the loaded Base or Ref model"
             )
@@ -528,7 +579,8 @@ class H3NativeConditioningRuntime:
                     f"{mode} bundles require a qualified SM89 single or matching pair and "
                     "their Base16 schedule"
                 )
-        validate_conditioning_source(bundle.source, self.artifact.source)
+        if not hybrid_reference:
+            validate_conditioning_source(bundle.source, self.artifact.source)
         loaded = (
             consume_h3_in_memory_conditioning(bundle)
             if isinstance(bundle, H3InMemoryConditioning)

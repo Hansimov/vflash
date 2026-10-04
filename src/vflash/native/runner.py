@@ -51,6 +51,7 @@ class NativeEngineSession:
         auxiliary_tensor: Path,
         weight_residency: str = "default",
         attention_backend: str = "auto",
+        hybrid_model: Any = None,
     ) -> None:
         started = time.perf_counter()
         profile = plan.profile
@@ -115,6 +116,17 @@ class NativeEngineSession:
         ):
             raise ContractError("invalid physical GPU group for native parallel execution")
         attention_backend = resolve_attention_backend(plan, attention_backend)
+        if hybrid_model is not None:
+            from vflash.native.h3_hybrid import HybridModel
+
+            if not isinstance(hybrid_model, HybridModel):
+                raise ContractError("hybrid_model requires a typed HybridModel")
+            hybrid_model.validate(
+                profile_id=profile.id,
+                capability=plan.target.compute_capability,
+                strategy=plan.parallel_strategy,
+                attention_backend=attention_backend,
+            )
         if attention_backend == "sol-sm89":
             if weight_residency == "default":
                 weight_residency = "block-ring"
@@ -144,6 +156,11 @@ class NativeEngineSession:
             expected_audio_flow_shift=profile.audio_flow_shift,
             parallel_strategy=plan.parallel_strategy,
             weight_residency=weight_residency,
+            **(
+                {"hybrid_reference_directory": hybrid_model.reference_directory}
+                if hybrid_model is not None
+                else {}
+            ),
         )
         self.initialization_seconds = time.perf_counter() - started
         self.request_count = 0

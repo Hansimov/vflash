@@ -29,6 +29,46 @@ must retain their own serving qualification; API validation alone does not quali
 
 ## Exact text-encoder prefix
 
+### Source-main hybrid reference model (opt-in)
+
+`HybridModel` keeps the original FL LightX v0.1 four-evaluation backbone and
+replaces only block 25–49 AdaLN projections with the pinned official Ref component.
+The FL timestep MLP, final layer and adapter remain unchanged. About 55.4 MiB of
+compiled modulation tables are added; a second denoiser is not loaded. This is a
+distinct model combination, not the standalone official Ref4 profile.
+
+```python
+from pathlib import Path
+from vflash.pipeline import H3Pipeline, HybridModel, VideoRequest
+
+# prepared: original i2va/fl2va-turbo4-v01-544-exact-sm89 assets
+with H3Pipeline(
+    prepared, device=device, trust_local_code=True,
+    attention_backend="torch-flash",
+    hybrid_model=HybridModel(Path("models/MiniMax-H3/transformer_ref")),
+) as pipeline:
+    result = pipeline.generate(
+        VideoRequest("Describe the ordered references and their actions.",
+                     references=(Path("subject.png"), Path("setting.png")),
+                     width=960, height=544),
+        Path("reference-video.mp4"),
+    )
+```
+
+This explicit Python option is single-SM89/dense only. Ref accepts one to three
+ordered image references for five seconds; video references and hybrid Sol are
+not qualified. Keyframes use their ordinary FL graph; Ref uses a real official
+Ref graph sharing the same prefix, text encoder and VAEs, with an in-memory
+native handoff. `request_mode` and `stages.model_variant` record the actual contract.
+Reference weight inventory/headers and per-request file stamps are checked without
+rehashing large weights. The caller supplies the pinned official model files;
+no checkpoint or merged model is distributed.
+
+Private-prototype complete-video evidence covers I2VA, FL2VA and three-image Ref.
+Public-interface continuous cross-mode verification is in progress. This does not
+change the default profile or claim a fix for fine contact, faces or motion quality;
+do not infer a serving-system rollout from the presence of this option.
+
 Version 0.5.1 retains 51 Qwen3-VL decoder layers for H3 conditioning instead of executing all 64.
 The pinned H3 adapter consumes `hidden_states[50]`; keeping one extra layer preserves that raw
 intermediate state rather than substituting the final normalized state. The first 50 layers,

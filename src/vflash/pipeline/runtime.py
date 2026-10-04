@@ -23,6 +23,8 @@ from vflash.hardware import NvidiaDevice
 from vflash.media.encoding import media_executables
 from vflash.media.runtime import OfficialMediaDecoder
 from vflash.model_assets import model_profile, supported_request_modes
+from vflash.native.h3_conditioning_bundle import H3InMemoryConditioning
+from vflash.native.h3_hybrid import HybridModel
 from vflash.native.runner import NativeEngineSession
 from vflash.pipeline.assets import PreparedPipelineAssets
 from vflash.pipeline.attention_adapter import AttentionAdapter, open_attention_adapter
@@ -57,6 +59,7 @@ class H3Pipeline:
         strategy: str | None = None,
         attention_backend: str = "auto",
         attention_adapter: AttentionAdapter | None = None,
+        hybrid_model: HybridModel | None = None,
     ) -> None:
         if trust_local_code is not True:
             raise ContractError("the official decoder adapter requires trust_local_code=True")
@@ -92,6 +95,20 @@ class H3Pipeline:
                 "attention adapter requires a single-SM89 Base16 keyframe pipeline"
             )
         self.attention_adapter = attention_adapter
+        if hybrid_model is not None and not isinstance(hybrid_model, HybridModel):
+            raise ContractError("hybrid_model requires a typed HybridModel")
+        self.hybrid_model = hybrid_model
+        self._hybrid_stamps = (
+            hybrid_model.validate(
+                profile_id=prepared.profile_id,
+                capability=plan.target.compute_capability,
+                strategy=plan.parallel_strategy,
+                attention_backend=self.attention_backend,
+            )
+            if hybrid_model is not None
+            else ()
+        )
+        self._reference_graph = None
         self._adapter_stack = None
         self._plan = plan
         self._lock = threading.Lock()
@@ -135,6 +152,7 @@ class H3Pipeline:
             if self._closed:
                 raise ContractError("the pipeline is closed")
             self.prepared.check_unchanged()
+            self._check_hybrid_unchanged()
             self._ensure_prepared()
         finally:
             self._lock.release()
@@ -156,6 +174,7 @@ class H3Pipeline:
             auxiliary_tensor=assets.auxiliary_tensor,
             weight_residency="block-ring",
             attention_backend=self.attention_backend,
+            **({"hybrid_model": self.hybrid_model} if self.hybrid_model is not None else {}),
         )
         self.initialization_stages["native"] = time.monotonic() - started
         if self.attention_adapter is not None:
@@ -167,6 +186,12 @@ class H3Pipeline:
             self.initialization_stages["attention_adapter"] = time.monotonic() - started
         started = time.monotonic()
         self._conditioner = DiffusersConditioner(self.prepared)
+        if self.hybrid_model is not None:
+            from vflash.adapters.hybrid_reference import HybridReferenceGraph
+
+            self._reference_graph = HybridReferenceGraph(
+                self._conditioner, self._core.runtime.metadata()["model_variant"]
+            )
         self.initialization_stages["conditioning"] = time.monotonic() - started
         started = time.monotonic()
         self._media = OfficialMediaDecoder(
@@ -195,7 +220,10 @@ class H3Pipeline:
             conditioning_reuse_scope, ConditioningReuseScope
         ):
             raise ContractError("conditioning reuse requires a typed opaque scope")
-        if request.mode not in supported_request_modes(self.profile.definition.id):
+        modes = supported_request_modes(self.profile.definition.id)
+        if self.hybrid_model is not None:
+            modes = (*modes, "ref2va")
+        if request.mode not in modes:
             raise ContractError("the request mode differs from the prepared pipeline profile")
         if request.reference_video is not None and (
             self.prepared.profile_id != "ref2va-turbo4-exact-sm89"
@@ -216,6 +244,7 @@ class H3Pipeline:
             # Input errors are checked before stage activation and do not retire
             # an otherwise healthy session. Read/hash exactly the decoded bytes.
             self.prepared.check_unchanged()
+            self._check_hybrid_unchanged()
             output_path.parent.mkdir(parents=True, exist_ok=True)
             with tempfile.TemporaryFile(dir=output_path.parent):
                 pass
@@ -312,14 +341,24 @@ class H3Pipeline:
                 if conditioning_reuse_scope is not None
                 else {}
             )
-            bundle = self._conditioner.capture(
+            capture_owner = (
+                self._reference_graph
+                if self._reference_graph is not None and request.mode == "ref2va"
+                else self._conditioner
+            )
+            # Reference prefixes are not the keyframe cache contract. Reuse is
+            # request-scoped only on the existing keyframe conditioning path.
+            if capture_owner is self._reference_graph:
+                capture_options = {}
+            bundle = capture_owner.capture(
                 request,
                 references,
                 directory / "conditioning",
                 **capture_options,
             )
             capture_call_seconds = time.monotonic() - call_started
-            capture_diagnostics = getattr(self._conditioner, "last_capture_diagnostics", {})
+            capture_diagnostics = getattr(capture_owner, "last_capture_diagnostics", {})
+            in_memory = isinstance(bundle, H3InMemoryConditioning)
             suspend_seconds = self._conditioner.suspend_cuda()
             report("encoding", 1, 1)
             stages["encoding"] = {
@@ -333,7 +372,7 @@ class H3Pipeline:
                 "profile": asdict(bundle.profile),
                 "source": dict(bundle.source),
                 "bundle_id": bundle.bundle_id,
-                "conditioning_transport": "persisted-file",
+                "conditioning_transport": "in-memory" if in_memory else "persisted-file",
                 "conditioning_tensor_bytes": next(
                     (
                         row.size_bytes
@@ -352,7 +391,7 @@ class H3Pipeline:
             if profile_denoise:
                 native_options["profile_denoise"] = True
             native = self._core.generate(
-                bundle.directory,
+                bundle if in_memory else bundle.directory,
                 directory / "latents.safetensors",
                 **native_options,
             )
@@ -361,6 +400,8 @@ class H3Pipeline:
                 for key, value in native["generation"].items()
                 if key != "output_path"
             }
+            if self.hybrid_model is not None:
+                stages["model_variant"] = dict(self._core.runtime.metadata()["model_variant"])
             if self.attention_adapter is not None:
                 stages["denoising"]["attention_adapter"] = self.attention_adapter.metadata()
             stage_started = time.monotonic()
@@ -414,12 +455,18 @@ class H3Pipeline:
             request_mode=request.mode,
         )
 
+    def _check_hybrid_unchanged(self) -> None:
+        if self.hybrid_model is not None and self.hybrid_model.stamps() != self._hybrid_stamps:
+            raise ContractError(
+                "the hybrid reference checkpoint changed; construct a new pipeline"
+            )
+
     def _close_owned(self) -> None:
         if self._released:
             return
         self._closed = True
         failures: list[BaseException] = []
-        for name in ("_adapter_stack", "_conditioner", "_media", "_core"):
+        for name in ("_reference_graph", "_adapter_stack", "_conditioner", "_media", "_core"):
             owner = getattr(self, name)
             if owner is not None:
                 try:
