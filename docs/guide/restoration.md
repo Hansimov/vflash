@@ -4,7 +4,48 @@ Restoration is separate from H3 generation and is **off by default**. Keep the
 original result and save an enhanced version separately. It is not lossless:
 STCDiT can reduce broken textures while softening or repainting details.
 
-## Local STCDiT-tiny runtime
+## FlashVSR v1.1 spatial upscaling
+
+For faster spatial upscaling, the new explicit `upscale-video` entry point uses
+FlashVSR v1.1's tiny streaming decoder. It does not change H3 generation defaults.
+
+```bash
+vflash upscale-video --input original.mp4 --output enhanced.mp4 \
+  --source /models/ComfyUI-FlashVSR_Ultra_Fast --weights /models/FlashVSR-v1.1 \
+  --scale 2 --trust-local-code
+```
+
+Provide a clean checkout of [the RTX adaptation](https://github.com/lihaoyun6/ComfyUI-FlashVSR_Ultra_Fast)
+at `4820b3f02347bddcbbb9a5a85ab7638fe976366e` and the official
+[v1.1 weights](https://huggingface.co/JunhaoZhuang/FlashVSR-v1.1/tree/27561b186ded3402d7c975f4fd722e2885b6135f):
+`diffusion_pytorch_model_streaming_dmd.safetensors`, `LQ_proj_in.ckpt`, `TCDecoder.ckpt`.
+Nothing is downloaded automatically. Source identity and sizes are inventory checks,
+not weight authentication. Only the provider's Apache-2.0 `src` is loaded; its GPL
+ComfyUI wrapper is not imported or vendored. Sparse Sage carries its own Apache notice.
+
+Python: `vflash.flashvsr.FlashVSR(source, weights, trust_local_code=True).enhance(input, output, scale=2)`.
+Use one serial owner and an explicitly allocated CUDA device. This independent optional
+runtime requires Torch, torchvision, Triton, NumPy, Pillow, einops, safetensors, tqdm,
+and system FFmpeg/Git. The exploratory environment used Torch2.9.1/cu130 on RTX4090 48GB.
+It retains actual local sparse self-attention and uses Torch SDPA for text cross-attention,
+not an accidental dense replacement of LCSA or an architecture-incompatible Sage wheel.
+
+Two and four times are explicit choices; the official model primarily targets four times.
+Input is limited to one mebipixel, CFR and ten seconds; output to four mebipixels.
+Tail padding preserves all source frames, edge padding avoids aspect-ratio crops,
+original audio is copied, and publication never overwrites an existing destination.
+The optional progress callback can raise to cancel; the caller owns process lifetime.
+
+Exploratory complete-video processing (excluding one approximately 11.7–11.9s model load):
+512²/5s→1024² **22.85s**; 768×448/5s→1536×896 **29.02s**;
+960×544/5s→1920×1088 **39.89s**; 512²/5s→2048² **72.36s**;
+1280×768/10s→2560×1536 **134.46s**. Peak allocated VRAM ranged from11.5 to35.9GiB.
+All five retained complete frame counts and identical decoded audio. Native-region review
+found clearer edges/textures with some repainted detail; this is not a face/physics cure,
+an HD ground truth, a repeated benchmark or a universal temporal-quality guarantee.
+Four-times and large-canvas costs justify keeping enhancement optional.
+
+## Earlier same-size STCDiT runtime
 
 The complete file-to-file entry point keeps the original and copies its audio
 packets without re-encoding. The enhanced H.264 picture is separately encoded:

@@ -3,6 +3,38 @@
 增强独立于H3生成，**默认关闭**。保留原视频，增强另存；STCDiT能够减少坏纹理，也可能软化或改绘细节，
 不能称为无损修复。推理核心不包含账号、计费、任务调度或自动坏帧检测。
 
+## FlashVSR v1.1可选高清放大
+
+```bash
+vflash upscale-video --input original.mp4 --output enhanced.mp4 \
+  --source /models/ComfyUI-FlashVSR_Ultra_Fast --weights /models/FlashVSR-v1.1 \
+  --scale 2 --trust-local-code
+```
+
+显式提供[RTX适配源码](https://github.com/lihaoyun6/ComfyUI-FlashVSR_Ultra_Fast)
+`4820b3f02347bddcbbb9a5a85ab7638fe976366e`的干净checkout，以及
+[官方权重](https://huggingface.co/JunhaoZhuang/FlashVSR-v1.1/tree/27561b186ded3402d7c975f4fd722e2885b6135f)
+中的`diffusion_pytorch_model_streaming_dmd.safetensors`、`LQ_proj_in.ckpt`、`TCDecoder.ckpt`。
+不自动下载；固定源码与文件大小仅是清单检查，不是权重内容认证。仅加载Apache-2.0的`src`，
+不导入或复制GPL的ComfyUI外层；Sparse Sage保留自身Apache声明。
+
+Python入口为`vflash.flashvsr.FlashVSR(source, weights, trust_local_code=True).enhance(input, output, scale=2)`。
+调用方独占、串行管理CUDA设备和进程。独立可选环境需Torch/torchvision/Triton/NumPy/Pillow/
+einops/safetensors/tqdm及系统FFmpeg/Git；本轮实测Torch2.9.1/cu130、RTX4090 48GB。
+真实局部稀疏自注意力保留，文本交叉注意力明确用Torch SDPA；没有悄悄丢弃LCSA或误用缺少SM89的Sage包。
+
+明确支持2/4倍，官方主要针对4倍训练。输入限1Mi像素/CFR/十秒，输出限4Mi像素。
+补尾后还原完整源帧数，边缘padding代替裁图，保持精确倍率/原音轨，独立原子另存且不覆盖旧结果。
+进度回调可抛异常取消，调用方负责GPU和进程生命周期；不改变H3默认生成。
+
+五完整片的处理耗时（加载另约11.7–11.9秒）：512²五秒→1024²为22.85秒；768×448五秒→1536×896
+为29.02秒；960×544五秒→1920×1088为39.89秒；512²五秒→2048²为72.36秒；1280×768十秒→2560×1536
+为134.46秒。峰值分配显存11.5–35.9GiB。全部完整帧与解码PCM一致。
+原尺寸局部观察边缘/纹理改善，也有细节重绘；不是高清真值、小脸/物理根治、重复正式基准或全场景时序保证。
+大画布与4倍成本更高，故保留按需调用。
+
+## 既有同尺寸STCDiT增强
+
 完整入口为 `vflash restore-video`，显式传入 `--source-video`、新的 `--output`、
 `--runtime-code`、`--weights`、`--caption-file` 和 `--trust-local-code`。
 Python入口为 `vflash.restoration.restore_video`：解码、完整运动分段、增强并原子另存MP4，

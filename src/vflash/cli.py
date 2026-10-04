@@ -33,6 +33,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     add_restoration_command(commands)
 
+    from vflash.flashvsr import add_flashvsr_command
+
+    add_flashvsr_command(commands)
+
     plan = commands.add_parser(
         "plan", help="resolve a profile onto one physical GPU or a cooperating pair"
     )
@@ -76,6 +80,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        if args.command == "upscale-video":
+            from vflash.flashvsr import run_flashvsr_command
+
+            return run_flashvsr_command(args)
         if args.command == "restore-video":
             from vflash.restoration import run_restoration_command
 

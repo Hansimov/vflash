@@ -1,6 +1,21 @@
 # Release notes
 
-Version **0.6.8** adds an explicit hybrid reference graph sharing the original FL v0.1 backbone.
+Version **0.6.9** adds optional complete-video FlashVSR spatial upscaling.
+
+## 0.6.9 · Optional FlashVSR upscaling {#v0-6-9}
+
+`upscale-video` and `vflash.flashvsr.FlashVSR` integrate an explicitly pinned RTX
+adaptation of official FlashVSR v1.1 with real sparse local attention. The wrapper
+preserves all frames, exact output aspect ratio, rational CFR and source audio,
+and saves a separate result. It corrects sample-runner tail truncation and center
+cropping; color correction failures are explicit rather than silently swallowed.
+
+Five complete exploratory 2×/4× videos and one public-interface 2× video passed
+on RTX 4090 48 GB. The public-interface 960×544/5s case took 43.19s plus 11.18s
+load time. [Measurements and quality limitations](../guide/restoration) include
+repainted detail and unresolved source anatomy/physics. This is optional, not a
+changed H3 default or lossless restoration. Source/wheel only; external runtime
+and weights are explicit dependencies, with no automatic download or deployment.
 
 ## 0.6.8 · Shared-backbone hybrid references {#v0-6-8}
 
