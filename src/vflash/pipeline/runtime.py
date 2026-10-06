@@ -58,6 +58,7 @@ class H3Pipeline:
         peer_device: NvidiaDevice | None = None,
         strategy: str | None = None,
         attention_backend: str = "auto",
+        veda_predictor: Path | None = None,
         attention_adapter: AttentionAdapter | None = None,
         hybrid_model: HybridModel | None = None,
     ) -> None:
@@ -84,6 +85,10 @@ class H3Pipeline:
             )
         self.prepared = prepared
         self.attention_backend = resolve_attention_backend(plan, attention_backend)
+        from vflash.native.h3_veda_attention import validate_predictor
+
+        validate_predictor(self.attention_backend, veda_predictor)
+        self.veda_predictor = veda_predictor
         self.profile = model_profile(prepared.profile_id)
         if attention_adapter is not None and (
             not isinstance(attention_adapter, AttentionAdapter)
@@ -174,6 +179,11 @@ class H3Pipeline:
             auxiliary_tensor=assets.auxiliary_tensor,
             weight_residency="block-ring",
             attention_backend=self.attention_backend,
+            **(
+                {"veda_predictor": self.veda_predictor}
+                if self.veda_predictor is not None
+                else {}
+            ),
             **({"hybrid_model": self.hybrid_model} if self.hybrid_model is not None else {}),
         )
         self.initialization_stages["native"] = time.monotonic() - started

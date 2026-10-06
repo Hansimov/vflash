@@ -6,6 +6,11 @@ Native **MiniMax H3 inference** for RTX 3080 20 GB and RTX 4090 48 GB. Vflash us
 
 **0.6.9.** Optional [FlashVSR upscaling](https://hansimov.github.io/vflash/guide/restoration) preserves complete video and original audio; H3 defaults remain unchanged.
 
+**0.6.10.** Explicit [Veda sparse attention](https://hansimov.github.io/vflash/guide/veda)
+for original v0.1 and the hybrid model on one SM89, with a pinned standalone
+core installer, protected connections, and actual kernel/coverage receipts.
+Dense remains the automatic choice for these profiles.
+
 **0.6.8.** Explicit [hybrid references](https://hansimov.github.io/vflash/guide/complete-pipeline#hybrid-reference-model-in-0-6-8-opt-in)
 share the original FL-v0.1 backbone and add only Ref block modulation tables. One Python
 session serves real reference images and keyframes, with distinct conditioning identities.

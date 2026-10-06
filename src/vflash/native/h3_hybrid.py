@@ -28,11 +28,11 @@ class HybridModel:
             not in {"i2va-turbo4-v01-544-exact-sm89", "fl2va-turbo4-v01-544-exact-sm89"}
             or capability != "8.9"
             or strategy != "single"
-            or attention_backend != "torch-flash"
+            or attention_backend not in {"torch-flash", "veda-sm89"}
             or not isinstance(self.reference_directory, Path)
         ):
             raise ContractError(
-                "hybrid requires original FL v0.1 on one SM89 with dense attention"
+                "hybrid requires original FL v0.1 on one SM89 with dense or Veda attention"
             )
         from vflash.adapters.checkpoints import IndexedCheckpoint
 

@@ -53,7 +53,7 @@ with H3Pipeline(
     )
 ```
 
-This explicit Python option is single-SM89/dense only. Ref accepts one to three
+This explicit Python option requires single SM89 with dense or explicit Veda attention. Ref accepts one to three
 ordered image references for five seconds; video references and hybrid Sol are
 not qualified. Keyframes use their ordinary FL graph; Ref uses a real official
 Ref graph sharing the same prefix, text encoder and VAEs, with an in-memory
@@ -242,3 +242,5 @@ Compare conditioning and final latents to the fixed reference implementation sep
 Media checks cover decoded video and audio before encoding, the selected five-through-ten-second delivery clock, frame count and channel layout. H.264 and AAC are lossy formats. An MP4 hash is not a numerical equivalence test for the denoiser or audio decoder.
 
 Release checks separate all 14 conditioning tensors, final FP32 audio/video latents, decoded video and playable delivery. The official audio VAE can produce small floating-point differences between repeated requests before PCM or AAC encoding. Audio bitwise reproducibility is not promised; finite output, channel layout, frame count, clock and complete decoding are checked. See [release validation](../reference/releases) for the tested cases and scope.
+
+The explicit [Veda backend](./veda) also supports this single-SM89 hybrid; its approximate contract and evidence are separate.

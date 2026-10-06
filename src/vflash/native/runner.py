@@ -51,6 +51,7 @@ class NativeEngineSession:
         auxiliary_tensor: Path,
         weight_residency: str = "default",
         attention_backend: str = "auto",
+        veda_predictor: Path | None = None,
         hybrid_model: Any = None,
     ) -> None:
         started = time.perf_counter()
@@ -116,6 +117,9 @@ class NativeEngineSession:
         ):
             raise ContractError("invalid physical GPU group for native parallel execution")
         attention_backend = resolve_attention_backend(plan, attention_backend)
+        from vflash.native.h3_veda_attention import validate_predictor
+
+        validate_predictor(attention_backend, veda_predictor)
         if hybrid_model is not None:
             from vflash.native.h3_hybrid import HybridModel
 
@@ -127,11 +131,13 @@ class NativeEngineSession:
                 strategy=plan.parallel_strategy,
                 attention_backend=attention_backend,
             )
-        if attention_backend == "sol-sm89":
+        if attention_backend in {"sol-sm89", "veda-sm89"}:
             if weight_residency == "default":
                 weight_residency = "block-ring"
             if weight_residency != "block-ring":
-                raise ContractError("Sol requires block-ring weight residency")
+                raise ContractError(
+                    "approximate attention requires block-ring weight residency"
+                )
         require_attention_dependencies(attention_backend)
         os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(plan.gpu_uuids)
 
@@ -144,6 +150,7 @@ class NativeEngineSession:
             auxiliary_tensor_path=auxiliary_tensor,
             device="cuda:0",
             attention_backend=attention_backend,
+            **({"veda_predictor": veda_predictor} if veda_predictor is not None else {}),
             expected_task=profile.mode.value,
             expected_weight_profile=WEIGHT_PROFILES[profile.id],
             expected_model_repository=profile.model,
@@ -243,6 +250,7 @@ def denoise_conditioning_bundle(
     output_latents: Path,
     weight_residency: str = "default",
     attention_backend: str = "auto",
+    veda_predictor: Path | None = None,
     profile_denoise: bool = False,
 ) -> dict[str, Any]:
     """One-shot CLI path; services retain a NativeEngineSession instead."""
@@ -253,5 +261,6 @@ def denoise_conditioning_bundle(
         auxiliary_tensor=auxiliary_tensor,
         weight_residency=weight_residency,
         attention_backend=attention_backend,
+        **({"veda_predictor": veda_predictor} if veda_predictor is not None else {}),
     ) as session:
         return session.generate(bundle, output_latents, profile_denoise=profile_denoise)

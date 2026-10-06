@@ -173,3 +173,16 @@ def test_installer_extracts_only_the_pinned_package(tmp_path, monkeypatch):
     install_sol.fetch_package(tmp_path)
     assert (tmp_path / "sol_attn/interface.py").read_text() == "hello"
     assert list(tmp_path.iterdir()) == [tmp_path / "sol_attn"]
+
+
+def test_veda_is_explicit_original_v01_only():
+    selected = plan("i2va-turbo4-v01-544-exact-sm89")
+    assert resolve_attention_backend(selected) == "torch-flash"
+    assert resolve_attention_backend(selected, "veda-sm89") == "veda-sm89"
+    for selected in (
+        plan(),
+        plan("ref2va-turbo4-exact-sm89"),
+        plan("i2va-base16-bf16-sm86", True),
+    ):
+        with pytest.raises(ContractError, match=r"original LightX v0\.1"):
+            resolve_attention_backend(selected, "veda-sm89")

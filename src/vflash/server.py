@@ -65,6 +65,7 @@ class ServerSettings:
     peer_gpu_index: int | None = None
     parallel_strategy: str | None = None
     attention_backend: str = "auto"
+    veda_predictor: Path | None = None
 
     def __post_init__(self) -> None:
         if self.attention_backend not in ATTENTION_BACKENDS:
@@ -111,6 +112,11 @@ class ServerSettings:
             ),
             parallel_strategy=values.get("VFLASH_PARALLEL_STRATEGY"),
             attention_backend=values.get("VFLASH_ATTENTION_BACKEND", "auto"),
+            veda_predictor=(
+                Path(values["VFLASH_VEDA_PREDICTOR"])
+                if values.get("VFLASH_VEDA_PREDICTOR")
+                else None
+            ),
         )
 
 
@@ -167,6 +173,11 @@ class NativeDenoiseExecutor:
                 schedule_overlay=self.settings.schedule_overlay_path,
                 auxiliary_tensor=self.settings.auxiliary_tensor_path,
                 attention_backend=self.settings.attention_backend,
+                **(
+                    {"veda_predictor": self.settings.veda_predictor}
+                    if self.settings.veda_predictor is not None
+                    else {}
+                ),
             )
         payload = self.worker.generate(bundle, output)
         generation = dict(payload["generation"])
@@ -437,6 +448,9 @@ def _readiness(
             "exact": backend == "torch-flash",
             "executed": False,
         }
+        from vflash.native.h3_veda_attention import validate_predictor
+
+        validate_predictor(backend, settings.veda_predictor)
         require_attention_dependencies(backend)
         checks["attention"] = True
         gpu = {

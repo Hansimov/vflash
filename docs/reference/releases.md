@@ -1,5 +1,15 @@
 # Release notes
 
+## 0.6.10 · Explicit Veda sparse attention {#v0-6-10}
+
+Original LightX v0.1 on one SM89, including the explicit hybrid model, can select
+[Veda attention](../guide/veda). The owned predictor and per-request target layout
+integrate with the existing two-slot ring; protected connections remain dense,
+first/last five blocks use Torch Flash, and actual INT8 sparse execution is reported.
+An explicit installer packages the pinned independent upstream core and its notices;
+no ComfyUI, model downloads or default change. Dense execution is the rollback.
+
+
 Version **0.6.9** adds optional complete-video FlashVSR spatial upscaling.
 
 ## 0.6.9 · Optional FlashVSR upscaling {#v0-6-9}

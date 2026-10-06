@@ -1182,6 +1182,12 @@ class H3NativeBlockBF16Resident(_H3BlockOperations):
         )
 
     def _attention(self, query: Any, key: Any, value: Any) -> Any:
+        veda = getattr(self, "_veda_attention", None)
+        if veda is not None:
+            return veda(self._attention_block_index, self._dense_attention, query, key, value)
+        return self._dense_attention(query, key, value)
+
+    def _dense_attention(self, query: Any, key: Any, value: Any) -> Any:
         approximate = getattr(self, "_sol_attention", None)
         if approximate is not None:
             return approximate(query, key, value)
@@ -1823,6 +1829,8 @@ class H3NativeDenoiserBF16Ring:
                 )
                 if profile is not None:
                     slot._vflash_block_profile_index = index
+                # Logical identity belongs to the compute thread, never the copy stream.
+                slot._attention_block_index = index
                 hidden_states = slot.forward_prevalidated(hidden_states, invocation)
                 compute_end = (
                     self._record_profile_event(torch, compute_stream) if profile else None
@@ -1876,6 +1884,7 @@ class H3NativeDenoiserBF16Ring:
                 _copy_bf16_tensor_pairs_(copy_pairs)
                 self.ready_events[0].record(self.copy_stream)
             compute_stream.wait_event(self.ready_events[0])
+            slot._attention_block_index = index
             hidden_states = slot.forward_prevalidated(hidden_states, invocation)
             self.compute_done_events[0].record(compute_stream)
             if index in checkpoint_blocks:

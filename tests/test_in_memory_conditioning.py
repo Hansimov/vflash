@@ -113,6 +113,7 @@ def test_in_memory_conditioning_is_file_free_and_one_shot():
     assert selected["first_packed_input"] is captured["first_packed_input"]
     assert "encoder_hidden_states" not in selected
     assert set(selected) == {
+        "position_ids",
         "initial_video_latents",
         "initial_audio_latents",
         "token_tags",

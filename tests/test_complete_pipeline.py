@@ -131,6 +131,7 @@ def _pipeline(*, fail: str | None = None) -> tuple[H3Pipeline, list[str]]:
     pipeline._closed = pipeline._released = False
     pipeline.attention_adapter = None
     pipeline.hybrid_model = None
+    pipeline.veda_predictor = None
     pipeline._reference_graph = None
     pipeline._adapter_stack = None
     pipeline._core, pipeline._conditioner, pipeline._media = (

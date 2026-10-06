@@ -6,7 +6,7 @@ from importlib.util import find_spec
 
 from vflash.contracts import ContractError, ExecutionPlan
 
-ATTENTION_BACKENDS = ("auto", "torch-flash", "sol-sm89")
+ATTENTION_BACKENDS = ("auto", "torch-flash", "sol-sm89", "veda-sm89")
 
 
 def resolve_attention_backend(plan: ExecutionPlan, requested: str = "auto") -> str:
@@ -32,6 +32,8 @@ def resolve_attention_backend(plan: ExecutionPlan, requested: str = "auto") -> s
             "Sol requires single-SM89 official Base16 or original LightX v0.1 keyframes; "
             "use torch-flash here"
         )
+    if requested == "veda-sm89" and not (single_sm89 and original_v01):
+        raise ContractError("Veda requires original LightX v0.1 on one SM89")
     # Few-step approximation is opt-in, independently of the Base16 default.
     return (
         ("sol-sm89" if single_sm89 and base16 else "torch-flash")
@@ -47,3 +49,17 @@ def require_attention_dependencies(backend: str) -> None:
             "python -m vflash.install_sol or explicitly select torch-flash. "
             "No dense fallback is performed."
         )
+
+    if backend == "veda-sm89":
+        try:
+            from veda_comfy._vflash_pin import REVISION
+
+            from vflash.install_veda import REVISION as expected
+        except ImportError as exc:
+            raise ContractError(
+                "Install the pinned Veda core: python -m vflash.install_veda"
+            ) from exc
+        if expected != REVISION or find_spec("triton") is None:
+            raise ContractError(
+                "Veda requires the pinned core and Triton; no fallback is performed"
+            )

@@ -61,11 +61,12 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
     generate.add_argument(
         "--attention-adapter", type=Path, help="local FP32 DiT attention LoRA"
     )
+    generate.add_argument("--veda-predictor", type=Path)
     generate.add_argument("--attention-adapter-rank", type=int)
     generate.add_argument("--attention-adapter-scale", type=float)
     generate.add_argument(
         "--attention-backend",
-        choices=("auto", "torch-flash", "sol-sm89"),
+        choices=("auto", "torch-flash", "sol-sm89", "veda-sm89"),
         default="auto",
         help="auto selects approximate Sol for single-SM89 Base16; torch-flash is dense",
     )
@@ -176,6 +177,8 @@ def run_pipeline_command(args: argparse.Namespace) -> int:
         options = {"peer_device": devices[args.peer_gpu], "strategy": args.strategy}
     if args.attention_backend != "auto":
         options["attention_backend"] = args.attention_backend
+    if args.veda_predictor is not None:
+        options["veda_predictor"] = args.veda_predictor
     if adapter is not None:
         options["attention_adapter"] = adapter
     with H3Pipeline(

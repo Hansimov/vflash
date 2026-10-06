@@ -71,6 +71,7 @@ _TENSORS = frozenset(
 )
 _NATIVE_REQUEST_TENSORS = frozenset(
     {
+        "position_ids",
         "initial_video_latents",
         "initial_audio_latents",
         "token_tags",
