@@ -83,6 +83,20 @@ operator comparison was element-equal and all complete A/B/A video elementary st
 Repeated official audio decoding varied in both controls and candidates. No large model or media
 file was hashed for these checks. See the [Sol-Engine alignment matrix](./sol-engine-alignment).
 
+## Attention activation lifetimes
+
+The normal native block gathers attention and FFN modulation separately and drops dead QKV,
+normalization and attention tensors before FFN. GEMM shapes, sampling and model weights are unchanged;
+the optional phase-profiler retains its original measurement path.
+
+A single-SM89 48GiB exploratory 2048×1152, five-second, original-v0.1 BF16 hybrid/Veda control
+reduced peak allocated memory from 34,914,620,416 to 24,200,463,872 bytes (30.69%). Denoising was
+221.633 versus 223.787 seconds; this is a memory improvement, not a measured speedup. All 120 decoded
+RGB frames matched exactly. Audio decoding was not bit-identical, consistent with previously observed
+decoder variability; audio-content equivalence was not established. These are one paired case,
+not a general quality guarantee or an expansion of the published pipeline limits. CPU float32/BF16
+checks also cover block output and temporary ownership at the FFN boundary.
+
 ## Check output quality {#quality}
 
 A faster result is useful only if it still meets your task. Judge decoded outputs against the original instructions and references: instruction following, identity and detail consistency, motion, visual artifacts, and the relationship between audio and video. A candidate matching a baseline may still fail the task if the baseline also fails.

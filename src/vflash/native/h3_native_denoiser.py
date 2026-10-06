@@ -522,16 +522,14 @@ class _H3BlockOperations:
             raise H3NativeDenoiserError(
                 "H3 prevalidated invocation does not match this block activation"
             )
-        table = self.weights.adaln_table
-        modulation = (
-            table[invocation.evaluation_index]
-            .to(
-                device=invocation.device,
-                dtype=invocation.dtype,
-            )
-            .index_select(0, invocation.adaln_indices)
+        # Expand only the modulation values needed by the active phase. Holding
+        # all six token-sized gathers also pins their backing tensor through FFN.
+        table = self.weights.adaln_table[invocation.evaluation_index].to(
+            device=invocation.device, dtype=invocation.dtype
         )
-        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = modulation.unbind(1)
+        shift_msa, scale_msa, gate_msa = (
+            table[:, index, :].index_select(0, invocation.adaln_indices) for index in range(3)
+        )
 
         residual = hidden_states
         normalized = _rms_norm(
@@ -541,6 +539,7 @@ class _H3BlockOperations:
         )
         normalized = self._modulate(normalized, scale_msa, shift_msa)
         query, key, value = self._qkv_linear(normalized).chunk(3, dim=-1)
+        del normalized, shift_msa, scale_msa
         heads = spec.num_attention_heads
         head_dim = spec.attention_head_dim
         query = query.unflatten(-1, (heads, head_dim))
@@ -548,6 +547,7 @@ class _H3BlockOperations:
         value = value.unflatten(-1, (heads, head_dim))
         query, key = self._qk_norm_rotary(query, key, invocation)
         attention = self._attention(query, key, value)
+        del query, key, value
         hidden_states = self._adapted_gate_residual(
             attention.flatten(2, 3),
             self.weights.attention_out,
@@ -556,6 +556,11 @@ class _H3BlockOperations:
             gate_msa,
         )
 
+        del attention, residual, gate_msa
+        shift_mlp, scale_mlp, gate_mlp = (
+            table[:, index, :].index_select(0, invocation.adaln_indices)
+            for index in range(3, 6)
+        )
         residual = hidden_states
         normalized = _rms_norm(hidden_states, self.weights.ffn_norm, eps=self.norm_eps)
         normalized = self._modulate(normalized, scale_mlp, shift_mlp)
