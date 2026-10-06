@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.6.11 · Native HD and bounded activation lifetimes {#v0-6-11}
+
+Adds explicit native sampling up to a 2048-pixel long edge (2048² maximum), five seconds, with the original-v0.1 single-SM89 hybrid Veda pipeline. Image keyframes and image reference conditioning use the original source; this is not the unreleased official Regenerate-2K model or postprocessing. Ordinary request limits and automatic attention selection are unchanged.
+
+Attention and FFN modulation tensors now have shorter lifetimes. One complete 2048×1152 control reduced peak allocated memory by 30.69%, with all 120 RGB frames unchanged; audio was not sample-identical. Native HD trades substantially higher time and memory for more local detail. See the performance page for measured scope.
+
 ## 0.6.10 · Explicit Veda sparse attention {#v0-6-10}
 
 Original LightX v0.1 on one SM89, including the explicit hybrid model, can select

@@ -18,6 +18,7 @@ from vflash.model_assets import MODEL_REVISION as MODEL_REVISION
 
 PIPELINE_PROFILE = DEFAULT_MODEL_PROFILE
 MAX_CANVAS_PIXELS = 1024**2
+NATIVE_HD_MAX_PIXELS = 2048**2
 VIDEO_REFERENCE_CANVAS_PIXELS = 928 * 512
 
 
@@ -181,7 +182,7 @@ class VideoRequest:
         max_pixels = (
             VIDEO_REFERENCE_CANVAS_PIXELS
             if self.reference_video is not None
-            else MAX_CANVAS_PIXELS
+            else NATIVE_HD_MAX_PIXELS
         )
         if self.width * self.height > max_pixels or not 0.25 <= self.width / self.height <= 4:
             raise ContractError(
@@ -194,6 +195,15 @@ class VideoRequest:
         if self.duration_seconds > 5 and self.mode not in {"i2va", "l2va", "fl2va"}:
             raise ContractError(
                 "complete requests over five seconds require I2VA, L2VA, or FL2VA"
+            )
+        if self.width * self.height > MAX_CANVAS_PIXELS and (
+            self.duration_seconds != 5
+            or max(self.width, self.height) > 2048
+            or self.mode not in {"i2va", "l2va", "fl2va", "ref2va"}
+            or len(self.ordered_references) > 1
+        ):
+            raise ContractError(
+                "native HD requires five-second image conditioning within 2048 pixels per side"
             )
         if self.audio_delivery_profile not in AUDIO_DELIVERY_PROFILES:
             raise ContractError("unknown audio delivery profile")

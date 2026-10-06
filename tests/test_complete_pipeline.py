@@ -438,7 +438,7 @@ def test_bad_input_and_busy_session_do_not_run_models_or_destroy_outputs(
     [
         {"width": 641},
         {"height": 0},
-        {"width": 1376, "height": 768},
+        {"width": 2080, "height": 768},
         {"prompt": " "},
         {"seed": True},
         {"seed": -1},
@@ -953,3 +953,40 @@ def test_pipeline_owns_adapter_and_restores_it_before_core_exit(
     assert events.count("adapter:detach") == 1
     assert events.index("adapter:detach") < events.index("native:close")
     assert pipeline._adapter_stack is None
+
+
+@pytest.mark.parametrize("mode", ["i2va", "l2va", "fl2va", "ref2va"])
+def test_native_hd_request_is_native_and_limited_to_five_seconds(tmp_path, mode):
+    image = tmp_path / "frame.png"
+    images = {
+        "i2va": {"first_frame": image},
+        "l2va": {"last_frame": image},
+        "fl2va": {"first_frame": image, "last_frame": image},
+        "ref2va": {"reference": image},
+    }[mode]
+    request = VideoRequest("A detailed scene.", width=2048, height=2048, **images)
+    assert request.mode == mode and request.model_frames == 124
+    with pytest.raises(ContractError):
+        VideoRequest("A scene.", width=2048, height=2048, duration_seconds=10, **images)
+    with pytest.raises(ContractError):
+        VideoRequest("A scene.", width=2080, height=512, **images)
+
+
+def test_native_hd_rejects_unqualified_engine_before_loading(tmp_path):
+    pipeline, events = _pipeline()
+    request = VideoRequest(
+        "A scene.", reference=tmp_path / "first.png", width=2048, height=2048
+    )
+    with pytest.raises(ContractError, match="native HD"):
+        pipeline.generate(request, tmp_path / "output.mp4")
+    assert not events and not pipeline._closed
+
+
+def test_native_hd_rejects_unqualified_multiple_image_references(tmp_path):
+    with pytest.raises(ContractError, match="native HD"):
+        VideoRequest(
+            "A scene.",
+            references=(tmp_path / "one.png", tmp_path / "two.png"),
+            width=2048,
+            height=2048,
+        )

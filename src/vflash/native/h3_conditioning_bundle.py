@@ -726,6 +726,14 @@ def _keyframe_schedule_supported(profile: H3ConditioningProfile) -> bool:
     }
 
 
+def _keyframe_canvas_supported(profile: H3ConditioningProfile) -> bool:
+    return profile.width * profile.height <= H3_BASE16_MAX_CANVAS_PIXELS or (
+        profile.nfe == 4
+        and profile.frames == 124
+        and max(profile.width, profile.height) <= 2048
+    )
+
+
 def _validate_first_frame_profile(
     profile: H3ConditioningProfile, request: Mapping[str, Any]
 ) -> None:
@@ -735,7 +743,7 @@ def _validate_first_frame_profile(
         profile.task != "i2va"
         or not _keyframe_schedule_supported(profile)
         or delivery_profile is None
-        or profile.width * profile.height > H3_BASE16_MAX_CANVAS_PIXELS
+        or not _keyframe_canvas_supported(profile)
         or profile.num_condition_audio_rows != 0
         or profile.num_condition_video_rows != expected_rows
         or request["delivery_profiles"] != delivery_profile
@@ -753,7 +761,7 @@ def _validate_fl2va_profile(profile: H3ConditioningProfile, request: Mapping[str
         profile.task != "fl2va"
         or not _keyframe_schedule_supported(profile)
         or delivery_profile is None
-        or profile.width * profile.height > H3_BASE16_MAX_CANVAS_PIXELS
+        or not _keyframe_canvas_supported(profile)
         or profile.num_condition_audio_rows != 0
         or profile.num_condition_video_rows != expected_rows
         or request["delivery_profiles"] != delivery_profile
@@ -774,7 +782,7 @@ def _validate_last_frame_profile(
         or (profile.nfe, profile.video_flow_shift, profile.audio_flow_shift)
         not in {(16, 12, 3), (8, 12, 3), (4, 12, 3)}
         or delivery_profile is None
-        or profile.width * profile.height > H3_BASE16_MAX_CANVAS_PIXELS
+        or not _keyframe_canvas_supported(profile)
         or profile.num_condition_audio_rows != 0
         or profile.num_condition_video_rows != expected_rows
         or request["delivery_profiles"] != delivery_profile

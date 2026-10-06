@@ -240,6 +240,14 @@ class H3Pipeline:
             or self._plan.parallel_strategy != "single"
         ):
             raise ContractError("video references require the single-SM89 Ref4 pipeline")
+        if request.width * request.height > 1024**2 and (
+            self.hybrid_model is None
+            or self._plan.parallel_strategy != "single"
+            or self.attention_backend != "veda-sm89"
+        ):
+            raise ContractError(
+                "native HD requires the original-v0.1 single-SM89 hybrid Veda pipeline"
+            )
         if output_path.exists() or output_path.is_symlink():
             raise ContractError("the output path already exists")
         if not self._lock.acquire(blocking=False):

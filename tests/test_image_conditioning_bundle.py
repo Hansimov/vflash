@@ -399,3 +399,26 @@ def test_native_reader_rejects_invalid_reference_identity_after_roundtrip(tmp_pa
     manifest.write_text(json.dumps(value))
     with pytest.raises(H3ConditioningBundleError, match=r"reference|Ref2VA"):
         load_h3_conditioning_bundle(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "task,validator,anchors",
+    [
+        ("i2va", _validate_first_frame_profile, 1),
+        ("l2va", _validate_last_frame_profile, 1),
+        ("fl2va", _validate_fl2va_profile, 2),
+    ],
+)
+def test_native_hd_keyframe_conditioning_retains_both_endpoint_rows(task, validator, anchors):
+    rows = anchors * 64**2
+    profile = H3ConditioningProfile(task, 2048, 2048, 124, 4, 12, 3, rows, rows, 0)
+    request = {
+        "delivery_profiles": [
+            {"temporal_profile": "native-24fps-5s", "frames": 120, "fps": 24.0}
+        ]
+    }
+    assert validator(profile, request) is None
+    for nfe, frames in ((16, 124), (4, 243)):
+        other = H3ConditioningProfile(task, 2048, 2048, frames, nfe, 12, 3, rows, rows, 0)
+        with pytest.raises(H3ConditioningBundleError):
+            validator(other, request)
