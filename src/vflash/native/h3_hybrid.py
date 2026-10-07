@@ -215,7 +215,7 @@ def validate_hybrid_reference_bundle(bundle, *, source, schedule):
         or bundle.profile.audio_flow_shift != 3
         or bundle.profile.num_condition_video_rows <= 0
         or bundle.profile.num_condition_audio_rows != 0
-        or not 1 <= len(bundle.request.get("references", ())) <= 3
+        or not 1 <= len(bundle.request.get("references", ())) <= 9
         or bundle.schedule.to_mapping() != schedule.to_mapping()
     ):
         raise ValueError("hybrid Ref image/clock/prefix contract differs")

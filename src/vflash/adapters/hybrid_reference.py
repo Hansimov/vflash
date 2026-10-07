@@ -72,7 +72,7 @@ class HybridReferenceGraph:
             request.mode != "ref2va"
             or request.reference_video is not None
             or len(references) != len(request.ordered_references)
-            or not 1 <= len(references) <= 3
+            or not 1 <= len(references) <= 9
             or not self.owner._cuda_active
         ):
             raise ValueError("resume the shared conditioner and supply ordered Ref images")

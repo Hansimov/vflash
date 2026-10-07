@@ -144,6 +144,10 @@ class DiffusersConditioner:
             workflow=self.profile.workflow,
             modular_config_dict=local_modular_config(model, transformer_component=component),
         )
+        if self.profile.workflow in {"fl2va", "t2va"}:
+            from vflash.adapters.conditioning_temporal import install_delivery_frame_layout
+
+            install_delivery_frame_layout(self.pipe)
         prefix = load_h3_conditioning_transformer(
             MiniMaxH3Transformer3DModel,
             transformer_directory=model / component,

@@ -94,8 +94,8 @@ def test_wrong_combination_identity_fails(field):
         validate_hybrid_reference_bundle(b, source=source(), schedule=b.schedule)
 
 
-@pytest.mark.parametrize("count", [0, 4])
-def test_reference_count_is_ordered_one_to_three(count):
+@pytest.mark.parametrize("count", [0, 10])
+def test_reference_count_rejects_outside_one_to_nine(count):
     b = bundle()
     b.request["references"] = list(range(count))
     with pytest.raises(ValueError):

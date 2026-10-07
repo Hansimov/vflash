@@ -248,6 +248,34 @@ class H3Pipeline:
             raise ContractError(
                 "native HD requires the original-v0.1 single-SM89 hybrid Veda pipeline"
             )
+        extended = (
+            request.duration_seconds > 10
+            or len(request.ordered_references) > 3
+            or (request.mode == "ref2va" and request.duration_seconds != 5)
+            or (request.width * request.height > 1024**2 and request.duration_seconds != 5)
+        )
+        if extended and (
+            self.hybrid_model is None
+            or self._plan.parallel_strategy != "single"
+            or self.attention_backend != "veda-sm89"
+        ):
+            raise ContractError(
+                "extended duration/references require the original-v0.1 "
+                "single-SM89 hybrid Veda pipeline"
+            )
+        if extended and (
+            request.width * request.height * request.model_frames > 2048**2 * 124
+            or (
+                len(request.ordered_references) > 1
+                and request.mode == "ref2va"
+                and (
+                    request.duration_seconds != 5 or request.width * request.height > 960 * 544
+                )
+            )
+        ):
+            raise ContractError(
+                "extended request exceeds the qualified joint canvas/duration/reference budget"
+            )
         if output_path.exists() or output_path.is_symlink():
             raise ContractError("the output path already exists")
         if not self._lock.acquire(blocking=False):

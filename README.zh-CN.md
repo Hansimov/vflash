@@ -4,6 +4,8 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
+**0.6.12.** 显式单SM89 hybrid/Veda支持经过实卡验证的最长15秒与九张有序参考；[组合资源限制](https://hansimov.github.io/vflash/zh/guide/complete-pipeline#extended-hybrid)仍适用，H100未支持。
+
 **0.6.8。** 新增显式[hybrid多参考](https://hansimov.github.io/vflash/zh/guide/complete-pipeline)，
 共享原始FL-v0.1主干，仅增加Ref调制表；同一Python实例可处理真正的参考图片和关键帧，
 分别保留实际条件身份。

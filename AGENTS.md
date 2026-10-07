@@ -24,7 +24,9 @@ option, not automatic scheduling or the throughput default. A single SM89 Ref4 p
 2–5 second visual-only video reference, without mixing images. Complete SM86 uses `sequence-head`; single-SM86
 and native-only Turbo profiles retain their latent interface. Optional 544p keyframe Turbo pairs have separate
 complete-pipeline evidence and artifact identities; original v0.1 defaults to dense with explicit single-SM89 Sol.
-The current profile guide owns the supported boundary; archived release
+The explicit single-SM89 original-v0.1 hybrid/Veda expansion supports up to fifteen seconds and nine ordered
+images within its joint pixel-frame budget; expanded multi-image Ref remains five seconds / 960x544 area.
+H100 is not qualified. The current profile guide owns the supported boundary; archived release
 notes describe their original versions, not additional requirements for a new release.
 The dual-SM86 T2 Turbo4 native profile additionally requires `sequence-head` and Base-specific SM86 compilation.
 Its application-stage integration is qualified at two fixed geometries; the standalone five-second `H3Pipeline`

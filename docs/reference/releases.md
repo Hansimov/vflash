@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.6.12 · Qualified duration and reference expansion {#v0-6-12}
+
+Single-SM89 original-v0.1 hybrid/Veda now supports up to fifteen-second image-conditioned delivery and nine ordered images, within a joint resource bound. Fixes VAE padding at fifteen seconds and extends exact media trimming. Standard profiles, paired/SM86 execution and video references keep their earlier limits; H100 is not qualified. See [complete pipeline](../guide/complete-pipeline#extended-hybrid) and [measured cases](./performance#extended-hybrid).
+
 ## 0.6.11 · Native HD and bounded activation lifetimes {#v0-6-11}
 
 Adds explicit native sampling up to a 2048-pixel long edge (2048² maximum), five seconds, with the original-v0.1 single-SM89 hybrid Veda pipeline. Image keyframes and image reference conditioning use the original source; this is not the unreleased official Regenerate-2K model or postprocessing. Ordinary request limits and automatic attention selection are unchanged.

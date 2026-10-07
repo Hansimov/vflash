@@ -36,7 +36,7 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
         type=Path,
         action="append",
         default=[],
-        help="local image; repeat in <Picture N> order up to three times; omit for T2VA",
+        help="local image; repeat in <Picture N> order up to nine times; omit for T2VA",
     )
     generate.add_argument(
         "--first-frame",
@@ -53,9 +53,9 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
     generate.add_argument(
         "--duration",
         type=int,
-        choices=range(5, 11),
+        choices=range(5, 16),
         default=5,
-        help="native delivery duration in seconds; 6-10 requires I2VA, L2VA, or FL2VA",
+        help="native delivery duration in seconds; 6-15 requires image conditioning",
     )
     generate.add_argument("--seed", type=int, default=0)
     generate.add_argument(

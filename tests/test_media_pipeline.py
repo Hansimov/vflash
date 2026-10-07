@@ -224,8 +224,9 @@ def test_close_fences_resources_before_retirement_and_can_retry() -> None:
     assert decoder._released and decoder.video is None and decoder._video_master is None
 
 
-def test_media_decoder_delivers_the_exact_ten_second_audio_video_window(
-    tmp_path, monkeypatch
+@pytest.mark.parametrize("duration", [10, 15])
+def test_media_decoder_delivers_the_exact_audio_video_window(
+    tmp_path, monkeypatch, duration
 ) -> None:
     decoder = OfficialMediaDecoder.__new__(OfficialMediaDecoder)
     decoder._closed = False
@@ -238,8 +239,8 @@ def test_media_decoder_delivers_the_exact_ten_second_audio_video_window(
             max_memory_allocated=lambda _device: 123,
         )
     )
-    decoded_video = torch.zeros(1, 3, 243, 2, 2)
-    decoded_audio = torch.zeros(1, 2, 320512)
+    decoded_video = torch.zeros(1, 3, duration * 24 + 3, 2, 2)
+    decoded_audio = torch.zeros(1, 2, duration * 32000 + 512)
     decoder._decode_cpu = lambda *_args, **_kwargs: (
         decoded_video,
         decoded_audio,
@@ -262,11 +263,11 @@ def test_media_decoder_delivers_the_exact_ten_second_audio_video_window(
         tmp_path / "ten-seconds.mp4",
         height=32,
         width=32,
-        duration_seconds=10,
+        duration_seconds=duration,
     )
     assert observed == {
-        "video_frames": 240,
-        "audio_samples": 320000,
+        "video_frames": duration * 24,
+        "audio_samples": duration * 32000,
         "output": tmp_path / "ten-seconds.mp4",
         "fps": 24,
         "audio_sample_rate": 32000,
@@ -279,7 +280,7 @@ def test_media_decoder_delivers_the_exact_ten_second_audio_video_window(
         tmp_path / "ten-seconds-web.mp4",
         height=32,
         width=32,
-        duration_seconds=10,
+        duration_seconds=duration,
         audio_delivery_profile="web-v1",
     )
     assert observed["audio_delivery_profile"] == "web-v1"

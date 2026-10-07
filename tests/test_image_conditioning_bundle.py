@@ -123,6 +123,7 @@ def write_bundle(directory, count, *, task="ref2va", frames=5, nfe=4):
         (8, 192, 192, 640),
         (9, 226, 216, 754),
         (10, 243, 240, 810),
+        (15, 362, 360, 1206),
     ],
 )
 def test_native_first_frame_bundle_is_distinct_from_ref2va(
@@ -179,6 +180,7 @@ def test_native_first_frame_bundle_is_distinct_from_ref2va(
         (8, 192, 192),
         (9, 226, 216),
         (10, 243, 240),
+        (15, 362, 360),
     ],
 )
 def test_native_last_frame_bundle_is_distinct_from_fl2va(
@@ -236,6 +238,7 @@ def test_native_last_frame_bundle_is_distinct_from_fl2va(
         (8, 192, 192),
         (9, 226, 216),
         (10, 243, 240),
+        (15, 362, 360),
     ],
 )
 def test_native_fl2va_bundle_binds_both_temporal_anchors(

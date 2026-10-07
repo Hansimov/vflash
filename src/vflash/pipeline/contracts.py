@@ -88,7 +88,7 @@ class PipelineAssets:
 
 @dataclass(frozen=True)
 class VideoRequest:
-    """A text-, image- or video-guided 5-10-second video at the native 24 fps clock.
+    """A text-, image- or video-guided 5-15-second video at the native 24 fps clock.
 
     The prompt is used verbatim; an application may format or polish it before
     this boundary. Images are ordered and labeled ``<Picture 1>`` through
@@ -155,8 +155,8 @@ class VideoRequest:
                 raise ContractError("last_frame must be a local pathlib.Path")
             if self.ordered_references or self.reference_video is not None:
                 raise ContractError("provide keyframes or Ref2VA references, not both")
-        if len(self.ordered_references) > 3:
-            raise ContractError("Ref2VA supports at most three reference images")
+        if len(self.ordered_references) > 9:
+            raise ContractError("Ref2VA supports at most nine reference images")
         picture_count = (
             2
             if self.first_frame is not None and self.last_frame is not None
@@ -190,20 +190,20 @@ class VideoRequest:
             )
         if type(self.seed) is not int or not 0 <= self.seed < 2**63:
             raise ContractError("seed must be an integer between 0 and 2^63-1")
-        if type(self.duration_seconds) is not int or not 5 <= self.duration_seconds <= 10:
-            raise ContractError("duration_seconds must be an integer from 5 to 10")
-        if self.duration_seconds > 5 and self.mode not in {"i2va", "l2va", "fl2va"}:
+        if type(self.duration_seconds) is not int or not 5 <= self.duration_seconds <= 15:
+            raise ContractError("duration_seconds must be an integer from 5 to 15")
+        if self.duration_seconds > 5 and self.mode not in {"i2va", "l2va", "fl2va", "ref2va"}:
             raise ContractError(
-                "complete requests over five seconds require I2VA, L2VA, or FL2VA"
+                "complete requests over five seconds require image conditioning"
             )
+        if self.reference_video is not None and self.duration_seconds != 5:
+            raise ContractError("video reference delivery supports five seconds")
         if self.width * self.height > MAX_CANVAS_PIXELS and (
-            self.duration_seconds != 5
-            or max(self.width, self.height) > 2048
+            max(self.width, self.height) > 2048
             or self.mode not in {"i2va", "l2va", "fl2va", "ref2va"}
-            or len(self.ordered_references) > 1
         ):
             raise ContractError(
-                "native HD requires five-second image conditioning within 2048 pixels per side"
+                "native HD requires image conditioning within 2048 pixels per side"
             )
         if self.audio_delivery_profile not in AUDIO_DELIVERY_PROFILES:
             raise ContractError("unknown audio delivery profile")

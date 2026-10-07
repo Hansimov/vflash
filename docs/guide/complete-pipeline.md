@@ -239,8 +239,16 @@ This is more expensive than a still image: the official VAE consumes complete te
 
 Compare conditioning and final latents to the fixed reference implementation separately from visual quality. Assess generated motion, appearance, instructions and sound against the original request. A matching latent tensor does not qualify a poor result.
 
-Media checks cover decoded video and audio before encoding, the selected five-through-ten-second delivery clock, frame count and channel layout. H.264 and AAC are lossy formats. An MP4 hash is not a numerical equivalence test for the denoiser or audio decoder.
+Media checks cover decoded video and audio before encoding, the selected five-through-fifteen-second delivery clock, frame count and channel layout. H.264 and AAC are lossy formats. An MP4 hash is not a numerical equivalence test for the denoiser or audio decoder.
 
 Release checks separate all 14 conditioning tensors, final FP32 audio/video latents, decoded video and playable delivery. The official audio VAE can produce small floating-point differences between repeated requests before PCM or AAC encoding. Audio bitwise reproducibility is not promised; finite output, channel layout, frame count, clock and complete decoding are checked. See [release validation](../reference/releases) for the tested cases and scope.
 
 The explicit [Veda backend](./veda) also supports this single-SM89 hybrid; its approximate contract and evidence are separate.
+
+## Fifteen seconds and nine images (0.6.12) {#extended-hybrid}
+
+The explicit original-v0.1 **single-SM89 hybrid with Veda** accepts integer image-conditioned durations from 5 to 15 seconds and up to nine ordered image references. Standard Ref4/Base16, SM86, paired execution and video-reference contracts do not inherit this expansion. H100 is not a supported or tested target of this release.
+
+The bounds are joint, not independently combinable: width and height stay 32-aligned with long edge at most 2048, and `width × height × model_frames` must not exceed `2048² × 124`. Expanded multiple-image Ref requests are limited to five seconds and 960×544 total pixels. Fifteen-second keyframes or a single image reference use 362 internal model frames and deliver exactly 360 frames at 24 fps with 480000 audio samples per channel. Internal padding does not extend the requested duration. Unsupported combinations fail before model activation.
+
+The pinned official conditioning adapter accepts the aligned temporal boundary without changing its logical duration limit. Nine references preserve input order and labels `<Picture 1>` through `<Picture 9>`; they are visual references, not nine timeline keyframes. More inputs increase conditioning work and do not guarantee that every requested detail is followed. Full target-hardware cases and visual limitations are recorded in [performance](../reference/performance#extended-hybrid).

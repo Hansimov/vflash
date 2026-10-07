@@ -482,20 +482,28 @@ def test_request_duration_is_discrete_and_defaults_to_five_seconds():
     )
     assert (short.duration_seconds, short.model_frames, short.delivery_frames) == (5, 124, 120)
     assert (long.duration_seconds, long.model_frames, long.delivery_frames) == (10, 243, 240)
-    for duration, model_frames in ((6, 158), (7, 175), (8, 192), (9, 226)):
+    for duration, model_frames in (
+        (6, 158),
+        (7, 175),
+        (8, 192),
+        (9, 226),
+        (11, 277),
+        (12, 294),
+        (13, 328),
+        (14, 345),
+        (15, 362),
+    ):
         middle = VideoRequest(
             "Continue.", first_frame=Path("first.png"), duration_seconds=duration
         )
         assert (middle.model_frames, middle.delivery_frames) == (model_frames, duration * 24)
-    for invalid in (True, 5.0, 4, 11, 15):
-        with pytest.raises(ContractError, match="integer from 5 to 10"):
+    for invalid in (True, 5.0, 4, 16):
+        with pytest.raises(ContractError, match="integer from 5 to 15"):
             VideoRequest("Continue.", first_frame=Path("first.png"), duration_seconds=invalid)
-    for values in (
-        {},
-        {"reference": Path("reference.png")},
-    ):
-        with pytest.raises(ContractError, match="require I2VA, L2VA, or FL2VA"):
-            VideoRequest("A scene.", duration_seconds=6, **values)
+    with pytest.raises(ContractError, match="require image conditioning"):
+        VideoRequest("A scene.", duration_seconds=6)
+    with pytest.raises(ContractError, match="video reference delivery"):
+        VideoRequest("A scene.", reference_video=Path("clip.mp4"), duration_seconds=6)
 
 
 def test_ordered_multi_reference_request_keeps_labels_and_seed_replacement(tmp_path):
@@ -514,7 +522,7 @@ def test_ordered_multi_reference_request_keeps_labels_and_seed_replacement(tmp_p
     "values",
     [
         {"prompt": "<Picture 1> without an image"},
-        {"references": (Path("one"),) * 4},
+        {"references": (Path("one"),) * 10},
         {"reference": Path("one"), "references": (Path("two"),)},
         {"references": [Path("one")]},
         {"references": ("one",)},
@@ -956,7 +964,7 @@ def test_pipeline_owns_adapter_and_restores_it_before_core_exit(
 
 
 @pytest.mark.parametrize("mode", ["i2va", "l2va", "fl2va", "ref2va"])
-def test_native_hd_request_is_native_and_limited_to_five_seconds(tmp_path, mode):
+def test_native_hd_request_preserves_explicit_canvas_and_duration(tmp_path, mode):
     image = tmp_path / "frame.png"
     images = {
         "i2va": {"first_frame": image},
@@ -966,8 +974,8 @@ def test_native_hd_request_is_native_and_limited_to_five_seconds(tmp_path, mode)
     }[mode]
     request = VideoRequest("A detailed scene.", width=2048, height=2048, **images)
     assert request.mode == mode and request.model_frames == 124
-    with pytest.raises(ContractError):
-        VideoRequest("A scene.", width=2048, height=2048, duration_seconds=10, **images)
+    long = VideoRequest("A scene.", width=2048, height=2048, duration_seconds=15, **images)
+    assert long.model_frames == 362 and long.delivery_frames == 360
     with pytest.raises(ContractError):
         VideoRequest("A scene.", width=2080, height=512, **images)
 
@@ -982,11 +990,57 @@ def test_native_hd_rejects_unqualified_engine_before_loading(tmp_path):
     assert not events and not pipeline._closed
 
 
-def test_native_hd_rejects_unqualified_multiple_image_references(tmp_path):
-    with pytest.raises(ContractError, match="native HD"):
-        VideoRequest(
-            "A scene.",
-            references=(tmp_path / "one.png", tmp_path / "two.png"),
-            width=2048,
-            height=2048,
-        )
+def test_nine_ordered_references_keep_native_dimensions_and_duration(tmp_path):
+    refs = tuple(tmp_path / f"picture-{i}.png" for i in range(1, 10))
+    request = VideoRequest(
+        "<Picture 9> sets the location.",
+        references=refs,
+        width=1440,
+        height=1440,
+        duration_seconds=15,
+    )
+    assert request.ordered_references == refs
+    assert (request.width, request.height, request.model_frames, request.delivery_frames) == (
+        1440,
+        1440,
+        362,
+        360,
+    )
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {"duration_seconds": 15, "reference": Path("r0.png")},
+        {"references": tuple(Path(f"r{i}.png") for i in range(9))},
+    ],
+)
+def test_extended_geometry_rejects_unqualified_runtime_before_activation(tmp_path, options):
+    pipeline, events = _pipeline()
+    options = dict(options)
+    request = VideoRequest("A scene.", **options)
+    with pytest.raises(ContractError, match="extended"):
+        pipeline.generate(request, tmp_path / "output.mp4")
+    assert not events and not pipeline._closed
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {"reference": Path("r.png"), "width": 2048, "height": 2048, "duration_seconds": 15},
+        {"references": tuple(Path(f"r{i}.png") for i in range(9)), "duration_seconds": 15},
+        {
+            "references": tuple(Path(f"r{i}.png") for i in range(9)),
+            "width": 1024,
+            "height": 1024,
+        },
+    ],
+)
+def test_extended_runtime_rejects_unqualified_joint_budget_before_loading(tmp_path, options):
+    pipeline, events = _pipeline()
+    pipeline.hybrid_model = object()
+    pipeline.attention_backend = "veda-sm89"
+    request = VideoRequest("A scene.", **options)
+    with pytest.raises(ContractError, match="joint"):
+        pipeline.generate(request, tmp_path / "output.mp4")
+    assert not events and not pipeline._closed

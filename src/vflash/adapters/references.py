@@ -160,8 +160,21 @@ def install_match_reference_setup_block(pipe: Any) -> Any:
                 components.vae_frames_per_chunk,
                 components.vae_latents_per_chunk,
             )
+            # The delivered limit is 15 s (360 frames), but the VAE needs
+            # 17*n+5 frames (362). Validate the same padded endpoint instead
+            # of rejecting the two required internal padding frames.
+            minimum_frames = align_num_frames(
+                round(components.min_duration * components.fps),
+                components.vae_frames_per_chunk,
+                components.vae_latents_per_chunk,
+            )
+            maximum_frames = align_num_frames(
+                round(components.max_duration * components.fps),
+                components.vae_frames_per_chunk,
+                components.vae_latents_per_chunk,
+            )
             duration = aligned_num_frames / components.fps
-            if not components.min_duration <= duration <= components.max_duration:
+            if not minimum_frames <= aligned_num_frames <= maximum_frames:
                 raise ValueError(
                     f"MiniMax-H3 generates between {components.min_duration} and "
                     f"{components.max_duration} seconds, got {duration:.6f}"

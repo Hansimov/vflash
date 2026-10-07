@@ -191,3 +191,5 @@ The Base adapter filename includes `fl2v`; this release qualifies it for T2VA, n
 Prepare and hash files once in their final location. Startup checks the resulting local receipt without rereading all model payloads. In 0.4.0, `H3Pipeline.prepare()` explicitly preloads the stages; otherwise the first request loads them after CPU input validation. Models remain owned for reuse. Stage placement follows the selected profile above. Preloading does not run conditioning or prepare every input shape. Report asset preparation, model loading, first request and repeated requests separately. Cancelling an active request retires the pipeline; create a new instance before further work.
 
 The [reference-video input](../guide/complete-pipeline#reference-video) uses the same single-SM89 Ref4 assets. It passed a complete image/video/image sequence without model reload. SM86 and Turbo8 video references remain outside the supported boundary.
+
+The explicit hybrid/Veda exception supports qualified 15-second and nine-image requests; see [joint limits](../guide/complete-pipeline#extended-hybrid). Other profiles retain the ranges above.

@@ -106,3 +106,17 @@ Inspect multiple decoded frames over time, watch at normal speed, and listen to 
 Exact attention does not make a distilled adapter equivalent to the base model, or guarantee identical floating-point results across GPU architectures. The current [support notes](../guide/profiles#lora) describe the narrower checks completed for each profile.
 
 The complete pipeline is available for the [qualified profiles](./pipeline-profiles). Its integration checks establish that measured requests complete correctly; they do not establish a general prompt-to-MP4 speed or quality guarantee.
+
+## Extended hybrid delivery (0.6.12) {#extended-hybrid}
+
+Five complete fresh-conditioning requests ran sequentially on one RTX 4090 48 GB / 450 W, original v0.1 BF16 hybrid, four evaluations, explicit Veda. The first request includes cold initialization; later requests reuse the pipeline. These are observed full-request latencies, not an isolated speed comparison. All delivered exact frames/dimensions and fully decoded video plus 32 kHz stereo audio. The host-memory cap was 260 GiB, not a measured minimum. Memory values are the maximum reported denoising/media-stage allocated peaks, not total process memory or a guaranteed minimum device size.
+
+| Mode | Images | Canvas | Seconds | Full request (s) | Recorded stage peak (GiB) |
+| --- | --- | --- | --- | --- | --- |
+| I2VA | 1 | 1024×1024 | 15 | 484.13 | 27.74 |
+| I2VA HD | 1 | 1440×1440 | 10 | 609.89 | 36.53 |
+| FL2VA | 2 | 1344×768 | 15 | 405.50 | 27.81 |
+| Ref2VA | 1 | 960×544 | 15 | 172.07 | 14.83 |
+| Ref2VA | 9 | 960×544 | 5 | 93.15 | 9.44 |
+
+Capacity evidence is separate from quality. Multiple-time visual inspection found camera/composition drift and fine-detail changes in some scenes, and complex reference/action adherence is not fully qualified. Audio was finite and decodable; silence or sound semantics are not certified by an AAC track. Use explicit silent delivery for digital silence. There is no H100, ordinary 24 GiB 4090, or arbitrary 4MP/15s qualification. The request guard enforces the joint resource boundary. Integration source: `90e19b3b`.

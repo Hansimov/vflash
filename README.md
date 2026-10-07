@@ -4,6 +4,8 @@ Native **MiniMax H3 inference** for RTX 3080 20 GB and RTX 4090 48 GB. Vflash us
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
+**0.6.12.** Explicit single-SM89 hybrid/Veda supports qualified fifteen-second and nine-image requests within [joint resource limits](https://hansimov.github.io/vflash/guide/complete-pipeline#extended-hybrid). H100 is not supported.
+
 **0.6.9.** Optional [FlashVSR upscaling](https://hansimov.github.io/vflash/guide/restoration) preserves complete video and original audio; H3 defaults remain unchanged.
 
 **0.6.10.** Explicit [Veda sparse attention](https://hansimov.github.io/vflash/guide/veda)
@@ -48,7 +50,7 @@ profiles retain their separate five-second contracts. [Read the qualification bo
 Python 3.11 or newer is required. The base install does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.6.9 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.6.12 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
