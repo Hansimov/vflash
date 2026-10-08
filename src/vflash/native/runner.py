@@ -144,7 +144,7 @@ class NativeEngineSession:
         if attention_backend in {"sol-sm89", "veda-sm89", "veda-triton"}:
             if weight_residency == "default":
                 weight_residency = "block-ring"
-            if weight_residency != "block-ring":
+            if attention_backend == "sol-sm89" and weight_residency != "block-ring":
                 raise ContractError(
                     "approximate attention requires block-ring weight residency"
                 )

@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Any
+
+from vflash.contracts import ContractError
 
 
 class CPUResidencyError(RuntimeError):
@@ -51,3 +54,50 @@ def restore_cpu_master(module: Any, master: CPUModuleMaster) -> None:
     for module_name, name, tensor in master.non_persistent_buffers:
         child = module.get_submodule(module_name) if module_name else module
         child._buffers[name] = tensor
+
+
+def validate_residency(plan: Any, choice: str, attention: str, hybrid: Any) -> str:
+    if choice == "block-ring":
+        return choice
+    if choice != "resident":
+        raise ContractError("pipeline weight_residency must be block-ring or resident")
+    if (
+        plan.target.compute_capability != "9.0"
+        or plan.gpu_memory_gib < 75
+        or plan.parallel_strategy != "single"
+        or attention != "veda-triton"
+        or hybrid is None
+    ):
+        raise ContractError(
+            "resident pipeline requires a single >=75GiB SM90 hybrid Veda allocation"
+        )
+    allocator = os.environ.get(
+        "PYTORCH_ALLOC_CONF", os.environ.get("PYTORCH_CUDA_ALLOC_CONF", "")
+    )
+    options = {
+        k.strip(): v.strip()
+        for token in allocator.split(",")
+        if ":" in token
+        for k, v in [token.split(":", 1)]
+    }
+    if options.get("expandable_segments") != "True":
+        raise ContractError(
+            "resident pipeline requires PYTORCH_ALLOC_CONF=expandable_segments:True "
+            "before CUDA starts"
+        )
+    return choice
+
+
+def validate_resident_request(choice: str, request: Any) -> None:
+    if choice != "resident":
+        return
+    if (
+        request.mode != "i2va"
+        or request.width * request.height > 1536 * 864
+        or request.model_frames > 362
+        or len(request.ordered_references) != 1
+    ):
+        raise ContractError(
+            "resident I2VA supports one first frame, at most 1536x864 pixels and 15 seconds; "
+            "use block-ring for other requests"
+        )

@@ -1,5 +1,44 @@
 # Profiles and hardware
 
+## Explicit H100 trunk residency (0.6.14) {#h100-resident}
+
+`H3Pipeline(..., weight_residency="resident")` can retain the trunk on a single
+SM90 GPU with at least 75 GiB VRAM. It requires the original-v0.1 `HybridModel`,
+`attention_backend="veda-triton"`, and `PYTORCH_ALLOC_CONF=expandable_segments:True`
+set **before starting the Python process**. The default remains `block-ring`.
+The measured request envelope is I2VA with one first frame, area at most
+1536 × 864 pixels and at most 15 seconds. Other modes and larger canvases must
+use the block ring; this option does not qualify other GPU architectures.
+
+A same-H100-SXM A/B/A2 experiment used separate processes, the same immutable
+runtime/model/reference/seed, four updates and expandable segments in every arm.
+Per-file eviction hints did not guarantee a cold remote storage server. Seven
+complete videos passed decode and playback checks. Aggregate evidence from the
+private integration at source `575f7986`:
+
+| Observation | Block ring A | Resident B | Block ring A2 |
+| --- | ---: | ---: | ---: |
+| Initialization, seconds | 119.049 | 128.154 | 115.268 |
+| First 512² five-second output | 156.137 | 124.491 | 126.772 |
+| Warm 512² five-second output | 27.085 | 16.992 | 19.560 |
+| Peak host RSS for short outputs, GiB | 102.956 | 62.941 | 102.948 |
+
+Against the more favorable return control, warm latency improved 13.1%, but
+initialization plus first output took 10.6 seconds longer. Five subsequent warm
+requests are needed to recover that startup difference in this limited sample.
+This is useful for sustained small-request batches or reducing host memory, not
+an unconditional cold-start speedup. Host CPU, storage and compile state remain
+part of the result; a single rental does not establish an SLA.
+
+The resident arm additionally completed 1536 × 864 / 15 seconds in 227.337 seconds,
+with 68.180 GiB peak host RSS and a **70.344 GiB denoising allocation peak**.
+The post-decode counter was only 59.200 GiB and must not replace the earlier peak.
+Without expandable segments, the prior resident trial failed this larger case.
+No matched long-request speedup is claimed. Multiple-time visual review found the
+same background/style drift already present in the block-ring baseline; no quality
+improvement is claimed, and audio semantics were not independently reviewed.
+Return to `weight_residency="block-ring"` for rollback.
+
 ## H100 and Blackwell preview (0.6.13) {#heterogeneous}
 
 Original-v0.1 I2VA with explicit hybrid modulation and `veda-triton` has complete

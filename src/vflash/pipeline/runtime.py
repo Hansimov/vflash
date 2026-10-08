@@ -44,8 +44,10 @@ class H3Pipeline:
     validates the fixed profile on the CPU. ``prepare()`` explicitly warms its
     stages; otherwise the first valid request loads them after input decoding.
     Native weights
-    use the tested block ring so the official encoding and VAE stages can take
-    turns on the same device. The object owns its stages and temporary files;
+    use the block ring by default so encoding and VAE stages can take turns on
+    the same device. An explicit H100 resident option retains the trunk on GPU
+    within its measured request envelope; see pipeline.residency. The object owns
+    its stages and temporary files;
     the caller owns scheduling, requests, final MP4s and any account/storage data.
     """
 
@@ -61,6 +63,7 @@ class H3Pipeline:
         veda_predictor: Path | None = None,
         attention_adapter: AttentionAdapter | None = None,
         hybrid_model: HybridModel | None = None,
+        weight_residency: str = "block-ring",
     ) -> None:
         if trust_local_code is not True:
             raise ContractError("the official decoder adapter requires trust_local_code=True")
@@ -103,6 +106,11 @@ class H3Pipeline:
         if hybrid_model is not None and not isinstance(hybrid_model, HybridModel):
             raise ContractError("hybrid_model requires a typed HybridModel")
         self.hybrid_model = hybrid_model
+        from vflash.pipeline.residency import validate_residency
+
+        self.weight_residency = validate_residency(
+            plan, weight_residency, self.attention_backend, hybrid_model
+        )
         self._hybrid_stamps = (
             hybrid_model.validate(
                 profile_id=prepared.profile_id,
@@ -177,7 +185,7 @@ class H3Pipeline:
             artifact=assets.artifact,
             schedule_overlay=assets.schedule_overlay,
             auxiliary_tensor=assets.auxiliary_tensor,
-            weight_residency="block-ring",
+            weight_residency=self.weight_residency,
             attention_backend=self.attention_backend,
             **(
                 {"veda_predictor": self.veda_predictor}
@@ -235,6 +243,9 @@ class H3Pipeline:
             modes = (*modes, "ref2va")
         if request.mode not in modes:
             raise ContractError("the request mode differs from the prepared pipeline profile")
+        from vflash.pipeline.residency import validate_resident_request
+
+        validate_resident_request(self.weight_residency, request)
         if request.reference_video is not None and (
             self.prepared.profile_id != "ref2va-turbo4-exact-sm89"
             or self._plan.parallel_strategy != "single"

@@ -254,12 +254,20 @@ class H3NativeConditioningRuntime:
             and weight_residency != "block-ring"
         ):
             raise H3NativeConditioningRuntimeError("unsupported native weight residency")
-        if (
-            attention_backend in {"sol-sm89", "veda-sm89", "veda-triton"}
-            and weight_residency != "block-ring"
-        ):
+        if attention_backend == "sol-sm89" and weight_residency != "block-ring":
             raise H3NativeConditioningRuntimeError(
                 "approximate attention requires the serial block-ring runtime"
+            )
+        if (
+            weight_residency == "resident"
+            and attention_backend in {"veda-sm89", "veda-triton"}
+            and (
+                capability != (9, 0)
+                or torch.cuda.get_device_properties(resolved_device).total_memory < 75 * 2**30
+            )
+        ):
+            raise H3NativeConditioningRuntimeError(
+                "resident Veda requires a single SM90 GPU with at least 75GiB"
             )
         devices = (resolved_device,)
         if parallel_strategy != "single":
@@ -665,7 +673,7 @@ class H3NativeConditioningRuntime:
         bundle, tensors = self._load_request_tensors(conditioning)
         device = self.device
         self._sol_attention = None
-        slots = getattr(self.denoiser, "slots", ())
+        slots = getattr(self.denoiser, "slots", getattr(self.denoiser, "blocks", ()))
         for slot in slots:
             slot._sol_attention = None
             slot._veda_attention = None
@@ -689,17 +697,26 @@ class H3NativeConditioningRuntime:
         if self.attention_backend in {"veda-sm89", "veda-triton"}:
             from vflash.native.h3_veda_attention import VedaVideoAttention
 
-            if len(slots) != 2 or len(self.denoiser.host_blocks) != 50:
+            if not (
+                (
+                    self.weight_residency == "block-ring"
+                    and len(slots) == 2
+                    and len(self.denoiser.host_blocks) == 50
+                )
+                or (self.weight_residency == "resident" and len(slots) == 50)
+            ):
                 raise H3NativeConditioningRuntimeError(
-                    "Veda requires the complete two-slot H3 ring"
+                    "Veda requires the complete two-slot ring or fifty resident H3 blocks"
                 )
             if self._veda_attention is None:
                 self._veda_attention = VedaVideoAttention(
                     device, self.veda_predictor, backend=self.attention_backend
                 )
             self._veda_attention.prepare(tensors, bundle.profile)
-            for slot in slots:
+            for index, slot in enumerate(slots):
                 slot._veda_attention = self._veda_attention
+                if self.weight_residency == "resident":
+                    slot._attention_block_index = index
         state = H3NativeLatentState(
             self.overlay.schedule,
             video_latents=tensors["initial_video"].to(device=device, dtype=torch.float32),
