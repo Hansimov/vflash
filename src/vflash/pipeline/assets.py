@@ -249,6 +249,7 @@ def prepare_pipeline_assets(
     *,
     profile_id: str = PIPELINE_PROFILE,
     verify_content_hashes: bool = True,
+    derivation: Path | None = None,
 ) -> PreparedPipelineAssets:
     """Verify consumed official files and compiled blocks at an explicit ingestion boundary.
 
@@ -259,6 +260,12 @@ def prepare_pipeline_assets(
     if receipt.exists() or receipt.is_symlink():
         raise ContractError("the asset receipt already exists")
     planned = _planned_files(assets, profile_id)
+    if derivation is not None:
+        if verify_content_hashes:
+            raise ContractError("exact subsets require explicit metadata-only preparation")
+        from vflash.pipeline.derivation import apply_exact_subset
+
+        planned = apply_exact_subset(derivation, planned)
     inventory = []
     for role, path, expected in planned:
         before = _stamp(path)
@@ -301,6 +308,8 @@ def prepare_pipeline_assets(
     }
     if not verify_content_hashes:
         value.update(schema_version=2, verification="source-inventory-and-file-identity")
+    if derivation is not None:
+        value.update(schema_version=3, derivation=str(derivation.resolve(strict=True)))
     receipt.parent.mkdir(parents=True, exist_ok=True)
     temporary = receipt.with_name(f".{receipt.name}.{uuid.uuid4().hex}.tmp")
     try:
@@ -317,7 +326,7 @@ def load_prepared_pipeline_assets(receipt: Path) -> PreparedPipelineAssets:
         value = json.loads(data)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ContractError("the pipeline asset receipt is invalid") from exc
-    metadata_only = isinstance(value, dict) and value.get("schema_version") == 2
+    metadata_only = isinstance(value, dict) and value.get("schema_version") in {2, 3}
     if (
         not isinstance(value, dict)
         or set(value)
@@ -329,8 +338,9 @@ def load_prepared_pipeline_assets(receipt: Path) -> PreparedPipelineAssets:
                 "inventory",
             }
             | ({"verification"} if metadata_only else set())
+            | ({"derivation"} if value.get("schema_version") == 3 else set())
         )
-        or value["schema_version"] not in {1, 2}
+        or value["schema_version"] not in {1, 2, 3}
         or (metadata_only and value.get("verification") != "source-inventory-and-file-identity")
         or not isinstance(value["profile_id"], str)
         or not isinstance(value["inventory"], list)
@@ -342,10 +352,14 @@ def load_prepared_pipeline_assets(receipt: Path) -> PreparedPipelineAssets:
     assets = PipelineAssets.from_mapping(value["assets"])
     if any(path is not None and not path.is_absolute() for path in vars(assets).values()):
         raise ContractError("prepared asset paths must be absolute")
-    planned = {
-        role: (path.resolve(strict=True), expected)
-        for role, path, expected in _planned_files(assets, profile_id)
-    }
+    files = _planned_files(assets, profile_id)
+    if value["schema_version"] == 3:
+        from vflash.pipeline.derivation import apply_exact_subset
+
+        if not isinstance(value["derivation"], str):
+            raise ContractError("invalid exact-subset derivation path")
+        files = apply_exact_subset(Path(value["derivation"]), files)
+    planned = {role: (path.resolve(strict=True), expected) for role, path, expected in files}
     seen: set[str] = set()
     for row in value["inventory"]:
         if (

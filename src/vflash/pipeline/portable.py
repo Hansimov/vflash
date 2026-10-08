@@ -21,7 +21,13 @@ from vflash.pipeline.assets import prepare_pipeline_assets
 from vflash.pipeline.contracts import PipelineAssets
 
 
-def prepare_portable_assets(assets: PipelineAssets, directory: Path, architecture: str):
+def prepare_portable_assets(
+    assets: PipelineAssets,
+    directory: Path,
+    architecture: str,
+    *,
+    derivation: Path | None = None,
+):
     """Build a new local receipt for one explicit I2VA preview architecture.
 
     The caller owns the immutable source cache and keeps it mounted read-only.
@@ -91,4 +97,5 @@ def prepare_portable_assets(assets: PipelineAssets, directory: Path, architectur
         directory / "prepared.json",
         profile_id=profile,
         verify_content_hashes=False,
+        **({"derivation": derivation} if derivation is not None else {}),
     )

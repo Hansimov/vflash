@@ -1,5 +1,12 @@
 # 版本更新
 
+## 0.6.16
+
+增加可信H3消费张量子集的显式来源声明。`prepare_pipeline_assets(..., derivation=Path(...), verify_content_hashes=False)`和`prepare_portable_assets(..., derivation=Path(...))`绑定小型转换声明、固定上游身份、实际大小及本地不可变文件身份。派生文件摘要保持null，不把原始文件hash冒充子集hash。schema-3回执重新打开同一声明，普通官方资产合同不变。
+
+RTX PRO 6000 Server完成十条I2VA/L2VA/FL2VA/Ref2VA组合，缓存从125.084降至100.451GiB。初始化120.737秒，对照旧宿主120.114秒，不声称启动或画质加速；主机RSS仍109.229GiB。验证范围是存储精简，不代表任意转换、较小主机内存或其他硬件模式均合格。调用方仍负责可信的字节保留转换及不可变存储。
+
+
 ## 0.6.15
 
 修复显式驻留I2VA请求的首帧校验。I2VA的时间首帧与Ref2VA有序参考列表不同，旧校验会在推理前拒绝合法请求。容量、allocator与硬件范围不变；回归测试改用真实`VideoRequest`合同。

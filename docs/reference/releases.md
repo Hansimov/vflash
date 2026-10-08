@@ -1,5 +1,12 @@
 # Release notes
 
+## 0.6.16
+
+Add explicit exact-subset lineage for trusted consumed H3 checkpoints. `prepare_pipeline_assets(..., derivation=Path(...), verify_content_hashes=False)` and `prepare_portable_assets(..., derivation=Path(...))` bind a bounded conversion declaration, the pinned source identity, resulting size and immutable local stamps. Derived payloads retain null digests; source hashes are never presented as subset hashes. Schema-3 receipts reopen the same declared subset; ordinary official assets keep their existing contract.
+
+A single RTX PRO 6000 Server completed ten mixed I2VA/L2VA/FL2VA/Ref2VA cases from a cache reduced from 125.084 to 100.451 GiB. Initialization was 120.737 seconds versus a previous-host 120.114 seconds; no startup or quality speedup is claimed. Host RSS remained 109.229 GiB. This qualifies the storage reduction, not arbitrary conversions, smaller host RAM or additional hardware modes. The caller must own a trusted byte-preserving preparation process and immutable storage.
+
+
 ## 0.6.15
 
 Fix the opt-in resident I2VA request check to use the temporal first frame. I2VA intentionally has no Ref2VA `ordered_references`; the previous check rejected valid keyframe requests before inference. Capacity, allocator and hardware restrictions are unchanged. Regression coverage now uses the real `VideoRequest` contract.
