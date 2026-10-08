@@ -1,5 +1,9 @@
 # 版本更新
 
+## 0.6.17
+
+显式hybrid/Veda全驻留扩展到至少90GiB的单SM120。同一PRO 6000 Server的A/B/A2九片完成：相对更快回切，暖五秒视频快18.1%，同契约十五秒快3.3%；初始化加首片多18.4秒，主机RSS峰值108.7降到68.7GiB。应按整批完工时间选择，当前三片整批未摊平启动。默认块环、I2VA范围、allocator要求和小显存卡排除保持。见[范围与证据](../guide/profiles#sm120-resident)。
+
 ## 0.6.16
 
 增加可信H3消费张量子集的显式来源声明。`prepare_pipeline_assets(..., derivation=Path(...), verify_content_hashes=False)`和`prepare_portable_assets(..., derivation=Path(...))`绑定小型转换声明、固定上游身份、实际大小及本地不可变文件身份。派生文件摘要保持null，不把原始文件hash冒充子集hash。schema-3回执重新打开同一声明，普通官方资产合同不变。

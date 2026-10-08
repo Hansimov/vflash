@@ -262,12 +262,13 @@ class H3NativeConditioningRuntime:
             weight_residency == "resident"
             and attention_backend in {"veda-sm89", "veda-triton"}
             and (
-                capability != (9, 0)
-                or torch.cuda.get_device_properties(resolved_device).total_memory < 75 * 2**30
+                capability not in {(9, 0), (12, 0)}
+                or torch.cuda.get_device_properties(resolved_device).total_memory
+                < (90 if capability == (12, 0) else 75) * 2**30
             )
         ):
             raise H3NativeConditioningRuntimeError(
-                "resident Veda requires a single SM90 GPU with at least 75GiB"
+                "resident Veda requires a single >=75GiB SM90 or >=90GiB SM120 GPU"
             )
         devices = (resolved_device,)
         if parallel_strategy != "single":

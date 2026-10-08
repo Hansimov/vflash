@@ -8,7 +8,8 @@ SM90 GPU with at least 75 GiB VRAM. It requires the original-v0.1 `HybridModel`,
 set **before starting the Python process**. The default remains `block-ring`.
 The measured request envelope is I2VA with one first frame, area at most
 1536 × 864 pixels and at most 15 seconds. Other modes and larger canvases must
-use the block ring; this option does not qualify other GPU architectures.
+use the block ring. The separate SM120 qualification is described below; H100
+measurements do not qualify untested architectures.
 
 A same-H100-SXM A/B/A2 experiment used separate processes, the same immutable
 runtime/model/reference/seed, four updates and expandable segments in every arm.
@@ -38,6 +39,40 @@ No matched long-request speedup is claimed. Multiple-time visual review found th
 same background/style drift already present in the block-ring baseline; no quality
 improvement is claimed, and audio semantics were not independently reviewed.
 Return to `weight_residency="block-ring"` for rollback.
+
+## Full-memory Blackwell residency (0.6.17) {#sm120-resident}
+
+The same explicit resident option now also admits a **single SM120 GPU with at
+least 90 GiB VRAM**. Complete-video evidence is from RTX PRO 6000 Blackwell Server
+96 GB; Workstation residency has not been separately measured. RTX 5090 and
+48 GB MIG partitions remain outside this residency contract. The hybrid/Veda,
+allocator and I2VA request limits above still apply; the default remains block ring.
+
+A same-instance A/B/A2 comparison used separate processes, identical frozen inputs,
+compact assets, four updates, seed and expandable allocator. The host provided
+approximately 251 GB RAM and 16 vCPUs. Storage eviction hints do not establish
+remote-server cold state. All nine complete outputs decoded and played successfully.
+Aggregate evidence from private integration source `2f0444f7`:
+
+| Seconds unless noted | Block ring A | Resident B | Block ring A2 |
+| --- | ---: | ---: | ---: |
+| Initialization | 105.228 | 123.279 | 108.208 |
+| First 512² / 5 s | 77.668 | 86.367 | 83.024 |
+| Warm 512² / 5 s | 21.015 | 15.693 | 19.168 |
+| 1536 × 864 / 15 s | 256.104 | 245.326 | 253.650 |
+| Whole three-output arm | 469.730 | 474.786 | 471.519 |
+| Peak host RSS, GiB | 108.739 | 68.718 | 108.710 |
+
+Against the faster return control, warm short requests improved **18.1%** and the
+long request **3.3%**. Initialization plus first output cost 18.4 seconds more;
+approximately six subsequent short requests amortize that difference. This tested
+three-output batch itself took 3.3 seconds longer. Choose residency for sustained
+warm batches or lower host memory, using total startup and batch time for deployment.
+Denoising allocation peaked at **70.324 GiB**, versus 59.177 GiB after decoding.
+Five-time-point visual review retained the baseline's unwanted zoom/tracking, with
+no observed new material visual regression. No general quality or audio-semantic
+improvement is claimed. Return to block ring for rollback. No weights or private
+media are distributed with this release.
 
 ## H100 and Blackwell preview (0.6.13) {#heterogeneous}
 

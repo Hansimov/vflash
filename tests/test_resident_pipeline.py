@@ -12,7 +12,7 @@ def plan(cap="9.0", memory=79, strategy="single"):
     )
 
 
-def test_explicit_resident_requires_large_h100_and_tested_allocator(monkeypatch):
+def test_explicit_resident_requires_qualified_memory_and_tested_allocator(monkeypatch):
     monkeypatch.delenv("PYTORCH_ALLOC_CONF", raising=False)
     monkeypatch.delenv("PYTORCH_CUDA_ALLOC_CONF", raising=False)
     assert validate_residency(plan(), "block-ring", "veda-triton", object()) == "block-ring"
@@ -20,9 +20,15 @@ def test_explicit_resident_requires_large_h100_and_tested_allocator(monkeypatch)
         validate_residency(plan(), "resident", "veda-triton", object())
     monkeypatch.setenv("PYTORCH_ALLOC_CONF", "expandable_segments:True")
     assert validate_residency(plan(), "resident", "veda-triton", object()) == "resident"
+    for accepted in (plan("9.0", 75), plan("12.0", 90), plan("12.0", 95)):
+        assert validate_residency(accepted, "resident", "veda-triton", object()) == "resident"
     for candidate in (
         plan("8.9", 48),
-        plan("12.0", 95),
+        plan("12.0", 48),
+        plan("12.0", 32),
+        plan("12.0", 89.9),
+        plan("10.3", 100),
+        plan("9.0", 74.9),
         plan(memory=48),
         plan(strategy="sequence-head"),
     ):

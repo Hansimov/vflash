@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.6.17
+
+Extend explicit hybrid/Veda trunk residency to single SM120 allocations with at least 90 GiB. A same-PRO-6000-Server A/B/A2 comparison completed nine videos: warm five-second latency improved 18.1% and a matched fifteen-second request 3.3% versus the faster return control, while initialization plus first output increased 18.4 seconds. Peak host RSS fell from 108.7 to 68.7 GiB. Use total batch time when selecting residency; the tested three-output batch did not amortize startup. Default block-ring behavior, I2VA limits, allocator requirement and smaller-card exclusions remain. See [scope and evidence](../guide/profiles#sm120-resident).
+
 ## 0.6.16
 
 Add explicit exact-subset lineage for trusted consumed H3 checkpoints. `prepare_pipeline_assets(..., derivation=Path(...), verify_content_hashes=False)` and `prepare_portable_assets(..., derivation=Path(...))` bind a bounded conversion declaration, the pinned source identity, resulting size and immutable local stamps. Derived payloads retain null digests; source hashes are never presented as subset hashes. Schema-3 receipts reopen the same declared subset; ordinary official assets keep their existing contract.

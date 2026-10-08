@@ -62,14 +62,15 @@ def validate_residency(plan: Any, choice: str, attention: str, hybrid: Any) -> s
     if choice != "resident":
         raise ContractError("pipeline weight_residency must be block-ring or resident")
     if (
-        plan.target.compute_capability != "9.0"
-        or plan.gpu_memory_gib < 75
+        plan.target.compute_capability not in {"9.0", "12.0"}
+        or plan.gpu_memory_gib < (90 if plan.target.compute_capability == "12.0" else 75)
         or plan.parallel_strategy != "single"
         or attention != "veda-triton"
         or hybrid is None
     ):
         raise ContractError(
-            "resident pipeline requires a single >=75GiB SM90 hybrid Veda allocation"
+            "resident pipeline requires a single hybrid Veda allocation: "
+            ">=75GiB SM90 or >=90GiB SM120"
         )
     allocator = os.environ.get(
         "PYTORCH_ALLOC_CONF", os.environ.get("PYTORCH_CUDA_ALLOC_CONF", "")
