@@ -1,5 +1,10 @@
 # 版本更新
 
+## 0.6.15
+
+修复显式驻留I2VA请求的首帧校验。I2VA的时间首帧与Ref2VA有序参考列表不同，旧校验会在推理前拒绝合法请求。容量、allocator与硬件范围不变；回归测试改用真实`VideoRequest`合同。
+
+
 ## 0.6.13 · 异构设备预览与CPU准备 {#v0-6-13}
 
 新增SM90/SM103/SM120显式profile、分区探测、不可变资产目标视图与CPU hybrid小表。H100 SXM与PRO Server/Workstation已有完整I2VA hybrid/Veda实测，其他新卡和模式仍未资格；SM89默认及原Veda名称保持。见[范围与测量](../guide/profiles#heterogeneous)。

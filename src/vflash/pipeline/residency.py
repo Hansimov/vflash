@@ -95,7 +95,7 @@ def validate_resident_request(choice: str, request: Any) -> None:
         request.mode != "i2va"
         or request.width * request.height > 1536 * 864
         or request.model_frames > 362
-        or len(request.ordered_references) != 1
+        or request.first_frame is None
     ):
         raise ContractError(
             "resident I2VA supports one first frame, at most 1536x864 pixels and 15 seconds; "

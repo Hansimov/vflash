@@ -1,5 +1,10 @@
 # Release notes
 
+## 0.6.15
+
+Fix the opt-in resident I2VA request check to use the temporal first frame. I2VA intentionally has no Ref2VA `ordered_references`; the previous check rejected valid keyframe requests before inference. Capacity, allocator and hardware restrictions are unchanged. Regression coverage now uses the real `VideoRequest` contract.
+
+
 ## 0.6.13 · Heterogeneous device preview and CPU preparation {#v0-6-13}
 
 Adds explicit SM90/SM103/SM120 profiles, partition-aware discovery, portable immutable asset views and CPU-prepared hybrid tables. Complete I2VA hybrid/Veda measured on H100 SXM and PRO Server/Workstation; other new cards and modes remain unqualified. SM89 defaults and the original Veda name remain available. See [scope and measurements](../guide/profiles#heterogeneous).

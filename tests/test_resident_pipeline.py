@@ -33,20 +33,34 @@ def test_explicit_resident_requires_large_h100_and_tested_allocator(monkeypatch)
             validate_residency(plan(), "resident", attention, hybrid)
 
 
-def test_resident_capacity_rejects_larger_or_different_modes_before_execution():
-    request = N(
-        mode="i2va", width=1536, height=864, model_frames=362, ordered_references=(object(),)
+def test_resident_capacity_uses_real_keyframe_contract():
+    from dataclasses import replace
+    from pathlib import Path
+
+    from vflash.pipeline.contracts import VideoRequest
+
+    request = VideoRequest(
+        prompt="A clock moves.",
+        first_frame=Path("first.png"),
+        width=1536,
+        height=864,
+        duration_seconds=15,
     )
+    assert request.ordered_references == ()
     validate_resident_request("resident", request)
+    validate_resident_request(
+        "resident", replace(request, width=512, height=512, duration_seconds=5)
+    )
     for change in (
         {"width": 1920, "height": 1088},
-        {"model_frames": 363},
-        {"mode": "fl2va"},
-        {"ordered_references": (object(), object())},
+        {"last_frame": Path("last.png")},
+        {"first_frame": None, "width": 512, "height": 512},
+        {"first_frame": None, "references": (Path("ref.png"),)},
     ):
+        changed = replace(request, duration_seconds=5, **change)
         with pytest.raises(ContractError, match="resident I2VA"):
-            validate_resident_request("resident", N(**(vars(request) | change)))
-        validate_resident_request("block-ring", N(**(vars(request) | change)))
+            validate_resident_request("resident", changed)
+        validate_resident_request("block-ring", changed)
 
 
 def test_explicit_residency_reaches_native_owner_before_any_cuda_api(monkeypatch):
