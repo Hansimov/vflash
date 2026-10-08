@@ -41,6 +41,9 @@ def test_tampered_t2_sm86_plan_rejected_before_runtime(monkeypatch, tmp_path, st
     "profile_id,capability,memory,strategy,residency",
     [
         ("ref2va-turbo4-exact-sm89", "8.9", 48.0, "single", "default"),
+        ("i2va-turbo4-v01-544-exact-sm90", "9.0", 80.0, "single", "default"),
+        ("i2va-turbo4-v01-544-exact-sm103", "10.3", 34.0, "single", "default"),
+        ("i2va-turbo4-v01-544-exact-sm120", "12.0", 96.0, "single", "default"),
         ("t2va-turbo4-exact-sm89", "8.9", 48.0, "single", "default"),
         ("ref2va-turbo8-exact-sm89", "8.9", 48.0, "single", "block-ring"),
         ("ref2va-turbo4-exact-sm86", "8.6", 20.0, "single", "default"),
@@ -149,6 +152,8 @@ def test_session_loads_once_and_keeps_request_accounting_separate(
         and expected_nfe == 16
     )
     assert loads[0]["attention_backend"] == ("sol-sm89" if sol else "torch-flash")
+    if residency == "default" and capability not in {"8.6", "8.9"}:
+        residency = plan.target.weight_residency
     assert loads[0]["weight_residency"] == (
         "block-ring" if sol and residency == "default" else residency
     )

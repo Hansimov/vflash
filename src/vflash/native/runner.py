@@ -149,7 +149,10 @@ class NativeEngineSession:
                     "approximate attention requires block-ring weight residency"
                 )
         require_attention_dependencies(attention_backend)
-        if weight_residency == "default":
+        if weight_residency == "default" and plan.target.compute_capability not in {
+            "8.6",
+            "8.9",
+        }:
             weight_residency = plan.target.weight_residency
         os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(plan.gpu_uuids)
 
