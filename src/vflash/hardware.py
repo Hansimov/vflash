@@ -1,9 +1,10 @@
-"""NVIDIA device discovery for the two deliberately narrow Vflash targets."""
+"""NVIDIA device discovery for explicit Vflash targets and optional visible CUDA partitions."""
 
 from __future__ import annotations
 
 import csv
 import io
+import os
 import subprocess
 from dataclasses import dataclass
 
@@ -21,14 +22,20 @@ class NvidiaDevice:
 
 
 def discover_nvidia_devices() -> tuple[NvidiaDevice, ...]:
+    if os.environ.get("VFLASH_DEVICE_DISCOVERY") == "cuda-visible":
+        from vflash.cuda_visible import visible_devices
+
+        return visible_devices()
     command = (
         "nvidia-smi",
         "--query-gpu=index,uuid,name,memory.total,compute_cap,power.limit",
         "--format=csv,noheader,nounits",
     )
     try:
-        completed = subprocess.run(command, check=True, capture_output=True, text=True)
-    except (FileNotFoundError, subprocess.CalledProcessError) as exc:
+        completed = subprocess.run(
+            command, check=True, capture_output=True, text=True, timeout=10
+        )
+    except (FileNotFoundError, subprocess.SubprocessError) as exc:
         raise ContractError("nvidia-smi could not enumerate GPUs") from exc
     devices = []
     for row in csv.reader(io.StringIO(completed.stdout), skipinitialspace=True):

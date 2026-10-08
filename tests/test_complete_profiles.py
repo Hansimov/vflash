@@ -109,6 +109,11 @@ def test_turbo_and_reference_profiles_remain_single_mode():
         "i2va-turbo4-v01-544-exact-sm89",
         "fl2va-turbo4-v01-544-exact-sm89",
     }
+    paired.update(
+        f"{mode}-turbo4-v01-544-exact-{arch}"
+        for mode in ("i2va", "fl2va")
+        for arch in ("sm90", "sm103", "sm120")
+    )
     for profile_id in COMPLETE_MODEL_PROFILES:
         if profile_id not in paired:
             assert supported_request_modes(profile_id) == (
@@ -374,7 +379,12 @@ def test_complete_constructor_owns_one_explicit_device_group(monkeypatch, tmp_pa
     assets = PipelineAssets(**{name: tmp_path for name in PipelineAssets.__dataclass_fields__})
     prepared = PreparedPipelineAssets(assets, tmp_path / "receipt", "a" * 64, (), profile_id)
     device = NvidiaDevice(
-        0, "primary-test-device", "test", 48, profile.hardware.compute_capability, 300
+        0,
+        "primary-test-device",
+        "test",
+        max(48, profile.hardware.minimum_memory_gib),
+        profile.hardware.compute_capability,
+        300,
     )
     peer = (
         NvidiaDevice(1, "peer-test-device", "test", 20, "8.6", 300)

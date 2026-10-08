@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from vflash.contracts import ContractError
+from vflash.hardware_profiles import V01_PROFILES
 
 
 @dataclass(frozen=True)
@@ -24,22 +25,30 @@ class HybridModel:
 
     def validate(self, *, profile_id, capability, strategy, attention_backend):
         if (
-            profile_id
-            not in {"i2va-turbo4-v01-544-exact-sm89", "fl2va-turbo4-v01-544-exact-sm89"}
-            or capability != "8.9"
+            profile_id not in V01_PROFILES
+            or capability not in {"8.9", "9.0", "10.3", "12.0"}
             or strategy != "single"
-            or attention_backend not in {"torch-flash", "veda-sm89"}
+            or attention_backend not in {"torch-flash", "veda-sm89", "veda-triton"}
             or not isinstance(self.reference_directory, Path)
         ):
             raise ContractError(
-                "hybrid requires original FL v0.1 on one SM89 with dense or Veda attention"
+                "hybrid requires original FL v0.1 on one supported GPU "
+                "with dense or Veda attention"
             )
+        if (self.reference_directory / "hybrid-cache.json").is_file():
+            from vflash.native.h3_prepared_hybrid import inspect
+
+            return inspect(self.reference_directory)[1]
         from vflash.adapters.checkpoints import IndexedCheckpoint
 
         validate_hybrid_reference(IndexedCheckpoint(self.reference_directory))
         return self.stamps()
 
     def stamps(self):
+        if (self.reference_directory / "hybrid-cache.json").is_file():
+            from vflash.native.h3_prepared_hybrid import inspect
+
+            return inspect(self.reference_directory)[1]
         from vflash.model_assets import upstream_inventory
 
         rows = []
@@ -189,7 +198,8 @@ def hybrid_reference_source(base_source, *, reference_revision, runtime_versions
             for k in ("model_repository", "model_revision", "oracle", "oracle_revision")
         },
         "transformer_sha256": _digest(recipe),
-        "oracle_profile": "ref2va-hybrid-fl-v01-bf16-sm89",
+        "oracle_profile": "ref2va-hybrid-fl-v01-bf16-"
+        + base_source["oracle_profile"].rsplit("-", 1)[-1],
         "oracle_config_sha256": _digest(
             dict(
                 workflow="ref2va",
@@ -201,7 +211,7 @@ def hybrid_reference_source(base_source, *, reference_revision, runtime_versions
                 text_precision="bf16",
             )
         ),
-        "oracle_hardware": "sm89-single",
+        "oracle_hardware": base_source["oracle_profile"].rsplit("-", 1)[-1] + "-single",
         "oracle_runtime_sha256": _digest(runtime_versions or {}),
     }
 

@@ -66,7 +66,7 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
     generate.add_argument("--attention-adapter-scale", type=float)
     generate.add_argument(
         "--attention-backend",
-        choices=("auto", "torch-flash", "sol-sm89", "veda-sm89"),
+        choices=("auto", "torch-flash", "sol-sm89", "veda-sm89", "veda-triton"),
         default="auto",
         help="auto selects approximate Sol for single-SM89 Base16; torch-flash is dense",
     )

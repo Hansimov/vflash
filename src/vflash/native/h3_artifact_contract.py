@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+
+from vflash.hardware_profiles import REMOTE_ARCHITECTURES, target_id
 
 GIB = 1024**3
 
@@ -64,6 +66,18 @@ H3_ARTIFACT_TARGETS = {
         fallback="event-driven-block-ring",
     ),
 }
+
+
+for _arch, (_cap, _memory, _residency) in REMOTE_ARCHITECTURES.items():
+    H3_ARTIFACT_TARGETS[target_id(_arch)] = replace(
+        H3_ARTIFACT_TARGETS["rtx4090-48g-sm89-bf16-resident"],
+        target_id=target_id(_arch),
+        compute_capability=_arch,
+        nominal_device_bytes=(_memory + 1) * GIB,
+        fallback="event-driven-block-ring"
+        if _residency == "block-ring"
+        else "fail-closed-no-streaming",
+    )
 
 
 def resolve_h3_artifact_target(target_id: str) -> H3ArtifactTarget:

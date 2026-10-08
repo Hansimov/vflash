@@ -5,8 +5,9 @@ from __future__ import annotations
 from importlib.util import find_spec
 
 from vflash.contracts import ContractError, ExecutionPlan
+from vflash.hardware_profiles import V01_PROFILES
 
-ATTENTION_BACKENDS = ("auto", "torch-flash", "sol-sm89", "veda-sm89")
+ATTENTION_BACKENDS = ("auto", "torch-flash", "sol-sm89", "veda-sm89", "veda-triton")
 
 
 def resolve_attention_backend(plan: ExecutionPlan, requested: str = "auto") -> str:
@@ -23,7 +24,7 @@ def resolve_attention_backend(plan: ExecutionPlan, requested: str = "auto") -> s
         and plan.profile.adapter is None
     )
     original_v01 = (
-        plan.profile.id in {"i2va-turbo4-v01-544-exact-sm89", "fl2va-turbo4-v01-544-exact-sm89"}
+        plan.profile.id in V01_PROFILES
         and plan.profile.nfe == 4
         and plan.profile.adapter == "lightx2v/Minimax-h3-Turbo"
     )
@@ -32,8 +33,17 @@ def resolve_attention_backend(plan: ExecutionPlan, requested: str = "auto") -> s
             "Sol requires single-SM89 official Base16 or original LightX v0.1 keyframes; "
             "use torch-flash here"
         )
-    if requested == "veda-sm89" and not (single_sm89 and original_v01):
-        raise ContractError("Veda requires original LightX v0.1 on one SM89")
+    if requested in {"veda-sm89", "veda-triton"} and not (
+        plan.target.compute_capability in {"8.9", "9.0", "10.3", "12.0"}
+        and plan.parallel_strategy == "single"
+        and plan.peer_device is None
+        and original_v01
+    ):
+        raise ContractError("Veda requires original LightX v0.1 on one supported GPU")
+    if requested == "veda-sm89" and not single_sm89:
+        raise ContractError(
+            "veda-sm89 requires SM89; use veda-triton for other qualified devices"
+        )
     # Few-step approximation is opt-in, independently of the Base16 default.
     return (
         ("sol-sm89" if single_sm89 and base16 else "torch-flash")
@@ -50,7 +60,7 @@ def require_attention_dependencies(backend: str) -> None:
             "No dense fallback is performed."
         )
 
-    if backend == "veda-sm89":
+    if backend in {"veda-sm89", "veda-triton"}:
         try:
             from veda_comfy._vflash_pin import REVISION
 

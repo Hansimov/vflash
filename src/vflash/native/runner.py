@@ -12,6 +12,7 @@ from typing import Any
 
 from vflash.attention import require_attention_dependencies, resolve_attention_backend
 from vflash.contracts import ContractError, ExecutionPlan, GenerationMode
+from vflash.hardware_profiles import V01_PROFILES
 from vflash.native.h3_conditioning_bundle import H3InMemoryConditioning
 
 WEIGHT_PROFILES = {
@@ -33,6 +34,9 @@ WEIGHT_PROFILES = {
     "fl2va-base16-bf16-sm89": "minimax-h3-base",
     "fl2va-base16-bf16-sm86": "minimax-h3-base",
 }
+
+
+WEIGHT_PROFILES.update({profile: "lightx-turbo4-v0.1-544" for profile in V01_PROFILES})
 
 
 class NativeEngineSession:
@@ -75,7 +79,13 @@ class NativeEngineSession:
             or not profile.attention.exact
             or plan.target.id not in profile.target_ids
             or (plan.target.compute_capability, plan.target.weight_residency)
-            not in {("8.6", "block-ring"), ("8.9", "resident")}
+            not in {
+                ("8.6", "block-ring"),
+                ("8.9", "resident"),
+                ("9.0", "resident"),
+                ("10.3", "block-ring"),
+                ("12.0", "block-ring"),
+            }
         ):
             raise ContractError(
                 "the public denoiser supports exact Ref2VA/T2VA Turbo4 on SM86, "
@@ -131,7 +141,7 @@ class NativeEngineSession:
                 strategy=plan.parallel_strategy,
                 attention_backend=attention_backend,
             )
-        if attention_backend in {"sol-sm89", "veda-sm89"}:
+        if attention_backend in {"sol-sm89", "veda-sm89", "veda-triton"}:
             if weight_residency == "default":
                 weight_residency = "block-ring"
             if weight_residency != "block-ring":
@@ -139,6 +149,8 @@ class NativeEngineSession:
                     "approximate attention requires block-ring weight residency"
                 )
         require_attention_dependencies(attention_backend)
+        if weight_residency == "default":
+            weight_residency = plan.target.weight_residency
         os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(plan.gpu_uuids)
 
         from vflash.native.h3_native_conditioning_runtime import H3NativeConditioningRuntime

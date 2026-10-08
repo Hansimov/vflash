@@ -1,4 +1,4 @@
-"""Explicit approximate Veda attention for original v0.1 on one SM89.
+"""Explicit approximate Veda attention for original v0.1 on one supported GPU.
 
 The external MIT Veda core owns the predictor and INT8 sparse kernel. The first
 and last five layers use Torch Flash; remaining layers keep condition/audio/text
@@ -18,12 +18,12 @@ DENSE_LAYERS = frozenset((*range(5), *range(45, 50)))
 
 def validate_predictor(backend: str, predictor: Path | None) -> None:
     """Check only small metadata before allocating CUDA or loading weights."""
-    if backend != "veda-sm89":
+    if backend not in {"veda-sm89", "veda-triton"}:
         if predictor is not None:
-            raise ContractError("a Veda predictor requires attention_backend=veda-sm89")
+            raise ContractError("a Veda predictor requires attention_backend=veda-triton")
         return
     if not isinstance(predictor, Path) or not predictor.is_file():
-        raise ContractError("veda-sm89 requires a local --veda-predictor safetensors file")
+        raise ContractError("veda-triton requires a local --veda-predictor safetensors file")
     from safetensors import safe_open
 
     with safe_open(predictor, framework="pt", device="cpu") as handle:
@@ -70,15 +70,20 @@ def target_layout(
 class VedaVideoAttention:
     """One owned predictor per session; geometry and counters reset per request."""
 
-    def __init__(self, device: Any, predictor: Path) -> None:
+    def __init__(self, device: Any, predictor: Path, *, backend: str = "veda-sm89") -> None:
         import torch
         from veda_comfy import backends
         from veda_comfy.core.bundle import load_bundle
         from veda_comfy.core.engine import VedaEngine
         from veda_comfy.core.selection import Budget
 
-        if torch.cuda.get_device_capability(device) != (8, 9):
-            raise ValueError("veda-sm89 requires SM89")
+        if torch.cuda.get_device_capability(device) not in {(8, 9), (9, 0), (10, 3), (12, 0)}:
+            raise ValueError("Veda requires SM89, SM90, SM103 or SM120")
+        if backend not in {"veda-sm89", "veda-triton"} or (
+            backend == "veda-sm89" and torch.cuda.get_device_capability(device) != (8, 9)
+        ):
+            raise ValueError("Veda backend differs from the device contract")
+        self.backend = backend
         resolved = backends.resolve(device)
         if resolved.backend is None or resolved.backend.name != "triton-int8":
             raise RuntimeError("Veda triton-int8 self-test failed; dense fallback is disabled")
@@ -124,7 +129,7 @@ class VedaVideoAttention:
 
     def metadata(self) -> dict[str, Any]:
         return {
-            "attention_backend": "veda-sm89",
+            "attention_backend": getattr(self, "backend", "veda-sm89"),
             "exact": False,
             "effective_backends": ["triton-int8", "torch-flash"],
             "dense_layers": sorted(DENSE_LAYERS),

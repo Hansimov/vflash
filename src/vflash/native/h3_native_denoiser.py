@@ -1447,7 +1447,7 @@ class H3NativeDenoiserBF16Ring:
             raise H3NativeDenoiserError("the BF16 block ring requires a CUDA device")
         if not artifact.is_complete_block_stack or len(host_blocks) != artifact.spec.num_layers:
             raise H3NativeDenoiserError("the BF16 block ring requires a complete block stack")
-        if artifact.target.compute_capability not in {"sm86", "sm89"}:
+        if artifact.target.compute_capability not in {"sm86", "sm89", "sm90", "sm103", "sm120"}:
             raise H3NativeDenoiserError("the BF16 block ring requires an SM86 or SM89 artifact")
         capability = torch.cuda.get_device_capability(runtime_device)
         if artifact.target.compute_capability != f"sm{capability[0]}{capability[1]}":

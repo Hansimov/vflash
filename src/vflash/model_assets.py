@@ -12,6 +12,7 @@ from typing import Any
 
 from vflash.catalog import ProfileCatalog
 from vflash.contracts import ContractError, HardwareTarget, Profile
+from vflash.hardware_profiles import REMOTE_ARCHITECTURES, V01_PROFILES, base_profile
 from vflash.native.h3_distilled_lora import (
     H3DistilledLoraContract,
     h3_distilled_lora_contract_for_profile,
@@ -211,6 +212,18 @@ class H3ModelProfile:
         return f"{family}-bf16-{self.adapter_execution}-{self.architecture}-v1"
 
 
+COMPLETE_MODEL_PROFILES = tuple(
+    dict.fromkeys((*COMPLETE_MODEL_PROFILES, *sorted(V01_PROFILES)))
+)
+for _arch in REMOTE_ARCHITECTURES:
+    for _mode in ("i2va", "fl2va"):
+        _id = f"{_mode}-turbo4-v01-544-exact-{_arch}"
+        _KEYFRAME_PROFILE_BY_MODE[_id] = {
+            mode: value.replace("sm89", _arch)
+            for mode, value in _KEYFRAME_PROFILE_BY_MODE[base_profile(_id)].items()
+        }
+
+
 def model_profile(profile_id: str = DEFAULT_MODEL_PROFILE) -> H3ModelProfile:
     if profile_id not in COMPLETE_MODEL_PROFILES:
         raise ContractError("unsupported complete-pipeline model profile")
@@ -222,8 +235,7 @@ def model_profile(profile_id: str = DEFAULT_MODEL_PROFILE) -> H3ModelProfile:
             "lightx-ref-turbo4-v0.1"
             if definition.mode.value == "ref2va"
             else "lightx-turbo4-v0.1-544"
-            if profile_id
-            in {"i2va-turbo4-v01-544-exact-sm89", "fl2va-turbo4-v01-544-exact-sm89"}
+            if profile_id in V01_PROFILES
             else "lightx-turbo8-v1.0-544"
             if profile_id in {"i2va-turbo8-544-exact-sm89", "fl2va-turbo8-544-exact-sm89"}
             else f"lightx-turbo{definition.nfe}-v1.0"

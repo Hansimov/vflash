@@ -1,5 +1,78 @@
 # Profiles and hardware
 
+## H100 and Blackwell preview (0.6.13) {#heterogeneous}
+
+Original-v0.1 I2VA with explicit hybrid modulation and `veda-triton` has complete
+video evidence on **H100 SXM 80 GB (SM90)** and **RTX PRO 6000 Blackwell Server
+96 GB (SM120)**. Existing `veda-sm89` names, defaults and behavior are preserved.
+SM103, RTX 5090, workstation cards, H100 NVL/PCIe, MIG partitions and new-device
+FL2VA are explicit previews without complete-device qualification. A catalog
+entry or CUDA probe is not proof that a workload fits or meets quality needs.
+
+The frozen four-step diagnostic uses BF16 weights, two-slot block streaming,
+Veda Triton INT8 sparse attention and 24 fps. Same-input warm total seconds:
+
+| Request | PRO Server | H100 SXM |
+| --- | ---: | ---: |
+| 512² / 5 s | 19.969 | 25.403 |
+| 928×512 / 5 s | 29.534 | 28.949 |
+| 1280×704 / 5 s | 51.855 | 48.656 |
+| 1536² / 5 s | 144.122 | 135.542 |
+| 512² / 15 s | 43.624 | 52.007 |
+
+Initialization took 169.575 / 147.109 seconds; first cold generation 112.538 /
+110.788 seconds, respectively, excluding container provisioning. Peak host RSS
+was 106.7 / 106.2 GiB. Provision at least 128 GB host RAM with headroom; device
+memory alone does not determine compatibility. Six videos per card passed full
+AV decoding, dimensions, frame rate and duration checks. Multi-time frame review
+found background drift and imperfect motion/shape adherence; audio semantics
+were not independently auditioned. These are not broad quality guarantees.
+
+A separate product path with aspect-preserving cover preprocessing and decoded
+keyframes on PRO Server measured 18.552, 24.996, 48.441, **199.668**, and 41.905
+seconds for those warm cases. Different host CPU allocation and processing make
+this an integration measurement, not a controlled speedup/regression comparison.
+The 1536² product media stage alone took 92.540 seconds. End-to-end decisions must
+include conditioning, media, initialization and the actual caller's preprocessing.
+Aggregate evidence originated in the product experiment through `1865e6ff`;
+no product accounts, rental logic, prompts, media or machine configuration ship here.
+
+Use `VFLASH_DEVICE_DISCOVERY=cuda-visible` in partitioned/container environments.
+An isolated CUDA subprocess matches the visible UUID and **partition memory**
+against NVIDIA enumeration; it never substitutes the parent card's capacity.
+Discovery is opt-in, and failure is explicit. Tested MIG identity mapping is CPU
+contract evidence only, not an actual MIG inference benchmark.
+
+CPU preparation can happen before a GPU is rented:
+
+```python
+from pathlib import Path
+from vflash.pipeline.assets import load_prepared_pipeline_assets
+from vflash.pipeline.portable import prepare_portable_assets
+from vflash.native.h3_runtime_artifact import load_h3_runtime_artifact
+from vflash.native.h3_schedule_overlay import load_h3_schedule_overlay
+from vflash.native.h3_prepared_hybrid import prepare
+from vflash.adapters.checkpoints import IndexedCheckpoint
+
+source = load_prepared_pipeline_assets(Path("/models/prepared-sm89.json"))
+prepared = prepare_portable_assets(source.assets, Path("/models/sm120-view"), "sm120")
+artifact = load_h3_runtime_artifact(prepared.assets.artifact, verify_content_hashes=False)
+overlay = load_h3_schedule_overlay(prepared.assets.schedule_overlay, artifact=artifact)
+prepare(Path("/models/hybrid-sm120"), artifact, overlay,
+        IndexedCheckpoint(Path("/models/transformer_ref")))
+```
+
+Pass the new prepared receipt and `HybridModel(Path("/models/hybrid-sm120"))`
+to the existing pipeline, explicitly selecting `attention_backend="veda-triton"`.
+Keep the ingested source mounted read-only. Portable preparation uses existing
+trusted inventories, records the original compile target and source manifest,
+creates a directory view plus small schedule copies, and does not hash giant
+weights. It must not hardlink serving files: changing link counts changes ctime
+and invalidates old receipts. CPU-derived tables are checked separately by digest,
+shape, dtype, finite values and backbone/schedule binding. No weights are bundled.
+Source/wheel release only; select a compatible CUDA/Torch/Triton runtime explicitly.
+
+
 A profile chooses the model, LoRA revision, step count, and arithmetic. Its default memory strategy follows the selected hardware. Choose one that matches both your hardware and compiled assets.
 
 ## Available profiles {#available}

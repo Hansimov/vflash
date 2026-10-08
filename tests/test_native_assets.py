@@ -232,6 +232,7 @@ def test_conditioning_capture_schedule_can_differ_from_execution(monkeypatch, tm
     )
     packed = torch.arange(6, dtype=torch.float32).reshape(1, 3, 2).to(torch.bfloat16)
     tensors = {
+        "position_ids": torch.zeros(3, 4, dtype=torch.int64),
         "video_indices": torch.tensor([0]),
         "audio_indices": torch.tensor([1]),
         "text_indices": torch.tensor([2]),

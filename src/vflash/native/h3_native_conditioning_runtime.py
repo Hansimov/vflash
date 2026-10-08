@@ -58,7 +58,7 @@ def _attention_policy(
 ) -> dict[str, Any]:
     if sol is not None:
         return sol.metadata()
-    if configured_backend in {"sol-sm89", "veda-sm89"}:
+    if configured_backend in {"sol-sm89", "veda-sm89", "veda-triton"}:
         return {
             "attention_backend": configured_backend,
             "exact": False,
@@ -119,7 +119,7 @@ def validate_conditioning_source(source: dict, artifact_source: dict) -> None:
     )
     expected_profile = artifact_source.get("oracle_profile", "")
     profile = source.get("oracle_profile", "")
-    for suffix in ("-sm86", "-sm89"):
+    for suffix in ("-sm86", "-sm89", "-sm90", "-sm103", "-sm120"):
         expected_profile = expected_profile.removesuffix(suffix)
         profile = profile.removesuffix(suffix)
     keyframe_profiles = {
@@ -204,7 +204,7 @@ class H3NativeConditioningRuntime:
     ) -> None:
         import torch
 
-        if attention_backend not in {"torch-flash", "sol-sm89", "veda-sm89"}:
+        if attention_backend not in {"torch-flash", "sol-sm89", "veda-sm89", "veda-triton"}:
             raise H3NativeConditioningRuntimeError("unknown native attention backend")
         if expected_task not in {None, "ref2va", "t2va", "i2va", "l2va", "fl2va"}:
             raise H3NativeConditioningRuntimeError("unsupported native generation task")
@@ -229,15 +229,17 @@ class H3NativeConditioningRuntime:
             raise H3NativeConditioningRuntimeError(
                 "approximate Sol requires single-SM89 Base16 or original LightX v0.1 keyframes"
             )
-        if attention_backend == "veda-sm89" and (
-            capability != (8, 9)
+        if attention_backend in {"veda-sm89", "veda-triton"} and (
+            capability not in {(8, 9), (9, 0), (10, 3), (12, 0)}
             or parallel_strategy != "single"
             or (expected_weight_profile, expected_nfe) != ("lightx-turbo4-v0.1-544", 4)
         ):
-            raise H3NativeConditioningRuntimeError("Veda requires single-SM89 original v0.1")
-        if capability not in {(8, 6), (8, 9)}:
+            raise H3NativeConditioningRuntimeError("Veda requires single-device original v0.1")
+        if attention_backend == "veda-sm89" and capability != (8, 9):
+            raise H3NativeConditioningRuntimeError("veda-sm89 requires SM89")
+        if capability not in {(8, 6), (8, 9), (9, 0), (10, 3), (12, 0)}:
             raise H3NativeConditioningRuntimeError(
-                "the live native runtime currently supports only SM86 and SM89"
+                "the live native runtime does not support this CUDA architecture"
             )
         if parallel_strategy not in {"single", "tensor", "sequence-head"}:
             raise H3NativeConditioningRuntimeError("unknown parallel execution strategy")
@@ -252,7 +254,10 @@ class H3NativeConditioningRuntime:
             and weight_residency != "block-ring"
         ):
             raise H3NativeConditioningRuntimeError("unsupported native weight residency")
-        if attention_backend in {"sol-sm89", "veda-sm89"} and weight_residency != "block-ring":
+        if (
+            attention_backend in {"sol-sm89", "veda-sm89", "veda-triton"}
+            and weight_residency != "block-ring"
+        ):
             raise H3NativeConditioningRuntimeError(
                 "approximate attention requires the serial block-ring runtime"
             )
@@ -382,20 +387,25 @@ class H3NativeConditioningRuntime:
                 from vflash.native.h3_hybrid import compile_hybrid_modulation
 
                 if (
-                    capability != (8, 9)
+                    capability not in {(8, 9), (9, 0), (10, 3), (12, 0)}
                     or parallel_strategy != "single"
-                    or attention_backend not in {"torch-flash", "veda-sm89"}
+                    or attention_backend not in {"torch-flash", "veda-sm89", "veda-triton"}
                 ):
                     raise H3NativeConditioningRuntimeError(
-                        "hybrid requires single-SM89 dense or Veda attention"
+                        "hybrid requires single-device dense or Veda attention"
                     )
                 hybrid_started = time.monotonic()
-                self.overlay = compile_hybrid_modulation(
-                    artifact,
-                    overlay,
-                    IndexedCheckpoint(hybrid_reference_directory),
-                    device=resolved_device,
-                )
+                if (hybrid_reference_directory / "hybrid-cache.json").is_file():
+                    from vflash.native.h3_prepared_hybrid import load
+
+                    self.overlay = load(hybrid_reference_directory, artifact, overlay)
+                else:
+                    self.overlay = compile_hybrid_modulation(
+                        artifact,
+                        overlay,
+                        IndexedCheckpoint(hybrid_reference_directory),
+                        device=resolved_device,
+                    )
                 hybrid_seconds = time.monotonic() - hybrid_started
             self.initialization_stages = {
                 "contract": contract_seconds,
@@ -574,7 +584,7 @@ class H3NativeConditioningRuntime:
         if bundle.schema_version in {3, 4, 5}:
             keyframe_topology = (
                 len(self.devices) == 1
-                and self.compute_capability == (8, 9)
+                and self.compute_capability in {(8, 9), (9, 0), (10, 3), (12, 0)}
                 and self.parallel_strategy == "single"
             ) or (
                 len(self.devices) == 2
@@ -676,7 +686,7 @@ class H3NativeConditioningRuntime:
             for slot in slots:
                 slot._sol_attention = operator
             self._sol_attention = operator
-        if self.attention_backend == "veda-sm89":
+        if self.attention_backend in {"veda-sm89", "veda-triton"}:
             from vflash.native.h3_veda_attention import VedaVideoAttention
 
             if len(slots) != 2 or len(self.denoiser.host_blocks) != 50:
@@ -684,7 +694,9 @@ class H3NativeConditioningRuntime:
                     "Veda requires the complete two-slot H3 ring"
                 )
             if self._veda_attention is None:
-                self._veda_attention = VedaVideoAttention(device, self.veda_predictor)
+                self._veda_attention = VedaVideoAttention(
+                    device, self.veda_predictor, backend=self.attention_backend
+                )
             self._veda_attention.prepare(tensors, bundle.profile)
             for slot in slots:
                 slot._veda_attention = self._veda_attention

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 
 class H3KernelPlanError(ValueError):
@@ -82,6 +82,18 @@ _STRICT_PLANS = {
         latent_state_backend="stable-address-generated-suffix-inplace",
     ),
 }
+
+
+for _arch in ("sm90", "sm103", "sm120"):
+    _STRICT_PLANS[_arch] = replace(
+        _STRICT_PLANS["sm89"],
+        plan_id="h3-" + _arch + "-bf16-preview",
+        compute_capability=_arch,
+        weight_residency="pinned-host-two-slot-event-ring",
+        quality_contract=(
+            "bf16-and-tf32-rounding-boundaries; device-and-mode qualification required"
+        ),
+    )
 
 
 def resolve_h3_kernel_plan(compute_capability: str) -> H3KernelPlan:

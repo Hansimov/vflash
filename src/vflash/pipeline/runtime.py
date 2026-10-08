@@ -243,7 +243,7 @@ class H3Pipeline:
         if request.width * request.height > 1024**2 and (
             self.hybrid_model is None
             or self._plan.parallel_strategy != "single"
-            or self.attention_backend != "veda-sm89"
+            or self.attention_backend not in {"veda-sm89", "veda-triton"}
         ):
             raise ContractError(
                 "native HD requires the original-v0.1 single-SM89 hybrid Veda pipeline"
@@ -257,7 +257,7 @@ class H3Pipeline:
         if extended and (
             self.hybrid_model is None
             or self._plan.parallel_strategy != "single"
-            or self.attention_backend != "veda-sm89"
+            or self.attention_backend not in {"veda-sm89", "veda-triton"}
         ):
             raise ContractError(
                 "extended duration/references require the original-v0.1 "

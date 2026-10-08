@@ -26,7 +26,7 @@ and native-only Turbo profiles retain their latent interface. Optional 544p keyf
 complete-pipeline evidence and artifact identities; original v0.1 defaults to dense with explicit single-SM89 Sol.
 The explicit single-SM89 original-v0.1 hybrid/Veda expansion supports up to fifteen seconds and nine ordered
 images within its joint pixel-frame budget; expanded multi-image Ref remains five seconds / 960x544 area.
-H100 is not qualified. The current profile guide owns the supported boundary; archived release
+H100 SXM and RTX PRO 6000 Server have complete I2VA hybrid/Veda evidence; other new-device profiles remain explicit previews. The current profile guide owns the supported boundary; archived release
 notes describe their original versions, not additional requirements for a new release.
 The dual-SM86 T2 Turbo4 native profile additionally requires `sequence-head` and Base-specific SM86 compilation.
 Its application-stage integration is qualified at two fixed geometries; the standalone five-second `H3Pipeline`

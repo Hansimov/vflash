@@ -1,5 +1,10 @@
 # Release notes
 
+## 0.6.13 · Heterogeneous device preview and CPU preparation {#v0-6-13}
+
+Adds explicit SM90/SM103/SM120 profiles, partition-aware discovery, portable immutable asset views and CPU-prepared hybrid tables. Complete I2VA hybrid/Veda measured on H100 SXM and PRO Server; other new cards and modes remain unqualified. SM89 defaults and the original Veda name remain available. See [scope and measurements](../guide/profiles#heterogeneous).
+
+
 ## 0.6.12 · Qualified duration and reference expansion {#v0-6-12}
 
 Single-SM89 original-v0.1 hybrid/Veda now supports up to fifteen-second image-conditioned delivery and nine ordered images, within a joint resource bound. Fixes VAE padding at fifteen seconds and extends exact media trimming. Standard profiles, paired/SM86 execution and video references keep their earlier limits; H100 is not qualified. See [complete pipeline](../guide/complete-pipeline#extended-hybrid) and [measured cases](./performance#extended-hybrid).

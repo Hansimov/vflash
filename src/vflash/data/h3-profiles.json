@@ -15,6 +15,27 @@
       "minimum_memory_gib": 45.0,
       "weight_residency": "resident",
       "block_prefetch_slots": 2
+    },
+    {
+      "id": "remote-sm90-bf16-preview",
+      "compute_capability": "9.0",
+      "minimum_memory_gib": 75,
+      "weight_residency": "resident",
+      "block_prefetch_slots": 2
+    },
+    {
+      "id": "remote-sm103-bf16-preview",
+      "compute_capability": "10.3",
+      "minimum_memory_gib": 31,
+      "weight_residency": "block-ring",
+      "block_prefetch_slots": 2
+    },
+    {
+      "id": "remote-sm120-bf16-preview",
+      "compute_capability": "12.0",
+      "minimum_memory_gib": 30,
+      "weight_residency": "block-ring",
+      "block_prefetch_slots": 2
     }
   ],
   "profiles": [
@@ -91,11 +112,19 @@
         "backend": "torch-flash",
         "exact": true,
         "backend_by_evaluation": [
-          "torch-flash", "torch-flash", "torch-flash", "torch-flash",
-          "torch-flash", "torch-flash", "torch-flash", "torch-flash"
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash"
         ]
       },
-      "target_ids": ["sm89-48g-resident"],
+      "target_ids": [
+        "sm89-48g-resident"
+      ],
       "quality_statement": "Experimental 544p-trained keyframe adapter with its own pinned weights and 12/3 schedule. Exact describes attention only. Native SM89 qualification is pending; this is not a production default or a general quality claim."
     },
     {
@@ -115,11 +144,19 @@
         "backend": "torch-flash",
         "exact": true,
         "backend_by_evaluation": [
-          "torch-flash", "torch-flash", "torch-flash", "torch-flash",
-          "torch-flash", "torch-flash", "torch-flash", "torch-flash"
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash"
         ]
       },
-      "target_ids": ["sm89-48g-resident"],
+      "target_ids": [
+        "sm89-48g-resident"
+      ],
       "quality_statement": "Experimental 544p-trained first/last-frame adapter; also accepts true last-only conditioning through the matched I2/FL pair. Native SM89 qualification is pending. It must not reuse the 768p adapter or its 6/3 schedule."
     },
     {
@@ -545,6 +582,174 @@
         "sm86-20g-block-ring"
       ],
       "quality_statement": "Official Base transformer at 16 evaluations with explicit first- and last-frame anchors on two SM86 GPUs using sequence-head execution. The public contract is implemented; target-hardware latency and output quality are not yet qualified."
+    },
+    {
+      "id": "i2va-turbo4-v01-544-exact-sm90",
+      "mode": "i2va",
+      "availability": "preview",
+      "model": "MiniMaxAI/MiniMax-H3",
+      "model_revision": "42ed227ee7df40d41602854ae760620d6eb651fe",
+      "adapter": "lightx2v/Minimax-h3-Turbo",
+      "adapter_revision": "3ec17a324ced54151364f24f8b5fb6bf7e26414f",
+      "nfe": 4,
+      "scheduler": "h3-training-euler",
+      "video_flow_shift": 12,
+      "audio_flow_shift": 3,
+      "precision": "bf16-runtime-residual",
+      "attention": {
+        "backend": "torch-flash",
+        "exact": true,
+        "backend_by_evaluation": [
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash"
+        ]
+      },
+      "target_ids": [
+        "remote-sm90-bf16-preview"
+      ],
+      "quality_statement": "Explicit BF16 preview. Complete I2VA hybrid/Veda runs measured on H100 SXM and RTX PRO 6000 Server; other SKUs, MIG and FL2VA remain unqualified. Default dense attention has no corresponding cross-device quality claim."
+    },
+    {
+      "id": "fl2va-turbo4-v01-544-exact-sm90",
+      "mode": "fl2va",
+      "availability": "preview",
+      "model": "MiniMaxAI/MiniMax-H3",
+      "model_revision": "42ed227ee7df40d41602854ae760620d6eb651fe",
+      "adapter": "lightx2v/Minimax-h3-Turbo",
+      "adapter_revision": "3ec17a324ced54151364f24f8b5fb6bf7e26414f",
+      "nfe": 4,
+      "scheduler": "h3-training-euler",
+      "video_flow_shift": 12,
+      "audio_flow_shift": 3,
+      "precision": "bf16-runtime-residual",
+      "attention": {
+        "backend": "torch-flash",
+        "exact": true,
+        "backend_by_evaluation": [
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash"
+        ]
+      },
+      "target_ids": [
+        "remote-sm90-bf16-preview"
+      ],
+      "quality_statement": "Explicit BF16 preview. Complete I2VA hybrid/Veda runs measured on H100 SXM and RTX PRO 6000 Server; other SKUs, MIG and FL2VA remain unqualified. Default dense attention has no corresponding cross-device quality claim."
+    },
+    {
+      "id": "i2va-turbo4-v01-544-exact-sm103",
+      "mode": "i2va",
+      "availability": "preview",
+      "model": "MiniMaxAI/MiniMax-H3",
+      "model_revision": "42ed227ee7df40d41602854ae760620d6eb651fe",
+      "adapter": "lightx2v/Minimax-h3-Turbo",
+      "adapter_revision": "3ec17a324ced54151364f24f8b5fb6bf7e26414f",
+      "nfe": 4,
+      "scheduler": "h3-training-euler",
+      "video_flow_shift": 12,
+      "audio_flow_shift": 3,
+      "precision": "bf16-runtime-residual",
+      "attention": {
+        "backend": "torch-flash",
+        "exact": true,
+        "backend_by_evaluation": [
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash"
+        ]
+      },
+      "target_ids": [
+        "remote-sm103-bf16-preview"
+      ],
+      "quality_statement": "Explicit BF16 preview. Complete I2VA hybrid/Veda runs measured on H100 SXM and RTX PRO 6000 Server; other SKUs, MIG and FL2VA remain unqualified. Default dense attention has no corresponding cross-device quality claim."
+    },
+    {
+      "id": "fl2va-turbo4-v01-544-exact-sm103",
+      "mode": "fl2va",
+      "availability": "preview",
+      "model": "MiniMaxAI/MiniMax-H3",
+      "model_revision": "42ed227ee7df40d41602854ae760620d6eb651fe",
+      "adapter": "lightx2v/Minimax-h3-Turbo",
+      "adapter_revision": "3ec17a324ced54151364f24f8b5fb6bf7e26414f",
+      "nfe": 4,
+      "scheduler": "h3-training-euler",
+      "video_flow_shift": 12,
+      "audio_flow_shift": 3,
+      "precision": "bf16-runtime-residual",
+      "attention": {
+        "backend": "torch-flash",
+        "exact": true,
+        "backend_by_evaluation": [
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash"
+        ]
+      },
+      "target_ids": [
+        "remote-sm103-bf16-preview"
+      ],
+      "quality_statement": "Explicit BF16 preview. Complete I2VA hybrid/Veda runs measured on H100 SXM and RTX PRO 6000 Server; other SKUs, MIG and FL2VA remain unqualified. Default dense attention has no corresponding cross-device quality claim."
+    },
+    {
+      "id": "i2va-turbo4-v01-544-exact-sm120",
+      "mode": "i2va",
+      "availability": "preview",
+      "model": "MiniMaxAI/MiniMax-H3",
+      "model_revision": "42ed227ee7df40d41602854ae760620d6eb651fe",
+      "adapter": "lightx2v/Minimax-h3-Turbo",
+      "adapter_revision": "3ec17a324ced54151364f24f8b5fb6bf7e26414f",
+      "nfe": 4,
+      "scheduler": "h3-training-euler",
+      "video_flow_shift": 12,
+      "audio_flow_shift": 3,
+      "precision": "bf16-runtime-residual",
+      "attention": {
+        "backend": "torch-flash",
+        "exact": true,
+        "backend_by_evaluation": [
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash"
+        ]
+      },
+      "target_ids": [
+        "remote-sm120-bf16-preview"
+      ],
+      "quality_statement": "Explicit BF16 preview. Complete I2VA hybrid/Veda runs measured on H100 SXM and RTX PRO 6000 Server; other SKUs, MIG and FL2VA remain unqualified. Default dense attention has no corresponding cross-device quality claim."
+    },
+    {
+      "id": "fl2va-turbo4-v01-544-exact-sm120",
+      "mode": "fl2va",
+      "availability": "preview",
+      "model": "MiniMaxAI/MiniMax-H3",
+      "model_revision": "42ed227ee7df40d41602854ae760620d6eb651fe",
+      "adapter": "lightx2v/Minimax-h3-Turbo",
+      "adapter_revision": "3ec17a324ced54151364f24f8b5fb6bf7e26414f",
+      "nfe": 4,
+      "scheduler": "h3-training-euler",
+      "video_flow_shift": 12,
+      "audio_flow_shift": 3,
+      "precision": "bf16-runtime-residual",
+      "attention": {
+        "backend": "torch-flash",
+        "exact": true,
+        "backend_by_evaluation": [
+          "torch-flash",
+          "torch-flash",
+          "torch-flash",
+          "torch-flash"
+        ]
+      },
+      "target_ids": [
+        "remote-sm120-bf16-preview"
+      ],
+      "quality_statement": "Explicit BF16 preview. Complete I2VA hybrid/Veda runs measured on H100 SXM and RTX PRO 6000 Server; other SKUs, MIG and FL2VA remain unqualified. Default dense attention has no corresponding cross-device quality claim."
     }
   ]
 }

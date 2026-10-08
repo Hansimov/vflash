@@ -7,6 +7,7 @@ from dataclasses import asdict
 from pathlib import Path
 from traceback import clear_frames
 
+from vflash.hardware_profiles import V01_PROFILES
 from vflash.native.h3_hybrid import _digest, hybrid_reference_source
 
 
@@ -20,10 +21,7 @@ class HybridReferenceGraph:
         from vflash.adapters.references import install_match_reference_setup_block
         from vflash.pipeline.assets import conditioning_source
 
-        if owner.prepared.profile_id not in {
-            "i2va-turbo4-v01-544-exact-sm89",
-            "fl2va-turbo4-v01-544-exact-sm89",
-        }:
+        if owner.prepared.profile_id not in V01_PROFILES:
             raise ValueError("hybrid reference requires original FL v0.1")
         self.owner = owner
         model = owner.prepared.assets.model_directory

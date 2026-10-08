@@ -1,10 +1,12 @@
 # Vflash
 
-Native **MiniMax H3 inference** for RTX 3080 20 GB and RTX 4090 48 GB. Vflash uses PyTorch and Triton, with its own denoising runtime and support for pinned LightX2V Turbo LoRAs.
+Native **MiniMax H3 inference** with explicit GPU profiles. Vflash uses PyTorch and Triton, with its own denoising runtime and support for pinned LightX2V Turbo LoRAs.
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
-**0.6.12.** Explicit single-SM89 hybrid/Veda supports qualified fifteen-second and nine-image requests within [joint resource limits](https://hansimov.github.io/vflash/guide/complete-pipeline#extended-hybrid). H100 is not supported.
+**0.6.13.** [H100 SXM and PRO 6000 Server I2VA preview](https://hansimov.github.io/vflash/guide/profiles#heterogeneous), CPU hybrid preparation and partition-aware discovery. Other new cards/MIG modes remain unqualified; existing SM89 defaults are unchanged.
+
+**0.6.12.** Explicit single-SM89 hybrid/Veda supports qualified fifteen-second and nine-image requests within [joint resource limits](https://hansimov.github.io/vflash/guide/complete-pipeline#extended-hybrid).
 
 **0.6.9.** Optional [FlashVSR upscaling](https://hansimov.github.io/vflash/guide/restoration) preserves complete video and original audio; H3 defaults remain unchanged.
 

@@ -414,9 +414,11 @@ def load_h3_runtime_artifact(
         "compile_environment",
         "adapter_execution",
     }
+    if schema_version == 7:
+        expected_fields.add("portable_from")
     if (
         schema_version
-        not in {H3_LEGACY_ARTIFACT_SCHEMA_VERSION, 5, H3_RUNTIME_ARTIFACT_SCHEMA_VERSION}
+        not in {H3_LEGACY_ARTIFACT_SCHEMA_VERSION, 5, H3_RUNTIME_ARTIFACT_SCHEMA_VERSION, 7}
         or set(value) != expected_fields
     ):
         raise H3RuntimeArtifactError("H3 RuntimeArtifact manifest schema is invalid")
@@ -513,6 +515,12 @@ def load_h3_runtime_artifact(
             "t2va-adapter-bf16-torch-sdpa-sm86",
             "i2va-adapter-bf16-torch-sdpa-sm89",
             "fl2va-adapter-bf16-torch-sdpa-sm89",
+            "i2va-adapter-bf16-torch-sdpa-sm90",
+            "fl2va-adapter-bf16-torch-sdpa-sm90",
+            "i2va-adapter-bf16-torch-sdpa-sm103",
+            "fl2va-adapter-bf16-torch-sdpa-sm103",
+            "i2va-adapter-bf16-torch-sdpa-sm120",
+            "fl2va-adapter-bf16-torch-sdpa-sm120",
         }
         or nfe
         != h3_distilled_lora_contract_for_profile(
@@ -523,8 +531,23 @@ def load_h3_runtime_artifact(
         raise H3RuntimeArtifactError(
             "H3 distilled-LoRA artifact lacks a pinned Diffusers oracle identity"
         )
+    compile_target = target
+    if schema_version == 7:
+        origin = value["portable_from"]
+        if (
+            not isinstance(origin, dict)
+            or set(origin) != {"artifact_id", "target_id", "manifest_sha256", "source"}
+            or not _SHA256.fullmatch(origin.get("manifest_sha256", ""))
+        ):
+            raise H3RuntimeArtifactError("invalid portable artifact provenance")
+        from vflash.hardware_profiles import base_profile
+        from vflash.model_assets import weights_source
+
+        if origin["source"] != weights_source(base_profile(profile.definition.id)):
+            raise H3RuntimeArtifactError("portable view changes its original model")
+        compile_target = resolve_h3_artifact_target(origin["target_id"])
     compile_environment = (
-        _validate_compile_environment(value.get("compile_environment"), target=target)
+        _validate_compile_environment(value.get("compile_environment"), target=compile_target)
         if schema_version >= 3
         else {}
     )
@@ -558,7 +581,7 @@ def load_h3_runtime_artifact(
             or isinstance(size_bytes, bool)
             or size_bytes <= 0
             or not (
-                (schema_version == 6 and digest is None)
+                (schema_version in {6, 7} and digest is None)
                 or (isinstance(digest, str) and _SHA256.fullmatch(digest))
             )
             or not isinstance(adaln_rows, int)

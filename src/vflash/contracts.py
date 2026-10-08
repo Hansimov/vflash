@@ -66,8 +66,8 @@ class HardwareTarget:
             weight_residency=_required_text(value, "weight_residency"),
             block_prefetch_slots=_required_int(value, "block_prefetch_slots"),
         )
-        if target.compute_capability not in {"8.6", "8.9"}:
-            raise ContractError("Vflash currently targets compute capability 8.6 or 8.9")
+        if target.compute_capability not in {"8.6", "8.9", "9.0", "10.3", "12.0"}:
+            raise ContractError("unsupported Vflash CUDA compute capability")
         if target.minimum_memory_gib <= 0 or target.block_prefetch_slots < 1:
             raise ContractError("hardware memory and prefetch slots must be positive")
         return target
