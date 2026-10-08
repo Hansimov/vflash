@@ -4,7 +4,7 @@ Native **MiniMax H3 inference** with explicit GPU profiles. Vflash uses PyTorch 
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
-**0.6.13.** [H100 SXM and PRO 6000 Server I2VA preview](https://hansimov.github.io/vflash/guide/profiles#heterogeneous), CPU hybrid preparation and partition-aware discovery. Other new cards/MIG modes remain unqualified; existing SM89 defaults are unchanged.
+**0.6.13.** [H100 SXM and PRO 6000 Server/Workstation I2VA preview](https://hansimov.github.io/vflash/guide/profiles#heterogeneous), CPU hybrid preparation and partition-aware discovery. Other new cards/MIG modes remain unqualified; existing SM89 defaults are unchanged.
 
 **0.6.12.** Explicit single-SM89 hybrid/Veda supports qualified fifteen-second and nine-image requests within [joint resource limits](https://hansimov.github.io/vflash/guide/complete-pipeline#extended-hybrid).
 

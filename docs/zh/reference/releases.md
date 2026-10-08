@@ -2,7 +2,7 @@
 
 ## 0.6.13 · 异构设备预览与CPU准备 {#v0-6-13}
 
-新增SM90/SM103/SM120显式profile、分区探测、不可变资产目标视图与CPU hybrid小表。H100 SXM与PRO Server已有完整I2VA hybrid/Veda实测，其他新卡和模式仍未资格；SM89默认及原Veda名称保持。见[范围与测量](../guide/profiles#heterogeneous)。
+新增SM90/SM103/SM120显式profile、分区探测、不可变资产目标视图与CPU hybrid小表。H100 SXM与PRO Server/Workstation已有完整I2VA hybrid/Veda实测，其他新卡和模式仍未资格；SM89默认及原Veda名称保持。见[范围与测量](../guide/profiles#heterogeneous)。
 
 
 ## 0.6.12 · 时长与参考数量资格扩展 {#v0-6-12}

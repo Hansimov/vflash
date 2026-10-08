@@ -3,9 +3,9 @@
 ## H100 and Blackwell preview (0.6.13) {#heterogeneous}
 
 Original-v0.1 I2VA with explicit hybrid modulation and `veda-triton` has complete
-video evidence on **H100 SXM 80 GB (SM90)** and **RTX PRO 6000 Blackwell Server
+video evidence on **H100 SXM 80 GB (SM90)** and **RTX PRO 6000 Blackwell Server/Workstation
 96 GB (SM120)**. Existing `veda-sm89` names, defaults and behavior are preserved.
-SM103, RTX 5090, workstation cards, H100 NVL/PCIe, MIG partitions and new-device
+SM103, RTX 5090, H100 NVL/PCIe, MIG partitions and new-device
 FL2VA are explicit previews without complete-device qualification. A catalog
 entry or CUDA probe is not proof that a workload fits or meets quality needs.
 
@@ -34,7 +34,16 @@ seconds for those warm cases. Different host CPU allocation and processing make
 this an integration measurement, not a controlled speedup/regression comparison.
 The 1536² product media stage alone took 92.540 seconds. End-to-end decisions must
 include conditioning, media, initialization and the actual caller's preprocessing.
-Aggregate evidence originated in the product experiment through `1865e6ff`;
+A follow-up product-path batch with the public core measured Server/Workstation
+warm times of 17.885/21.192, 30.097/43.778, 63.470/62.591, 181.772/220.547 and
+45.182/52.446 seconds for the same five geometries/durations. Hosts differed
+(188 GB / 32 vCPU versus 282 GB / 16 vCPU), so these are whole-instance results,
+not isolated GPU speed ratios. Provisioning through first output took
+336.573/372.868 seconds. Both batches fully decoded and received six-time-point
+visual inspection per clip; background/cloud drift and unassessed audio semantics
+remain. Workstation is an additional measured I2VA option, not a faster default.
+
+Aggregate evidence originated in product experiments through `4322801e`;
 no product accounts, rental logic, prompts, media or machine configuration ship here.
 
 Use `VFLASH_DEVICE_DISCOVERY=cuda-visible` in partitioned/container environments.

@@ -3,8 +3,8 @@
 ## H100 与 Blackwell 预览（0.6.13） {#heterogeneous}
 
 原始v0.1 I2VA、显式hybrid和`veda-triton`已在 **H100 SXM 80GB（SM90）**与
-**RTX PRO 6000 Blackwell Server 96GB（SM120）**取得完整成片证据。原有`veda-sm89`名称、
-默认设置和行为保留。SM103、5090、工作站卡、H100 NVL/PCIe、MIG和新卡FL2VA仍为未实卡资格的显式预览，
+**RTX PRO 6000 Blackwell Server/Workstation 96GB（SM120）**取得完整成片证据。原有`veda-sm89`名称、
+默认设置和行为保留。SM103、5090、H100 NVL/PCIe、MIG和新卡FL2VA仍为未实卡资格的显式预览，
 不能由目录或CUDA探测推断完整任务能力。
 
 同输入四步、BF16主权重、双槽block ring、Veda Triton INT8稀疏注意力、24fps诊断对照：
@@ -31,6 +31,12 @@
 
 可在租GPU前调用`vflash.pipeline.portable.prepare_portable_assets`从已摄入SM89原始v0.1工件创建
 SM90/SM103/SM120目标视图，再用`vflash.native.h3_prepared_hybrid.prepare`在CPU预计算hybrid小表。
+公开core的后续产品通路对照：Server/Workstation相同五组合的暖耗时分别为
+17.885/21.192、30.097/43.778、63.470/62.591、181.772/220.547和45.182/52.446秒。
+主机为188GB/32vCPU与282GB/16vCPU，因此比较的是实际整机，不是隔离GPU速比；
+分配至首片336.573/372.868秒。两批全部AV解码及逐片六时间点查看通过，云/背景漂移及未审听音频的边界保持。
+Workstation增加一个有完整I2VA证据的选择，不代表更快默认。聚合产品来源至`4322801e`。
+
 [英文完整调用示例](../../guide/profiles#heterogeneous)展示如何传入现有`HybridModel`和`veda-triton`。
 准备过程复用固定来源清单，记录原编译目标与小清单摘要，不重哈希大型权重、不创建来源硬链接；
 来源保持只读。硬链接会改变ctime并破坏旧回执。小表独立核对摘要、形状、dtype、有限值及主干/调度绑定。
