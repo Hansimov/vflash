@@ -56,6 +56,7 @@ class NativeEngineSession:
         weight_residency: str = "default",
         attention_backend: str = "auto",
         veda_predictor: Path | None = None,
+        veda_dense_backend: str = "torch-flash",
         hybrid_model: Any = None,
     ) -> None:
         started = time.perf_counter()
@@ -130,6 +131,17 @@ class NativeEngineSession:
         from vflash.native.h3_veda_attention import validate_predictor
 
         validate_predictor(attention_backend, veda_predictor)
+        from vflash.native.h3_veda_dense import (
+            require_dense_dependencies,
+            validate_dense_backend,
+        )
+
+        validate_dense_backend(
+            veda_dense_backend,
+            attention_backend=attention_backend,
+            capability=plan.target.compute_capability,
+        )
+        require_dense_dependencies(veda_dense_backend)
         if hybrid_model is not None:
             from vflash.native.h3_hybrid import HybridModel
 
@@ -165,6 +177,11 @@ class NativeEngineSession:
             auxiliary_tensor_path=auxiliary_tensor,
             device="cuda:0",
             attention_backend=attention_backend,
+            **(
+                {"veda_dense_backend": veda_dense_backend}
+                if veda_dense_backend != "torch-flash"
+                else {}
+            ),
             **({"veda_predictor": veda_predictor} if veda_predictor is not None else {}),
             expected_task=profile.mode.value,
             expected_weight_profile=WEIGHT_PROFILES[profile.id],

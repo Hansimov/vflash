@@ -57,6 +57,8 @@ def test_attention_routes_every_logical_layer_and_rejects_missing_work():
     torch = pytest.importorskip("torch")
     calls = []
     op = VedaVideoAttention.__new__(VedaVideoAttention)
+    op.dense_attention = None
+    op.dense_backend = "torch-flash"
     op.layout = SimpleNamespace(seq_len=2)
     op.choice = SimpleNamespace(plan=object())
     op.engine = SimpleNamespace(

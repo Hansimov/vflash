@@ -69,7 +69,10 @@ def test_resident_capacity_uses_real_keyframe_contract():
         validate_resident_request("block-ring", changed)
 
 
-def test_explicit_residency_reaches_native_owner_before_any_cuda_api(monkeypatch):
+@pytest.mark.parametrize("dense_backend", ["torch-flash", "sageattention2"])
+def test_explicit_residency_reaches_native_owner_before_any_cuda_api(
+    monkeypatch, dense_backend
+):
     import sys
     from pathlib import Path
 
@@ -83,7 +86,9 @@ def test_explicit_residency_reaches_native_owner_before_any_cuda_api(monkeypatch
     calls = []
 
     def native(plan, **options):
-        calls.append(options["weight_residency"])
+        calls.append(
+            (options["weight_residency"], options.get("veda_dense_backend", "torch-flash"))
+        )
         return object()
 
     monkeypatch.setattr("vflash.pipeline.runtime.NativeEngineSession", native)
@@ -100,7 +105,8 @@ def test_explicit_residency_reaches_native_owner_before_any_cuda_api(monkeypatch
     )
     pipeline.weight_residency = "resident"
     pipeline.attention_backend = "veda-triton"
+    pipeline.veda_dense_backend = dense_backend
     pipeline.veda_predictor = pipeline.hybrid_model = pipeline.attention_adapter = None
     pipeline.initialization_stages = {}
     pipeline._load_stages(plan())
-    assert calls == ["resident"]
+    assert calls == [("resident", dense_backend)]

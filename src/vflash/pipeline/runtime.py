@@ -61,6 +61,7 @@ class H3Pipeline:
         strategy: str | None = None,
         attention_backend: str = "auto",
         veda_predictor: Path | None = None,
+        veda_dense_backend: str = "torch-flash",
         attention_adapter: AttentionAdapter | None = None,
         hybrid_model: HybridModel | None = None,
         weight_residency: str = "block-ring",
@@ -92,6 +93,18 @@ class H3Pipeline:
 
         validate_predictor(self.attention_backend, veda_predictor)
         self.veda_predictor = veda_predictor
+        from vflash.native.h3_veda_dense import (
+            require_dense_dependencies,
+            validate_dense_backend,
+        )
+
+        validate_dense_backend(
+            veda_dense_backend,
+            attention_backend=self.attention_backend,
+            capability=plan.target.compute_capability,
+        )
+        require_dense_dependencies(veda_dense_backend)
+        self.veda_dense_backend = veda_dense_backend
         self.profile = model_profile(prepared.profile_id)
         if attention_adapter is not None and (
             not isinstance(attention_adapter, AttentionAdapter)
@@ -187,6 +200,11 @@ class H3Pipeline:
             auxiliary_tensor=assets.auxiliary_tensor,
             weight_residency=self.weight_residency,
             attention_backend=self.attention_backend,
+            **(
+                {"veda_dense_backend": self.veda_dense_backend}
+                if self.veda_dense_backend != "torch-flash"
+                else {}
+            ),
             **(
                 {"veda_predictor": self.veda_predictor}
                 if self.veda_predictor is not None

@@ -1,4 +1,4 @@
-# Veda attention (explicit SM89 option)
+# Veda attention
 
 `attention_backend="veda-sm89"` selects learned sparse video attention for the
 original LightX v0.1 four-step keyframe profiles on one SM89 GPU. It also accepts
@@ -60,3 +60,44 @@ be applied to every canvas. Native-size crops showed more facial detail on the
 larger canvas, alongside the extra cost; existing object-contact errors persisted.
 Changed expressions/reflections are visible in the attention comparison. Audio
 semantic equivalence and universal quality gains remain unestablished.
+
+
+## Explicit SM120 dense-block acceleration
+
+On a qualified single RTX PRO 6000 or RTX 5090, keep `attention_backend="veda-triton"`
+and select `veda_dense_backend="sageattention2"` in `H3Pipeline`. The complete
+`generate` CLI exposes `--veda-dense-backend sageattention2`. Default dense blocks
+remain Torch Flash; missing extensions and failed kernels stop execution.
+
+Install [SageAttention 2.2.0](https://github.com/thu-ml/SageAttention/tree/d1a57a546c3d395b1ffcbeecc66d81db76f3b4b5)
+separately, compiled for SM120 and the actual Torch/CUDA environment. The qualified
+build used Torch 2.11/CUDA 13.0 and the pinned upstream revision above. SageAttention
+has its own Apache-2.0 license; no optional extension or model is bundled here.
+Do not use an SM90-only wheel on SM120, or treat successful CPU import as GPU qualification.
+
+Only layers 0–4 and 45–49 switch to INT8 QK / FP8 PV, with per-warp QK quantization,
+FP32+FP16 accumulation, key smoothing and no value smoothing. The other forty Veda
+layers, keep budgets, four-step schedule, conditioning and decoder stay unchanged.
+Receipts identify both effective backends, dense precision and actual call counts.
+This option is intentionally approximate; it is not an equivalence guarantee.
+
+Same-PRO-6000-Server I2VA comparisons with BF16 hybrid weights and block-ring loading
+measured 1536×864/15 s at 257.718 s Flash versus 223.718 s Sage (13.19% shorter), and
+2048²/5 s at 314.753 versus 302.123 s (4.01% shorter). These are complete warm
+conditioning/denoising/media requests, excluding initialization and transfer. At
+1344×768/5 s, Flash/Sage/Flash was 49.683/49.775/52.914 s: no stable short-request
+win. The batch's 1205.634 s initialization shows why warm gains do not guarantee
+lower first-output latency or rental cost.
+
+All eight outputs decoded with audio/video and played in the application. Five
+sampled times per clip plus native detail crops retained subject/architectural
+structure without a new obvious structural failure; motion trajectories changed.
+Existing camera adherence defects persist and audio semantics are unassessed.
+These bounded observations do not establish universal quality equivalence. H100
+and other architectures retain Flash dense blocks until separately qualified.
+
+Same-RTX-5090 1344×768/5 s Flash/Sage/Flash measured 75.632/70.395/75.428 s;
+1536×864/15 s measured 379.763/310.595 s (18.21% shorter). Both fifteen-second
+arms peaked at 24.143 GiB of denoising allocation with the corrected profiler.
+The longer result has full audio/video decode and application playback; sampled
+faces, fabric and motion retain the same limitations described above.

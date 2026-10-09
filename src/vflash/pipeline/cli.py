@@ -62,6 +62,12 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
         "--attention-adapter", type=Path, help="local FP32 DiT attention LoRA"
     )
     generate.add_argument("--veda-predictor", type=Path)
+    generate.add_argument(
+        "--veda-dense-backend",
+        choices=("torch-flash", "sageattention2"),
+        default="torch-flash",
+        help="Veda dense blocks; SageAttention2 requires SM120 and its CUDA build",
+    )
     generate.add_argument("--attention-adapter-rank", type=int)
     generate.add_argument("--attention-adapter-scale", type=float)
     generate.add_argument(
@@ -175,6 +181,8 @@ def run_pipeline_command(args: argparse.Namespace) -> int:
         if args.peer_gpu not in devices:
             raise ContractError(f"GPU index {args.peer_gpu} was not found")
         options = {"peer_device": devices[args.peer_gpu], "strategy": args.strategy}
+    if args.veda_dense_backend != "torch-flash":
+        options["veda_dense_backend"] = args.veda_dense_backend
     if args.attention_backend != "auto":
         options["attention_backend"] = args.attention_backend
     if args.veda_predictor is not None:

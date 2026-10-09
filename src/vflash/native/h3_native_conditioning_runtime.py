@@ -188,6 +188,7 @@ class H3NativeConditioningRuntime:
         device: str = "cuda:0",
         attention_backend: str = "torch-flash",
         veda_predictor: Path | None = None,
+        veda_dense_backend: str = "torch-flash",
         expected_task: str | None = None,
         expected_weight_profile: str | None = None,
         expected_model_repository: str | None = None,
@@ -220,6 +221,18 @@ class H3NativeConditioningRuntime:
         if resolved_device.index is None:
             resolved_device = torch.device("cuda:0")
         capability = torch.cuda.get_device_capability(resolved_device)
+        from vflash.native.h3_veda_dense import (
+            require_dense_dependencies,
+            validate_dense_backend,
+        )
+
+        validate_dense_backend(
+            veda_dense_backend,
+            attention_backend=attention_backend,
+            capability=".".join(map(str, capability)),
+        )
+        require_dense_dependencies(veda_dense_backend)
+        self.veda_dense_backend = veda_dense_backend
         if attention_backend == "sol-sm89" and (
             capability != (8, 9)
             or parallel_strategy != "single"
@@ -711,7 +724,10 @@ class H3NativeConditioningRuntime:
                 )
             if self._veda_attention is None:
                 self._veda_attention = VedaVideoAttention(
-                    device, self.veda_predictor, backend=self.attention_backend
+                    device,
+                    self.veda_predictor,
+                    backend=self.attention_backend,
+                    dense_backend=self.veda_dense_backend,
                 )
             self._veda_attention.prepare(tensors, bundle.profile)
             for index, slot in enumerate(slots):

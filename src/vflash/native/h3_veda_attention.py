@@ -1,8 +1,9 @@
 """Explicit approximate Veda attention for original v0.1 on one supported GPU.
 
 The external MIT Veda core owns the predictor and INT8 sparse kernel. The first
-and last five layers use Torch Flash; remaining layers keep condition/audio/text
-connections dense but use approximate INT8 attention. No silent fallback.
+and last five layers use explicit Torch Flash or optional SageAttention2. Other
+layers keep condition/audio/text connections dense but use approximate INT8
+attention. No silent fallback.
 """
 
 from __future__ import annotations
@@ -70,7 +71,14 @@ def target_layout(
 class VedaVideoAttention:
     """One owned predictor per session; geometry and counters reset per request."""
 
-    def __init__(self, device: Any, predictor: Path, *, backend: str = "veda-sm89") -> None:
+    def __init__(
+        self,
+        device: Any,
+        predictor: Path,
+        *,
+        backend: str = "veda-sm89",
+        dense_backend: str = "torch-flash",
+    ) -> None:
         import torch
         from veda_comfy import backends
         from veda_comfy.core.bundle import load_bundle
@@ -84,6 +92,20 @@ class VedaVideoAttention:
         ):
             raise ValueError("Veda backend differs from the device contract")
         self.backend = backend
+        from vflash.native.h3_veda_dense import (
+            require_dense_dependencies,
+            sage_dense,
+            validate_dense_backend,
+        )
+
+        validate_dense_backend(
+            dense_backend,
+            attention_backend=backend,
+            capability=".".join(map(str, torch.cuda.get_device_capability(device))),
+        )
+        require_dense_dependencies(dense_backend)
+        self.dense_backend = dense_backend
+        self.dense_attention = sage_dense if dense_backend == "sageattention2" else None
         resolved = backends.resolve(device)
         if resolved.backend is None or resolved.backend.name != "triton-int8":
             raise RuntimeError("Veda triton-int8 self-test failed; dense fallback is disabled")
@@ -122,7 +144,7 @@ class VedaVideoAttention:
             raise ValueError("Veda requires matching BF16 H3 BSHD tensors")
         if index in DENSE_LAYERS:
             self.dense_calls += 1
-            return dense(q, k, v)
+            return (self.dense_attention or dense)(q, k, v)
         value = self.engine.attention(q[0], k[0], v[0], index, self.layout, self.choice.plan)
         self.sparse_calls += 1
         return value.unsqueeze(0)
@@ -131,7 +153,11 @@ class VedaVideoAttention:
         return {
             "attention_backend": getattr(self, "backend", "veda-sm89"),
             "exact": False,
-            "effective_backends": ["triton-int8", "torch-flash"],
+            "effective_backends": ["triton-int8", self.dense_backend],
+            "dense_backend": self.dense_backend,
+            "dense_precision": "INT8 QK / FP8 PV"
+            if self.dense_backend == "sageattention2"
+            else "BF16",
             "dense_layers": sorted(DENSE_LAYERS),
             "generated_keep_ratio": 0.1,
             "condition_keep_ratio": 1.0,

@@ -32,6 +32,7 @@ def test_generate_parser_preserves_reference_order():
     assert args.keyframe_delivery_profile == "decoded"
     assert args.profile_denoise is False
     assert args.attention_backend == "auto"
+    assert args.veda_dense_backend == "torch-flash"
 
 
 def test_generate_parser_exposes_explicit_approximate_sol():
