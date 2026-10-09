@@ -623,16 +623,14 @@ class _H3BlockOperations:
             record["phases"].append((name, phase_start, phase_end))
             phase_start = phase_end
 
-        table = self.weights.adaln_table
-        modulation = (
-            table[invocation.evaluation_index]
-            .to(
-                device=invocation.device,
-                dtype=invocation.dtype,
-            )
-            .index_select(0, invocation.adaln_indices)
+        # Profiling must preserve the ordinary path's activation lifetime.
+        # CUDA events retain timings, not old token-sized modulation/QKV views.
+        table = self.weights.adaln_table[invocation.evaluation_index].to(
+            device=invocation.device, dtype=invocation.dtype
         )
-        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = modulation.unbind(1)
+        shift_msa, scale_msa, gate_msa = (
+            table[:, index, :].index_select(0, invocation.adaln_indices) for index in range(3)
+        )
         finish_phase("adaln")
 
         residual = hidden_states
@@ -645,6 +643,7 @@ class _H3BlockOperations:
         finish_phase("attention_norm_modulate")
 
         query, key, value = self._qkv_linear(normalized).chunk(3, dim=-1)
+        del normalized, shift_msa, scale_msa
         finish_phase("qkv_projection")
         heads = spec.num_attention_heads
         head_dim = spec.attention_head_dim
@@ -659,6 +658,7 @@ class _H3BlockOperations:
             attention = self._attention(query, key, value)
         finally:
             self._vflash_attention_phase_profile = None
+        del query, key, value
         finish_phase("attention")
         hidden_states = self._profiled_adapted_gate_residual(
             attention.flatten(2, 3),
@@ -670,17 +670,24 @@ class _H3BlockOperations:
             detail=record["block_detail"],
             event=event,
         )
+        del attention, residual, gate_msa
         finish_phase("attention_output")
+        shift_mlp, scale_mlp, gate_mlp = (
+            table[:, index, :].index_select(0, invocation.adaln_indices)
+            for index in range(3, 6)
+        )
 
         residual = hidden_states
         normalized = _rms_norm(hidden_states, self.weights.ffn_norm, eps=self.norm_eps)
         normalized = self._modulate(normalized, scale_mlp, shift_mlp)
+        del shift_mlp, scale_mlp
         finish_phase("ffn_norm_modulate")
         ffn = self._profiled_ffn_input(
             normalized,
             detail=record["block_detail"],
             event=event,
         )
+        del normalized
         finish_phase("ffn_input")
         hidden_states = self._profiled_adapted_gate_residual(
             ffn,

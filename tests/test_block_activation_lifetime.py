@@ -8,8 +8,11 @@ import pytest
 from vflash.native.h3_native_denoiser import H3NativeBlockBF16Resident, _rms_norm
 
 
+@pytest.mark.parametrize("profiled", [False, True])
 @pytest.mark.parametrize("dtype_name", ["float32", "bfloat16"])
-def test_block_releases_phase_temporaries_before_large_ffn_allocations(dtype_name):
+def test_block_releases_phase_temporaries_before_large_ffn_allocations(
+    dtype_name, profiled, monkeypatch
+):
     torch = pytest.importorskip("torch")
     torch.manual_seed(31)
     dtype = getattr(torch, dtype_name)
@@ -88,6 +91,16 @@ def test_block_releases_phase_temporaries_before_large_ffn_allocations(dtype_nam
     instance._attention = attention
     instance._adapted_gate_residual = residual
     instance._ffn_input = ffn
+    if profiled:
+        instance._vflash_block_phase_profile = []
+        instance._vflash_block_profile_index = 0
+        instance._profiled_ffn_input = lambda value, **kwargs: ffn(value)
+        instance._profiled_adapted_gate_residual = lambda *args, **kwargs: residual(*args)
+        monkeypatch.setattr(torch.cuda, "current_stream", lambda device: None)
+        monkeypatch.setattr(
+            "vflash.native.h3_native_denoiser._record_cuda_profile_event",
+            lambda torch, stream: object(),
+        )
     # Independent unoptimized expression expands all six groups at once.
     shift, scale, gate, fshift, fscale, fgate = table[1].index_select(0, indices).unbind(1)
     normalized = modulate(_rms_norm(x, instance.weights.attention_norm, eps=1e-6), scale, shift)
@@ -109,3 +122,6 @@ def test_block_releases_phase_temporaries_before_large_ffn_allocations(dtype_nam
     with torch.no_grad():
         actual = instance.forward_prevalidated(x, invocation)
     assert torch.equal(actual, expected)
+    if profiled:
+        assert len(instance._vflash_block_phase_profile) == 1
+        assert len(instance._vflash_block_phase_profile[0]["phases"]) == 9
