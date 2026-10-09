@@ -101,3 +101,5 @@ Same-RTX-5090 1344×768/5 s Flash/Sage/Flash measured 75.632/70.395/75.428 s;
 arms peaked at 24.143 GiB of denoising allocation with the corrected profiler.
 The longer result has full audio/video decode and application playback; sampled
 faces, fabric and motion retain the same limitations described above.
+
+The same 5090 batch also completed 2048²/5 s with Sage in 368.807 s, at 26.982 GiB peak denoising allocation. It has complete AV decode and application playback, but no matched same-instance Flash control; this establishes capacity and delivery, not a four-MP speedup.

@@ -1,5 +1,15 @@
 # Release notes
 
+## 0.6.22
+
+Keep profiled native blocks on the ordinary path's activation lifetimes: do not retain attention temporaries or pre-gather FFN modulation across the next large allocation. CPU FP32/BF16 parity and weak-reference checks cover both paths; a seven-video RTX 5090 integration completes the previously failing profiled 1536×864/15 s request and 2048²/5 s output. This fixes diagnostic-path memory overhead, without broadening the existing canvas contract.
+
+Add an explicit `veda_dense_backend="sageattention2"` option for single-SM120 Veda, also exposed by `generate --veda-dense-backend sageattention2`. The ten dense layers use separately installed, pinned SageAttention 2.2.0 with INT8 QK / FP8 PV; the other forty Veda layers are unchanged. Flash remains the default. Unsupported architectures, missing extensions and kernel failures raise errors instead of silently changing execution. See [installation and measured scope](../guide/veda#explicit-sm120-dense-block-acceleration).
+
+Same-instance I2VA warm full-generation controls measured 1536×864/15 s at 257.718/223.718 s on RTX PRO 6000 Server (13.19% shorter) and 379.763/310.595 s on RTX 5090 (18.21%). PRO 2048²/5 s was 314.753/302.123 s (4.01% shorter). The 5090 also completed 2048²/5 s at 368.807 s and 26.982 GiB denoising allocation, without a matched Flash control. These times include conditioning, denoising and media but exclude initialization and delivery. The PRO's 1205.634 s initialization prevents claiming a cold-start improvement. Complete AV decode, application playback, five sampled times and native crops accompany the comparisons; changed motion, existing camera adherence defects and unassessed audio semantics remain. No general quality-equivalence or H100 Sage qualification is claimed.
+
+Private integration evidence: `video-gen` `40745220`; only aggregate measurements are public. Product deployment is separate from this package release.
+
 ## 0.6.21
 
 Reuse the exclusively owned SM120 hybrid FFN base projection for its activated value half, instead of allocating another full output. The gate half and adapter remain unchanged, strict BF16 boundaries are retained, and the next linear consumes a strided view. Other architectures retain the allocated-output path. The owned contract is explicit and rejects autograd inputs.

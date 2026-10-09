@@ -132,6 +132,7 @@ def _pipeline(*, fail: str | None = None) -> tuple[H3Pipeline, list[str]]:
     pipeline.attention_adapter = None
     pipeline.hybrid_model = None
     pipeline.weight_residency = "block-ring"
+    pipeline.veda_dense_backend = "torch-flash"
     pipeline.veda_predictor = None
     pipeline._reference_graph = None
     pipeline._adapter_stack = None
