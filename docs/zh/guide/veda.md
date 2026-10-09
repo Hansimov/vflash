@@ -35,7 +35,9 @@ Veda I2 1344×768热态118.634秒（去噪74.010），单图Ref热态59.002秒�
 
 ## SM120显式密集层加速
 
-在已资格的单卡RTX PRO 6000或RTX 5090上，保留`attention_backend="veda-triton"`，
+**2026-10-10质量复核：** 已收到高清Sage成片时序不稳定的反馈。2048方形同输入对照的连续帧显示Flash/Veda与Sage/Veda均有细节波动，Sage一个局部区域变化更大，尚未隔离原因。此前五时间点抽帧和播放通过不能证明时序质量。该选项应视为实验能力，不能作为已获画质资格的生产推荐；密集层默认Flash保持，但关闭Sage不等于已经修复闪烁。
+
+在已做执行测试的单卡RTX PRO 6000或RTX 5090上，保留`attention_backend="veda-triton"`，
 为`H3Pipeline`显式指定`veda_dense_backend="sageattention2"`；完整`generate`命令支持
 `--veda-dense-backend sageattention2`。默认密集层仍为Torch Flash，扩展缺失或内核失败直接停止。
 

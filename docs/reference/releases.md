@@ -2,6 +2,8 @@
 
 ## 0.6.22
 
+**Quality follow-up, 2026-10-10:** the optional Sage path remains experimental. High-resolution temporal instability has been reported; consecutive-frame checks found detail fluctuation in both compared backends and did not isolate its cause. Decode, playback and sparse frame sampling do not establish temporal-quality qualification. The timings below remain execution measurements, not accepted-video throughput. No default or runtime change is made by this documentation correction.
+
 Keep profiled native blocks on the ordinary path's activation lifetimes: do not retain attention temporaries or pre-gather FFN modulation across the next large allocation. CPU FP32/BF16 parity and weak-reference checks cover both paths; a seven-video RTX 5090 integration completes the previously failing profiled 1536×864/15 s request and 2048²/5 s output. This fixes diagnostic-path memory overhead, without broadening the existing canvas contract.
 
 Add an explicit `veda_dense_backend="sageattention2"` option for single-SM120 Veda, also exposed by `generate --veda-dense-backend sageattention2`. The ten dense layers use separately installed, pinned SageAttention 2.2.0 with INT8 QK / FP8 PV; the other forty Veda layers are unchanged. Flash remains the default. Unsupported architectures, missing extensions and kernel failures raise errors instead of silently changing execution. See [installation and measured scope](../guide/veda#explicit-sm120-dense-block-acceleration).

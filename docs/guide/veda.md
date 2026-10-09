@@ -64,13 +64,15 @@ semantic equivalence and universal quality gains remain unestablished.
 
 ## Explicit SM120 dense-block acceleration
 
-On a qualified single RTX PRO 6000 or RTX 5090, keep `attention_backend="veda-triton"`
+**Quality review reopened (2026-10-10).** Temporal instability has been reported in high-resolution Sage output. Consecutive-frame review of a matched 2048-square pair shows detail fluctuations in both Flash/Veda and Sage/Veda, with larger variation in one Sage region; the cause is not isolated. Earlier five-frame sampling and successful playback do not qualify temporal quality. Treat this option as experimental, not a quality-qualified production recommendation. Flash dense blocks remain the default; removing Sage is not a proven flicker fix.
+
+On a tested single RTX PRO 6000 or RTX 5090, keep `attention_backend="veda-triton"`
 and select `veda_dense_backend="sageattention2"` in `H3Pipeline`. The complete
 `generate` CLI exposes `--veda-dense-backend sageattention2`. Default dense blocks
 remain Torch Flash; missing extensions and failed kernels stop execution.
 
 Install [SageAttention 2.2.0](https://github.com/thu-ml/SageAttention/tree/d1a57a546c3d395b1ffcbeecc66d81db76f3b4b5)
-separately, compiled for SM120 and the actual Torch/CUDA environment. The qualified
+separately, compiled for SM120 and the actual Torch/CUDA environment. The tested
 build used Torch 2.11/CUDA 13.0 and the pinned upstream revision above. SageAttention
 has its own Apache-2.0 license; no optional extension or model is bundled here.
 Do not use an SM90-only wheel on SM120, or treat successful CPU import as GPU qualification.
