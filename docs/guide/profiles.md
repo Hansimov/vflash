@@ -79,8 +79,9 @@ media are distributed with this release.
 Original-v0.1 I2VA with explicit hybrid modulation and `veda-triton` has complete
 video evidence on **H100 SXM 80 GB (SM90)** and **RTX PRO 6000 Blackwell Server/Workstation
 96 GB (SM120)**. Existing `veda-sm89` names, defaults and behavior are preserved.
-SM103, RTX 5090, H100 NVL/PCIe, MIG partitions and new-device
-FL2VA are explicit previews without complete-device qualification. A catalog
+Later bounded I2VA measurements cover H100 NVL and RTX 5090; see below.
+SM103, H100 PCIe, MIG partitions and new-device FL2VA remain explicit previews
+without complete-device qualification. A catalog
 entry or CUDA probe is not proof that a workload fits or meets quality needs.
 
 The frozen four-step diagnostic uses BF16 weights, two-slot block streaming,
@@ -233,3 +234,31 @@ The single-device 3080 profile has been checked for capacity and repeatable resu
 ## What is outside this release {#scope}
 
 The [complete profile table](../reference/pipeline-profiles) owns each profile's current media-validation scope, including the 544p keyframe previews. Single-SM86 and Ref Turbo8 retain native bundle-to-latents interfaces; the 544p keyframe Turbo8 pair also has a complete pipeline. Unlisted modes, adapters, quantization and temporal settings are outside these profiles. The HTTP API provides one serial denoising lane; account management, billing and distributed GPU scheduling belong to the application.
+
+
+## Bounded NVL and RTX 5090 I2VA evidence (0.6.20) {#small-blackwell}
+
+A public-core 0.6.17 H100 NVL integration completed six I2VA videos, including
+1920×1088/10 s, 1536×864/15 s, 2048²/5 s and 1440²/10 s. Generation times for
+those four cases were 288.072, 263.939, 321.574 and 289.858 seconds; initialization
+was 46.590 seconds. Container and model provisioning are excluded here. Complete
+AV decode and multi-time visual review passed technical delivery, with unwanted
+camera drift and unassessed audio semantics. This does not qualify other modes.
+
+Version 0.6.20 adopts measured SM120 hybrid FFN/QKV fusion and shorter unprofiled
+FFN tensor lifetimes. On a 32 GB RTX 5090, a 1920×1088/5 s same-card lifetime
+A/B/A2 used 17.949/16.961/17.949 GiB denoising allocation and produced identical
+MP4 bytes. Generation was 198.377/200.900/198.355 seconds: memory improved, speed
+was not improved. A separate fusion-only comparison measured about 2.1% lower
+denoising time and 2.137 GiB lower peak allocation; host/media variability precludes
+combining these into a general full-workflow speed claim.
+
+The combined path completed 1536×864/15 s in 431.601 seconds with a 27.916 GiB
+denoising peak on a 500 W card and a host with approximately 342 GiB RAM / 23 CPU
+cores of quota. The 2048²/5 s case still failed a 4.28 GiB FFN allocation; the
+subsequent 1440²/10 s case was not executed. Keep request geometry and duration
+within individually measured capacity. This is block-ring I2VA evidence, using
+`PYTORCH_ALLOC_CONF=expandable_segments:True`, not full-weight residency or a
+production routing default. Complete media decoded and was reviewed at multiple
+times; existing camera tracking remains. Private evidence source: `video-gen`
+`674c84fc`; no private media, prompts or machine identities are included.

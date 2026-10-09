@@ -37,8 +37,22 @@ def block(**changes):
     return instance
 
 
-def test_direct_dispatch_recomputes_base_and_releases_adapters(monkeypatch):
-    instance = block()
+@pytest.mark.parametrize(
+    "architecture,profile",
+    [
+        ("sm89", "lightx-ref-turbo4-v0.1"),
+        ("sm120", "lightx-turbo4-v0.1-544"),
+    ],
+)
+def test_direct_dispatch_recomputes_base_and_releases_adapters(
+    monkeypatch, architecture, profile
+):
+    instance = block(
+        **{
+            "artifact.target.compute_capability": architecture,
+            "artifact.weight_profile": profile,
+        }
+    )
     states, calls, references = Value(), [], []
 
     def project(value, weight):
@@ -80,6 +94,11 @@ def test_direct_dispatch_recomputes_base_and_releases_adapters(monkeypatch):
     "changes",
     [
         {"artifact.target.compute_capability": "sm86"},
+        {"artifact.target.compute_capability": "sm120"},
+        {
+            "artifact.target.compute_capability": "sm90",
+            "artifact.weight_profile": "lightx-turbo4-v0.1-544",
+        },
         {"artifact.weight_profile": "lightx-turbo4-v1.0"},
         {"artifact.weight_profile": "lightx-turbo8-v1.0"},
         {"elementwise_backend": "torch-eager"},

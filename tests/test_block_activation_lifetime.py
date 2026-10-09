@@ -9,7 +9,7 @@ from vflash.native.h3_native_denoiser import H3NativeBlockBF16Resident, _rms_nor
 
 
 @pytest.mark.parametrize("dtype_name", ["float32", "bfloat16"])
-def test_block_releases_attention_temporaries_before_ffn(dtype_name):
+def test_block_releases_phase_temporaries_before_large_ffn_allocations(dtype_name):
     torch = pytest.importorskip("torch")
     torch.manual_seed(31)
     dtype = getattr(torch, dtype_name)
@@ -51,9 +51,10 @@ def test_block_releases_attention_temporaries_before_ffn(dtype_name):
         ffn_out_residual=None,
     )
     instance.norm_eps = 1e-6
-    temporaries = []
+    temporaries, modulations, ffn_inputs = [], [], []
 
     def modulate(value, scale, shift):
+        modulations.append((weakref.ref(scale), weakref.ref(shift)))
         return value * (1 + scale) + shift
 
     def projection(value):
@@ -71,10 +72,14 @@ def test_block_releases_attention_temporaries_before_ffn(dtype_name):
 
     def residual(value, weight, adapter, original, gate):
         assert adapter is None
+        if ffn_inputs and weight is ffn_out:
+            assert ffn_inputs[-1]() is None
         return original + (value @ weight) * gate
 
     def ffn(value):
         assert all(reference() is None for reference in temporaries)
+        assert all(reference() is None for reference in modulations[-1])
+        ffn_inputs.append(weakref.ref(value))
         return torch.nn.functional.silu(value @ ffn_weight)
 
     instance._modulate = modulate

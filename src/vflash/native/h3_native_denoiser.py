@@ -564,7 +564,9 @@ class _H3BlockOperations:
         residual = hidden_states
         normalized = _rms_norm(hidden_states, self.weights.ffn_norm, eps=self.norm_eps)
         normalized = self._modulate(normalized, scale_mlp, shift_mlp)
+        del shift_mlp, scale_mlp
         ffn = self._ffn_input(normalized)
+        del normalized
         return self._adapted_gate_residual(
             ffn,
             self.weights.ffn_out,
@@ -1071,8 +1073,11 @@ class H3NativeBlockBF16Resident(_H3BlockOperations):
             self.elementwise_backend != "triton-strict"
             or self.adapter_fusion_backend != "triton-strict"
             or self.elementwise_block_size != 1024
-            or self.artifact.target.compute_capability != "sm89"
-            or self.artifact.weight_profile != "lightx-ref-turbo4-v0.1"
+            or (self.artifact.target.compute_capability, self.artifact.weight_profile)
+            not in {
+                ("sm89", "lightx-ref-turbo4-v0.1"),
+                ("sm120", "lightx-turbo4-v0.1-544"),
+            }
             or adapter is None
             or adapter.scaling != 0.0625
         ):
@@ -1098,8 +1103,11 @@ class H3NativeBlockBF16Resident(_H3BlockOperations):
             self.elementwise_backend != "triton-strict"
             or self.adapter_fusion_backend != "triton-strict"
             or self.elementwise_block_size != 1024
-            or self.artifact.target.compute_capability != "sm89"
-            or self.artifact.weight_profile != "lightx-ref-turbo4-v0.1"
+            or (self.artifact.target.compute_capability, self.artifact.weight_profile)
+            not in {
+                ("sm89", "lightx-ref-turbo4-v0.1"),
+                ("sm120", "lightx-turbo4-v0.1-544"),
+            }
             or adapter is None
             or adapter.scaling != 0.0625
         ):
@@ -1143,8 +1151,11 @@ class H3NativeBlockBF16Resident(_H3BlockOperations):
             self.elementwise_backend == "triton-strict"
             and self.adapter_fusion_backend == "triton-strict"
             and self.elementwise_block_size == 1024
-            and self.artifact.target.compute_capability == "sm89"
-            and self.artifact.weight_profile == "lightx-ref-turbo4-v0.1"
+            and (self.artifact.target.compute_capability, self.artifact.weight_profile)
+            in {
+                ("sm89", "lightx-ref-turbo4-v0.1"),
+                ("sm120", "lightx-turbo4-v0.1-544"),
+            }
             and all(row.scaling == 0.0625 for row in residuals)
         ):
             from vflash.native.h3_fused_ops import triton_strict_bf16_qkv_direct_merge

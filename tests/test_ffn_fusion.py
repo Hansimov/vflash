@@ -28,8 +28,22 @@ def block(**changes):
     return result
 
 
-def test_qualified_dispatch_keeps_gemms_and_releases_temporary_values(monkeypatch):
-    instance = block()
+@pytest.mark.parametrize(
+    "architecture,profile",
+    [
+        ("sm89", "lightx-ref-turbo4-v0.1"),
+        ("sm120", "lightx-turbo4-v0.1-544"),
+    ],
+)
+def test_qualified_dispatch_keeps_gemms_and_releases_temporary_values(
+    monkeypatch, architecture, profile
+):
+    instance = block(
+        **{
+            "artifact.target.compute_capability": architecture,
+            "artifact.weight_profile": profile,
+        }
+    )
     states, output, calls, references = object(), object(), [], []
 
     class Temporary:
@@ -63,6 +77,11 @@ def test_qualified_dispatch_keeps_gemms_and_releases_temporary_values(monkeypatc
     "changes",
     [
         {"artifact.target.compute_capability": "sm86"},
+        {"artifact.target.compute_capability": "sm120"},
+        {
+            "artifact.target.compute_capability": "sm90",
+            "artifact.weight_profile": "lightx-turbo4-v0.1-544",
+        },
         {"artifact.weight_profile": "lightx-turbo4-v1.0"},
         {"artifact.weight_profile": "lightx-turbo8-v1.0"},
         {"elementwise_backend": "torch-eager"},

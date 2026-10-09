@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.6.20
+
+Extend the existing strict BF16 FFN/QKV small-adapter fusion to SM120 original-v0.1 hybrid weights, and release dead FFN modulation/normalization tensors before the next large allocation. A same-RTX-5090 1920×1088, five-second A/B/A2 comparison reduced denoising allocation from 20.086 to 17.949 GiB and denoising time by about 2.1%; full-generation speedup was not established because media-stage time varied. A separate same-card lifetime A/B/A2 reduced 17.949 to 16.961 GiB with identical complete MP4 bytes, without a measured speed gain.
+
+The combined path completed 1536×864 at fifteen seconds on a 32 GB RTX 5090 (500 W): 431.601 seconds total generation, 27.916 GiB peak denoising allocation, full audio/video decode and multi-time visual review. A 2048² five-second request still failed its 4.28 GiB FFN output allocation; the following ten-second case did not run. This is bounded I2VA integration evidence, not a general four-MP or quality qualification. Existing unwanted camera movement and unassessed audio semantics remain. Use `PYTORCH_ALLOC_CONF=expandable_segments:True` for this measured block-ring path. CPU ownership/dispatch checks cover the existing and added profiles. Private integration evidence: `video-gen` `674c84fc`; only aggregates are public.
+
 ## 0.6.19
 
 Avoid a separate FP32 copy before RGB scaling: multiplication owns its result, then rounding and clipping reuse it. Lower-precision input retains the owned conversion buffer used since 0.6.18. Inputs, quantization and codec settings stay unchanged. On eight CPUs, a decoded FP32 2048²/120-frame clip encoded in 15.145 seconds versus 17.342/17.627 seconds for controls, approximately 13.4% faster. Complete output bytes and audio/video decode matched. This is CPU encoding evidence; remote full-generation improvement remains unqualified. Private integration source: `video-gen` `fc41b4b8` (only aggregate evidence is public).
