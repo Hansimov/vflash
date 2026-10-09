@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.6.18
+
+Reuse one owned FP32 block for RGB quantization, reducing temporary CPU allocations without changing the caller's decoded tensor, rounding, codec or audio processing. On an eight-CPU allocation, encoding a 2048², 120-frame RGB clip took 15.903 seconds versus 18.863/18.846 seconds for the before/after controls (15.7% faster). Complete MP4 bytes matched and all audio/video decoded. This is encoding-stage evidence, not a full-generation or GPU throughput claim; no thread-count or hardware-profile defaults change.
+
 ## 0.6.17
 
 Extend explicit hybrid/Veda trunk residency to single SM120 allocations with at least 90 GiB. A same-PRO-6000-Server A/B/A2 comparison completed nine videos: warm five-second latency improved 18.1% and a matched fifteen-second request 3.3% versus the faster return control, while initialization plus first output increased 18.4 seconds. Peak host RSS fell from 108.7 to 68.7 GiB. Use total batch time when selecting residency; the tested three-output batch did not amortize startup. Default block-ring behavior, I2VA limits, allocator requirement and smaller-card exclusions remain. See [scope and evidence](../guide/profiles#sm120-resident).

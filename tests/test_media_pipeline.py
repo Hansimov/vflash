@@ -104,10 +104,17 @@ def _delivery_media(*, peaked: bool = False) -> tuple[object, object]:
 
 
 @pytest.mark.skipif(not shutil.which("ffmpeg") or not shutil.which("ffprobe"), reason="FFmpeg")
-def test_real_mp4_has_expected_clocks_and_preserves_existing_output(tmp_path: Path) -> None:
+@pytest.mark.parametrize("dtype", [torch.float16, torch.float32])
+def test_real_mp4_has_expected_clocks_and_preserves_existing_output(
+    tmp_path: Path, dtype
+) -> None:
     video, audio = _media()
+    video = video.to(dtype)
+    original_video, original_audio = video.clone(), audio.clone()
     target = tmp_path / "output.mp4"
     result = encode_mp4(video, audio, target, preset="ultrafast")
+    assert torch.equal(video, original_video)
+    assert torch.equal(audio, original_audio)
     assert result["frames"] == 24
     assert result["audio_samples"] == 32000
     assert result["duration_seconds"] == 1
