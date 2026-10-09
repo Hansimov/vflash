@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.6.19
+
+Avoid a separate FP32 copy before RGB scaling: multiplication owns its result, then rounding and clipping reuse it. Lower-precision input retains the owned conversion buffer used since 0.6.18. Inputs, quantization and codec settings stay unchanged. On eight CPUs, a decoded FP32 2048²/120-frame clip encoded in 15.145 seconds versus 17.342/17.627 seconds for controls, approximately 13.4% faster. Complete output bytes and audio/video decode matched. This is CPU encoding evidence; remote full-generation improvement remains unqualified. Private integration source: `video-gen` `fc41b4b8` (only aggregate evidence is public).
+
 ## 0.6.18
 
 Reuse one owned FP32 block for RGB quantization, reducing temporary CPU allocations without changing the caller's decoded tensor, rounding, codec or audio processing. On an eight-CPU allocation, encoding a decoded FP16 2048², 120-frame RGB clip took 15.903 seconds versus 18.863/18.846 seconds for the before/after controls (15.7% faster). Complete MP4 bytes matched and all audio/video decoded. This is encoding-stage evidence, not a full-generation or GPU throughput claim; no thread-count or hardware-profile defaults change. A later FP32 CPU control measured 17.066 seconds versus 17.180/17.386 seconds (about 1.3%), while one remote PRO same-instance 1080-class control was slower (13.472 versus 8.427/7.519 seconds). The official VAE returns FP32; the FP16 gain must not be generalized to every pipeline or host.

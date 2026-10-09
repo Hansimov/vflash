@@ -144,17 +144,14 @@ def encode_mp4(
         encoded_path = directory / "output.mp4"
         with video_path.open("wb") as destination:
             for start in range(0, frames, 8):
-                # Own the float buffer even for FP32/strided input: the caller
-                # retains its decoded tensor, while quantization reuses this
-                # one bounded block instead of allocating each arithmetic step.
-                block = (
-                    video[0, :, start : start + 8]
-                    .permute(1, 2, 3, 0)
-                    .to(dtype=torch.float32, copy=True)
-                )
+                block = video[0, :, start : start + 8].permute(1, 2, 3, 0).float()
                 if not torch.isfinite(block).all().item():
                     raise MediaError("decoded video contains nonfinite values")
-                rgb = block.mul_(255).round_().clamp_(0, 255).to(torch.uint8).contiguous()
+                # FP32 is a borrowed view: multiplication creates the owned
+                # buffer without a separate copy. Other dtypes already own the
+                # float conversion, preserving the FP16 allocation reduction.
+                scaled = block.mul(255) if video.dtype == torch.float32 else block.mul_(255)
+                rgb = scaled.round_().clamp_(0, 255).to(torch.uint8).contiguous()
                 rgb.numpy().tofile(destination)
         if not torch.isfinite(audio).all().item():
             raise MediaError("decoded audio contains nonfinite values")
