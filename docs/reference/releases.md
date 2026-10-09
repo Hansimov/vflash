@@ -2,7 +2,7 @@
 
 ## 0.6.18
 
-Reuse one owned FP32 block for RGB quantization, reducing temporary CPU allocations without changing the caller's decoded tensor, rounding, codec or audio processing. On an eight-CPU allocation, encoding a 2048², 120-frame RGB clip took 15.903 seconds versus 18.863/18.846 seconds for the before/after controls (15.7% faster). Complete MP4 bytes matched and all audio/video decoded. This is encoding-stage evidence, not a full-generation or GPU throughput claim; no thread-count or hardware-profile defaults change.
+Reuse one owned FP32 block for RGB quantization, reducing temporary CPU allocations without changing the caller's decoded tensor, rounding, codec or audio processing. On an eight-CPU allocation, encoding a decoded FP16 2048², 120-frame RGB clip took 15.903 seconds versus 18.863/18.846 seconds for the before/after controls (15.7% faster). Complete MP4 bytes matched and all audio/video decoded. This is encoding-stage evidence, not a full-generation or GPU throughput claim; no thread-count or hardware-profile defaults change. A later FP32 CPU control measured 17.066 seconds versus 17.180/17.386 seconds (about 1.3%), while one remote PRO same-instance 1080-class control was slower (13.472 versus 8.427/7.519 seconds). The official VAE returns FP32; the FP16 gain must not be generalized to every pipeline or host.
 
 ## 0.6.17
 
