@@ -1,5 +1,13 @@
 # Release notes
 
+## 0.6.21
+
+Reuse the exclusively owned SM120 hybrid FFN base projection for its activated value half, instead of allocating another full output. The gate half and adapter remain unchanged, strict BF16 boundaries are retained, and the next linear consumes a strided view. Other architectures retain the allocated-output path. The owned contract is explicit and rejects autograd inputs.
+
+On a 32 GB, 600 W RTX 5090, a seven-video integration completed 2048²/5 s in 451.039 seconds (26.982 GiB peak denoising allocation), 1536×864/15 s in 364.943 seconds (24.143 GiB), and 1440²/10 s in 392.383 seconds. The earlier 4.28 GiB FFN output allocation failure is avoided. Same-host 1920×1088/5 s A/B/A2 produced identical complete MP4 bytes; its denoising peak stayed 16.960 GiB and no speed gain was established. This is a capacity improvement, not a general speed or image-quality claim. Separate-host 500 W and 600 W runs do not isolate this optimization's latency effect. Full media decode, multi-time visual review and application playback accompany the integration; existing camera motion and unassessed audio semantics remain. Product routing is unchanged.
+
+Private integration evidence: `video-gen` `3e20f9f3`; only aggregate results are public. The promoted kernel also passed four real-GPU shape checks, including subsequent strided linear output without a hidden clone.
+
 ## 0.6.20
 
 Extend the existing strict BF16 FFN/QKV small-adapter fusion to SM120 original-v0.1 hybrid weights, and release dead FFN modulation/normalization tensors before the next large allocation. A same-RTX-5090 1920×1088, five-second A/B/A2 comparison reduced denoising allocation from 20.086 to 17.949 GiB and denoising time by about 2.1%; full-generation speedup was not established because media-stage time varied. A separate same-card lifetime A/B/A2 reduced 17.949 to 16.961 GiB with identical complete MP4 bytes, without a measured speed gain.

@@ -1089,6 +1089,7 @@ class H3NativeBlockBF16Resident(_H3BlockOperations):
             self._residual_linear_unscaled(normalized, adapter),
             scaling=adapter.scaling,
             block_size=self.elementwise_block_size,
+            reuse_base=self.artifact.target.compute_capability == "sm120",
         )
 
     def _profiled_ffn_input(
@@ -1128,6 +1129,7 @@ class H3NativeBlockBF16Resident(_H3BlockOperations):
             update,
             scaling=adapter.scaling,
             block_size=self.elementwise_block_size,
+            reuse_base=self.artifact.target.compute_capability == "sm120",
         )
         activation_end = event()
         detail.setdefault("ffn_input_base_projection", []).append((base_start, base_end))

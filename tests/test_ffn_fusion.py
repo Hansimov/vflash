@@ -57,9 +57,10 @@ def test_qualified_dispatch_keeps_gemms_and_releases_temporary_values(
         references.append(weakref.ref(temporary))
         return temporary
 
-    def merge(base, adapter, *, scaling, block_size):
+    def merge(base, adapter, *, scaling, block_size, reuse_base):
         assert base is references[0]() and adapter is references[1]()
         assert scaling == 0.0625 and block_size == 1024
+        assert reuse_base is (architecture == "sm120")
         calls.append("merge-silu")
         return output
 

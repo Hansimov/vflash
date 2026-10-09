@@ -236,7 +236,7 @@ The single-device 3080 profile has been checked for capacity and repeatable resu
 The [complete profile table](../reference/pipeline-profiles) owns each profile's current media-validation scope, including the 544p keyframe previews. Single-SM86 and Ref Turbo8 retain native bundle-to-latents interfaces; the 544p keyframe Turbo8 pair also has a complete pipeline. Unlisted modes, adapters, quantization and temporal settings are outside these profiles. The HTTP API provides one serial denoising lane; account management, billing and distributed GPU scheduling belong to the application.
 
 
-## Bounded NVL and RTX 5090 I2VA evidence (0.6.20) {#small-blackwell}
+## Bounded NVL and RTX 5090 I2VA evidence (0.6.21) {#small-blackwell}
 
 A public-core 0.6.17 H100 NVL integration completed six I2VA videos, including
 1920×1088/10 s, 1536×864/15 s, 2048²/5 s and 1440²/10 s. Generation times for
@@ -262,3 +262,7 @@ within individually measured capacity. This is block-ring I2VA evidence, using
 production routing default. Complete media decoded and was reviewed at multiple
 times; existing camera tracking remains. Private evidence source: `video-gen`
 `674c84fc`; no private media, prompts or machine identities are included.
+
+Version 0.6.21 reuses the owned base projection and adds complete 32 GB / 600 W RTX 5090 outputs at 2048²/5 s (451.039 s, 26.982 GiB denoising peak) and 1440²/10 s (392.383 s). The same batch completed 1536×864/15 s in 364.943 s with a 24.143 GiB peak. Its host had about 342 GiB RAM and 61 CPU cores of quota, distinct from the 500 W host above. Same-card 1920×1088/5 s A/B/A2 MP4 bytes matched, with an unchanged 16.960 GiB peak and no established speed improvement. These are bounded capacity results, not other-mode qualification or proof of full camera/audio instruction adherence.
+
+Private integration source: `video-gen` `3e20f9f3`.

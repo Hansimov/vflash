@@ -260,6 +260,7 @@ def _strict_bf16_ffn_adapter_silu_kernel() -> Any:
         scaling,
         BLOCK_SIZE: tl.constexpr,
         WIDE_INDEX: tl.constexpr,
+        REUSE_BASE: tl.constexpr = False,
     ):
         block = tl.program_id(0)
         if WIDE_INDEX:
@@ -280,7 +281,7 @@ def _strict_bf16_ffn_adapter_silu_kernel() -> Any:
         gate = round_bf16(base_gate + round_bf16(adapter_gate * scaling))
         activated = gate / (1.0 + libdevice.exp(-gate))
         output = value * round_bf16(activated)
-        tl.store(output_ptr + offsets, output, mask=mask)
+        tl.store(output_ptr + (value_offsets if REUSE_BASE else offsets), output, mask=mask)
 
     return strict_ffn_adapter_silu_kernel
 
@@ -700,12 +701,15 @@ def triton_strict_bf16_silu_mul(
 
 
 def triton_strict_bf16_ffn_adapter_silu(
-    base: Any, adapter: Any, *, scaling: float, block_size: int
+    base: Any, adapter: Any, *, scaling: float, block_size: int, reuse_base: bool = False
 ) -> Any:
     """Merge the FFN adapter and SiLU without a merged [B,S,2F] temporary.
 
     The separate BF16 LoRA product, addition and SiLU round boundaries remain
-    explicit. This entry is dispatched only for the qualified SM89 Ref4 profile.
+    explicit. ``reuse_base`` transfers ownership of a fresh base projection to
+    the result: only its value half is overwritten, returning a strided view.
+    The caller must not retain or reuse the old projection. The gate half and
+    adapter stay unchanged; no cross-row write aliases another lane's reads.
     """
 
     import torch
@@ -733,8 +737,16 @@ def triton_strict_bf16_ffn_adapter_silu(
         or block_size != 1024
     ):
         raise H3FusedOpsError("FFN fusion requires finite scaling and block size 1024")
+    if type(reuse_base) is not bool or (
+        reuse_base and (base.requires_grad or adapter.requires_grad)
+    ):
+        raise H3FusedOpsError("owned FFN reuse requires an inference-only boolean contract")
     width = base.shape[-1] // 2
-    output = torch.empty((*base.shape[:-1], width), device=base.device, dtype=base.dtype)
+    output = (
+        base[..., :width]
+        if reuse_base
+        else torch.empty((*base.shape[:-1], width), device=base.device, dtype=base.dtype)
+    )
     _strict_bf16_ffn_adapter_silu_kernel()[(triton.cdiv(output.numel(), block_size),)](
         output,
         base,
@@ -744,6 +756,7 @@ def triton_strict_bf16_ffn_adapter_silu(
         float(scaling),
         BLOCK_SIZE=block_size,
         WIDE_INDEX=_use_wide_index(base),
+        REUSE_BASE=reuse_base,
         num_warps=8,
     )
     return output
