@@ -22,10 +22,11 @@ from vflash.contracts import ContractError
 from vflash.hardware import NvidiaDevice
 from vflash.media.encoding import media_executables
 from vflash.media.runtime import OfficialMediaDecoder
-from vflash.model_assets import model_profile, supported_request_modes
+from vflash.model_assets import model_profile
 from vflash.native.h3_conditioning_bundle import H3InMemoryConditioning
 from vflash.native.h3_hybrid import HybridModel
 from vflash.native.runner import NativeEngineSession
+from vflash.pipeline.admission import validate_request
 from vflash.pipeline.assets import PreparedPipelineAssets
 from vflash.pipeline.attention_adapter import AttentionAdapter, open_attention_adapter
 from vflash.pipeline.contracts import (
@@ -256,55 +257,14 @@ class H3Pipeline:
             conditioning_reuse_scope, ConditioningReuseScope
         ):
             raise ContractError("conditioning reuse requires a typed opaque scope")
-        modes = supported_request_modes(self.profile.definition.id)
-        if self.hybrid_model is not None:
-            modes = (*modes, "ref2va")
-        if request.mode not in modes:
-            raise ContractError("the request mode differs from the prepared pipeline profile")
-        from vflash.pipeline.residency import validate_resident_request
-
-        validate_resident_request(self.weight_residency, request)
-        if request.reference_video is not None and (
-            self.prepared.profile_id != "ref2va-turbo4-exact-sm89"
-            or self._plan.parallel_strategy != "single"
-        ):
-            raise ContractError("video references require the single-SM89 Ref4 pipeline")
-        if request.width * request.height > 1024**2 and (
-            self.hybrid_model is None
-            or self._plan.parallel_strategy != "single"
-            or self.attention_backend not in {"veda-sm89", "veda-triton"}
-        ):
-            raise ContractError(
-                "native HD requires the original-v0.1 single-SM89 hybrid Veda pipeline"
-            )
-        extended = (
-            request.duration_seconds > 10
-            or len(request.ordered_references) > 3
-            or (request.mode == "ref2va" and request.duration_seconds != 5)
-            or (request.width * request.height > 1024**2 and request.duration_seconds != 5)
+        validate_request(
+            request,
+            profile_id=self.profile.definition.id,
+            hybrid=self.hybrid_model is not None,
+            parallel_strategy=self._plan.parallel_strategy,
+            attention_backend=self.attention_backend,
+            weight_residency=self.weight_residency,
         )
-        if extended and (
-            self.hybrid_model is None
-            or self._plan.parallel_strategy != "single"
-            or self.attention_backend not in {"veda-sm89", "veda-triton"}
-        ):
-            raise ContractError(
-                "extended duration/references require the original-v0.1 "
-                "single-SM89 hybrid Veda pipeline"
-            )
-        if extended and (
-            request.width * request.height * request.model_frames > 2048**2 * 124
-            or (
-                len(request.ordered_references) > 1
-                and request.mode == "ref2va"
-                and (
-                    request.duration_seconds != 5 or request.width * request.height > 960 * 544
-                )
-            )
-        ):
-            raise ContractError(
-                "extended request exceeds the qualified joint canvas/duration/reference budget"
-            )
         if output_path.exists() or output_path.is_symlink():
             raise ContractError("the output path already exists")
         if not self._lock.acquire(blocking=False):

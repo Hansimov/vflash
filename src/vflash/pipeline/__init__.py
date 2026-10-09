@@ -6,6 +6,7 @@ from importlib import import_module
 from typing import Any
 
 from vflash.native.h3_hybrid import HybridModel
+from vflash.pipeline.admission import validate_request
 from vflash.pipeline.attention_adapter import AttentionAdapter
 from vflash.pipeline.contracts import (
     ConditioningReuseScope,
@@ -27,6 +28,7 @@ __all__ = [
     "VideoResult",
     "load_prepared_pipeline_assets",
     "prepare_pipeline_assets",
+    "validate_request",
 ]
 
 

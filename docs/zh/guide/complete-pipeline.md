@@ -1,5 +1,27 @@
 # 生成视频
 
+## 在申请硬件之前检查请求
+
+源码主线从 `vflash.pipeline` 导出 `validate_request`，与
+`H3Pipeline.generate` 共用软件准入检查，不导入 Torch、不加载权重、
+不打开参考素材，也不初始化 CUDA：
+
+```python
+from pathlib import Path
+from vflash.pipeline import VideoRequest, validate_request
+
+request = VideoRequest("描述画面中的运动。", first_frame=Path("first.png"),
+                       width=2048, height=2048, duration_seconds=5)
+validate_request(request, profile_id="i2va-turbo4-v01-544-exact-sm90",
+                 hybrid=True, attention_backend="veda-triton",
+                 parallel_strategy="single", weight_residency="block-ring")
+```
+
+检查应使用实际执行的引擎版本与解析后的选项。尺寸和时长分别合法，
+不代表组合合法：2048 × 2048、十五秒仍超出现有像素与帧数联合预算。
+准入通过只表示软件允许，不代表显存足够、素材凭据有效、目标硬件已验证或画质通过。
+
+
 ## 0.6.8：显式 hybrid 多参考模型
 
 `H3Pipeline(..., hybrid_model=HybridModel(Path("models/MiniMax-H3/transformer_ref")))`

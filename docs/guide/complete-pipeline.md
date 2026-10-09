@@ -4,6 +4,30 @@ Vflash 0.5.1 generates a five-second MP4 from text alone, or from a prompt and o
 
 On one 4090, Ref4 also accepts [a short reference video](#reference-video). The same instance can alternate images and video without switching weights.
 
+## Check a request before allocating hardware
+
+Source main exposes `validate_request` from `vflash.pipeline`. It runs the same
+software admission checks as `H3Pipeline.generate`, without importing Torch,
+loading weights, opening reference media or initializing CUDA:
+
+```python
+from pathlib import Path
+from vflash.pipeline import VideoRequest, validate_request
+
+request = VideoRequest("Describe the motion.", first_frame=Path("first.png"),
+                       width=2048, height=2048, duration_seconds=5)
+validate_request(request, profile_id="i2va-turbo4-v01-544-exact-sm90",
+                 hybrid=True, attention_backend="veda-triton",
+                 parallel_strategy="single", weight_residency="block-ring")
+```
+
+Use the exact engine revision and resolved options intended for execution.
+A legal width and duration individually do not imply a legal combination:
+2048 × 2048 at fifteen seconds exceeds the current joint pixel-frame budget.
+Passing admission establishes software eligibility, not available GPU memory,
+prepared-asset integrity, hardware qualification or output quality.
+
+
 ## What runs where
 
 Vflash owns the native denoiser, stage lifetimes, local image loading and MP4 delivery. The text and image encoders use pinned Diffusers and Transformers code; Turbo profiles additionally use PEFT adapters. Video and audio decoding use the official H3 VAE code. These components are explicit dependencies; they are not described as new native kernels. No LightX2V runtime or application server is needed.

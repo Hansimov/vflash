@@ -130,6 +130,7 @@ def _pipeline(*, fail: str | None = None) -> tuple[H3Pipeline, list[str]]:
     pipeline._lock = threading.Lock()
     pipeline._closed = pipeline._released = False
     pipeline.attention_adapter = None
+    pipeline.attention_backend = "torch-flash"
     pipeline.hybrid_model = None
     pipeline.weight_residency = "block-ring"
     pipeline.veda_dense_backend = "torch-flash"
@@ -840,6 +841,7 @@ def test_video_requires_single_sm89_ref4_before_decoding(
 ):
     pipeline, events = _pipeline()
     pipeline.prepared.profile_id = profile
+    pipeline.profile = SimpleNamespace(definition=SimpleNamespace(id=profile))
     pipeline._plan.parallel_strategy = strategy
     monkeypatch.setattr(
         "vflash.pipeline.runtime.read_video_reference", lambda _: pytest.fail("decode")
