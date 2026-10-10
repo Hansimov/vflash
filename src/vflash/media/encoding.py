@@ -8,6 +8,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import threading
 import wave
 from pathlib import Path
 from typing import Any
@@ -84,11 +85,13 @@ def encode_mp4(
     crf: int = 18,
     timeout_seconds: float = 600,
     audio_delivery_profile: str = "unchanged",
+    video_input: str = "file",
 ) -> dict[str, Any]:
     """Encode CPU ``[1,3,F,H,W]`` RGB and ``[1,2,S]`` stereo without overwriting.
 
-    RGB floats are quantized eight frames at a time. Temporary RGB, PCM and MP4
-    files share the output filesystem and are removed on success or failure.
+    RGB floats are quantized eight frames at a time. Explicit ``video_input="pipe"``
+    feeds FFmpeg directly; the default retains the raw RGB file. The pipe deadline
+    covers feeding and encoding. Temporary files are removed on success or failure.
     A completed and probed MP4 is published with an atomic, no-clobber link.
     """
     import torch
@@ -109,6 +112,8 @@ def encode_mp4(
         raise MediaError("audio_sample_rate must be a positive integer")
     if type(crf) is not int or not 0 <= crf <= 51:
         raise MediaError("crf must be an integer between 0 and 51")
+    if video_input not in {"file", "pipe"}:
+        raise MediaError("video_input must be file or pipe")
     if audio_delivery_profile not in AUDIO_DELIVERY_PROFILES:
         raise MediaError("unknown audio delivery profile")
     if preset not in {
@@ -142,7 +147,8 @@ def encode_mp4(
         directory = Path(tmp)
         video_path, audio_path = directory / "video.rgb24", directory / "audio.wav"
         encoded_path = directory / "output.mp4"
-        with video_path.open("wb") as destination:
+
+        def rgb_blocks():
             for start in range(0, frames, 8):
                 block = video[0, :, start : start + 8].permute(1, 2, 3, 0).float()
                 if not torch.isfinite(block).all().item():
@@ -152,7 +158,12 @@ def encode_mp4(
                 # float conversion, preserving the FP16 allocation reduction.
                 scaled = block.mul(255) if video.dtype == torch.float32 else block.mul_(255)
                 rgb = scaled.round_().clamp_(0, 255).to(torch.uint8).contiguous()
-                rgb.numpy().tofile(destination)
+                yield rgb.numpy()
+
+        if video_input == "file":
+            with video_path.open("wb") as destination:
+                for block in rgb_blocks():
+                    block.tofile(destination)
         if not torch.isfinite(audio).all().item():
             raise MediaError("decoded audio contains nonfinite values")
         audio_filters: list[str] = []
@@ -205,7 +216,7 @@ def encode_mp4(
             "-framerate",
             str(fps),
             "-i",
-            str(video_path),
+            "pipe:0" if video_input == "pipe" else str(video_path),
             *audio_input,
             "-map",
             "0:v:0",
@@ -231,18 +242,51 @@ def encode_mp4(
             "+faststart",
             str(encoded_path),
         ]
-        try:
-            completed = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                timeout=timeout_seconds,
-                check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            raise MediaError("ffmpeg did not complete the video") from exc
-        if completed.returncode or not encoded_path.is_file():
-            raise MediaError(f"ffmpeg failed: {completed.stderr[-2000:].strip()}")
+        if video_input == "file":
+            try:
+                completed = subprocess.run(
+                    command,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout_seconds,
+                    check=False,
+                )
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                raise MediaError("ffmpeg did not complete the video") from exc
+            if completed.returncode or not encoded_path.is_file():
+                raise MediaError(f"ffmpeg failed: {completed.stderr[-2000:].strip()}")
+        else:
+            with (directory / "ffmpeg.stderr").open("w+") as stderr:
+                try:
+                    process = subprocess.Popen(
+                        command, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=stderr
+                    )
+                except OSError as exc:
+                    raise MediaError("ffmpeg could not start") from exc
+                timer = threading.Timer(timeout_seconds, process.kill)
+                timer.daemon = True
+                timer.start()
+                try:
+                    assert process.stdin is not None
+                    for block in rgb_blocks():
+                        process.stdin.write(memoryview(block).cast("B"))
+                    process.stdin.close()
+                    code = process.wait(timeout=timeout_seconds)
+                except (OSError, subprocess.TimeoutExpired) as exc:
+                    raise MediaError("ffmpeg did not complete the video") from exc
+                finally:
+                    timer.cancel()
+                    if process.poll() is None:
+                        process.kill()
+                    process.wait()
+                    try:
+                        if process.stdin is not None:
+                            process.stdin.close()
+                    except OSError:
+                        pass
+                if code or not encoded_path.is_file():
+                    stderr.seek(max(0, stderr.tell() - 2000))
+                    raise MediaError("ffmpeg failed: " + stderr.read(2000))
         probe = probe_mp4(encoded_path, ffprobe=ffprobe)
         streams = probe["streams"]
         visual = [row for row in streams if row.get("codec_type") == "video"]

@@ -120,3 +120,28 @@ Five complete fresh-conditioning requests ran sequentially on one RTX 4090 48 GB
 | Ref2VA | 9 | 960×544 | 5 | 93.15 | 9.44 |
 
 Capacity evidence is separate from quality. Multiple-time visual inspection found camera/composition drift and fine-detail changes in some scenes, and complex reference/action adherence is not fully qualified. Audio was finite and decodable; silence or sound semantics are not certified by an AAC track. Use explicit silent delivery for digital silence. There is no H100, ordinary 24 GiB 4090, or arbitrary 4MP/15s qualification. The request guard enforces the joint resource boundary. Integration source: `90e19b3b`.
+
+
+## Optional bounded RGB streaming {#media-streaming}
+
+Source builds can select `H3Pipeline(..., media_video_input="pipe")` or
+`vflash generate --media-video-input pipe`. The lower-level `encode_mp4` option is
+`video_input="pipe"`. The default remains `file`. Both paths quantize the same eight-frame
+blocks and retain H.264/AAC, audio delivery, exact temporal anchors and atomic no-clobber publication.
+Pipe mode removes the raw RGB temporary file: 1,509,949,440 bytes for 120 frames at 2048².
+It does not eliminate the decoded CPU tensor or qualify larger GPU requests.
+
+A controlled, initialized four-step hybrid/Veda I2VA comparison at 2048² / five seconds measured:
+
+| GPU / host scope | File A1 | Pipe B | File A2 | Whole-request conclusion |
+| --- | ---: | ---: | ---: | --- |
+| H100 SXM, one remote host | 282.452 s | 294.185 s | 283.594 s | Pipe 3.94% slower than control mean |
+| RTX PRO 6000 Server, another remote host | 498.368 s | 428.771 s | 359.039 s | Within control drift; no established speedup |
+
+Each three-video group was byte-identical. This establishes encoding equivalence for these cases,
+not general visual quality or prompt adherence. The PRO controls had substantial memory-pressure
+drift; do not interpret the first control alone as a 14% pipeline improvement. Use the option when
+its measured CPU/I/O or temporary-storage benefit outweighs its cost for the actual workload.
+H100 SXM retains the file path. No provider acquisition, model loading, transfer or queue time is
+included in these initialized request timings. The pipe timeout owns feeding and FFmpeg execution;
+failure kills/reaps the child and removes temporary outputs.

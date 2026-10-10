@@ -66,6 +66,7 @@ class H3Pipeline:
         attention_adapter: AttentionAdapter | None = None,
         hybrid_model: HybridModel | None = None,
         weight_residency: str = "block-ring",
+        media_video_input: str = "file",
     ) -> None:
         if trust_local_code is not True:
             raise ContractError("the official decoder adapter requires trust_local_code=True")
@@ -88,6 +89,9 @@ class H3Pipeline:
             raise ContractError(
                 "the complete SM86 pipeline requires two GPUs with sequence-head execution"
             )
+        if media_video_input not in {"file", "pipe"}:
+            raise ContractError("media_video_input must be file or pipe")
+        self.media_video_input = media_video_input
         self.prepared = prepared
         self.attention_backend = resolve_attention_backend(plan, attention_backend)
         from vflash.native.h3_veda_attention import validate_predictor
@@ -448,6 +452,8 @@ class H3Pipeline:
                 if request.audio_delivery_profile != "unchanged"
                 else {}
             )
+            if self.media_video_input == "pipe":
+                media_options["video_input"] = "pipe"
             if request.keyframe_delivery_profile != "decoded":
                 media_options["keyframe_delivery_profile"] = request.keyframe_delivery_profile
                 if request.mode in {"i2va", "fl2va"}:

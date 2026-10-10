@@ -88,6 +88,12 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
         default="decoded",
         help="temporal-anchor delivery policy; exact-v1 restores supplied endpoints",
     )
+    generate.add_argument(
+        "--media-video-input",
+        choices=("file", "pipe"),
+        default="file",
+        help="raw RGB file (default) or bounded pipe to FFmpeg; qualify whole-request speed",
+    )
     generate.add_argument("--output", type=Path, required=True, help="new MP4 output path")
     generate.add_argument("--gpu", type=int, required=True, help="physical nvidia-smi index")
     generate.add_argument(
@@ -181,6 +187,8 @@ def run_pipeline_command(args: argparse.Namespace) -> int:
         if args.peer_gpu not in devices:
             raise ContractError(f"GPU index {args.peer_gpu} was not found")
         options = {"peer_device": devices[args.peer_gpu], "strategy": args.strategy}
+    if args.media_video_input != "file":
+        options["media_video_input"] = args.media_video_input
     if args.veda_dense_backend != "torch-flash":
         options["veda_dense_backend"] = args.veda_dense_backend
     if args.attention_backend != "auto":

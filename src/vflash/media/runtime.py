@@ -196,6 +196,7 @@ class OfficialMediaDecoder:
         duration_seconds: float,
         fps: int = 24,
         audio_delivery_profile: str = "unchanged",
+        video_input: str = "file",
         keyframe_delivery_profile: str = DECODED_KEYFRAME_DELIVERY_PROFILE,
         first_frame: Any | None = None,
         last_frame: Any | None = None,
@@ -209,6 +210,8 @@ class OfficialMediaDecoder:
             raise MediaError("this adapter preserves the native 24 fps model clock")
         if type(duration_seconds) is not int or not 5 <= duration_seconds <= 15:
             raise MediaError("this delivery supports whole seconds from five through fifteen")
+        if video_input not in {"file", "pipe"}:
+            raise MediaError("video_input must be file or pipe")
         if audio_delivery_profile not in AUDIO_DELIVERY_PROFILES:
             raise MediaError("unknown audio delivery profile")
         if keyframe_delivery_profile not in KEYFRAME_DELIVERY_PROFILES:
@@ -263,6 +266,8 @@ class OfficialMediaDecoder:
             if audio_delivery_profile != "unchanged"
             else {}
         )
+        if video_input == "pipe":
+            encode_options["video_input"] = "pipe"
         media = encode_mp4(
             video[:, :, :frames],
             audio[:, :, :samples],

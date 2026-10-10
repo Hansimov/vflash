@@ -133,6 +133,7 @@ def _pipeline(*, fail: str | None = None) -> tuple[H3Pipeline, list[str]]:
     pipeline.attention_backend = "torch-flash"
     pipeline.hybrid_model = None
     pipeline.weight_residency = "block-ring"
+    pipeline.media_video_input = "file"
     pipeline.veda_dense_backend = "torch-flash"
     pipeline.veda_predictor = None
     pipeline._reference_graph = None
@@ -1048,3 +1049,19 @@ def test_extended_runtime_rejects_unqualified_joint_budget_before_loading(tmp_pa
     with pytest.raises(ContractError, match="joint"):
         pipeline.generate(request, tmp_path / "output.mp4")
     assert not events and not pipeline._closed
+
+
+def test_opt_in_pipe_reaches_the_owned_media_stage(video_request, tmp_path):
+    pipeline, _events = _pipeline()
+    original = pipeline._media.generate_mp4
+    received = []
+
+    def generate(*args, **kwargs):
+        received.append(kwargs.pop("video_input"))
+        return original(*args, **kwargs)
+
+    pipeline._media.generate_mp4 = generate
+    pipeline.media_video_input = "pipe"
+    pipeline.generate(video_request, tmp_path / "stream.mp4")
+    assert received == ["pipe"]
+    pipeline.close()

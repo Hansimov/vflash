@@ -193,12 +193,13 @@ def test_web_audio_delivery_bypasses_audio_below_the_quiet_floor(tmp_path: Path)
     assert measured["input_i"] < -55
 
 
-def test_failed_encoding_leaves_no_partial_output(tmp_path: Path) -> None:
+@pytest.mark.parametrize("video_input", ["file", "pipe"])
+def test_failed_encoding_leaves_no_partial_output(tmp_path: Path, video_input) -> None:
     video, audio = _media()
     video = video.clone()
     video[0, 0, 9, 0, 0] = float("nan")
     with pytest.raises(MediaError, match="nonfinite"):
-        encode_mp4(video, audio, tmp_path / "output.mp4")
+        encode_mp4(video, audio, tmp_path / "output.mp4", video_input=video_input)
     assert list(tmp_path.iterdir()) == []
 
 
@@ -351,3 +352,49 @@ def test_exact_keyframe_delivery_restores_only_delivery_endpoints(
     }
     first.close()
     last.close()
+
+
+@pytest.mark.parametrize("audio_profile", ["unchanged", "web-v1", "silent-v1"])
+def test_pipe_preserves_exact_media_and_borrowed_tensors(tmp_path, audio_profile):
+    video, audio = _media()
+    original_video, original_audio = video.clone(), audio.clone()
+    for mode in ("file", "pipe"):
+        encode_mp4(
+            video,
+            audio,
+            tmp_path / (mode + ".mp4"),
+            preset="ultrafast",
+            video_input=mode,
+            audio_delivery_profile=audio_profile,
+        )
+    assert (tmp_path / "file.mp4").read_bytes() == (tmp_path / "pipe.mp4").read_bytes()
+    assert torch.equal(video, original_video) and torch.equal(audio, original_audio)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["file.mp4", "pipe.mp4"]
+
+
+def test_pipe_deadline_reaps_stalled_child_without_publishing(tmp_path, monkeypatch):
+    import os
+    import time
+
+    executable = tmp_path / "encoder"
+    pidfile = tmp_path / "child.pid"
+    executable.write_text(
+        "#!/usr/bin/env python3\nimport os,time\n"
+        + "open("
+        + repr(str(pidfile))
+        + ", 'w').write(str(os.getpid()))\ntime.sleep(30)\n"
+    )
+    executable.chmod(0o700)
+    monkeypatch.setattr(
+        "vflash.media.encoding.media_executables", lambda: (str(executable), "ffprobe")
+    )
+    video, audio = _media()
+    start = time.monotonic()
+    with pytest.raises(MediaError, match=r"did not complete|ffmpeg failed"):
+        encode_mp4(
+            video, audio, tmp_path / "output.mp4", video_input="pipe", timeout_seconds=0.5
+        )
+    assert time.monotonic() - start < 4 and not (tmp_path / "output.mp4").exists()
+    assert not list(tmp_path.glob(".vflash-media-*"))
+    with pytest.raises(ProcessLookupError):
+        os.kill(int(pidfile.read_text()), 0)
