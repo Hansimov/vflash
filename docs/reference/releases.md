@@ -1,5 +1,13 @@
 # Release notes
 
+## 0.6.23
+
+Expose CPU-only complete-request admission before allocating an accelerator, and explicit bounded media delivery options: `video_input="pipe"` avoids a full RGB temporary file, while `video_threads` controls codec concurrency. Defaults remain file delivery and codec auto-threading. These are the previously published reusable changes; this release pins them for distributed worker images.
+
+A CPU encoding comparison at 2048²/120 frames found explicit 16-thread encoding 8.68% faster on average and 50.54% lower peak anonymous memory than the measured auto-thread control. Full decode, audio and compression checks passed; thread settings can change lossy bitstreams. This is a CPU-stage result, not a guarantee of lower remote cold-start or whole-generation latency. Weight preparation, cache placement and rental ownership remain application responsibilities. Flash remains the default; the experimental Sage quality limitations in 0.6.22 remain unresolved.
+
+Source and wheel are released. Private integration evidence: `video-gen` `fc9306fe`; only aggregate results are public. Existing public container tags and running workers keep their pinned versions.
+
 ## 0.6.22
 
 **Quality follow-up, 2026-10-10:** the optional Sage path remains experimental. High-resolution temporal instability has been reported; consecutive-frame checks found detail fluctuation in both compared backends and did not isolate its cause. Decode, playback and sparse frame sampling do not establish temporal-quality qualification. The timings below remain execution measurements, not accepted-video throughput. No default or runtime change is made by this documentation correction.
