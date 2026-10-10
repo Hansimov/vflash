@@ -74,6 +74,12 @@ def probe_mp4(path: Path, *, ffprobe: str | None = None) -> dict[str, Any]:
     }
 
 
+def validate_video_threads(value: int | None) -> None:
+    """Validate an explicit codec budget without changing FFmpeg auto selection."""
+    if value is not None and (type(value) is not int or not 1 <= value <= 256):
+        raise MediaError("video_threads must be None or an integer between 1 and 256")
+
+
 def encode_mp4(
     video: Any,
     audio: Any,
@@ -86,9 +92,12 @@ def encode_mp4(
     timeout_seconds: float = 600,
     audio_delivery_profile: str = "unchanged",
     video_input: str = "file",
+    video_threads: int | None = None,
 ) -> dict[str, Any]:
     """Encode CPU ``[1,3,F,H,W]`` RGB and ``[1,2,S]`` stereo without overwriting.
 
+    ``video_threads`` optionally bounds codec threads, not every FFmpeg filter.
+    None preserves FFmpeg auto selection; thread changes can alter H.264 bytes.
     RGB floats are quantized eight frames at a time. Explicit ``video_input="pipe"``
     feeds FFmpeg directly; the default retains the raw RGB file. The pipe deadline
     covers feeding and encoding. Temporary files are removed on success or failure.
@@ -112,6 +121,7 @@ def encode_mp4(
         raise MediaError("audio_sample_rate must be a positive integer")
     if type(crf) is not int or not 0 <= crf <= 51:
         raise MediaError("crf must be an integer between 0 and 51")
+    validate_video_threads(video_threads)
     if video_input not in {"file", "pipe"}:
         raise MediaError("video_input must be file or pipe")
     if audio_delivery_profile not in AUDIO_DELIVERY_PROFILES:
@@ -224,6 +234,7 @@ def encode_mp4(
             "1:a:0",
             "-c:v",
             "libx264",
+            *(["-threads:v", str(video_threads)] if video_threads is not None else []),
             "-preset",
             preset,
             "-crf",

@@ -20,7 +20,7 @@ from vflash.attention import resolve_attention_backend
 from vflash.catalog import ProfileCatalog
 from vflash.contracts import ContractError
 from vflash.hardware import NvidiaDevice
-from vflash.media.encoding import media_executables
+from vflash.media.encoding import MediaError, media_executables, validate_video_threads
 from vflash.media.runtime import OfficialMediaDecoder
 from vflash.model_assets import model_profile
 from vflash.native.h3_conditioning_bundle import H3InMemoryConditioning
@@ -67,6 +67,7 @@ class H3Pipeline:
         hybrid_model: HybridModel | None = None,
         weight_residency: str = "block-ring",
         media_video_input: str = "file",
+        media_video_threads: int | None = None,
     ) -> None:
         if trust_local_code is not True:
             raise ContractError("the official decoder adapter requires trust_local_code=True")
@@ -91,6 +92,11 @@ class H3Pipeline:
             )
         if media_video_input not in {"file", "pipe"}:
             raise ContractError("media_video_input must be file or pipe")
+        try:
+            validate_video_threads(media_video_threads)
+        except MediaError as exc:
+            raise ContractError(str(exc)) from exc
+        self.media_video_threads = media_video_threads
         self.media_video_input = media_video_input
         self.prepared = prepared
         self.attention_backend = resolve_attention_backend(plan, attention_backend)
@@ -452,6 +458,8 @@ class H3Pipeline:
                 if request.audio_delivery_profile != "unchanged"
                 else {}
             )
+            if self.media_video_threads is not None:
+                media_options["video_threads"] = self.media_video_threads
             if self.media_video_input == "pipe":
                 media_options["video_input"] = "pipe"
             if request.keyframe_delivery_profile != "decoded":

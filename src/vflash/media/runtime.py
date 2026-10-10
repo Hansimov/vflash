@@ -16,7 +16,12 @@ from vflash.adapters.official_vae import (
     prepare_official_h3_video_decoder,
 )
 from vflash.media.audio_delivery import AUDIO_DELIVERY_PROFILES, SILENT_AUDIO_PROFILE
-from vflash.media.encoding import MediaError, encode_mp4, media_executables
+from vflash.media.encoding import (
+    MediaError,
+    encode_mp4,
+    media_executables,
+    validate_video_threads,
+)
 from vflash.media.keyframe_delivery import (
     DECODED_KEYFRAME_DELIVERY_PROFILE,
     KEYFRAME_DELIVERY_PROFILES,
@@ -197,6 +202,7 @@ class OfficialMediaDecoder:
         fps: int = 24,
         audio_delivery_profile: str = "unchanged",
         video_input: str = "file",
+        video_threads: int | None = None,
         keyframe_delivery_profile: str = DECODED_KEYFRAME_DELIVERY_PROFILE,
         first_frame: Any | None = None,
         last_frame: Any | None = None,
@@ -210,6 +216,7 @@ class OfficialMediaDecoder:
             raise MediaError("this adapter preserves the native 24 fps model clock")
         if type(duration_seconds) is not int or not 5 <= duration_seconds <= 15:
             raise MediaError("this delivery supports whole seconds from five through fifteen")
+        validate_video_threads(video_threads)
         if video_input not in {"file", "pipe"}:
             raise MediaError("video_input must be file or pipe")
         if audio_delivery_profile not in AUDIO_DELIVERY_PROFILES:
@@ -266,6 +273,8 @@ class OfficialMediaDecoder:
             if audio_delivery_profile != "unchanged"
             else {}
         )
+        if video_threads is not None:
+            encode_options["video_threads"] = video_threads
         if video_input == "pipe":
             encode_options["video_input"] = "pipe"
         media = encode_mp4(

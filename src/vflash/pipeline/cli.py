@@ -89,6 +89,11 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
         help="temporal-anchor delivery policy; exact-v1 restores supplied endpoints",
     )
     generate.add_argument(
+        "--media-video-threads",
+        type=int,
+        help="explicit H.264 codec threads (1-256); default FFmpeg auto",
+    )
+    generate.add_argument(
         "--media-video-input",
         choices=("file", "pipe"),
         default="file",
@@ -187,6 +192,8 @@ def run_pipeline_command(args: argparse.Namespace) -> int:
         if args.peer_gpu not in devices:
             raise ContractError(f"GPU index {args.peer_gpu} was not found")
         options = {"peer_device": devices[args.peer_gpu], "strategy": args.strategy}
+    if args.media_video_threads is not None:
+        options["media_video_threads"] = args.media_video_threads
     if args.media_video_input != "file":
         options["media_video_input"] = args.media_video_input
     if args.veda_dense_backend != "torch-flash":

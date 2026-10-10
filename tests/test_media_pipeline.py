@@ -398,3 +398,28 @@ def test_pipe_deadline_reaps_stalled_child_without_publishing(tmp_path, monkeypa
     assert not list(tmp_path.glob(".vflash-media-*"))
     with pytest.raises(ProcessLookupError):
         os.kill(int(pidfile.read_text()), 0)
+
+
+@pytest.mark.parametrize("threads", [True, False, 0, -1, 257, 1.5, "16"])
+def test_codec_thread_budget_rejected_before_output(tmp_path, threads):
+    video, audio = _media()
+    with pytest.raises(MediaError, match="video_threads"):
+        encode_mp4(video, audio, tmp_path / "output.mp4", video_threads=threads)
+    assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg") or not shutil.which("ffprobe"), reason="FFmpeg")
+@pytest.mark.parametrize("video_input", ["file", "pipe"])
+def test_real_explicit_codec_threads_keep_media_contract(tmp_path, video_input):
+    video, audio = _media()
+    result = encode_mp4(
+        video,
+        audio,
+        tmp_path / "output.mp4",
+        video_input=video_input,
+        video_threads=2,
+        preset="medium",
+    )
+    assert result["frames"] == 24 and result["audio_samples"] == 32000
+    assert result["duration_seconds"] == 1
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["output.mp4"]

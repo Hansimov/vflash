@@ -134,6 +134,7 @@ def _pipeline(*, fail: str | None = None) -> tuple[H3Pipeline, list[str]]:
     pipeline.hybrid_model = None
     pipeline.weight_residency = "block-ring"
     pipeline.media_video_input = "file"
+    pipeline.media_video_threads = None
     pipeline.veda_dense_backend = "torch-flash"
     pipeline.veda_predictor = None
     pipeline._reference_graph = None
@@ -1051,17 +1052,18 @@ def test_extended_runtime_rejects_unqualified_joint_budget_before_loading(tmp_pa
     assert not events and not pipeline._closed
 
 
-def test_opt_in_pipe_reaches_the_owned_media_stage(video_request, tmp_path):
+def test_opt_in_media_controls_reach_the_owned_media_stage(video_request, tmp_path):
     pipeline, _events = _pipeline()
     original = pipeline._media.generate_mp4
     received = []
 
     def generate(*args, **kwargs):
-        received.append(kwargs.pop("video_input"))
+        received.append((kwargs.pop("video_input"), kwargs.pop("video_threads")))
         return original(*args, **kwargs)
 
     pipeline._media.generate_mp4 = generate
     pipeline.media_video_input = "pipe"
+    pipeline.media_video_threads = 16
     pipeline.generate(video_request, tmp_path / "stream.mp4")
-    assert received == ["pipe"]
+    assert received == [("pipe", 16)]
     pipeline.close()

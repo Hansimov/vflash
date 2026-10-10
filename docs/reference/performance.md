@@ -145,3 +145,21 @@ its measured CPU/I/O or temporary-storage benefit outweighs its cost for the act
 H100 SXM retains the file path. No provider acquisition, model loading, transfer or queue time is
 included in these initialized request timings. The pipe timeout owns feeding and FFmpeg execution;
 failure kills/reaps the child and removes temporary outputs.
+
+
+### Explicit CPU codec threads (source builds)
+
+`vflash generate --media-video-threads 16`, `H3Pipeline(media_video_threads=16)` and
+`encode_mp4(..., video_threads=16)` select H.264 codec threads. The default None retains
+FFmpeg auto selection. Explicit values are integers 1–256; filter/audio threads are separate.
+Both file and pipe inputs support this control. Lossy bitstreams can change with thread count.
+
+A CPU-only comparison of the same 2048²/120-frame RGB input, libx264 medium/CRF18 and
+8-CPU/8-GiB container measured auto at 7.127/7.432 s, 16 threads at 6.648 s and 8 at 9.847 s.
+The 16-thread arm was 8.68% faster than the control mean with 50.54% less peak anonymous memory.
+Default and 16-thread full-frame luma SSIM were both 0.994817 against the same decoded input;
+decoded audio matched. Bitstreams differ. Sparse visual inspection and compression metrics do
+not qualify model quality. This is an explicit CPU option, not a changed GPU default or proof
+of a remote timeout fix, full-inference speedup, or an optimum tied directly to CPU quota.
+
+[FFmpeg codec options](https://ffmpeg.org/ffmpeg-codecs.html#Codec-Options).

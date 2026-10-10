@@ -133,3 +133,20 @@ GEMM形状、采样和权重不变；可选分阶段profiler仍保持原测量�
 不能只比较第一次原路径并宣称约14%提速。按实际工作负载的CPU/I/O、临时盘收益选择显式选项，
 H100 SXM保留file。表中不包含资源申请、模型加载、传输和排队。流式超时覆盖喂入与FFmpeg执行，
 失败会终止并回收子进程、清理临时输出。
+
+
+### 显式CPU编码线程预算（源码构建）
+
+`vflash generate --media-video-threads 16`、`H3Pipeline(media_video_threads=16)`及
+`encode_mp4(..., video_threads=16)`可指定H.264编码线程数；默认None保留FFmpeg auto。
+合法显式范围1–256，该值不限制所有滤镜/音频线程。它既可配合file，也可配合pipe输入。
+线程配置可能改变有损码流，不承诺逐字节一致。
+
+固定2048²/120帧RGB、相同libx264 medium/CRF18、8 CPU配额/8GiB内存的CPU对照中，
+auto为7.127/7.432秒，16线程6.648秒，8线程9.847秒。16线程比两侧均值快8.68%，
+匿名峰值内存减少50.54%；三者不是GPU完整请求或共享宿主压力复现。
+默认与16线程的全帧luma SSIM均为0.994817（相对同一解码输入），音轨解码一致；
+码流不同，稀疏视觉抽查及该压缩指标不代表模型画质资格。保留此显式CPU选项，
+不依据它修改GPU默认、宣称远端超时已修复或自动按CPU配额选线程数。
+
+[FFmpeg codec options](https://ffmpeg.org/ffmpeg-codecs.html#Codec-Options).

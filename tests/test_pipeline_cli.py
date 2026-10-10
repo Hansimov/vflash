@@ -33,6 +33,7 @@ def test_generate_parser_preserves_reference_order():
     assert args.profile_denoise is False
     assert args.attention_backend == "auto"
     assert args.veda_dense_backend == "torch-flash"
+    assert args.media_video_threads is None
 
 
 def test_generate_parser_exposes_explicit_approximate_sol():
@@ -387,3 +388,22 @@ def test_text_only_and_dual_gpu_flags_are_explicit_cli_contracts():
         ]
     )
     assert args.profile == "t2va-turbo4-exact-sm89"
+
+
+def test_generate_parser_accepts_explicit_codec_budget():
+    args = build_parser().parse_args(
+        [
+            "generate",
+            "--prepared-assets",
+            "receipt.json",
+            "--prompt-file",
+            "prompt.txt",
+            "--gpu",
+            "0",
+            "--output",
+            "output.mp4",
+            "--media-video-threads",
+            "16",
+        ]
+    )
+    assert args.media_video_threads == 16
