@@ -28,3 +28,5 @@ The complete image includes the pinned [Diffusers](https://github.com/huggingfac
 MP4 encoding uses the Debian [FFmpeg package](https://packages.debian.org/trixie/ffmpeg). Its copyright and license notice is included at `/usr/share/doc/ffmpeg/copyright` in the image; corresponding source packages are available from [Debian Sources](https://sources.debian.org/src/ffmpeg/). These dependencies retain their own terms. Official H3 decoder code is loaded from the separately verified model snapshot.
 
 The optional FROST backend uses separately installed [NVIDIA cuDNN frontend 1.31.0](https://github.com/NVIDIA/cudnn-frontend/tree/51a3de73e122aeedafe68070acf3b7ff3970534e), whose source is Apache-2.0 licensed. Its wheel and model weights are not bundled; other NVIDIA runtime components retain their own terms.
+
+The optional [FlashAttention-3 Hopper backend](https://github.com/Dao-AILab/flash-attention/tree/94e22c906678e5483fa0e9e24d8e787bc2c0ed4c) is installed separately under its BSD-3-Clause license, retaining its upstream and CUTLASS notices. No optional wheel or model payload is bundled.

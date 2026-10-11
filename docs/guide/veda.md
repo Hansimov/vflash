@@ -200,3 +200,48 @@ scenes. Existing camera reframing and action-adherence defects remain; no new ma
 structural failure was observed in the reviewed regions. This is not universal visual
 or temporal equivalence. Audio semantics, other modes and multiple seeds remain unassessed.
 Private integration source: `video-gen` `eec85fd7`; only aggregate evidence is public.
+
+
+## Explicit SM90 FA3 dense blocks
+
+Select `H3Pipeline(..., attention_backend="veda-triton", veda_dense_backend="fa3-flash")`
+or `generate --veda-dense-backend fa3-flash`. Install the optional official
+[FlashAttention-3 Hopper build](https://github.com/Dao-AILab/flash-attention/tree/94e22c906678e5483fa0e9e24d8e787bc2c0ed4c/hopper),
+package `flash-attn-3==3.0.0`, from that fixed revision with its pinned CUTLASS submodule
+`7127592069c2fe01b041e174ba4345ef9b279671`. The measured build used Torch 2.11.0/CUDA 13.0,
+SM90a, BF16, forward-only head dimension 128. Build/install optional dependencies before
+renting a GPU. No extension or model payload is included in this Python package.
+
+Only the ten dense layers change from CuTe to FA3: BF16 full-context noncausal attention,
+one split, no GQA packing and no attention-probability output. All forty Veda layers remain.
+The fused-projection V view is passed directly. Unsupported devices, dtypes, layouts and
+package versions fail explicitly; no backend fallback or new geometry admission is added.
+Torch Flash remains the default. This does not enable FP8 attention or claim bitwise
+identity: changed floating-point accumulation can change the generation trajectory.
+
+Six I2VA controls followed six candidates on one H100 SXM 80 GB. Experimental FP8 Linear/text,
+streamed text residency, in-memory conditioning, the prepared official VAE and CPU output
+assembly were held fixed. These timings do not publish a new quantization API.
+
+| Canvas / duration | CuTe complete request seconds | FA3 complete request seconds |
+| --- | ---: | ---: |
+| 512×512 / 5s | 57.760 | 13.829 |
+| 768×768 / 10s | 39.671 | 35.799 |
+| 1024×1024 / 15s | 111.710 | 106.385 |
+| 1536×1344 / 10s | 166.739 | 169.017 |
+| 2048×2048 / 5s | 192.559 | 191.791 |
+| 2048×2048 / 15s | 882.097 | 863.367 |
+
+Requests include conditioning, denoising and media, excluding initialization and delivery.
+The first request and initialization are strongly confounded by order/shared caches; their
+large difference is not an FA3 cold-start win. The remaining five requests total
+1392.776 versus 1366.360 seconds (1.90% shorter). The largest request is 2.12% shorter;
+its dense CUDA time fell from 346.348 to 322.647 seconds while media became slower.
+The 1536×1344 case is 1.37% slower, so this is an explicit option rather than a universal winner.
+
+All twelve videos fully decoded and played in the application. Limited timelines and native
+consecutive-frame regions covered clothing/hands, foliage and library shelves. No new obvious
+large structural disruption was observed in those windows. Both variants retain unwanted
+camera movement/reframing and action-adherence defects. Other temporal regions, audio semantics,
+multiple seeds and other input modes remain unassessed. This is not a universal quality-equivalence
+claim or qualification of other H100 models. Private integration source: `video-gen` `6d9a2823`.

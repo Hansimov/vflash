@@ -1,7 +1,7 @@
 """Explicit optional dense blocks within Veda's mixed attention policy.
 
 SageAttention changes precision and outputs; it is never a silent Flash fallback.
-CuTe (SM90) and FROST (SM120) retain BF16 full-context dense attention.
+CuTe/FA3 (SM90) and FROST (SM120) retain BF16 full-context dense attention.
 Only the ten dense blocks change. Sparse/protected Veda connections stay intact.
 """
 
@@ -14,7 +14,7 @@ from vflash.contracts import ContractError
 
 
 def validate_dense_backend(value: str, *, attention_backend: str, capability: str) -> None:
-    if value not in {"torch-flash", "sageattention2", "cute-flash", "frost-flash"}:
+    if value not in {"torch-flash", "sageattention2", "cute-flash", "frost-flash", "fa3-flash"}:
         raise ContractError("unknown Veda dense backend")
     if value == "sageattention2" and (
         attention_backend != "veda-triton" or capability != "12.0"
@@ -24,12 +24,20 @@ def validate_dense_backend(value: str, *, attention_backend: str, capability: st
     if value == "cute-flash" and (attention_backend != "veda-triton" or capability != "9.0"):
         raise ContractError("CuTe Flash dense blocks require explicit single-SM90 Veda")
 
+    if value == "fa3-flash" and (attention_backend != "veda-triton" or capability != "9.0"):
+        raise ContractError("FA3 dense blocks require explicit single-SM90 Veda")
+
     if value == "frost-flash" and (attention_backend != "veda-triton" or capability != "12.0"):
         raise ContractError("FROST dense blocks require explicit single-SM120 Veda")
 
 
 def require_dense_dependencies(value: str) -> None:
     if value == "torch-flash":
+        return
+    if value == "fa3-flash":
+        from vflash.native.h3_fa3_dense import implementation
+
+        implementation()
         return
     if value == "frost-flash":
         try:

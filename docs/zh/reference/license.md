@@ -28,3 +28,5 @@ Vflash 基于 MiniMax 公开的 H3 架构和模型权重开发。LightX2V 的开
 MP4 编码使用 Debian 的 [FFmpeg 软件包](https://packages.debian.org/trixie/ffmpeg)。镜像内的 `/usr/share/doc/ffmpeg/copyright` 保留版权和许可声明，对应源码可通过 [Debian Sources](https://sources.debian.org/src/ffmpeg/) 获取。依赖仍按各自条款使用；H3 官方解码器代码来自单独核验的模型快照。
 
 可选FROST后端调用单独安装的[NVIDIA cuDNN frontend1.31.0](https://github.com/NVIDIA/cudnn-frontend/tree/51a3de73e122aeedafe68070acf3b7ff3970534e)，其源码采用Apache-2.0许可。此仓库不打包其wheel或模型权重；其他NVIDIA运行时组件保留各自条款。
+
+可选[FlashAttention-3 Hopper后端](https://github.com/Dao-AILab/flash-attention/tree/94e22c906678e5483fa0e9e24d8e787bc2c0ed4c)单独安装，遵守其BSD-3-Clause许可，保留上游和CUTLASS声明；本包不打包可选wheel或模型权重。

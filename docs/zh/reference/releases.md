@@ -1,5 +1,9 @@
 # 版本更新
 
+## 0.6.27
+
+新增显式SM90 `fa3-flash` BF16完整密集层，固定可选FlashAttention-3 3.0.0；稀疏层、默认和profile准入保持。同SXM完整成片暖五例合计快1.90%，保留分场景与质量边界，见[Veda指南](../guide/veda)。
+
 ## 0.6.26
 
 新增显式`H3Pipeline(..., conditioning_transport="memory")`，用于同进程单设备条件交接。带类型的一次性所有者避免条件张量中间写入／重读，并记录实际字节；双设备和无效所有者明确失败。文件交接仍为默认，独立hybrid参考图保持原路径。[H100六对完整比较](../guide/complete-pipeline#memory-conditioning)全部解码／播放，视频平面与音频PCM一致，直接减少21.107秒finish；完整观察时间保留顺序／暖缓存限制。不新增公开量化API、默认切换、运行中worker升级或通用质量声明。

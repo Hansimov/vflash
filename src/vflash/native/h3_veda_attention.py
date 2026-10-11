@@ -106,12 +106,14 @@ class VedaVideoAttention:
         )
         require_dense_dependencies(dense_backend)
         self.dense_backend = dense_backend
+        from vflash.native.h3_fa3_dense import fa3_dense
         from vflash.native.h3_frost_dense import frost_dense
 
         self.dense_attention = {
             "sageattention2": sage_dense,
             "cute-flash": cute_dense,
             "frost-flash": frost_dense,
+            "fa3-flash": fa3_dense,
         }.get(dense_backend)
         resolved = backends.resolve(device)
         if resolved.backend is None or resolved.backend.name != "triton-int8":

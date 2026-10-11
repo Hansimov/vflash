@@ -70,7 +70,7 @@ def test_resident_capacity_uses_real_keyframe_contract():
 
 
 @pytest.mark.parametrize(
-    "dense_backend", ["torch-flash", "sageattention2", "cute-flash", "frost-flash"]
+    "dense_backend", ["torch-flash", "sageattention2", "cute-flash", "frost-flash", "fa3-flash"]
 )
 def test_explicit_residency_reaches_native_owner_before_any_cuda_api(
     monkeypatch, dense_backend

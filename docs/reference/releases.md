@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.6.27
+
+Add explicit SM90 `fa3-flash` BF16 full-context dense layers within Veda, with pinned optional FlashAttention-3 3.0.0. Keep sparse layers, original defaults and profile admission unchanged. Same-SXM complete-video comparisons show a 1.90% warm-five-request reduction with scenario and quality limits; see the [Veda guide](../guide/veda#explicit-sm90-fa3-dense-blocks).
+
 ## 0.6.26
 
 Expose explicit `H3Pipeline(..., conditioning_transport="memory")` for same-process, single-device conditioning. The typed one-shot owner avoids intermediate tensor writes/rereads and reports actual tensor bytes; paired execution and invalid owners fail explicitly. File transport remains the default; the separate hybrid reference graph keeps its existing path. The [six-pair H100 comparison](../guide/complete-pipeline#memory-conditioning) fully decoded and played with identical video planes/audio PCM, removing 21.107 seconds of finishing work. Order/cache confounding is reported separately from total observed timings. No new quantized-model API, public default, running-worker upgrade or general quality claim is made.
