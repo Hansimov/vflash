@@ -223,7 +223,24 @@ The cache holds one copied CPU entry, is capped at 128 MiB, and expires after on
 
 On one dual-SM86 sequence-head pipeline, a warmed five-second 512 × 512 A/B/A reduced the two sequential candidates' makespan from a 352.393-second control median to 340.403 seconds (3.402%) without delaying the first candidate; both candidates' H.264 and AAC streams matched across arms. This is bounded SM86 evidence, not an SM89 or serving-system claim. When independent GPUs are available, keep one candidate per worker: serializing otherwise parallel candidates merely to obtain a cache hit loses first-result latency and fleet throughput.
 
-Inside `H3Pipeline`, the official encoder and native stage use the same content-bound conditioning bundle contract as standalone native calls and service jobs. A validated, one-shot in-memory handoff remains available to engine integrators as an experimental primitive, but it is not the complete pipeline default: target-hardware A/B/A qualification preserved output bytes but did not improve wall latency. Do not assume that removing file I/O also removes the dominant host-memory or model-transition costs.
+### Explicit in-memory conditioning {#memory-conditioning}
+
+`H3Pipeline(..., conditioning_transport="memory")` opts a single-device, same-process pipeline into a validated, one-shot handoff from its encoder to native denoising. The tensors retain their original storage and are consumed once; this removes intermediate conditioning tensor writes and rereads without caching prompts or tensors across requests. Typed sibling reuse scopes keep their existing ownership and expiry rules. Hybrid Ref2VA already uses its separate in-memory reference graph; this option does not change that graph.
+
+The default remains `conditioning_transport="file"`. Persisted bundles retain their content-bound contract for standalone native calls, service jobs and cross-process transport. Memory handoff rejects paired-device pipelines and rejects an encoder that fails to return the typed one-shot owner. Inspect `result.stages["encoding"]` for actual transport, tensor bytes and finishing time. Earlier hardware A/B/A preserved output bytes without a wall-time win; removing file I/O does not remove model-transition or host-memory costs. Keep cold initialization and warmed requests separate when evaluating this option.
+
+A later same-GPU H100 SXM comparison used six frozen I2VA requests, FP8 native/text weights, forty Veda sparse and ten BF16 CuTe dense layers, staged text, prepared BF16 VAE and CPU frame assembly. All twelve outputs fully decoded and played; every pair had identical decoded video planes and audio PCM. Integration source: `video-gen` `bf708735`; aggregate evidence recorded at `a70b3907`. These are private-integration measurements of the reusable handoff, not a new public quantized-model API.
+
+| Canvas / seconds | File request (s) | Memory request (s) | File finish (s) | Memory finish (s) |
+| --- | ---: | ---: | ---: | ---: |
+| 512² / 5 | 59.856 | 16.277 | 0.267 | 0.001 |
+| 768² / 10 | 45.686 | 37.389 | 0.970 | 0.008 |
+| 1024² / 15 | 117.724 | 110.484 | 2.537 | 0.006 |
+| 1536 × 1344 / 10 | 180.765 | 166.866 | 3.141 | 0.004 |
+| 2048² / 5 | 205.243 | 192.746 | 4.472 | 0.005 |
+| 2048² / 15 | 908.845 | 886.411 | 9.758 | 0.015 |
+
+The directly removed finishing work totaled **21.107 seconds**. Initialization plus six requests decreased from 1565.830 to 1427.246 seconds (8.85% observed), but the memory arm ran second with warm file/compiler caches: this entire gain cannot be attributed to handoff. A second worker shared read-only model storage after the first two memory requests. The largest conditioning owner was 5.392 GB; matching denoiser peaks reached 65.756 GB, and the container's cumulative lifetime peak reached 93.305 GB. The cumulative host peak does not establish per-request equality or a minimum RAM requirement. Output equivalence supports this copy-only change; it is not new semantic-quality qualification or evidence for other hardware/input modes.
 
 The integration checks used a 240 GiB host-memory limit. This is a tested budget, not a measured minimum. The 64 GiB recommendation for the denoiser alone does not cover these additional encoders and decoders.
 

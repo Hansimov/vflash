@@ -135,6 +135,7 @@ def _pipeline(*, fail: str | None = None) -> tuple[H3Pipeline, list[str]]:
     pipeline.weight_residency = "block-ring"
     pipeline.media_video_input = "file"
     pipeline.media_video_threads = None
+    pipeline.conditioning_transport = "file"
     pipeline.veda_dense_backend = "torch-flash"
     pipeline.veda_predictor = None
     pipeline._reference_graph = None
@@ -1067,3 +1068,91 @@ def test_opt_in_media_controls_reach_the_owned_media_stage(video_request, tmp_pa
     pipeline.generate(video_request, tmp_path / "stream.mp4")
     assert received == [("pipe", 16)]
     pipeline.close()
+
+
+def test_explicit_memory_handoff_reuses_no_files_and_consumes_each_owner_once(
+    video_request, tmp_path
+):
+    from test_in_memory_conditioning import _live_capture
+
+    from vflash.native.h3_conditioning_bundle import (
+        H3ConditioningBundleError,
+        consume_h3_in_memory_conditioning,
+    )
+
+    pipeline, _events = _pipeline()
+    pipeline.conditioning_transport = "memory"
+    captures, scopes = [], []
+    scope = ConditioningReuseScope("memory-siblings-0123456789")
+
+    def capture(request, references, directory, *, reuse_scope=None):
+        assert not directory.exists()
+        live, tensors, _source = _live_capture()
+        captures.append((live, tensors["first_packed_input"]))
+        scopes.append(reuse_scope)
+        return live
+
+    pipeline._conditioner.capture_in_memory = capture
+    pipeline._conditioner.capture = lambda *_args, **_kw: pytest.fail("persisted capture")
+    generate = pipeline._core.generate
+
+    def consume(owner, output, **options):
+        assert owner is captures[-1][0]
+        data = consume_h3_in_memory_conditioning(owner)
+        assert data["first_packed_input"] is captures[-1][1]
+        return generate(owner, output, **options)
+
+    pipeline._core.generate = consume
+    for index in range(2):
+        result = pipeline.generate(
+            video_request, tmp_path / f"memory-{index}.mp4", conditioning_reuse_scope=scope
+        )
+        live = captures[-1][0]
+        assert result.stages["encoding"]["conditioning_transport"] == "in-memory"
+        assert result.stages["encoding"]["conditioning_tensor_bytes"] == live.tensor_bytes
+        with pytest.raises(H3ConditioningBundleError, match="already consumed"):
+            consume_h3_in_memory_conditioning(live)
+    assert scopes == [scope, scope] and captures[0][0] is not captures[1][0]
+    assert not list(tmp_path.glob(".vflash-*"))
+    pipeline.close()
+
+
+def test_memory_handoff_failure_retires_owned_pipeline(video_request, tmp_path):
+    pipeline, events = _pipeline()
+    pipeline.conditioning_transport = "memory"
+    with pytest.raises(ContractError, match="one-shot owner"):
+        pipeline.generate(video_request, tmp_path / "invalid-memory.mp4")
+    assert pipeline._closed
+    assert "native:generate" not in events and "media:generate" not in events
+    assert not list(tmp_path.glob(".vflash-*"))
+
+
+@pytest.mark.parametrize(
+    "transport,strategy", [("unknown", "single"), ("memory", "sequence-head")]
+)
+def test_memory_transport_admission_precedes_loading(
+    tmp_path, monkeypatch, transport, strategy
+):
+    from vflash.pipeline.assets import PreparedPipelineAssets
+    from vflash.pipeline.contracts import PipelineAssets
+
+    prepared = PreparedPipelineAssets(
+        PipelineAssets(**{name: tmp_path for name in PipelineAssets.__dataclass_fields__}),
+        tmp_path / "receipt.json",
+        "a" * 64,
+        (),
+        "ref2va-turbo4-exact-sm89",
+    )
+    monkeypatch.setattr("vflash.pipeline.runtime.media_executables", lambda: None)
+    monkeypatch.setattr("vflash.pipeline.runtime.validate_adapter_dependencies", lambda: None)
+    monkeypatch.setattr(
+        "vflash.pipeline.runtime.resolve_plan",
+        lambda *_a, **_kw: SimpleNamespace(
+            target=SimpleNamespace(compute_capability="8.9"), parallel_strategy=strategy
+        ),
+    )
+    monkeypatch.setattr(H3Pipeline, "_load_stages", lambda *_a: pytest.fail("model loading"))
+    with pytest.raises(ContractError, match="conditioning"):
+        H3Pipeline(
+            prepared, device=object(), trust_local_code=True, conditioning_transport=transport
+        )

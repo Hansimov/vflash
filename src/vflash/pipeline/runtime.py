@@ -68,6 +68,7 @@ class H3Pipeline:
         weight_residency: str = "block-ring",
         media_video_input: str = "file",
         media_video_threads: int | None = None,
+        conditioning_transport: str = "file",
     ) -> None:
         if trust_local_code is not True:
             raise ContractError("the official decoder adapter requires trust_local_code=True")
@@ -90,6 +91,13 @@ class H3Pipeline:
             raise ContractError(
                 "the complete SM86 pipeline requires two GPUs with sequence-head execution"
             )
+        if conditioning_transport not in {"file", "memory"}:
+            raise ContractError("conditioning_transport must be file or memory")
+        if conditioning_transport == "memory" and plan.parallel_strategy != "single":
+            raise ContractError(
+                "memory conditioning requires a same-process single-device pipeline"
+            )
+        self.conditioning_transport = conditioning_transport
         if media_video_input not in {"file", "pipe"}:
             raise ContractError("media_video_input must be file or pipe")
         try:
@@ -395,7 +403,13 @@ class H3Pipeline:
             # request-scoped only on the existing keyframe conditioning path.
             if capture_owner is self._reference_graph:
                 capture_options = {}
-            bundle = capture_owner.capture(
+            capture = (
+                capture_owner.capture_in_memory
+                if capture_owner is self._conditioner
+                and self.conditioning_transport == "memory"
+                else capture_owner.capture
+            )
+            bundle = capture(
                 request,
                 references,
                 directory / "conditioning",
@@ -404,6 +418,12 @@ class H3Pipeline:
             capture_call_seconds = time.monotonic() - call_started
             capture_diagnostics = getattr(capture_owner, "last_capture_diagnostics", {})
             in_memory = isinstance(bundle, H3InMemoryConditioning)
+            if (
+                capture_owner is self._conditioner
+                and self.conditioning_transport == "memory"
+                and not in_memory
+            ):
+                raise ContractError("memory conditioning did not return its one-shot owner")
             suspend_seconds = self._conditioner.suspend_cuda()
             report("encoding", 1, 1)
             stages["encoding"] = {
@@ -418,7 +438,9 @@ class H3Pipeline:
                 "source": dict(bundle.source),
                 "bundle_id": bundle.bundle_id,
                 "conditioning_transport": "in-memory" if in_memory else "persisted-file",
-                "conditioning_tensor_bytes": next(
+                "conditioning_tensor_bytes": bundle.tensor_bytes
+                if in_memory
+                else next(
                     (
                         row.size_bytes
                         for row in getattr(bundle, "files", ())

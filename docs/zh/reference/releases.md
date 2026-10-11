@@ -1,5 +1,9 @@
 # 版本更新
 
+## 0.6.26
+
+新增显式`H3Pipeline(..., conditioning_transport="memory")`，用于同进程单设备条件交接。带类型的一次性所有者避免条件张量中间写入／重读，并记录实际字节；双设备和无效所有者明确失败。文件交接仍为默认，独立hybrid参考图保持原路径。[H100六对完整比较](../guide/complete-pipeline#memory-conditioning)全部解码／播放，视频平面与音频PCM一致，直接减少21.107秒finish；完整观察时间保留顺序／暖缓存限制。不新增公开量化API、默认切换、运行中worker升级或通用质量声明。
+
 ## 0.6.25
 
 新增显式SM120 `frost-flash` BF16密集层，固定可选NVIDIA cuDNN frontend1.31.0与显式sm_120a编译目标。保留原生带步长V、当前流和有界元数据计划，Torch默认保持。六组PRO6000 Server完整视频计时及有限质量边界见[Veda指南](../guide/veda)。不新增公开量化模型API或未实测显卡容量声明。

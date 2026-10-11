@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.6.26
+
+Expose explicit `H3Pipeline(..., conditioning_transport="memory")` for same-process, single-device conditioning. The typed one-shot owner avoids intermediate tensor writes/rereads and reports actual tensor bytes; paired execution and invalid owners fail explicitly. File transport remains the default; the separate hybrid reference graph keeps its existing path. The [six-pair H100 comparison](../guide/complete-pipeline#memory-conditioning) fully decoded and played with identical video planes/audio PCM, removing 21.107 seconds of finishing work. Order/cache confounding is reported separately from total observed timings. No new quantized-model API, public default, running-worker upgrade or general quality claim is made.
+
 ## 0.6.25
 
 Add explicit SM120 `frost-flash` BF16 dense layers within Veda, with pinned optional NVIDIA cuDNN frontend 1.31.0 and an explicit sm_120a compile target. Preserve native strided V, current-stream execution, bounded metadata plans and the Torch default. Six paired PRO 6000 Server complete-video timings and limited quality scope are documented in the [Veda guide](../guide/veda#explicit-sm120-frost-dense-blocks). No new quantized-model API or untested GPU capacity is claimed.

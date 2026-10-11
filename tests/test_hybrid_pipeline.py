@@ -68,6 +68,7 @@ def test_ref_keyframe_ref_share_owner_and_preserve_real_tasks(tmp_path, monkeypa
         if request.mode == "ref2va":
             bundle = Bundle()
             bundle.__dict__.update(value.__dict__)
+            bundle.tensor_bytes = 0
             return bundle
         return value
 
