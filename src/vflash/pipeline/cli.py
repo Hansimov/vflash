@@ -64,9 +64,9 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
     generate.add_argument("--veda-predictor", type=Path)
     generate.add_argument(
         "--veda-dense-backend",
-        choices=("torch-flash", "sageattention2"),
+        choices=("torch-flash", "sageattention2", "cute-flash"),
         default="torch-flash",
-        help="Veda dense blocks; SageAttention2 requires SM120 and its CUDA build",
+        help="Veda dense blocks; CuTe Flash requires SM90, SageAttention2 requires SM120",
     )
     generate.add_argument("--attention-adapter-rank", type=int)
     generate.add_argument("--attention-adapter-scale", type=float)

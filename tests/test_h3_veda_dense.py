@@ -95,3 +95,29 @@ def test_only_ten_dense_layers_change_and_kernel_failure_never_falls_back(monkey
     )
     with pytest.raises(RuntimeError, match="kernel failure"):
         op(0, forbidden, q, q, q)
+
+
+@pytest.mark.parametrize("capability", ["8.6", "8.9", "10.3", "12.0"])
+def test_cute_does_not_claim_untested_architectures(capability):
+    with pytest.raises(ContractError, match="SM90"):
+        dense.validate_dense_backend(
+            "cute-flash", attention_backend="veda-triton", capability=capability
+        )
+
+
+def test_cute_pins_public_dependency_and_has_no_cpu_fallback(monkeypatch):
+    dense.validate_dense_backend(
+        "cute-flash", attention_backend="veda-triton", capability="9.0"
+    )
+    monkeypatch.setattr(dense, "version", lambda _: "4.0.0b33")
+    with pytest.raises(ContractError, match="qualified"):
+        dense.require_dense_dependencies("cute-flash")
+    monkeypatch.setattr(dense, "version", lambda _: "4.0.0b34")
+    monkeypatch.setitem(
+        sys.modules, "flash_attn.cute", SimpleNamespace(flash_attn_func=lambda *a, **k: None)
+    )
+    dense.require_dense_dependencies("cute-flash")
+    torch = pytest.importorskip("torch")
+    q = torch.zeros(1, 2, 56, 128, dtype=torch.bfloat16)
+    with pytest.raises(ContractError, match="CUDA SM90"):
+        dense.cute_dense(q, q, q)

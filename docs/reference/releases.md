@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.6.24
+
+Add explicit SM90 `cute-flash` dense layers within Veda. The pinned optional FlashAttention 4 package retains BF16 full-context dense attention; the forty sparse layers and Torch Flash default remain unchanged. Actual H100 probes and complete-workload scope are documented in the [Veda guide](../guide/veda#explicit-sm90-cute-flash-dense-blocks). Missing dependencies and unsupported architectures fail explicitly.
+
 ## 0.6.23
 
 Expose CPU-only complete-request admission before allocating an accelerator, and explicit bounded media delivery options: `video_input="pipe"` avoids a full RGB temporary file, while `video_threads` controls codec concurrency. Defaults remain file delivery and codec auto-threading. These are the previously published reusable changes; this release pins them for distributed worker images.

@@ -105,3 +105,54 @@ The longer result has full audio/video decode and application playback; sampled
 faces, fabric and motion retain the same limitations described above.
 
 The same 5090 batch also completed 2048²/5 s with Sage in 368.807 s, at 26.982 GiB peak denoising allocation. It has complete AV decode and application playback, but no matched same-instance Flash control; this establishes capacity and delivery, not a four-MP speedup.
+
+
+## Explicit SM90 CuTe Flash dense blocks
+
+`H3Pipeline(..., attention_backend="veda-triton", veda_dense_backend="cute-flash")`
+and `generate --veda-dense-backend cute-flash` select the pinned
+[FlashAttention CuTe implementation](https://github.com/Dao-AILab/flash-attention).
+Install `flash-attn-4==4.0.0b34` separately; the measured environment used
+`nvidia-cutlass-dsl==4.8.0`, Torch 2.11.0/CUDA 13.0 and Triton 3.6.0.
+No optional extension, private model, or runtime credential is bundled.
+
+The option currently admits SM90 only. It retains BF16 QKV, complete dense context,
+noncausal attention, one split and the original forty Veda layers. Only the ten
+dense layers change implementation. Kernel errors, unsupported devices and wrong
+package versions fail instead of silently choosing another backend. Torch Flash
+remains the default. This does not restore Sage, enable FP8 attention, change the
+model precision, or expand a profile's geometry/memory admission limits.
+
+Six actual H100 SXM kernel probes at H3 lengths 9,984–438,784 measured Torch Flash
+at 7.888–16,796.029 ms and CuTe at 4.292–8,383.208 ms. Both kernels ran on the device;
+these are dense-layer timings, not whole-video speedups. Full I2VA comparisons
+hold experimental FP8 Linear/text, hybrid four-step denoising and Veda fixed.
+Their limited quality review and complete timings are recorded below; this option
+is not a claim of universal same-quality performance or new public FP8 support.
+
+
+| Canvas / duration | Torch full request seconds | CuTe full request seconds |
+| --- | ---: | ---: |
+| 512×512 / 5s | 81.744 | 77.015 |
+| 768×768 / 10s | 41.032 | 40.115 |
+| 1024×1024 / 15s | 130.214 | 114.534 |
+| 1536×1344 / 10s | 207.546 | 168.019 |
+| 2048×2048 / 5s | 235.523 | 195.820 |
+| 2048×2048 / 15s | 1237.038 | 891.409 |
+
+One physical H100 SXM ran all six controls before all six candidates, with one seed
+per scene. The table includes conditioning, denoising and media, excluding initialization
+and network delivery. Six-case process makespan including initialization was
+2068.473 versus 1629.436 seconds. Initialization itself increased from 131.435 to
+138.192 seconds. The first case includes cold conditioning and first-layout compilation;
+its total difference is not proof of a short-clip dense-kernel improvement. For the
+largest case, measured dense attention fell from 692.458 to 348.078 seconds and the
+whole request from 1237.038 to 891.409 seconds (27.94% shorter). Nested timings are not additive.
+
+All twelve videos fully decoded and played in the application. Sampled people,
+objects and architecture retained their structure; consecutive native-size rain-street
+and bookshelf crops showed no newly observed major structural failure. Both the control
+and candidate retain an early library camera reframe and insufficient intended action.
+This limited inspection is not full quality equivalence. Audio semantics, other modes
+and multiple seeds remain unassessed. Sequential order/cache effects remain, and warm
+stage gains do not imply a faster complete cold start.

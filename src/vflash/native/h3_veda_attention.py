@@ -93,6 +93,7 @@ class VedaVideoAttention:
             raise ValueError("Veda backend differs from the device contract")
         self.backend = backend
         from vflash.native.h3_veda_dense import (
+            cute_dense,
             require_dense_dependencies,
             sage_dense,
             validate_dense_backend,
@@ -105,7 +106,9 @@ class VedaVideoAttention:
         )
         require_dense_dependencies(dense_backend)
         self.dense_backend = dense_backend
-        self.dense_attention = sage_dense if dense_backend == "sageattention2" else None
+        self.dense_attention = {"sageattention2": sage_dense, "cute-flash": cute_dense}.get(
+            dense_backend
+        )
         resolved = backends.resolve(device)
         if resolved.backend is None or resolved.backend.name != "triton-int8":
             raise RuntimeError("Veda triton-int8 self-test failed; dense fallback is disabled")
