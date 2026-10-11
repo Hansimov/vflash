@@ -69,7 +69,9 @@ def test_resident_capacity_uses_real_keyframe_contract():
         validate_resident_request("block-ring", changed)
 
 
-@pytest.mark.parametrize("dense_backend", ["torch-flash", "sageattention2", "cute-flash"])
+@pytest.mark.parametrize(
+    "dense_backend", ["torch-flash", "sageattention2", "cute-flash", "frost-flash"]
+)
 def test_explicit_residency_reaches_native_owner_before_any_cuda_api(
     monkeypatch, dense_backend
 ):

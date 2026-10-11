@@ -1,7 +1,7 @@
 """Explicit optional dense blocks within Veda's mixed attention policy.
 
 SageAttention changes precision and outputs; it is never a silent Flash fallback.
-CuTe Flash retains BF16 full-context dense attention on qualified SM90.
+CuTe (SM90) and FROST (SM120) retain BF16 full-context dense attention.
 Only the ten dense blocks change. Sparse/protected Veda connections stay intact.
 """
 
@@ -14,7 +14,7 @@ from vflash.contracts import ContractError
 
 
 def validate_dense_backend(value: str, *, attention_backend: str, capability: str) -> None:
-    if value not in {"torch-flash", "sageattention2", "cute-flash"}:
+    if value not in {"torch-flash", "sageattention2", "cute-flash", "frost-flash"}:
         raise ContractError("unknown Veda dense backend")
     if value == "sageattention2" and (
         attention_backend != "veda-triton" or capability != "12.0"
@@ -24,9 +24,27 @@ def validate_dense_backend(value: str, *, attention_backend: str, capability: st
     if value == "cute-flash" and (attention_backend != "veda-triton" or capability != "9.0"):
         raise ContractError("CuTe Flash dense blocks require explicit single-SM90 Veda")
 
+    if value == "frost-flash" and (attention_backend != "veda-triton" or capability != "12.0"):
+        raise ContractError("FROST dense blocks require explicit single-SM120 Veda")
+
 
 def require_dense_dependencies(value: str) -> None:
     if value == "torch-flash":
+        return
+    if value == "frost-flash":
+        try:
+            if version("nvidia-cudnn-frontend") != "1.31.0":
+                raise ContractError("FROST requires the qualified nvidia-cudnn-frontend 1.31.0")
+            from cudnn.sdpa.fwd.api_dsl import SdpaFwdDslSm120, TensorDesc
+        except (PackageNotFoundError, ImportError, OSError) as exc:
+            raise ContractError(
+                "FROST requires an explicitly installed 1.31.0 CUDA build"
+            ) from exc
+        if not callable(SdpaFwdDslSm120) or not callable(TensorDesc):
+            raise ContractError("FROST SM120 interface is unavailable")
+        from vflash.native.h3_frost_dense import require_compile_target
+
+        require_compile_target()
         return
     if value == "cute-flash":
         try:

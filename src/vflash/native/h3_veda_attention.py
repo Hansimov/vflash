@@ -106,9 +106,13 @@ class VedaVideoAttention:
         )
         require_dense_dependencies(dense_backend)
         self.dense_backend = dense_backend
-        self.dense_attention = {"sageattention2": sage_dense, "cute-flash": cute_dense}.get(
-            dense_backend
-        )
+        from vflash.native.h3_frost_dense import frost_dense
+
+        self.dense_attention = {
+            "sageattention2": sage_dense,
+            "cute-flash": cute_dense,
+            "frost-flash": frost_dense,
+        }.get(dense_backend)
         resolved = backends.resolve(device)
         if resolved.backend is None or resolved.backend.name != "triton-int8":
             raise RuntimeError("Veda triton-int8 self-test failed; dense fallback is disabled")

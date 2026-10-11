@@ -1,5 +1,9 @@
 # 版本更新
 
+## 0.6.25
+
+新增显式SM120 `frost-flash` BF16密集层，固定可选NVIDIA cuDNN frontend1.31.0与显式sm_120a编译目标。保留原生带步长V、当前流和有界元数据计划，Torch默认保持。六组PRO6000 Server完整视频计时及有限质量边界见[Veda指南](../guide/veda)。不新增公开量化模型API或未实测显卡容量声明。
+
 ## 0.6.24
 
 新增显式SM90 `cute-flash`密集层选项，使用固定可选FlashAttention4依赖；保留BF16完整密集上下文、四十层Veda及Torch Flash默认。真实H100探针和完整工作负载边界见[Veda指南](../guide/veda)。不支持的架构或依赖缺失直接报错。

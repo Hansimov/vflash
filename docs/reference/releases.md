@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.6.25
+
+Add explicit SM120 `frost-flash` BF16 dense layers within Veda, with pinned optional NVIDIA cuDNN frontend 1.31.0 and an explicit sm_120a compile target. Preserve native strided V, current-stream execution, bounded metadata plans and the Torch default. Six paired PRO 6000 Server complete-video timings and limited quality scope are documented in the [Veda guide](../guide/veda#explicit-sm120-frost-dense-blocks). No new quantized-model API or untested GPU capacity is claimed.
+
 ## 0.6.24
 
 Add explicit SM90 `cute-flash` dense layers within Veda. The pinned optional FlashAttention 4 package retains BF16 full-context dense attention; the forty sparse layers and Torch Flash default remain unchanged. Actual H100 probes and complete-workload scope are documented in the [Veda guide](../guide/veda#explicit-sm90-cute-flash-dense-blocks). Missing dependencies and unsupported architectures fail explicitly.

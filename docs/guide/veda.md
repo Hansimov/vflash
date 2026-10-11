@@ -156,3 +156,47 @@ and candidate retain an early library camera reframe and insufficient intended a
 This limited inspection is not full quality equivalence. Audio semantics, other modes
 and multiple seeds remain unassessed. Sequential order/cache effects remain, and warm
 stage gains do not imply a faster complete cold start.
+
+
+## Explicit SM120 FROST dense blocks
+
+Select `H3Pipeline(..., attention_backend="veda-triton", veda_dense_backend="frost-flash")`
+or `generate --veda-dense-backend frost-flash`. Install the optional
+[NVIDIA cuDNN frontend 1.31.0](https://github.com/NVIDIA/cudnn-frontend/tree/51a3de73e122aeedafe68070acf3b7ff3970534e)
+separately. Set `CUTE_DSL_ARCH=sm_120a` **before starting the process**; the wrapper
+rejects a missing/different target rather than changing process-global compiler state.
+The tested environment used CUTLASS DSL 4.8.0, Torch 2.11.0 and CUDA 13.0.
+
+Only ten dense layers use FROST BF16, full-context, noncausal attention with
+128×128 tiles and one split. Forty Veda layers and their keep budgets remain unchanged.
+Native fused-projection V strides are accepted without a full QKV copy. Bounded cached
+plans contain descriptors only; actual tensors and the current CUDA stream are supplied
+per call. Unsupported layouts, architectures, package versions and kernels fail explicitly.
+Torch Flash remains the default; this option does not restore Sage or broaden profile capacity.
+
+The following six paired I2VA requests ran on one RTX PRO 6000 Blackwell Server 96 GB,
+with experimental native NVFP4 Linear and FP8 text encoding held fixed. They demonstrate
+the dense backend in that integration, not public support for those private quantization
+runners. This is not an RTX 5090, SM89 or H100 qualification.
+
+| Canvas / duration | CuTe 128×64 full request seconds | FROST 128×128 full request seconds |
+| --- | ---: | ---: |
+| 512×512 / 5s | 69.926 | 72.095 |
+| 768×768 / 10s | 43.673 | 40.588 |
+| 1024×1024 / 15s | 139.261 | 136.206 |
+| 1536×1344 / 10s | 221.993 | 215.276 |
+| 2048×2048 / 5s | 259.359 | 250.704 |
+| 2048×2048 / 15s | 1324.811 | 1232.634 |
+
+Each request includes conditioning, denoising and media; initialization, probe selection
+and network delivery are excluded. Initialization was 52.650
+and 53.620 seconds. Sum of initialization and the six
+requests was 2111.672 versus 2001.123 seconds. The first small request includes cold
+conditioning/compilation; controls ran before candidates, so cache/order effects remain.
+
+All twelve outputs fully decoded and played in the application. Limited timeline and
+native consecutive-frame review covered walking, fine street detail and long library
+scenes. Existing camera reframing and action-adherence defects remain; no new major
+structural failure was observed in the reviewed regions. This is not universal visual
+or temporal equivalence. Audio semantics, other modes and multiple seeds remain unassessed.
+Private integration source: `video-gen` `eec85fd7`; only aggregate evidence is public.
