@@ -986,10 +986,10 @@ class H3NativeBlockBF16Resident(_H3BlockOperations):
                 rotary_backend = kernel_plan.rotary_backend
         resident = H3NativeBlockWeights(
             adaln_table=weights.adaln_table.to(runtime_device),
-            qkv=_resident_bf16_weight(weights.qkv, runtime_device),
-            attention_out=_resident_bf16_weight(weights.attention_out, runtime_device),
-            ffn_in=_resident_bf16_weight(weights.ffn_in, runtime_device),
-            ffn_out=_resident_bf16_weight(weights.ffn_out, runtime_device),
+            qkv=self._resident_weight(weights.qkv, runtime_device),
+            attention_out=self._resident_weight(weights.attention_out, runtime_device),
+            ffn_in=self._resident_weight(weights.ffn_in, runtime_device),
+            ffn_out=self._resident_weight(weights.ffn_out, runtime_device),
             attention_norm=weights.attention_norm.to(runtime_device),
             ffn_norm=weights.ffn_norm.to(runtime_device),
             query_norm=weights.query_norm.to(runtime_device),
@@ -1010,6 +1010,10 @@ class H3NativeBlockBF16Resident(_H3BlockOperations):
         self.elementwise_block_size = elementwise_block_size
         self.adapter_fusion_backend = adapter_fusion_backend
         self.rotary_backend = rotary_backend
+
+    def _resident_weight(self, weight: H3BF16Weight, device: Any) -> H3BF16Weight:
+        """Place one matrix for this block; subclasses own alternative storage."""
+        return _resident_bf16_weight(weight, device)
 
     @classmethod
     def load(
@@ -1406,7 +1410,13 @@ class H3NativeDenoiserBF16Resident(_H3BlockStack):
         elementwise_block_size: int = 0,
         adapter_fusion_backend: str = "auto",
         rotary_backend: str = "auto",
+        block_loader: Callable[..., H3NativeBlockBF16Resident] | None = None,
     ) -> H3NativeDenoiserBF16Resident:
+        if block_loader is not None and not callable(block_loader):
+            raise H3NativeDenoiserError("block_loader must be a trusted Python callable")
+        load_block = (
+            block_loader if block_loader is not None else H3NativeBlockBF16Resident.load
+        )
         artifact = (
             artifact_or_directory
             if isinstance(artifact_or_directory, H3RuntimeArtifact)
@@ -1416,7 +1426,7 @@ class H3NativeDenoiserBF16Resident(_H3BlockStack):
             raise H3NativeDenoiserError("H3 RuntimeArtifact has no complete block stack")
         return cls(
             tuple(
-                H3NativeBlockBF16Resident.load(
+                load_block(
                     artifact,
                     block.index,
                     device=device,

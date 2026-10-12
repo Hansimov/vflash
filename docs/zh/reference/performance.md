@@ -236,3 +236,12 @@ CPU 测试覆盖独立所有权和异常隔离。微型51层固定 Qwen 实例�
 通过真实 H3 的文本、单图、多图、视频条件 helper，四项输出与恢复权重对照逐值一致。
 这是接口和数值证据，不是完整模型、GPU 或视频画质资格。构建此类对照时应保留旋转位置
 编码的非持久 FP32 缓冲区；把整个模块转成 BF16 也会改变这些缓冲区。
+
+
+可信 Python 集成可通过 `native_denoiser_loader` 将独立去噪器工厂从 `H3Pipeline`
+传给 `NativeEngineSession` 及其 native runtime。工厂接收已验证的 artifact，以及
+设备、AdaLN 加载器、注意力和融合设置等常驻加载参数，返回生命周期兼容的去噪器。
+必须显式使用 `weight_residency="resident"` 和单设备执行，原有容量与模型限制保持。
+这不是可序列化插件名称，也不提供 CLI/HTTP 入口。常驻块栈的 `load` 另接受
+`block_loader`，块子类可覆盖 `_resident_weight`，无需修改模块全局对象。
+默认路径仍严格搬运 BF16；这些所有权接口不替代其他资产的身份验证、精度声明、性能或画质资格。

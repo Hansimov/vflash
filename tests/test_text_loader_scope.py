@@ -76,7 +76,8 @@ def test_owned_loaders_do_not_replace_third_party_factory(tmp_path, monkeypatch)
     assert Qwen.__dict__["from_pretrained"] is original
 
 
-def test_real_pipeline_threads_loader_to_one_owned_conditioner(tmp_path, monkeypatch):
+@pytest.mark.parametrize("native", [False, True])
+def test_real_pipeline_threads_loader_to_one_owned_conditioner(tmp_path, monkeypatch, native):
     torch = pytest.importorskip("torch")
     events = []
 
@@ -97,13 +98,35 @@ def test_real_pipeline_threads_loader_to_one_owned_conditioner(tmp_path, monkeyp
     monkeypatch.setattr(runtime, "validate_adapter_dependencies", lambda: None)
     monkeypatch.setattr(torch, "set_num_threads", lambda _: None)
     monkeypatch.setattr(torch, "get_num_interop_threads", lambda: 1)
-    monkeypatch.setattr(runtime, "NativeEngineSession", lambda *args, **kw: Stage("native"))
+    native_calls = []
+
+    def native_stage(*args, **options):
+        native_calls.append(options)
+        return Stage("native")
+
+    monkeypatch.setattr(runtime, "NativeEngineSession", native_stage)
     monkeypatch.setattr(runtime, "DiffusersConditioner", conditioner)
     monkeypatch.setattr(runtime, "OfficialMediaDecoder", lambda **kw: Stage("media"))
     options = {
         "device": NvidiaDevice(0, "fixture", "RTX 4090", 48, "8.9", 450),
         "trust_local_code": True,
     }
+
+    def native_factory(*a, **k):
+        return None
+
+    if native:
+        # Constructor/forwarding test only; target capacity gates remain covered
+        # by test_resident_pipeline and are not broadened by a trusted loader.
+        monkeypatch.setattr(
+            "vflash.pipeline.residency.validate_residency",
+            lambda plan, choice, attention, hybrid: choice,
+        )
+        options.update(
+            native_denoiser_loader=native_factory,
+            weight_residency="resident",
+            attention_backend="torch-flash",
+        )
     a = runtime.H3Pipeline(prepared(tmp_path), **options, text_encoder_loader=lambda p: "a")
     b = runtime.H3Pipeline(prepared(tmp_path), **options, text_encoder_loader=lambda p: "b")
     try:
@@ -112,6 +135,12 @@ def test_real_pipeline_threads_loader_to_one_owned_conditioner(tmp_path, monkeyp
         b.prepare()
         a.prepare()
         assert events == ["a", "b"]
+        assert len(native_calls) == 2
+        for call in native_calls:
+            if native:
+                assert call["native_denoiser_loader"] is native_factory
+            else:
+                assert "native_denoiser_loader" not in call
     finally:
         a.close()
         b.close()

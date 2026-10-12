@@ -276,3 +276,16 @@ video feature helper; all four outputs matched the restored-weight control.
 This is interface and arithmetic evidence, not full-model, GPU or video quality
 qualification. Keep nonpersistent rotary buffers in their original FP32 precision
 when constructing such controls; converting the whole module to BF16 changes them.
+
+
+For a trusted Python integration, `native_denoiser_loader` is forwarded from
+`H3Pipeline` through `NativeEngineSession` to the owning native runtime. It receives
+the validated artifact and the resident loader's keyword arguments (device, AdaLN
+loader, attention and fusion settings), and must return a compatible denoiser
+with the same lifecycle. It requires explicit `weight_residency="resident"` and
+single-device execution; existing capacity/model gates still apply. It is not a
+serialized plugin name or a CLI/HTTP option. `H3NativeDenoiserBF16Resident.load`
+also accepts an owned `block_loader`; block subclasses may override
+`_resident_weight` without replacing module globals. The defaults retain strict
+BF16 placement. These ownership interfaces do not authenticate alternate assets
+or qualify their numerical precision, performance or output quality.

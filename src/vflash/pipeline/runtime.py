@@ -70,6 +70,7 @@ class H3Pipeline:
         media_video_threads: int | None = None,
         conditioning_transport: str = "file",
         text_encoder_loader: Callable[[Path], Any] | None = None,
+        native_denoiser_loader: Callable[..., Any] | None = None,
     ) -> None:
         if trust_local_code is not True:
             raise ContractError("the official decoder adapter requires trust_local_code=True")
@@ -78,6 +79,16 @@ class H3Pipeline:
         if text_encoder_loader is not None and not callable(text_encoder_loader):
             raise ContractError("text_encoder_loader must be a trusted Python callable")
         self._text_encoder_loader = text_encoder_loader
+        if native_denoiser_loader is not None and (
+            not callable(native_denoiser_loader)
+            or strategy not in {None, "single"}
+            or peer_device is not None
+            or weight_residency != "resident"
+        ):
+            raise ContractError(
+                "native_denoiser_loader requires a callable and single-device resident weights"
+            )
+        self._native_denoiser_loader = native_denoiser_loader
         prepared.check_unchanged()
         media_executables()
         validate_adapter_dependencies()
@@ -219,6 +230,11 @@ class H3Pipeline:
         self._core = NativeEngineSession(
             plan,
             artifact=assets.artifact,
+            **(
+                {"native_denoiser_loader": self._native_denoiser_loader}
+                if self._native_denoiser_loader is not None
+                else {}
+            ),
             schedule_overlay=assets.schedule_overlay,
             auxiliary_tensor=assets.auxiliary_tensor,
             weight_residency=self.weight_residency,

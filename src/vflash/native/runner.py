@@ -58,7 +58,16 @@ class NativeEngineSession:
         veda_predictor: Path | None = None,
         veda_dense_backend: str = "torch-flash",
         hybrid_model: Any = None,
+        native_denoiser_loader: Any = None,
     ) -> None:
+        if native_denoiser_loader is not None and (
+            not callable(native_denoiser_loader)
+            or plan.parallel_strategy != "single"
+            or weight_residency != "resident"
+        ):
+            raise ContractError(
+                "native_denoiser_loader requires a callable and single-device resident weights"
+            )
         started = time.perf_counter()
         profile = plan.profile
         if (
@@ -173,6 +182,11 @@ class NativeEngineSession:
         self.plan = plan
         self.runtime = H3NativeConditioningRuntime(
             artifact_path=artifact,
+            **(
+                {"native_denoiser_loader": native_denoiser_loader}
+                if native_denoiser_loader is not None
+                else {}
+            ),
             schedule_overlay_path=schedule_overlay,
             auxiliary_tensor_path=auxiliary_tensor,
             device="cuda:0",

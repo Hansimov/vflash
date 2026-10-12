@@ -202,7 +202,17 @@ class H3NativeConditioningRuntime:
         parallel_strategy: str = "single",
         weight_residency: str = "default",
         hybrid_reference_directory: Path | None = None,
+        native_denoiser_loader: Any = None,
     ) -> None:
+        if native_denoiser_loader is not None and (
+            not callable(native_denoiser_loader)
+            or parallel_strategy != "single"
+            or weight_residency != "resident"
+        ):
+            raise H3NativeConditioningRuntimeError(
+                "native_denoiser_loader requires a callable and single-device resident weights"
+            )
+        self._native_denoiser_loader = native_denoiser_loader
         import torch
 
         if attention_backend not in {"torch-flash", "sol-sm89", "veda-sm89", "veda-triton"}:
@@ -486,7 +496,12 @@ class H3NativeConditioningRuntime:
                 if weight_residency == "block-ring"
                 else H3NativeDenoiserBF16Resident
             )
-            self.denoiser = denoiser_type.load(
+            load_denoiser = (
+                self._native_denoiser_loader
+                if self._native_denoiser_loader is not None
+                else denoiser_type.load
+            )
+            self.denoiser = load_denoiser(
                 artifact,
                 device=resolved_device,
                 adaln_table_load=(overlay.load_block_table if overlay.blocks else None),

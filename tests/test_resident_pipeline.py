@@ -98,6 +98,7 @@ def test_explicit_residency_reaches_native_owner_before_any_cuda_api(
     monkeypatch.setattr("vflash.pipeline.runtime.OfficialMediaDecoder", lambda **_: object())
     pipeline = H3Pipeline.__new__(H3Pipeline)
     pipeline._text_encoder_loader = None
+    pipeline._native_denoiser_loader = None
     pipeline.prepared = N(
         assets=N(
             artifact=Path("artifact"),

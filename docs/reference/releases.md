@@ -1,5 +1,14 @@
 # Release notes
 
+## 0.6.31
+
+- Add an explicitly owned native denoiser loader for single-device resident Python pipelines.
+  The block stack can receive its own block factory and subclasses can own matrix placement;
+  experiments no longer need to replace the default block class or weight-placement function.
+- Preserve default BF16 loading and all existing hardware, residency, model and attention gates.
+  CPU constructor, failure-isolation and arithmetic checks cover the ownership refactor.
+  This does not add a public FP8 artifact format, qualify new GPU workloads or change serving defaults.
+
 ## 0.6.30
 
 Add an explicit per-pipeline text encoder loader, retaining lazy construction, prefix/offload ownership and the default pinned offline loader. It removes the need to replace a global Transformers factory in custom integrations. Independent CPU lifecycle and tiny real-Qwen/H3 multimodal checks pass; this is not new whole-GPU or quantized-asset qualification. See [the owned loading contract](performance#per-pipeline-text-loading).

@@ -128,6 +128,7 @@ def _pipeline(*, fail: str | None = None) -> tuple[H3Pipeline, list[str]]:
 
     pipeline = H3Pipeline.__new__(H3Pipeline)
     pipeline._text_encoder_loader = None
+    pipeline._native_denoiser_loader = None
     pipeline._lock = threading.Lock()
     pipeline._closed = pipeline._released = False
     pipeline.attention_adapter = None
