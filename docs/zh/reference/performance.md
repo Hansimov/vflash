@@ -150,3 +150,40 @@ auto为7.127/7.432秒，16线程6.648秒，8线程9.847秒。16线程比两侧�
 不依据它修改GPU默认、宣称远端超时已修复或自动按CPU配额选线程数。
 
 [FFmpeg codec options](https://ffmpeg.org/ffmpeg-codecs.html#Codec-Options).
+
+
+## 显式缓冲读取与无损压缩权重
+
+`vflash[weight-io]` 提供可选的 Zstandard codec。在已安装 Torch 的运行环境中，
+`SequentialWeights` 将不可变 safetensors 读入独占的 CPU 分片缓冲区，支持
+1/2/4/8 个有界读取线程。离开读取作用域后，仍被使用的张量会保留整个分片缓冲区。
+其他路径仍默认映射读取；不会自动改变精度、显卡配置或公共 pipeline 准入。
+
+```python
+from pathlib import Path
+from vflash.native.h3_weight_codec import prepare
+from vflash.native.h3_buffered_weights import SequentialWeights
+
+source = Path("weights.safetensors")
+sidecar = Path("prepared-sidecar")  # 新目录，保留原文件
+prepare(source, sidecar)             # 每个固定源只需准备一次，可在 CPU 上完成
+with SequentialWeights(source, read_workers=4, compressed_directory=sidecar) as weights:
+    tensor = weights.get_tensor("weight")
+# tensor 在作用域结束后继续持有 CPU 存储
+```
+
+调用者必须使用可信产物，并在加载前将源和 sidecar 绑定到同一准备版本；布局和文件
+不变性检查不等于密码学认证。准备时逐块比较解压字节与原文，不计算大模型哈希。
+清单最后发布，未完成的准备不能被消费。原文件用于读取头部和回滚，不能删除。
+额外存储与 CPU 准备时间均应计入完整成本。
+
+单台 H20/150GiB 慢盘实测中，native 无损压缩由 20.73→17.08GB，A/B/A 初始化
+快 14.25%，初始化加首片快 5.54%。固定其他优化后，文本由 29.19→23.88GB 的
+两组配对完整视频中，初始化加首片 286.93→270.07 秒（快 5.88%），实际登记
+301.02→287.56 秒；暖态第二片 90.49/90.62 秒。完整解码视频与 PCM 逐样本一致，
+只证明这些复制型改动的等价，不代表通用语义画质接受、物理存储空缓存或跨宿主均值。
+匿名内存峰值 7.89→37.38GB、cgroup 总峰值 65.10→90.86GB，容量代价不可忽略。
+本地快速页缓存下压缩反而更慢，须按实际机器的完整启动、交付和成本显式选择。
+
+通用核心源自已验证应用版本 `0ae285da`，补充现有头部验证及失败读取的缓冲区释放。
+本版本不公开应用 FP8 runner，也不会自动升级运行中的服务。

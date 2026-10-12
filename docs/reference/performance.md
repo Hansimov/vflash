@@ -163,3 +163,50 @@ not qualify model quality. This is an explicit CPU option, not a changed GPU def
 of a remote timeout fix, full-inference speedup, or an optimum tied directly to CPU quota.
 
 [FFmpeg codec options](https://ffmpeg.org/ffmpeg-codecs.html#Codec-Options).
+
+
+## Explicit buffered and lossless-compressed weight reads
+
+`vflash[weight-io]` adds the optional Zstandard codec. With the existing Torch
+runtime installed, `SequentialWeights` is an explicit CPU loader for immutable
+safetensors. It reads into one owned shard buffer, with 1/2/4/8 bounded workers;
+retained tensor views keep that whole buffer alive. Mapped loading remains the
+default everywhere else. No GPU profile, model precision or public pipeline
+admission changes automatically.
+
+```python
+from pathlib import Path
+from vflash.native.h3_weight_codec import prepare
+from vflash.native.h3_buffered_weights import SequentialWeights
+
+source = Path("weights.safetensors")
+sidecar = Path("prepared-sidecar")  # a new directory; originals are preserved
+prepare(source, sidecar)             # CPU preparation, once per immutable source
+with SequentialWeights(source, read_workers=4, compressed_directory=sidecar) as weights:
+    tensor = weights.get_tensor("weight")
+# tensor retains owned CPU storage after the scope closes
+```
+
+Use trusted artifacts and bind original files and sidecars to the same prepared
+asset revision before loading. Layout validation and immutable-file checks are
+not cryptographic authentication. Preparation compares each lossless frame to its
+input without hashing model payloads. A ready sidecar is published manifest-last;
+partial preparation cannot be consumed. Originals must remain available for the
+header and rollback. Sidecar preparation costs CPU time and duplicate storage.
+
+On one H20 / 150GiB host with slow retained storage, a 20.73→17.08GB native
+sidecar reduced initialization 14.25% and initialization plus first output 5.54%
+in an A/B/A comparison. Further 29.19→23.88GB text sidecars reduced the first
+output path 286.93→270.07 seconds (5.88%) and actual registration 301.02→287.56
+seconds across two paired workloads, with the other optimizations fixed. Warm
+second output was 90.49/90.62 seconds. Both paired full decoded videos and PCM
+streams were identical; these are copy-equivalence checks, not general semantic
+quality acceptance. No physical storage-cache miss or cross-host average is
+claimed. Anonymous-memory peak rose 7.89→37.38GB and total cgroup peak
+65.10→90.86GB; this is a meaningful capacity cost. A fast local page cache was
+slower with compression. Keep selection explicit and measure complete startup,
+delivery, host memory and retained-storage costs on the intended machine.
+
+The reusable core comes from validated application source `0ae285da`, with
+header validation and failed-read buffer cleanup integrated here. This release
+does not expose the application's FP8 runner or automatically upgrade a worker.

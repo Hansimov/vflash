@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.6.28
+
+Add explicit owned-buffer safetensors reads and optional lossless framed sidecars. Keep mapped defaults and model/profile admission unchanged; document complete-startup gains and the host-memory/storage tradeoff in the [performance reference](performance#explicit-buffered-and-lossless-compressed-weight-reads).
+
 ## 0.6.27
 
 Add explicit SM90 `fa3-flash` BF16 full-context dense layers within Veda, with pinned optional FlashAttention-3 3.0.0. Keep sparse layers, original defaults and profile admission unchanged. Same-SXM complete-video comparisons show a 1.90% warm-five-request reduction with scenario and quality limits; see the [Veda guide](../guide/veda#explicit-sm90-fa3-dense-blocks).

@@ -349,3 +349,19 @@ def _inspect_safetensors(path: Path) -> tuple[dict[str, dict[str, Any]], int, os
             raise H3TensorFileError(f"safetensors tensors overlap at {name}")
         previous_stop = max(previous_stop, stop)
     return tensors, 8 + header_size, file_stat
+
+
+def inspect_dense_safetensors(path):
+    """Validate a dense shard without reading payload bytes."""
+    try:
+        rows, offset, stamp = _inspect_safetensors(Path(path))
+    except H3TensorFileError as exc:
+        raise ValueError("invalid immutable tensor header") from exc
+    end = 0
+    for start, stop in sorted(row["data_offsets"] for row in rows.values()):
+        if start != end:
+            raise ValueError("checkpoint offsets have gaps or overlaps")
+        end = stop
+    if offset + end != stamp.st_size:
+        raise ValueError("checkpoint bytes differ from header")
+    return offset, rows
