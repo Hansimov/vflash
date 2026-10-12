@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.6.30
+
+Add an explicit per-pipeline text encoder loader, retaining lazy construction, prefix/offload ownership and the default pinned offline loader. It removes the need to replace a global Transformers factory in custom integrations. Independent CPU lifecycle and tiny real-Qwen/H3 multimodal checks pass; this is not new whole-GPU or quantized-asset qualification. See [the owned loading contract](performance#per-pipeline-text-loading).
+
 ## 0.6.29
 
 Expose explicit row-scaled FP8 linear primitives and the fused SM90/SM120 activation quantizer. Keep the tested arithmetic, wide addressing and per-object counters; no public pipeline precision selector or production default changes. See [scope and usage](performance#explicit-approximate-fp8-linear-primitives).

@@ -69,11 +69,15 @@ class H3Pipeline:
         media_video_input: str = "file",
         media_video_threads: int | None = None,
         conditioning_transport: str = "file",
+        text_encoder_loader: Callable[[Path], Any] | None = None,
     ) -> None:
         if trust_local_code is not True:
             raise ContractError("the official decoder adapter requires trust_local_code=True")
         if not isinstance(prepared, PreparedPipelineAssets):
             raise ContractError("prepare the immutable pipeline assets before loading a model")
+        if text_encoder_loader is not None and not callable(text_encoder_loader):
+            raise ContractError("text_encoder_loader must be a trusted Python callable")
+        self._text_encoder_loader = text_encoder_loader
         prepared.check_unchanged()
         media_executables()
         validate_adapter_dependencies()
@@ -240,7 +244,14 @@ class H3Pipeline:
             )
             self.initialization_stages["attention_adapter"] = time.monotonic() - started
         started = time.monotonic()
-        self._conditioner = DiffusersConditioner(self.prepared)
+        self._conditioner = DiffusersConditioner(
+            self.prepared,
+            **(
+                {"text_encoder_loader": self._text_encoder_loader}
+                if self._text_encoder_loader is not None
+                else {}
+            ),
+        )
         if self.hybrid_model is not None:
             from vflash.adapters.hybrid_reference import HybridReferenceGraph
 

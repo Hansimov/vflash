@@ -254,3 +254,25 @@ pipelines on the new package. No universal speedup, baseline-equivalent temporal
 quality, smaller-card capacity or public quantized-pipeline support is claimed.
 FP8 is approximate; matching the extracted computation does not remove its
 previously measured quality uncertainty. Production defaults are unchanged.
+
+### Per-pipeline text loading
+
+`H3Pipeline(..., text_encoder_loader=loader)` accepts an explicit trusted Python
+callable. It receives the prepared model root as a `Path` and returns a CPU
+`Qwen3VLForConditionalGeneration` matching the pinned architecture. The owning
+conditioner still trims the consumed prefix, installs offload and releases the
+model. Loading stays lazy until `prepare()` or the first request. Omitting this
+option retains the pinned offline BF16 loader. Strings/module paths are not
+resolved as code; it is not an HTTP or CLI plugin option.
+
+A loader can bind separately prepared FP8 assets and an independent
+`RowFP8Execution`, without replacing Transformers' global `from_pretrained`.
+The caller still owns immutable asset identity and custom-precision qualification;
+this hook alone does not turn a BF16 prepared receipt into an FP8 artifact.
+Native FP8 construction and full quantized pipeline admission remain separate.
+CPU owner/failure tests cover independent loaders. A tiny 51-layer pinned Qwen
+fixture used 372 actual FP8 Linear modules and the real H3 text/image/multi-image/
+video feature helper; all four outputs matched the restored-weight control.
+This is interface and arithmetic evidence, not full-model, GPU or video quality
+qualification. Keep nonpersistent rotary buffers in their original FP32 precision
+when constructing such controls; converting the whole module to BF16 changes them.

@@ -5,6 +5,7 @@ from __future__ import annotations
 import gc
 import hashlib
 import time
+from collections.abc import Callable
 from contextlib import nullcontext
 from importlib.metadata import version
 from pathlib import Path
@@ -94,7 +95,16 @@ class DiffusersConditioner:
     application settings. Construct and invoke serially in the pipeline process.
     """
 
-    def __init__(self, prepared: PreparedPipelineAssets, *, device: str = "cuda:0") -> None:
+    def __init__(
+        self,
+        prepared: PreparedPipelineAssets,
+        *,
+        device: str = "cuda:0",
+        text_encoder_loader: Callable[[Path], Any] | None = None,
+    ) -> None:
+        if text_encoder_loader is not None and not callable(text_encoder_loader):
+            raise ContractError("text_encoder_loader must be a trusted Python callable")
+        self._text_encoder_loader = text_encoder_loader
         prepared.check_unchanged()
         self.versions = validate_adapter_dependencies()
         import torch
@@ -126,6 +136,24 @@ class DiffusersConditioner:
             raise
         self.initialization_seconds = time.monotonic() - started
 
+    def _load_text_encoder(self, model: Path):
+        """Load into this owner without replacing third-party class methods.
+
+        A custom loader receives the prepared model root and returns the pinned
+        Qwen model on CPU. Prefix validation, offload and teardown remain owned
+        by this conditioner; custom precision needs separate asset qualification.
+        """
+        if self._text_encoder_loader is not None:
+            return self._text_encoder_loader(model)
+        from transformers import Qwen3VLForConditionalGeneration
+
+        return Qwen3VLForConditionalGeneration.from_pretrained(
+            str(model),
+            subfolder="text_encoder",
+            dtype=self._torch.bfloat16,
+            local_files_only=True,
+        )
+
     def _load_components(self) -> None:
         from accelerate import init_empty_weights
         from diffusers import (
@@ -134,7 +162,6 @@ class DiffusersConditioner:
             MiniMaxH3ModularPipeline,
             MiniMaxH3Transformer3DModel,
         )
-        from transformers import Qwen3VLForConditionalGeneration
 
         torch, model = self._torch, self.prepared.assets.model_directory
         definition = self.profile.definition
@@ -164,12 +191,7 @@ class DiffusersConditioner:
                 self.prepared.assets.adapter_path,
                 profile_id=self.prepared.profile_id,
             )
-        encoder = Qwen3VLForConditionalGeneration.from_pretrained(
-            str(model),
-            subfolder="text_encoder",
-            dtype=torch.bfloat16,
-            local_files_only=True,
-        )
+        encoder = self._load_text_encoder(model)
         retain_h3_text_encoder_prefix(encoder)
         vae = load_h3_image_conditioning_vae_components(
             video_component_path=model / "vae",
