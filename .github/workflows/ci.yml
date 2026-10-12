@@ -15,7 +15,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Ensure media executables
+        timeout-minutes: 5
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+            sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends ffmpeg
+          fi
+          ffmpeg -version
+          ffprobe -version
       - run: python -m pip install -e '.[dev,server,restoration]'
       - run: pre-commit run --all-files
       - run: pytest
