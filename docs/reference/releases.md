@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.6.29
+
+Expose explicit row-scaled FP8 linear primitives and the fused SM90/SM120 activation quantizer. Keep the tested arithmetic, wide addressing and per-object counters; no public pipeline precision selector or production default changes. See [scope and usage](performance#explicit-approximate-fp8-linear-primitives).
+
 ## 0.6.28
 
 Add explicit owned-buffer safetensors reads and optional lossless framed sidecars. Keep mapped defaults and model/profile admission unchanged; document complete-startup gains and the host-memory/storage tradeoff in the [performance reference](performance#explicit-buffered-and-lossless-compressed-weight-reads).

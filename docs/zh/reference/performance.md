@@ -187,3 +187,36 @@ with SequentialWeights(source, read_workers=4, compressed_directory=sidecar) as 
 
 通用核心源自已验证应用版本 `0ae285da`，补充现有头部验证及失败读取的缓冲区释放。
 本版本不公开应用 FP8 runner，也不会自动升级运行中的服务。
+
+## 显式近似 FP8 线性算子
+
+0.6.29 提供 `vflash.native.h3_fp8_linear.RowFP8Execution` 和 `RowFP8Linear`，
+消费 `[out, in]` 的 E4M3 编码与 `[out, 1]` 的 FP32 逐行尺度。这是数值算子接口，
+**不是**完整 FP8 资产加载器、流水线精度开关，也不改变现有 BF16 profile。
+Torch 来自 GPU 可选依赖；仅选择融合量化核时才导入 Triton。
+
+```python
+import torch
+from vflash.native.h3_fp8_linear import RowFP8Execution
+
+codes = torch.zeros((16, 32), dtype=torch.float8_e4m3fn)
+scales = torch.ones((16, 1), dtype=torch.float32)
+values = torch.ones((2, 32), dtype=torch.bfloat16)
+reference = RowFP8Execution("weight-only").linear(values, codes, scales)
+# 仅用于已明确准入的 SM90/SM120 CUDA 张量：
+execution = RowFP8Execution("w8a8", activation_quantizer="triton", fast_accum=False)
+# result = execution.linear(values.cuda(), codes.cuda(), scales.cuda())
+```
+
+weight-only 恢复近似权重后使用普通 GEMM；W8A8 还会逐行量化激活，调用 Torch scaled
+GEMM 并输出 BF16。Torch 和融合 Triton 量化均须显式选择，硬件不支持时失败，不偷偷回退
+精度。计数与可选异步测量作用域属于各自执行对象；算子不修改全局类、不读取模型、不选择设备，
+不插入 GPU 同步栅栏。`RowFP8Linear` 的权重/尺度初始位于 meta，保留原 bias；可信加载器
+必须在执行前赋齐张量。不可变资产、有限的预制尺度、转换和完整流水线准入仍由调用方负责。
+
+融合核保留“先拓宽到 64 位再乘步长”的地址计算，覆盖物理行跨度跨过 2³¹ 元素的 FFN 半幅视图。
+实现来自已实测应用源码 `3bbaa52d`；私有 H100、RTX PRO 6000、H20 集成曾执行这些计算，
+H20 九例包含四模式、0.25MP/五秒到4MP/十五秒。本次提取完成 CPU 数值/所有权检查与
+SM90/SM120 离线编译，**没有**用新包重跑上述全流水线。不据此宣称普遍提速、等同基线的时序
+画质、小显存容量或公开量化流水线资格。FP8 仍是近似计算，提取后计算一致不消除既有画质未知项。
+生产默认不变。

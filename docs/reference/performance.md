@@ -210,3 +210,47 @@ delivery, host memory and retained-storage costs on the intended machine.
 The reusable core comes from validated application source `0ae285da`, with
 header validation and failed-read buffer cleanup integrated here. This release
 does not expose the application's FP8 runner or automatically upgrade a worker.
+
+## Explicit approximate FP8 linear primitives
+
+Version 0.6.29 exposes `vflash.native.h3_fp8_linear.RowFP8Execution` and
+`RowFP8Linear`. They consume trusted E4M3 codes shaped `[out, in]` with FP32
+row scales `[out, 1]`. This is an explicit numerical interface, **not** an FP8
+asset loader, pipeline precision flag or change to an existing BF16 profile.
+Install the GPU extra for Torch; Triton is imported only for its selected kernel.
+
+```python
+import torch
+from vflash.native.h3_fp8_linear import RowFP8Execution
+
+codes = torch.zeros((16, 32), dtype=torch.float8_e4m3fn)
+scales = torch.ones((16, 1), dtype=torch.float32)
+values = torch.ones((2, 32), dtype=torch.bfloat16)
+reference = RowFP8Execution("weight-only").linear(values, codes, scales)
+# For explicitly admitted SM90/SM120 CUDA tensors:
+execution = RowFP8Execution("w8a8", activation_quantizer="triton", fast_accum=False)
+# result = execution.linear(values.cuda(), codes.cuda(), scales.cuda())
+```
+
+Weight-only reconstructs approximate weights and uses ordinary GEMM. W8A8 also
+quantizes activations per row and uses Torch's scaled GEMM with BF16 output.
+Torch and fused Triton activation quantizers are explicit choices; unsupported
+hardware fails without a precision fallback. Counters and optional asynchronous
+measurement scopes belong to each execution object. No global class patch, model
+read, device selection or GPU fence is introduced by these primitives.
+`RowFP8Linear` initially owns meta weights/scales and preserves the original bias;
+a trusted loader must assign all tensors before use. Caller-owned immutable
+assets, finite prepared scales, model conversion and complete-pipeline admission
+remain the caller's responsibility.
+
+The fused kernel retains 64-bit row-address arithmetic before multiplication,
+including a value-half FFN view whose physical stride crosses 2³¹ elements.
+This is the already exercised implementation from application source `3bbaa52d`:
+private H100, RTX PRO 6000 and H20 integrations exercised the arithmetic, and the
+H20 batch includes nine complete outputs across four modes, 0.25MP/five seconds
+through 4MP/fifteen seconds. This library extraction has CPU arithmetic/ownership
+checks and offline SM90/SM120 compilation; it has **not** rerun those whole
+pipelines on the new package. No universal speedup, baseline-equivalent temporal
+quality, smaller-card capacity or public quantized-pipeline support is claimed.
+FP8 is approximate; matching the extracted computation does not remove its
+previously measured quality uncertainty. Production defaults are unchanged.
