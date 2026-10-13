@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.6.34
+
+Explicit native low-noise face repaint, sigma-matched modulation compiler and bounded table loader. Preserves the original schedule, weights, audio and conditioned video rows. Resident PRO 6000 complete-video evidence; two-slot ring CUDA transfer checks only, with SM89 media qualification still open. No default generation or automatic face-selection change.
+
 ## 0.6.33
 
 Add an opt-in `vflash.media.audio_headroom.audio_decoder_headroom` context for the

@@ -342,3 +342,55 @@ Real evidence covers two refined stereo clips on one RTX PRO 6000 Blackwell Serv
 one was unchanged, while the other required about 0.31 dB attenuation to avoid new
 sample clipping. This does not establish general refinement quality or qualify a
 new hardware profile.
+
+
+## Explicit native face repaint
+
+Version 0.6.34 adds an opt-in native low-noise repaint building block. It keeps
+Turbo residuals, uses newly compiled FL/Ref modulation at the actual low-noise
+sigmas, preserves conditioned video rows and freezes audio latents. It does not
+change ordinary generation defaults or select people automatically.
+
+```python
+from pathlib import Path
+from vflash.compiler.refinement import compile_refinement_tables
+from vflash.native.h3_refinement import VideoRepaint
+from vflash.native.h3_refinement_schedule import load_tables
+
+compile_refinement_tables(
+    Path("fl-transformer"), Path("ref-transformer"), Path("face-modulation"),
+    steps=4, denoise=0.035, mode="face",
+)
+_, schedule, tables = load_tables(Path("face-modulation"), mode="face")
+# `engine` owns a fresh request; `encoded_rows` are the original video crop
+# encoded by the matching official VAE, in native packed generated-row layout.
+repaint = VideoRepaint(engine, schedule, tables, encoded_rows)
+for _ in range(4):
+    repaint.advance(step=ordinary_native_step)
+```
+
+The caller owns detection, unambiguous tracking, crop/keyframe alignment, original
+media preservation and localized compositing. Never infer identity continuity
+from detector confidence alone. Copy source audio when composing; frozen audio
+latents alone do not prove preserved mouth motion. This is a mathematical engine
+API, not an automatic face-swap or an independently qualified product flow.
+
+Complete-video evidence covers 512-pixel crops of 5- and 10-second material on a
+resident RTX PRO 6000 Server hybrid trunk. One resident audiovisual generation →
+fresh face preparation → silent repaint → full-frame composition measured
+32.31 + 2.91 + 22.71 + 0.99 seconds, excluding initialization and delivery. This
+is a supported example, not a universal speed or quality promise. Single-shot
+selected tracks have user-accepted improvements; crowded/cut/occluded scenes
+retain separate qualification requirements.
+
+The two-slot BF16 ring can now temporarily rebind its host modulation, slot
+storage and prevalidated copy pairs together. It synchronizes restoration of the
+original tables on completion/failure. A 100-copy CUDA check on RTX 3080 verified
+both successful and failed context restoration; it is **not complete H3 media
+qualification on SM89**, and must not be presented as a default serving upgrade.
+The stream/ring path currently permits face repaint only. Multi-GPU refinement
+is not supported by this API.
+
+The track/crop/repaint/stitch workflow was informed by the MIT-licensed
+[ComfyUI H3 FaceRefine](https://github.com/Carasibana/ComfyUI-H3-FaceRefine).
+No external face-restoration or identity-recognition weights are bundled.
