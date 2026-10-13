@@ -310,3 +310,35 @@ The explicit original-v0.1 **single-SM89 hybrid with Veda** accepts integer imag
 The bounds are joint, not independently combinable: width and height stay 32-aligned with long edge at most 2048, and `width × height × model_frames` must not exceed `2048² × 124`. Expanded multiple-image Ref requests are limited to five seconds and 960×544 total pixels. Fifteen-second keyframes or a single image reference use 362 internal model frames and deliver exactly 360 frames at 24 fps with 480000 audio samples per channel. Internal padding does not extend the requested duration. Unsupported combinations fail before model activation.
 
 The pinned official conditioning adapter accepts the aligned temporal boundary without changing its logical duration limit. Nine references preserve input order and labels `<Picture 1>` through `<Picture 9>`; they are visual references, not nine timeline keyframes. More inputs increase conditioning work and do not guarantee that every requested detail is followed. Full target-hardware cases and visual limitations are recorded in [performance](../reference/performance#extended-hybrid).
+
+
+## Pre-clamp audio headroom
+
+Version 0.6.33 provides an explicit adapter context for an exclusively owned,
+original H3 audio VAE component. It wraps exactly one complete stereo decode:
+
+```python
+from vflash.media.audio_headroom import audio_decoder_headroom
+
+observation = {}
+with audio_decoder_headroom(audio_component, observation):
+    waveform = decode_official_h3_audio_latents(
+        audio_component, latents, device=device, torch_module=torch
+    )
+```
+
+The fixed 0.98 sample ceiling uses a uniform gain across both channels and never
+boosts quiet audio. The hook is removed even when decoding or an optional diagnostic
+callback fails. `on_unclamped(tensor)` can record the original `[2, 1, samples]`
+waveform; diagnostic I/O is the caller's responsibility and cost. This scoped context
+must not share its component with another request. Decoder defaults, samplers and
+complete-pipeline profiles remain unchanged; there is no new CLI quality selector.
+
+This prevents the original decoder from destroying peaks before delivery processing.
+The existing `web-v1` post-decode loudness option cannot recover clipped samples.
+Neither option fixes synthesized timbre, speech, or audio/video synchronization.
+The ceiling is a sample-peak guard, not a true-peak or lossy-codec guarantee.
+Real evidence covers two refined stereo clips on one RTX PRO 6000 Blackwell Server:
+one was unchanged, while the other required about 0.31 dB attenuation to avoid new
+sample clipping. This does not establish general refinement quality or qualify a
+new hardware profile.

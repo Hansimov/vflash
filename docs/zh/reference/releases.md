@@ -1,5 +1,15 @@
 # 版本更新
 
+## 0.6.33
+
+新增显式 `vflash.media.audio_headroom.audio_decoder_headroom` 上下文：在原始H3
+BigVGAN硬削波前，对双声道施加同一只衰减增益，普通解码路径保持。此项是削波保护，
+不是音频补采样器，也不声称改善电音或音色。两条RTX PRO 6000 Blackwell Server真实
+补采音轨验证：一条完全保持，另一条仅需约0.31 dB衰减即可消除新增采样满幅削波；
+广泛感知质量仍待验证。[用法与限制](../guide/complete-pipeline#pre-clamp-audio-headroom)。
+通用核心来自私有集成 `video-gen` `a5f87c44`，不发布私有媒体或设备身份。
+
+
 ## 0.6.32
 
 增加显式单设备 `VideoRequest(generate_audio=False)`：移除生成音频行，跳过音频投影、调度、导出和波形解码，交付不含音轨的 MP4。联合生成上下文因此变化，视频也可能改变。默认仍有声；此选项拒绝多设备执行及音频交付效果。

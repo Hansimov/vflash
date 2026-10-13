@@ -1,5 +1,17 @@
 # Release notes
 
+## 0.6.33
+
+Add an opt-in `vflash.media.audio_headroom.audio_decoder_headroom` context for the
+original H3 BigVGAN decoder. One attenuation-only stereo gain precedes its hard
+sample clamp; the ordinary decode path is unchanged. This is clipping prevention,
+not an audio refinement sampler or a claim of improved timbre. Two real RTX PRO
+6000 Blackwell Server refinement outputs validate it: one remains unchanged; an
+otherwise clipped waveform needs approximately 0.31 dB attenuation. Broader perceptual
+quality remains unqualified. [Usage and limits](../guide/complete-pipeline#pre-clamp-audio-headroom).
+Promoted from private integration `video-gen` `a5f87c44` without private media or identities.
+
+
 ## 0.6.32
 
 Add explicit single-device `VideoRequest(generate_audio=False)`: omit generated audio rows,

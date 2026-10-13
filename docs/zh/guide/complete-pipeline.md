@@ -262,3 +262,29 @@ CPU 解码器先固定文件副本，检查完整视频并重采样到 24 fps，
 限制必须组合判断：宽高32对齐、最长边2048，且`宽×高×模型帧数`不得超过`2048²×124`。扩展多图Ref限五秒和960×544总像素。十五秒关键帧或单图参考使用362内部模型帧，精确交付24fps的360帧及每声道480000音频采样；内部padding不延长用户指定时长。不合格组合在模型激活前拒绝。
 
 固定官方条件适配器接受VAE对齐后的时间边界，不修改其逻辑时长上限。九张图按传入顺序保留`<Picture 1>`至`<Picture 9>`标签，属于视觉参考而非九个时间线关键帧。更多输入增加条件处理量，不能保证所有细节都遵循。完整目标硬件案例和视觉限制见[性能记录](../reference/performance#extended-hybrid)。
+
+
+## 解码硬削波前的音频余量 {#pre-clamp-audio-headroom}
+
+0.6.33新增适用于独占原始H3音频VAE组件的显式上下文，一次只包裹完整双声道解码：
+
+```python
+from vflash.media.audio_headroom import audio_decoder_headroom
+
+observation = {}
+with audio_decoder_headroom(audio_component, observation):
+    waveform = decode_official_h3_audio_latents(
+        audio_component, latents, device=device, torch_module=torch
+    )
+```
+
+固定0.98采样峰值上限对双声道使用相同增益，不放大小音量。解码或诊断回调失败也会
+移除钩子。可选 `on_unclamped(tensor)` 接收原始 `[2, 1, samples]` 波形；诊断读写
+及其开销由调用方负责。此上下文内不得让另一请求共享组件。普通解码、采样器和完整
+流水线默认配置保持，不新增CLI质量选择器。
+
+这避免原解码器在交付处理前破坏越界峰值；已有 `web-v1` 后置响度处理无法恢复已被
+削平的样本。两者都不能修复模型生成的音色、人声或音画对应。采样峰值上限也不等于
+真峰值或有损编码后的上限保证。实测来自一张RTX PRO 6000 Blackwell Server的两条
+补采双声道音轨：一条完全保持，另一条约衰减0.31 dB即消除了新增削波；不由此宣称
+补采感知质量全面合格，也不扩大显卡资格。
