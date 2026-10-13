@@ -1,5 +1,18 @@
 # Release notes
 
+## 0.6.32
+
+Add explicit single-device `VideoRequest(generate_audio=False)`: omit generated audio rows,
+audio projections/scheduler/export and waveform decoding, delivering an MP4 without an audio
+stream. This changes the joint generation context and can change the video. Audio/video remains
+the default; multi-device execution and audio effects are rejected for this option.
+
+Real integration covers four video-only clips and audio/video switching on one RTX PRO 6000
+Blackwell Server with an experimental FP8 hybrid backbone. Complete decoding and application
+playback passed. Other architectures and the default BF16 path are not newly qualified;
+reported face and audio defects remain open. See [scope](../guide/complete-pipeline#video-only-generation-0-6-32).
+Private integration source: `video-gen` `3b9cccef`; no private media or machine identities are published.
+
 ## 0.6.31
 
 - Add an explicitly owned native denoiser loader for single-device resident Python pipelines.
