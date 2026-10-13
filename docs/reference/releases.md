@@ -1,5 +1,23 @@
 # Release notes
 
+## 0.6.35
+
+- Add the opt-in `vflash.media.face_encoder.face_encoder` context for complete H3
+  refinement crops. It batches independent temporal encoder clips, preserves the
+  original model parameters and FP32 posterior, and restores all overrides on exit.
+- The explicit `batch2-fp16-norm` profile uses FP16 encoder operations and per-frame
+  GroupNorm with native FP32 reduction. It is approximate; the default remains
+  `original`. The decoder, attention, frame count and sampling schedule are unchanged.
+- RTX PRO 6000 Server measurements at 512²/5 s reduced warm four-step repaint from
+  16.05 to 13.13 s. A 384² internal crop reduced repaint to 6.84 s, while a complete
+  automatic five-second workflow including detection/crop/composition took 9.03 s
+  versus 19.58 s. Those latter gains combine multiple product changes and are not
+  solely encoder speedups. Limited same-person sequential frame review found no
+  obvious new structural failure; broad identity/scene quality remains unqualified.
+- FP32 batching and channels-last are explicit comparison options, not recommended
+  defaults: neither improved the measured complete workflow. No LightVAE is used.
+
+
 ## 0.6.34
 
 Explicit native low-noise face repaint, sigma-matched modulation compiler and bounded table loader. Preserves the original schedule, weights, audio and conditioned video rows. Resident PRO 6000 complete-video evidence; two-slot ring CUDA transfer checks only, with SM89 media qualification still open. No default generation or automatic face-selection change.

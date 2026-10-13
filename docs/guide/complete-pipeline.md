@@ -394,3 +394,28 @@ is not supported by this API.
 The track/crop/repaint/stitch workflow was informed by the MIT-licensed
 [ComfyUI H3 FaceRefine](https://github.com/Carasibana/ComfyUI-H3-FaceRefine).
 No external face-restoration or identity-recognition weights are bundled.
+
+
+### Optional crop encoder execution
+
+For original H3 refinement crops, version 0.6.35 offers an explicit scoped option:
+
+```python
+from vflash.media.face_encoder import face_encoder
+
+with face_encoder(vae, "batch2-fp16-norm") as observation:
+    # Use the pinned official normalization/encoding function on the complete crop.
+    encoded = encode_vae_condition(vae, pixels, pixel_mean, pixel_std, encode_seed)
+```
+
+The crop must have batch size one, square 320/384/512 pixels and 120–362 model
+frames with the original 17-frame clip / 3-token-drop geometry. Temporal blocks
+are batched independently, not mixed. The original FP32 parameters and FP32
+posterior remain intact; FP16 operations and affine copies are approximate.
+The context requires exclusive ownership of the VAE. It restores the encoder and
+per-frame normalization methods on success or failure. It does not select faces,
+change the decoder, shorten a video, preserve audio or compose the final canvas;
+those responsibilities belong to the caller. Use `original` for unchanged encoding.
+Smaller internal crops trade detail for time and need scene-specific final-video
+review; their dimensions are not the final delivery resolution. Measurements and
+quality limits are in the [release notes](../reference/releases.md).

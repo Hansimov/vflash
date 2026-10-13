@@ -312,3 +312,15 @@ with audio_decoder_headroom(audio_component, observation):
 跟踪/裁剪/重绘/回贴思路参考MIT许可的
 [ComfyUI H3 FaceRefine](https://github.com/Carasibana/ComfyUI-H3-FaceRefine)，
 没有附带身份识别或第三方人脸恢复权重。
+
+
+### 可选的裁剪编码执行方式
+
+0.6.35提供 `vflash.media.face_encoder.face_encoder(vae, "batch2-fp16-norm")` 上下文。
+在其中对完整裁剪调用固定官方 `encode_vae_condition`，保持官方归一化和FP32后验。
+仅支持batch=1、320/384/512方形、120–362模型帧、原17帧块/丢弃3个token的几何。
+时间块在batch维独立编码，不混合时间；原模型FP32参数不变，但FP16运算和仿射副本属于近似。
+VAE必须由当前调用独占，成功或异常退出均恢复编码和逐帧归一化方法。默认 `original` 不改执行。
+检测、最终画布合成及原声保留由调用方负责；此接口不替换解码器或减少帧数。
+较小内部裁剪需要最终视频的细节检查，不能把它的尺寸当成交付分辨率。
+实际收益与质量边界见[版本记录](../reference/releases.md)。
