@@ -305,11 +305,11 @@ class _H3FinalLayerOperations:
                 or value.ndim != 1
                 or value.dtype not in {torch.int32, torch.int64}
                 or (expected_rows is not None and int(value.shape[0]) != expected_rows)
-                or not value.numel()
+                or (not value.numel() and name != "audio indices")
             ):
                 raise H3NativeFinalLayerError(f"H3 final {name} are invalid")
             normalized = value.to(device=hidden_states.device, dtype=torch.int64)
-            if int(normalized.min()) < 0:
+            if normalized.numel() and int(normalized.min()) < 0:
                 raise H3NativeFinalLayerError(f"H3 final {name} contain a negative row")
             return normalized
 
@@ -322,7 +322,9 @@ class _H3FinalLayerOperations:
             raise H3NativeFinalLayerError("H3 final timestep index is outside the AdaLN table")
         videos = normalize_indices(video_indices, name="video indices", expected_rows=None)
         audios = normalize_indices(audio_indices, name="audio indices", expected_rows=None)
-        if int(videos.max()) >= sequence_length or int(audios.max()) >= sequence_length:
+        if int(videos.max()) >= sequence_length or (
+            audios.numel() and int(audios.max()) >= sequence_length
+        ):
             raise H3NativeFinalLayerError(
                 "H3 final modality index is outside the packed sequence"
             )
@@ -384,17 +386,22 @@ class _H3FinalLayerOperations:
             self.weights.video_bias_bank,
             self.weights.video_head_plans[invocation.evaluation_index],
         )
-        audio_weight, audio_bias = self._blended_head(
-            self.weights.audio_head_bank,
-            self.weights.audio_bias_bank,
-            self.weights.audio_head_plans[invocation.evaluation_index],
-        )
         video = functional.linear(projected_input, video_weight, video_bias).index_select(
             1, invocation.video_indices
         )
-        audio = functional.linear(projected_input, audio_weight, audio_bias).index_select(
-            1, invocation.audio_indices
-        )
+        if invocation.audio_indices.numel():
+            audio_weight, audio_bias = self._blended_head(
+                self.weights.audio_head_bank,
+                self.weights.audio_bias_bank,
+                self.weights.audio_head_plans[invocation.evaluation_index],
+            )
+            audio = functional.linear(projected_input, audio_weight, audio_bias).index_select(
+                1, invocation.audio_indices
+            )
+        else:
+            audio = projected_input.new_empty(
+                (invocation.batch_size, 0, self.weights.audio_head_bank.shape[1])
+            )
         return video, audio
 
     def __call__(

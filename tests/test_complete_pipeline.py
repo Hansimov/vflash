@@ -1158,3 +1158,31 @@ def test_memory_transport_admission_precedes_loading(
         H3Pipeline(
             prepared, device=object(), trust_local_code=True, conditioning_transport=transport
         )
+
+
+def test_video_only_request_reaches_native_and_media_without_changing_conditioning(
+    video_request, tmp_path
+):
+    from dataclasses import replace
+
+    pipeline, events = _pipeline()
+    observed = {}
+    native = pipeline._core.generate
+    resume = pipeline._media.resume_cuda
+
+    def generate(*args, generate_audio=True, **kwargs):
+        observed["native_generate_audio"] = generate_audio
+        return native(*args, **kwargs)
+
+    def resume_media(*, include_audio=True):
+        observed["include_audio"] = include_audio
+        return resume()
+
+    pipeline._core.generate = generate
+    pipeline._media.resume_cuda = resume_media
+    result = pipeline.generate(
+        replace(video_request, generate_audio=False), tmp_path / "video-only.mp4"
+    )
+    assert observed == {"native_generate_audio": False, "include_audio": False}
+    assert result.media["generate_audio"] is False
+    assert events.count("conditioning:capture") == 1

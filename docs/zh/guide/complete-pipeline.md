@@ -133,6 +133,19 @@ Ref2VA 的 `--reference` 可以出现一至三次。T2VA 在准备时指定 `--p
 
 进度以 JSON 行写入 stderr，stdout 输出最终结果。每次命令独立加载并释放模型；要在多次请求间实现跨模式常驻，应复用同一个 Python `H3Pipeline` 实例。预装环境及完整挂载示例见 [Docker 生成](./docker#pipeline)。
 
+### 无音频生成（源码 main）
+
+Python 请求可设置 `VideoRequest(..., generate_audio=False)`。此单卡选项在去噪前移除生成音频行，
+跳过音频投影、调度更新、音频 latent 导出及波形解码，交付不含音轨的 MP4。
+须保留 `audio_delivery_profile="unchanged"`，不能同时使用增益归一化或静音音轨交付；不支持音频条件输入。
+
+移除联合音频上下文可能改变相同种子下的视频。这是一种独立生成模式，不保证像素相同或大幅提速。
+完整实测覆盖一张 RTX PRO 6000 Blackwell Server 上的实验 FP8 hybrid：同进程有声/无声切换、
+576×864 五秒人物片，以及1248×832、1728×1152、2048×2048十秒无音轨片。
+输出已完整解码与播放；局部连续人脸裁剪不构成通用质量资格。
+其他架构、默认 BF16 主干及多卡执行尚未取得此选项的实卡资格。
+已发布0.6.31 wheel不含此功能；目前仅为源码 main 的 Python 选项，尚未增加对应 CLI 参数。
+
 ## 一个明确拥有资源的实例
 
 源码 main 新增 `audio_delivery_profile="silent-v1"`（CLI：`--audio-delivery-profile silent-v1`），

@@ -229,10 +229,10 @@ class _H3InputPackingOperations:
             weights.video_weight,
             weights.video_bias,
         )
-        audio_embeds = functional.linear(
-            audio_latents,
-            weights.audio_weight,
-            weights.audio_bias,
+        audio_embeds = (
+            functional.linear(audio_latents, weights.audio_weight, weights.audio_bias)
+            if invocation.audio_rows
+            else None
         )
         hidden_states = refined_text.new_zeros(
             (invocation.batch_size, invocation.sequence_length, weights.hidden_size)
@@ -243,11 +243,10 @@ class _H3InputPackingOperations:
             invocation.video_indices,
             video_embeds.to(refined_text.dtype),
         )
-        hidden_states.index_copy_(
-            1,
-            invocation.audio_indices,
-            audio_embeds.to(refined_text.dtype),
-        )
+        if audio_embeds is not None:
+            hidden_states.index_copy_(
+                1, invocation.audio_indices, audio_embeds.to(refined_text.dtype)
+            )
         return hidden_states
 
     def __call__(

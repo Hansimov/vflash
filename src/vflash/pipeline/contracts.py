@@ -103,6 +103,9 @@ class VideoRequest:
     decoding; the default ``unchanged`` profile preserves the decoded waveform.
     ``silent-v1`` enforces a silent stereo AAC track and skips waveform decoding.
     It never changes joint AV denoising or infers intent from prompt text.
+    Explicit ``generate_audio=False`` removes generated audio rows from denoising
+    and skips waveform decoding and audio encoding. Its MP4 has no audio track.
+    Removing joint attention context may change the video; it is not pixel-equivalent.
     ``keyframe_delivery_profile='exact-v1'`` restores supplied temporal anchors
     at the delivered endpoints after VAE decode; the default ``decoded`` profile
     preserves the model output for controlled comparison.
@@ -118,6 +121,7 @@ class VideoRequest:
     first_frame: Path | None = field(default=None, kw_only=True)
     last_frame: Path | None = field(default=None, kw_only=True)
     duration_seconds: int = field(default=5, kw_only=True)
+    generate_audio: bool = field(default=True, kw_only=True)
     audio_delivery_profile: Literal["unchanged", "web-v1", "silent-v1"] = field(
         default="unchanged", kw_only=True
     )
@@ -204,6 +208,12 @@ class VideoRequest:
         ):
             raise ContractError(
                 "native HD requires image conditioning within 2048 pixels per side"
+            )
+        if type(self.generate_audio) is not bool:
+            raise ContractError("generate_audio must be boolean")
+        if not self.generate_audio and self.audio_delivery_profile != "unchanged":
+            raise ContractError(
+                "video-only generation does not accept an audio delivery profile"
             )
         if self.audio_delivery_profile not in AUDIO_DELIVERY_PROFILES:
             raise ContractError("unknown audio delivery profile")

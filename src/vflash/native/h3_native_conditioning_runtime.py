@@ -690,6 +690,7 @@ class H3NativeConditioningRuntime:
         *,
         progress_callback: Callable[[int, int], None] | None = None,
         profile_denoise: bool = False,
+        generate_audio: bool = True,
     ) -> H3NativeConditioningRuntimeResult:
         """Run one live request and export target-only VAE-ready latents."""
 
@@ -699,7 +700,15 @@ class H3NativeConditioningRuntime:
             raise H3NativeConditioningRuntimeError("native latent output already exists")
         total_started = time.monotonic()
         prepare_started = time.monotonic()
+        if type(generate_audio) is not bool or (not generate_audio and len(self.devices) != 1):
+            raise H3NativeConditioningRuntimeError("video-only generation requires one device")
         bundle, tensors = self._load_request_tensors(conditioning)
+        if not generate_audio:
+            from vflash.native.h3_audio_mode import without_generated_audio
+
+            tensors = without_generated_audio(
+                tensors, condition_audio_rows=bundle.profile.num_condition_audio_rows
+            )
         device = self.device
         self._sol_attention = None
         slots = getattr(self.denoiser, "slots", getattr(self.denoiser, "blocks", ()))
@@ -880,8 +889,10 @@ class H3NativeConditioningRuntime:
             latent_height=bundle.profile.height // 16,
             latent_width=bundle.profile.width // 16,
         )
-        audio_latents = unpack_h3_audio_rows(
-            packed_audio[:, bundle.profile.num_condition_audio_rows :]
+        audio_latents = (
+            unpack_h3_audio_rows(packed_audio[:, bundle.profile.num_condition_audio_rows :])
+            if generate_audio
+            else None
         )
         if self._veda_attention is not None:
             self._veda_attention.validate_calls(self.overlay.schedule.nfe)
@@ -889,12 +900,13 @@ class H3NativeConditioningRuntime:
         save_safetensors_atomic(
             output_path,
             {
-                "audio_latents": audio_latents,
+                **({"audio_latents": audio_latents} if generate_audio else {}),
                 "video_latents": video_latents,
             },
             metadata={
                 "bundle_id": bundle.bundle_id,
                 "attention_backend": self.attention_backend,
+                "audio_generated": str(generate_audio).lower(),
                 "frames": str(bundle.profile.frames),
                 "height": str(bundle.profile.height),
                 "schedule_nfe": str(self.overlay.schedule.nfe),

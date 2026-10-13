@@ -484,6 +484,8 @@ class H3Pipeline:
             }
             if profile_denoise:
                 native_options["profile_denoise"] = True
+            if not request.generate_audio:
+                native_options["generate_audio"] = False
             native = self._core.generate(
                 bundle if in_memory else bundle.directory,
                 directory / "latents.safetensors",
@@ -500,13 +502,19 @@ class H3Pipeline:
                 stages["denoising"]["attention_adapter"] = self.attention_adapter.metadata()
             stage_started = time.monotonic()
             report("decoding", 0, 1)
-            weight_resume_seconds = self._media.resume_cuda()
+            weight_resume_seconds = (
+                self._media.resume_cuda()
+                if request.generate_audio
+                else self._media.resume_cuda(include_audio=False)
+            )
             call_started = time.monotonic()
             media_options = (
                 {"audio_delivery_profile": request.audio_delivery_profile}
                 if request.audio_delivery_profile != "unchanged"
                 else {}
             )
+            if not request.generate_audio:
+                media_options["generate_audio"] = False
             if self.media_video_threads is not None:
                 media_options["video_threads"] = self.media_video_threads
             if self.media_video_input == "pipe":

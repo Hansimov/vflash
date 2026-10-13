@@ -169,6 +169,24 @@ By default, delivered keyframes remain the official VAE reconstruction. Set `key
 
 Set `audio_delivery_profile="web-v1"`, or pass `--audio-delivery-profile web-v1`, to apply bounded post-decode gain toward -18 LUFS with a -2 dBTP peak limit; the default `unchanged` path preserves the decoded waveform. This delivery option does not improve sound identity or synchronization. Progress is emitted as JSON lines on stderr; stdout contains the final result. Each command starts and closes its own models. Use one Python `H3Pipeline` instance to realize cross-mode residency across repeated requests. For a ready-made environment and complete mounting example, see [Docker generation](./docker#pipeline).
 
+### Video-only generation (source main)
+
+Python requests can set `VideoRequest(..., generate_audio=False)`. This single-device
+option removes generated audio rows before denoising, skips audio projections and
+scheduler updates, omits audio latent export and waveform decoding, and writes an MP4
+with no audio stream. Keep `audio_delivery_profile="unchanged"`; gain normalization and
+silent-track delivery cannot be combined with this mode. Audio conditioning is not supported.
+
+Removing joint audio context can change the video, even with the same seed. This is a
+separate generation mode, not a promise of identical pixels or a large speed improvement.
+End-to-end evidence covers an experimental FP8 hybrid backbone on one RTX PRO 6000
+Blackwell Server GPU: same-process audio/video-only switching, 576×864 five-second
+people clips, and video-only 1248×832, 1728×1152 and 2048×2048 ten-second clips. Outputs
+were fully decoded and played; local face-crop inspection is not general quality approval.
+Other architectures, the default BF16 backbone and multi-device execution have not been
+qualified for this option. Released 0.6.31 wheels do not contain it; it is currently a
+Python source-main option, without an additional CLI flag.
+
 ## One owned pipeline
 
 Source main adds `audio_delivery_profile="silent-v1"` (CLI: `--audio-delivery-profile silent-v1`)

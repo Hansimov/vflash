@@ -94,7 +94,9 @@ def encode_mp4(
     video_input: str = "file",
     video_threads: int | None = None,
 ) -> dict[str, Any]:
-    """Encode CPU ``[1,3,F,H,W]`` RGB and ``[1,2,S]`` stereo without overwriting.
+    """Encode CPU RGB and optional stereo audio without overwriting.
+
+    ``audio=None`` encodes no waveform or audio stream.
 
     ``video_threads`` optionally bounds codec threads, not every FFmpeg filter.
     None preserves FFmpeg auto selection; thread changes can alter H.264 bytes.
@@ -107,13 +109,19 @@ def encode_mp4(
 
     if getattr(video, "ndim", None) != 5 or tuple(video.shape[:2]) != (1, 3):
         raise MediaError("video must have shape [1,3,frames,height,width]")
-    if getattr(audio, "ndim", None) != 3 or tuple(audio.shape[:2]) != (1, 2):
+    has_audio = audio is not None
+    if has_audio and (getattr(audio, "ndim", None) != 3 or tuple(audio.shape[:2]) != (1, 2)):
         raise MediaError("audio must have shape [1,2,samples]")
-    if video.device.type != "cpu" or audio.device.type != "cpu":
+    if video.device.type != "cpu" or (has_audio and audio.device.type != "cpu"):
         raise MediaError("the media encoder requires owned CPU tensors")
     frames, height, width = (int(value) for value in video.shape[2:])
-    samples = int(audio.shape[2])
-    if min(frames, height, width, samples) <= 0 or height % 2 or width % 2:
+    samples = int(audio.shape[2]) if has_audio else 0
+    if (
+        min(frames, height, width) <= 0
+        or (has_audio and samples <= 0)
+        or height % 2
+        or width % 2
+    ):
         raise MediaError("H.264 delivery requires nonempty media and even dimensions")
     if type(fps) is not int or not 1 <= fps <= 60:
         raise MediaError("fps must be an integer between 1 and 60")
@@ -124,6 +132,8 @@ def encode_mp4(
     validate_video_threads(video_threads)
     if video_input not in {"file", "pipe"}:
         raise MediaError("video_input must be file or pipe")
+    if not has_audio and audio_delivery_profile != "unchanged":
+        raise MediaError("video-only media cannot apply an audio delivery profile")
     if audio_delivery_profile not in AUDIO_DELIVERY_PROFILES:
         raise MediaError("unknown audio delivery profile")
     if preset not in {
@@ -145,7 +155,7 @@ def encode_mp4(
         or timeout_seconds <= 0
     ):
         raise MediaError("the encoding deadline must be positive and finite")
-    if abs(samples / audio_sample_rate - frames / fps) > 1 / audio_sample_rate:
+    if has_audio and abs(samples / audio_sample_rate - frames / fps) > 1 / audio_sample_rate:
         raise MediaError("audio and video must share the same delivery duration")
     ffmpeg, ffprobe = media_executables()
     # Resolve the parent, but not a pre-existing symlink at the destination.
@@ -174,42 +184,50 @@ def encode_mp4(
             with video_path.open("wb") as destination:
                 for block in rgb_blocks():
                     block.tofile(destination)
-        if not torch.isfinite(audio).all().item():
-            raise MediaError("decoded audio contains nonfinite values")
         audio_filters: list[str] = []
-        audio_delivery = None
-        if audio_delivery_profile == SILENT_AUDIO_PROFILE:
-            # Never modify the caller's waveform. Keep the AAC clock/stream
-            # contract while enforcing silence independently of model output.
-            audio = torch.zeros_like(audio)
-            audio_delivery = {"profile": SILENT_AUDIO_PROFILE, "status": "silent"}
-        if audio_delivery_profile == WEB_AUDIO_PROFILE:
-            audio_path = directory / "audio.f32le"
-            pcm = audio[0].T.float().contiguous()
-            pcm.numpy().astype("<f4", copy=False).tofile(audio_path)
-            audio_input = [
-                "-f",
-                "f32le",
-                "-ar",
-                str(audio_sample_rate),
-                "-ac",
-                "2",
-                "-i",
-                str(audio_path),
-            ]
-            normalization, audio_delivery = web_loudness_filter(ffmpeg, audio_input)
-            if normalization:
-                audio_filters.append(normalization)
-        else:
-            pcm = (
-                audio[0].T.float().clamp(-1, 1).mul(32767).round().to(torch.int16).contiguous()
-            )
-            with wave.open(str(audio_path), "wb") as destination:
-                destination.setnchannels(2)
-                destination.setsampwidth(2)
-                destination.setframerate(audio_sample_rate)
-                destination.writeframes(pcm.numpy().tobytes())
-            audio_input = ["-i", str(audio_path)]
+        audio_delivery = {"profile": "disabled", "status": "absent"} if not has_audio else None
+        audio_input = []
+        if has_audio:
+            if not torch.isfinite(audio).all().item():
+                raise MediaError("decoded audio contains nonfinite values")
+            if audio_delivery_profile == SILENT_AUDIO_PROFILE:
+                # Never modify the caller's waveform. Keep the AAC clock/stream
+                # contract while enforcing silence independently of model output.
+                audio = torch.zeros_like(audio)
+                audio_delivery = {"profile": SILENT_AUDIO_PROFILE, "status": "silent"}
+            if audio_delivery_profile == WEB_AUDIO_PROFILE:
+                audio_path = directory / "audio.f32le"
+                pcm = audio[0].T.float().contiguous()
+                pcm.numpy().astype("<f4", copy=False).tofile(audio_path)
+                audio_input = [
+                    "-f",
+                    "f32le",
+                    "-ar",
+                    str(audio_sample_rate),
+                    "-ac",
+                    "2",
+                    "-i",
+                    str(audio_path),
+                ]
+                normalization, audio_delivery = web_loudness_filter(ffmpeg, audio_input)
+                if normalization:
+                    audio_filters.append(normalization)
+            else:
+                pcm = (
+                    audio[0]
+                    .T.float()
+                    .clamp(-1, 1)
+                    .mul(32767)
+                    .round()
+                    .to(torch.int16)
+                    .contiguous()
+                )
+                with wave.open(str(audio_path), "wb") as destination:
+                    destination.setnchannels(2)
+                    destination.setsampwidth(2)
+                    destination.setframerate(audio_sample_rate)
+                    destination.writeframes(pcm.numpy().tobytes())
+                audio_input = ["-i", str(audio_path)]
         command = [
             ffmpeg,
             "-hide_banner",
@@ -230,8 +248,7 @@ def encode_mp4(
             *audio_input,
             "-map",
             "0:v:0",
-            "-map",
-            "1:a:0",
+            *(["-map", "1:a:0"] if has_audio else ["-an"]),
             "-c:v",
             "libx264",
             *(["-threads:v", str(video_threads)] if video_threads is not None else []),
@@ -241,8 +258,7 @@ def encode_mp4(
             str(crf),
             "-pix_fmt",
             "yuv420p",
-            "-c:a",
-            "aac",
+            *(["-c:a", "aac"] if has_audio else []),
             *(["-af", ",".join(audio_filters)] if audio_filters else []),
             *(
                 ["-ar", str(audio_sample_rate)]
@@ -304,12 +320,12 @@ def encode_mp4(
         sound = [row for row in streams if row.get("codec_type") == "audio"]
         if (
             len(visual) != 1
-            or len(sound) != 1
+            or len(sound) != (1 if has_audio else 0)
             or visual[0].get("width") != width
             or visual[0].get("height") != height
             or int(visual[0].get("nb_frames", 0)) != frames
-            or int(sound[0].get("sample_rate", 0)) != audio_sample_rate
-            or sound[0].get("channels") != 2
+            or (has_audio and int(sound[0].get("sample_rate", 0)) != audio_sample_rate)
+            or (has_audio and sound[0].get("channels") != 2)
         ):
             raise MediaError("the encoded streams differ from the requested delivery")
         try:
@@ -321,7 +337,7 @@ def encode_mp4(
         "width": width,
         "height": height,
         "fps": fps,
-        "audio_sample_rate": audio_sample_rate,
+        "audio_sample_rate": audio_sample_rate if has_audio else None,
         "audio_samples": samples,
         "duration_seconds": frames / fps,
         "preset": preset,

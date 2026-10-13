@@ -108,15 +108,21 @@ class OfficialMediaDecoder:
         if self._closed:
             raise MediaError("the media decoder is closed")
 
-    def resume_cuda(self) -> float:
+    def resume_cuda(self, *, include_audio: bool = True) -> float:
         self._require_open()
-        if self._cuda_active:
+        if type(include_audio) is not bool:
+            raise MediaError("include_audio must be boolean")
+        if self._cuda_active and (
+            not include_audio or getattr(self, "_audio_cuda_active", True)
+        ):
             return 0.0
         started = time.monotonic()
         self._cuda_touched = True
         try:
             self.video.module.to(device=self.device)
-            self.audio.module.to(device=self.device)
+            if include_audio:
+                self.audio.module.to(device=self.device)
+            self._audio_cuda_active = include_audio
             self._torch.cuda.synchronize(self.device)
         except BaseException:
             self._closed = True
@@ -141,19 +147,25 @@ class OfficialMediaDecoder:
         return time.monotonic() - started
 
     def _decode_cpu(
-        self, latent_path: Path, *, height: int, width: int, silent_samples: int | None = None
+        self,
+        latent_path: Path,
+        *,
+        height: int,
+        width: int,
+        silent_samples: int | None = None,
+        decode_audio: bool = True,
     ) -> tuple[Any, ...]:
         torch = self._torch
         started = time.monotonic()
         names = (
             ("video_latents",)
-            if silent_samples is not None
+            if silent_samples is not None or not decode_audio
             else ("video_latents", "audio_latents")
         )
         tensors = load_safetensor_tensors(latent_path, names)
         load_seconds = time.monotonic() - started
         if tensors["video_latents"].ndim != 5 or (
-            silent_samples is None and tensors["audio_latents"].ndim != 3
+            decode_audio and silent_samples is None and tensors["audio_latents"].ndim != 3
         ):
             raise MediaError("native output is not VAE-ready")
         started = time.monotonic()
@@ -168,7 +180,10 @@ class OfficialMediaDecoder:
         video = video[..., :height, :width].contiguous().cpu()
         video_seconds = time.monotonic() - started
         started = time.monotonic()
-        if silent_samples is None:
+        if not decode_audio:
+            audio = None
+            audio_seconds = 0.0
+        elif silent_samples is None:
             audio = decode_official_h3_audio_latents(
                 self.audio,
                 tensors["audio_latents"],
@@ -201,6 +216,7 @@ class OfficialMediaDecoder:
         duration_seconds: float,
         fps: int = 24,
         audio_delivery_profile: str = "unchanged",
+        generate_audio: bool = True,
         video_input: str = "file",
         video_threads: int | None = None,
         keyframe_delivery_profile: str = DECODED_KEYFRAME_DELIVERY_PROFILE,
@@ -219,6 +235,12 @@ class OfficialMediaDecoder:
         validate_video_threads(video_threads)
         if video_input not in {"file", "pipe"}:
             raise MediaError("video_input must be file or pipe")
+        if type(generate_audio) is not bool or (
+            not generate_audio and audio_delivery_profile != "unchanged"
+        ):
+            raise MediaError("video-only generation cannot apply audio delivery effects")
+        if generate_audio and not getattr(self, "_audio_cuda_active", True):
+            raise MediaError("resume the audio decoder before generating audio")
         if audio_delivery_profile not in AUDIO_DELIVERY_PROFILES:
             raise MediaError("unknown audio delivery profile")
         if keyframe_delivery_profile not in KEYFRAME_DELIVERY_PROFILES:
@@ -238,6 +260,8 @@ class OfficialMediaDecoder:
                 if audio_delivery_profile == SILENT_AUDIO_PROFILE
                 else {}
             )
+            if not generate_audio:
+                decode_options["decode_audio"] = False
             video, audio, stages = self._decode_cpu(
                 latent_path, height=height, width=width, **decode_options
             )
@@ -252,7 +276,9 @@ class OfficialMediaDecoder:
             else:
                 clear_frames(exc.__traceback__)
             raise
-        if video.shape[2] < frames or audio.shape[2] < samples:
+        if video.shape[2] < frames or (
+            generate_audio and (audio is None or audio.shape[2] < samples)
+        ):
             raise MediaError("decoded media is shorter than the requested delivery")
         keyframe_delivery = None
         if keyframe_delivery_profile != DECODED_KEYFRAME_DELIVERY_PROFILE:
@@ -279,7 +305,7 @@ class OfficialMediaDecoder:
             encode_options["video_input"] = "pipe"
         media = encode_mp4(
             video[:, :, :frames],
-            audio[:, :, :samples],
+            audio[:, :, :samples] if generate_audio else None,
             output_path,
             fps=fps,
             audio_sample_rate=self.audio_sample_rate,

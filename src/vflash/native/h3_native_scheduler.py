@@ -276,7 +276,17 @@ def compile_h3_row_timestep_plan(
         )
         row_timesteps[audio[num_condition_audio_rows:]] = audio_timestep
         row_timesteps[audio[:num_condition_audio_rows]] = 1.0
-        unique, inverse = torch.unique(row_timesteps, sorted=True, return_inverse=True)
+        # Compiled AdaLN/head tables belong to the full AV schedule. Without
+        # audio rows, removing their timestep from the unique table would shift
+        # every following video/keyframe index to the wrong trained parameters.
+        if audio.numel() == 0:
+            unique = torch.unique(
+                torch.cat((row_timesteps, torch.tensor([audio_timestep], dtype=torch.float32))),
+                sorted=True,
+            )
+            inverse = torch.searchsorted(unique, row_timesteps)
+        else:
+            unique, inverse = torch.unique(row_timesteps, sorted=True, return_inverse=True)
         rows.append(
             H3NativeRowTimestepStep(
                 timesteps=unique.to(device=target_device),
@@ -292,7 +302,7 @@ def _validate_latents(value: Any, *, name: str) -> None:
         not isinstance(value, torch.Tensor)
         or value.ndim != 3
         or value.shape[0] != 1
-        or value.shape[1] <= 0
+        or (value.shape[1] <= 0 and name not in {"audio_latents", "audio_velocity"})
         or value.shape[2] <= 0
         or value.dtype != torch.float32
         or not value.is_contiguous()
@@ -417,12 +427,16 @@ class H3NativeLatentState:
                 sigma=self._tensors.video_sigmas[expected],
                 sigma_next=self._tensors.video_sigmas[expected + 1],
             )
-            next_audio = h3_training_euler_step(
-                audio_sample,
-                audio_velocity[0, audio_start:],
-                timestep=self._tensors.audio_timesteps[expected],
-                sigma=self._tensors.audio_sigmas[expected],
-                sigma_next=self._tensors.audio_sigmas[expected + 1],
+            next_audio = (
+                audio_sample
+                if audio_sample.numel() == 0
+                else h3_training_euler_step(
+                    audio_sample,
+                    audio_velocity[0, audio_start:],
+                    timestep=self._tensors.audio_timesteps[expected],
+                    sigma=self._tensors.audio_sigmas[expected],
+                    sigma_next=self._tensors.audio_sigmas[expected + 1],
+                )
             )
             video_sample.copy_(next_video)
             audio_sample.copy_(next_audio)
