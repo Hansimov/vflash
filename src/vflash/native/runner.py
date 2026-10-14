@@ -152,8 +152,7 @@ class NativeEngineSession:
             attention_backend=attention_backend,
             capability=plan.target.compute_capability,
         )
-        if veda_dense_edge_layers != 0:
-            require_dense_dependencies(veda_dense_backend)
+        require_dense_dependencies(veda_dense_backend)
         if hybrid_model is not None:
             from vflash.native.h3_hybrid import HybridModel
 
@@ -235,7 +234,6 @@ class NativeEngineSession:
         progress_callback: Callable[[int, int], None] | None = None,
         profile_denoise: bool = False,
         generate_audio: bool = True,
-        video_repaint: Any | None = None,
     ) -> dict[str, Any]:
         if self.closed:
             raise ContractError("the native engine session is closed")
@@ -249,8 +247,6 @@ class NativeEngineSession:
             raise ContractError("generate_audio must be boolean")
         if not generate_audio:
             options["generate_audio"] = False
-        if video_repaint is not None:
-            options["video_repaint"] = video_repaint
         result = self.runtime.generate_latents(bundle, output_latents, **options)
         self.request_count += 1
         return {

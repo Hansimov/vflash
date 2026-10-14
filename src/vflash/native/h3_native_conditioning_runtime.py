@@ -243,8 +243,7 @@ class H3NativeConditioningRuntime:
             attention_backend=attention_backend,
             capability=".".join(map(str, capability)),
         )
-        if veda_dense_edge_layers != 0:
-            require_dense_dependencies(veda_dense_backend)
+        require_dense_dependencies(veda_dense_backend)
         self.veda_dense_backend = veda_dense_backend
         from vflash.native.h3_veda_attention import dense_layers_for_edges
 

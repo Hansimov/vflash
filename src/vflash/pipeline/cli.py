@@ -71,9 +71,9 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
     generate.add_argument(
         "--veda-dense-edge-layers",
         type=int,
-        choices=(0, 3, 5),
+        choices=(3, 5),
         default=5,
-        help="dense edge width: 5 (default), 3, or experimental 0 (all fifty Veda layers)",
+        help="dense edge width: 5 (default) or 3 (approximate speed option)",
     )
     generate.add_argument("--attention-adapter-rank", type=int)
     generate.add_argument("--attention-adapter-scale", type=float)

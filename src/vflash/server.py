@@ -480,8 +480,7 @@ def _readiness(
             attention_backend=backend,
             capability=plan.target.compute_capability,
         )
-        if settings.veda_dense_edge_layers != 0:
-            require_dense_dependencies(settings.veda_dense_backend)
+        require_dense_dependencies(settings.veda_dense_backend)
         if backend in {"veda-sm89", "veda-triton"}:
             attention.update(
                 dense_backend=settings.veda_dense_backend,

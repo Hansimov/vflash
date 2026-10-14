@@ -442,7 +442,7 @@ Use the default five-layer edge as the explicit rollback; other devices are not 
 by these measurements. Model startup and publication are outside those warm generation times.
 
 
-## Native repaint request and full Veda partition (current source)
+## Native repaint request (0.8.0)
 
 Current source adds `VideoRepaintRequest` to the preloaded `NativeEngineSession.generate`
 interface. It accepts independently matched two- or four-evaluation low-noise tables and
@@ -468,12 +468,13 @@ Do not truncate unrelated Turbo modulation. Result NFE, progress and Veda call c
 the actual evaluation count. A repaint result's `execution_schedule` is explicitly labelled
 `video-low-noise-repaint`, starts at its low-noise sigma and reports frozen audio; it is not
 an ordinary conditioning-schedule artifact. The `refinement` receipt reports the actual pass.
-The two-step algorithm has bounded complete-media evidence; GPU qualification of this new
-native request interface remains pending.
+The native request has now completed two five-second face-repaint scenes on one RTX PRO
+6000 Blackwell Server GPU with explicit 44/6 attention. A matched legacy/native two-step
+comparison produced identical decoded pixels for all 120 frames in one scene. Two-step
+repaint reduced the measured conditioning/repaint/media/composition interval by 17.5–18.6%
+against four evaluations; reused restoration inputs and shared initialization were excluded.
+This does not establish general perceptual equivalence or a complete-request latency target.
 
-`veda_dense_edge_layers=0` is an explicit experimental 50-Veda/0-dense-layer option in current
-Python, CLI and HTTP source. The default remains 5 and the 44/6 option remains 3. Zero still
-keeps Veda's condition/audio/text connection protection; it does not make those connections
-sparse or exact. Actual backend metadata omits the unused dense backend, and its optional
-package is not required. Full-video quality and speed qualification of zero remains pending;
-44/6 acceptance does not qualify 50/0.
+Use an explicitly qualified partition such as `veda_dense_edge_layers=3` (44 sparse / 6 dense).
+Zero dense-edge layers are not supported: full-sparse exploratory outputs showed material
+perceptual degradation and were not adopted. The default five-layer edge remains available.
