@@ -28,7 +28,9 @@ jobs:
       - run: pre-commit run --all-files
       - run: pytest
       - name: Install CPU tensor runtime
-        run: python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.11.0
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.11.0
+          python -m pip install "safetensors>=0.8.0rc0,<0.9"
       - name: Run CPU tensor regressions
         env:
           CUDA_VISIBLE_DEVICES: ""
