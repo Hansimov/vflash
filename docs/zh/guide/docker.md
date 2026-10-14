@@ -217,3 +217,10 @@ python -m vflash.server
 直接运行 Python 服务时，使用 `VFLASH_ARTIFACT_PATH`、`VFLASH_SCHEDULE_OVERLAY_PATH`、`VFLASH_AUXILIARY_TENSOR_PATH`、`VFLASH_BUNDLE_ROOT` 和 `VFLASH_OUTPUT_ROOT` 指定本地路径，使用 `VFLASH_GPU_INDEX` 指定物理 GPU 索引。本地访问请设置 `VFLASH_API_HOST=127.0.0.1`；Python 入口默认绑定所有网络接口。配置、超时、队列和历史记录选项使用本页中的同名变量。
 
 双卡 Python 服务设置 `VFLASH_PEER_GPU_INDEX`，需要权重 TP 时另设 `VFLASH_PARALLEL_STRATEGY=tensor`。指定第二张卡后，默认策略为 `sequence-head`。一个 worker 独占这两张物理显卡。
+
+### 构建代理范围
+
+构建需要通过回环 HTTP 代理访问 GitHub 源码时，可用 BuildKit 的
+`--build-arg VFLASH_SOURCE_NETWORK=host --build-arg HTTPS_PROXY`，代理值从调用环境读取。
+仅小型 Sol 源码安装步骤切换网络；其他依赖层仍用原网络和缓存，默认值为 `default`。
+不要把凭据写进 Dockerfile 的 `ENV` 或显式代理 `ARG`。
