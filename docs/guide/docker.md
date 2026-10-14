@@ -15,6 +15,23 @@ official Base16 defaults to approximate Sol; other profiles/pairs stay dense. Se
 to `generate`/`denoise`. `/readyz` reports selection (not executed calls); job runtime metadata reports
 the actual backend. Missing dependencies make the service unready rather than silently falling back.
 
+## Skip unused Sol dependencies in a dedicated build
+
+The published 0.7.0 images retain Sol for the supported single-SM89 Base16 `auto` path.
+An installed backend is not necessarily executed: Veda requests select Veda explicitly.
+Current `main` source builds also accept `--build-arg VFLASH_INSTALL_SOL=0` for either
+`runtime` or `pipeline`. This omits both Sol dependency installation and its source fetch;
+the already published 0.7.0 images and tagged build recipe are unchanged.
+
+```bash
+docker build --target runtime --build-arg VFLASH_INSTALL_SOL=0 -t vflash:veda-base .
+```
+
+Provision pinned Veda separately with `python -m vflash.install_veda` in a derived image,
+and explicitly select `veda-triton` plus its predictor. Dense-only deployments select
+`torch-flash`. A Sol-free image cannot serve a profile that still selects Sol; missing
+optional dependencies remain a readiness error, with no silent fallback.
+
 ## Veda service configuration
 
 The 0.7.0 service accepts `VFLASH_VEDA_DENSE_BACKEND` (default `torch-flash`) and

@@ -12,6 +12,21 @@
 HTTP可设置`VFLASH_ATTENTION_BACKEND=torch-flash`，`generate`/`denoise`可加`--attention-backend torch-flash`。
 `/readyz`报告选择结果而不是已执行调用，任务runtime元数据才报告实际后端；缺依赖时服务不就绪，不静默回退。
 
+## 专用构建跳过未使用的Sol依赖
+
+已发布0.7.0镜像为受支持的单SM89 Base16 `auto`路径保留Sol。
+预装不等于执行：Veda请求显式选择Veda。当前`main`源码的`runtime`与`pipeline`
+构建均支持`--build-arg VFLASH_INSTALL_SOL=0`，跳过Sol依赖安装和源码获取；
+已发布0.7.0镜像及该tag的构建配方保持不变。
+
+```bash
+docker build --target runtime --build-arg VFLASH_INSTALL_SOL=0 -t vflash:veda-base .
+```
+
+在派生镜像中通过`python -m vflash.install_veda`单独安装固定Veda，显式选择
+`veda-triton`并配置predictor；仅密集注意力选择`torch-flash`。
+未安装Sol的镜像不能运行仍选择Sol的配置，缺失可选依赖时保持不就绪，不静默回退。
+
 ## Veda服务配置
 
 0.7.0服务接受`VFLASH_VEDA_DENSE_BACKEND`（默认`torch-flash`）及

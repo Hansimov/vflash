@@ -38,14 +38,22 @@ RUN apt-get update \
     && apt-get install --yes --no-install-recommends gcc libc6-dev git \
     && rm -rf /var/lib/apt/lists/*
 
-# The ordinary native and complete images include the same fixed Sol dependency.
-# Selection remains architecture/profile-aware; SM86 and Turbo retain dense.
+# General images include Sol for supported auto-selection. Dedicated Veda/dense
+# builds can omit it; selection and optional dependency checks remain explicit.
+ARG VFLASH_INSTALL_SOL=1
 COPY src/vflash/install_sol.py /tmp/vflash-install-sol.py
 # Preserve successful dependencies even when a later upstream Git read fails.
 RUN --mount=type=cache,target=/root/.cache/pip \
-    PIP_NO_CACHE_DIR=0 python /tmp/vflash-install-sol.py --dependencies-only
-RUN python /tmp/vflash-install-sol.py --skip-dependencies && rm /tmp/vflash-install-sol.py
-LABEL org.vflash.sol-attention.revision="d0c0a4685ab5dc2336d18b7213d85f13def92418" \
+    case "$VFLASH_INSTALL_SOL" in \
+      1) PIP_NO_CACHE_DIR=0 python /tmp/vflash-install-sol.py --dependencies-only ;; \
+      0) echo 'Sol dependencies omitted by explicit build option' ;; \
+      *) echo 'VFLASH_INSTALL_SOL must be 0 or 1' >&2; exit 2 ;; \
+    esac
+RUN if [ "$VFLASH_INSTALL_SOL" = 1 ]; then \
+      python /tmp/vflash-install-sol.py --skip-dependencies; \
+    fi && rm /tmp/vflash-install-sol.py
+LABEL org.vflash.sol-attention.installed="$VFLASH_INSTALL_SOL" \
+      org.vflash.sol-attention.revision="d0c0a4685ab5dc2336d18b7213d85f13def92418" \
       org.vflash.sol-attention.patch="cutlass-4.5-positional-stream"
 
 # Code-only edits preserve the CUDA, Python dependency and compiler layers.
