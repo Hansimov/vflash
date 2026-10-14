@@ -4,7 +4,7 @@ Native **MiniMax H3 inference** with explicit GPU profiles. Vflash uses PyTorch 
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
-**0.7.0: consistent Python, CLI and service configuration.** The native HTTP service and
+**0.8.0: consistent Python, CLI and service configuration.** The native HTTP service and
 `denoise` command now expose the same explicit Veda dense backend and layer partition as
 `H3Pipeline` and `generate`. Five dense layers at each end remain the default (40 sparse / 10 dense);
 three at each end explicitly select 44 / 6. Readiness validates the selected dependencies and GPU
@@ -37,7 +37,7 @@ face-restoration workflow. Existing model, precision and attention defaults rema
 Python 3.11 or newer is required. The base install does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.7.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.8.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate

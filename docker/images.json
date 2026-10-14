@@ -1,11 +1,11 @@
 {
   "schema_version": 2,
-  "version": "0.7.0",
+  "version": "0.8.0",
   "platform": "linux/amd64",
-  "implementation_revision": "3f04a1f33f8275418adb2f85ce0ed85be75a0386",
-  "wheel_sha256": "b52cd321954d75cc33e1b9bab5a1917d6db10542d2d618ce0b572afc50785cb1",
-  "build_recipe": "https://github.com/Hansimov/vflash/blob/3f04a1f33f8275418adb2f85ce0ed85be75a0386/Dockerfile",
-  "previous_inventory": "https://github.com/Hansimov/vflash/blob/v0.3.2/docker/images.json",
+  "implementation_revision": "4e70d6fca049d51313f52b6a8b5b228e9a8dea0f",
+  "wheel_sha256": "4a41224ad3fc39f2278cee47fe4edeb6a17a549a7684bae726908c32fe97544f",
+  "build_recipe": "https://github.com/Hansimov/vflash/blob/4e70d6fca049d51313f52b6a8b5b228e9a8dea0f/docker/release-from-wheel.Dockerfile",
+  "previous_inventory": "https://github.com/Hansimov/vflash/blob/v0.7.0/docker/images.json",
   "runtime_dependencies": {
     "torch": "2.11.0+cu130",
     "torchvision": "0.26.0+cu130",
@@ -17,22 +17,26 @@
     "sol_source_revision": "d0c0a4685ab5dc2336d18b7213d85f13def92418"
   },
   "qualification": {
-    "package": "Clean source wheel/sdist, focused CPU checks, image imports and default pipeline CLI entrypoint verified. Both images use the same public source Dockerfile and pinned Sol setup. No model weights are bundled.",
-    "engine": "The 0.7.0 core executed complete five-second 512-square keyframe generation and four-step low-noise repaint on one RTX 4090 with explicit 44 sparse / 6 dense attention layers. This used application-owned prepared assets and a separately provisioned Veda environment.",
-    "limits": "The new standalone public images have CPU/dependency/CLI verification, not a new GPU qualification matrix. Prior profile evidence remains workload-specific. Veda, FROST and face-restoration assets require explicit provisioning. No general quality or latency claim and no claim that consuming services have upgraded."
+    "package": "Clean public wheel/sdist, focused CPU checks, unprivileged image imports, matching visible source and default pipeline CLI verified. Images reuse immutable published 0.7.0 dependencies and install the selected wheel offline. No model weights are bundled.",
+    "engine": "Owned two-step repaint executed two complete five-second scenes on one RTX PRO 6000 Blackwell Server with application-owned FP8 loaders and explicit 44 sparse / 6 dense attention. One legacy/native two-step pair matched all 120 decoded frames. The supported 44/6 repaint code is unchanged by removal of the rejected zero-dense option.",
+    "limits": "Installed public images have CPU/dependency/CLI verification, not a new GPU image matrix. Two-step repaint is approximate against four steps, not a general perceptual or full-request latency guarantee. Veda, FROST, restoration models and prepared tables require explicit provisioning. Zero dense-edge layers are unsupported. Consuming service deployment is separate."
   },
   "images": {
     "native": {
-      "name": "hansimov/vflash:0.7.0",
-      "digest": "sha256:06734559ff58bce76078306340b2f7785627021c063c678c02fe453f8ce2a974",
+      "name": "hansimov/vflash:0.8.0",
+      "digest": "sha256:7e9e4b2b940ab701488a4e54f1fb82b81593ff15d3155ff4aec4262a3ed063e5",
       "target": "runtime",
-      "interface": "Compiled conditioning bundles to audio/video latents through the native HTTP API."
+      "interface": "Compiled conditioning bundles to audio/video latents through the native HTTP API.",
+      "base_image": "hansimov/vflash@sha256:06734559ff58bce76078306340b2f7785627021c063c678c02fe453f8ce2a974",
+      "recipe_target": "inherited from immutable base"
     },
     "pipeline": {
-      "name": "hansimov/vflash:0.7.0-pipeline",
-      "digest": "sha256:0412e4016760e58efcfde95391523d26e7874b949353ccafeaa48545808750ab",
+      "name": "hansimov/vflash:0.8.0-pipeline",
+      "digest": "sha256:dc52478d8ee03e57963fe8740eb468df0ad83cb676cd2b6a23d0d0ccbeead572",
       "target": "pipeline",
-      "interface": "Complete MP4 generation using explicitly mounted prepared model assets; supported modes and limits follow the complete-pipeline guide."
+      "interface": "Complete MP4 generation using explicitly mounted prepared model assets; supported modes and limits follow the complete-pipeline guide.",
+      "base_image": "hansimov/vflash@sha256:0412e4016760e58efcfde95391523d26e7874b949353ccafeaa48545808750ab",
+      "recipe_target": "inherited from immutable base"
     }
   }
 }

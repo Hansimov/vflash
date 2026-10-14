@@ -4,7 +4,7 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
-**0.7.0：统一 Python、CLI 与服务配置。** 原生HTTP服务和`denoise`命令现在支持与
+**0.8.0：统一 Python、CLI 与服务配置。** 原生HTTP服务和`denoise`命令现在支持与
 `H3Pipeline`、`generate`相同的显式Veda密集后端及层分配。默认首尾各五层密集（40稀疏/10密集），
 显式首尾各三层得到44/6；就绪检查验证依赖与GPU架构。该选项属于近似注意力，不承诺输出相同或普遍质量/速度改善。
 
@@ -29,7 +29,7 @@ Vflash提供两类入口：
 需要 Python 3.11 或更新版本。基础安装不会下载模型权重或 PyTorch。
 
 ```bash
-git clone --branch v0.7.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.8.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate

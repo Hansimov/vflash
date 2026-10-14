@@ -1,5 +1,12 @@
 # Release notes
 
+## 0.8.0
+
+Adds an owned `VideoRepaintRequest` with independently matched two- or four-evaluation low-noise tables, actual NFE/progress receipts and frozen audio. Temporary head/modulation bindings remain request-scoped. Two complete PRO6000 scenes exercised the native path; one matched legacy/native two-step pair had identical decoded frames. See the complete-pipeline guide for timing scope and limits.
+
+The explicit 44/6 partition remains supported. The unreleased zero-dense experiment was withdrawn after perceptual review; 50/0 is not part of this release. Native and complete-pipeline images reuse pinned 0.7.0 dependency layers with an offline wheel/source upgrade. Application restoration assets and service deployment remain separate.
+
+
 ## 0.7.0
 
 A minor release consolidating the complete pipeline, repaint building blocks and explicit
