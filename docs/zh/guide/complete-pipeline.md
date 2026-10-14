@@ -337,4 +337,35 @@ RTX PRO 6000 Server同卡、四步hybrid FP8/FROST控制实验中，1/2/4MP十�
 不扩大公开流水线原有模式或容量准入。抽样上下文和连续局部帧未见新增明显缺陷，但完整感知、
 声音及跨设备资格仍开放。显式改回5即可回滚；暖态生成时钟不包含模型启动和发布。
 
-上述耗时来自会话独立接口发布前的受控实验分层；新公开选项已通过CPU集成检查，精确发行版的GPU重放仍待执行。
+上述耗时来自会话独立接口发布前的受控实验分层；精确0.6.36现已完成四模式GPU重放，
+视频像素与对应早期44/6结果一致，不据此宣称更广感知质量或音频等价。
+
+
+## 原生重绘请求与全量Veda分配（当前源码）
+
+当前源码在常驻`NativeEngineSession.generate`中增加`VideoRepaintRequest`，接收独立匹配的
+两步或四步低噪声调制表，以及官方VAE产生的打包视频行。原四步I2VA条件包照常校验，
+会话基础overlay保持，临时输出头/调制绑定在每次执行后恢复。必须指定`generate_audio=False`；该接口暂不支持多卡或
+去噪profile。检测、裁剪/关键帧一致性和原音轨合成仍由应用负责。
+
+```python
+from vflash.native.h3_refinement import VideoRepaintRequest
+from vflash.native.h3_refinement_schedule import load_tables
+
+_, schedule, tables = load_tables("face-modulation-two-step", mode="face")
+result = session.generate(
+    conditioning_bundle, output_latents, generate_audio=False,
+    video_repaint=VideoRepaintRequest(schedule, tuple(tables), encoded_rows),
+)
+```
+
+两步表使用`compile_refinement_tables(..., steps=2, denoise=0.035, mode="face")`编译，不能截取
+不相关的Turbo调制表。结果NFE、进度及Veda调用覆盖按实际执行次数记录。重绘结果的
+`execution_schedule`明确标注`video-low-noise-repaint`，从真实低噪声sigma开始并声明音频冻结；
+它不是普通条件调度工件，`refinement`另记实际执行。两步算法已有有限完整媒体证据，
+这个新原生请求接口的GPU资格仍待验证。
+
+当前Python、CLI和HTTP源码增加显式实验选项`veda_dense_edge_layers=0`，即50层Veda/0层密集。
+默认仍为5，44/6仍用3。零边界仍保留Veda内部对条件/音频/文本连接的保护，不表示这些连接
+改为稀疏或精确。实际后端元数据排除未执行的密集后端，也不要求其可选依赖。
+50/0的完整视频画质与速度资格待验证，不能沿用44/6认可。

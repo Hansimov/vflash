@@ -282,14 +282,15 @@ def test_parallel_environment_selects_one_device_group():
     assert settings.parallel_strategy == "sequence-head"
 
 
+@pytest.mark.parametrize("edges", [0, 3])
 def test_veda_service_readiness_reports_partition_and_rejects_wrong_dense_gpu(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, edges
 ):
     settings = replace(
         _settings(tmp_path),
         profile_id="i2va-turbo4-v01-544-exact-sm89",
         attention_backend="veda-triton",
-        veda_dense_edge_layers=3,
+        veda_dense_edge_layers=edges,
     )
     monkeypatch.setattr(
         "vflash.native.h3_veda_attention.validate_predictor", lambda *args: None
@@ -298,16 +299,18 @@ def test_veda_service_readiness_reports_partition_and_rejects_wrong_dense_gpu(
     with TestClient(create_app(settings, device_provider=_sm89_devices)) as client:
         ready = client.get("/readyz")
         assert ready.status_code == 200
-        assert ready.json()["version"] == "0.7.0"
+        from vflash import __version__
+
+        assert ready.json()["version"] == __version__
         assert ready.json()["attention_selection"] == dict(
             requested="veda-triton",
             resolved="veda-triton",
             exact=False,
             executed=False,
             dense_backend="torch-flash",
-            dense_edge_layers=3,
-            dense_layers=6,
-            sparse_layers=44,
+            dense_edge_layers=edges,
+            dense_layers=2 * edges,
+            sparse_layers=50 - 2 * edges,
         )
     with TestClient(
         create_app(

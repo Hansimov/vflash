@@ -2,7 +2,7 @@
 
 The external MIT Veda core owns the predictor and INT8 sparse kernel. By default the first
 and last five layers use the selected dense backend; an explicit three-layer
-edge option trades more approximate work for speed. Other
+edge option trades more approximate work for speed; zero uses Veda in all fifty layers. Other
 layers keep condition/audio/text connections dense but use approximate INT8
 attention. No silent fallback.
 """
@@ -20,8 +20,8 @@ DENSE_LAYERS = frozenset((*range(5), *range(45, 50)))
 
 def dense_layers_for_edges(edge_layers: int, *, attention_backend: str) -> frozenset[int]:
     """Resolve an explicit approximate partition without changing other sessions."""
-    if type(edge_layers) is not int or edge_layers not in (3, 5):
-        raise ContractError("Veda dense edge layers must be 3 or 5")
+    if type(edge_layers) is not int or edge_layers not in (0, 3, 5):
+        raise ContractError("Veda dense edge layers must be 0, 3 or 5")
     if edge_layers != 5 and attention_backend not in {"veda-sm89", "veda-triton"}:
         raise ContractError("a custom dense edge partition requires Veda attention")
     return frozenset((*range(edge_layers), *range(50 - edge_layers, 50)))
@@ -116,7 +116,8 @@ class VedaVideoAttention:
             attention_backend=backend,
             capability=".".join(map(str, torch.cuda.get_device_capability(device))),
         )
-        require_dense_dependencies(dense_backend)
+        if self.dense_layers:
+            require_dense_dependencies(dense_backend)
         self.dense_backend = dense_backend
         from vflash.native.h3_fa3_dense import fa3_dense
         from vflash.native.h3_frost_dense import frost_dense
@@ -174,11 +175,14 @@ class VedaVideoAttention:
         return {
             "attention_backend": getattr(self, "backend", "veda-sm89"),
             "exact": False,
-            "effective_backends": ["triton-int8", self.dense_backend],
+            "effective_backends": ["triton-int8"]
+            + ([self.dense_backend] if self.dense_layers else []),
             "dense_backend": self.dense_backend,
-            "dense_precision": "INT8 QK / FP8 PV"
-            if self.dense_backend == "sageattention2"
-            else "BF16",
+            "dense_precision": (
+                "INT8 QK / FP8 PV" if self.dense_backend == "sageattention2" else "BF16"
+            )
+            if self.dense_layers
+            else None,
             "dense_layers": sorted(self.dense_layers),
             "generated_keep_ratio": 0.1,
             "condition_keep_ratio": 1.0,

@@ -172,6 +172,7 @@ class H3NativeConditioningRuntimeResult:
     stage_durations: dict[str, float]
     peak_allocated_bytes_by_device: tuple[int, ...]
     denoise_profile: dict[str, Any] | None = None
+    refinement: dict[str, Any] | None = None
 
 
 class H3NativeConditioningRuntime:
@@ -242,7 +243,8 @@ class H3NativeConditioningRuntime:
             attention_backend=attention_backend,
             capability=".".join(map(str, capability)),
         )
-        require_dense_dependencies(veda_dense_backend)
+        if veda_dense_edge_layers != 0:
+            require_dense_dependencies(veda_dense_backend)
         self.veda_dense_backend = veda_dense_backend
         from vflash.native.h3_veda_attention import dense_layers_for_edges
 
@@ -696,6 +698,7 @@ class H3NativeConditioningRuntime:
         progress_callback: Callable[[int, int], None] | None = None,
         profile_denoise: bool = False,
         generate_audio: bool = True,
+        video_repaint: Any | None = None,
     ) -> H3NativeConditioningRuntimeResult:
         """Run one live request and export target-only VAE-ready latents."""
 
@@ -707,7 +710,25 @@ class H3NativeConditioningRuntime:
         prepare_started = time.monotonic()
         if type(generate_audio) is not bool or (not generate_audio and len(self.devices) != 1):
             raise H3NativeConditioningRuntimeError("video-only generation requires one device")
+        if video_repaint is not None:
+            from vflash.native.h3_refinement import VideoRepaintRequest
+
+            if (
+                not isinstance(video_repaint, VideoRepaintRequest)
+                or generate_audio
+                or profile_denoise
+                or len(self.devices) != 1
+            ):
+                raise H3NativeConditioningRuntimeError(
+                    "explicit repaint requires unprofiled single-device video-only execution"
+                )
         bundle, tensors = self._load_request_tensors(conditioning)
+        if video_repaint is not None and (
+            self.overlay.schedule.nfe != 4 or bundle.profile.task != "i2va"
+        ):
+            raise H3NativeConditioningRuntimeError(
+                "repaint requires a four-step I2VA base owner"
+            )
         if not generate_audio:
             from vflash.native.h3_audio_mode import without_generated_audio
 
@@ -789,6 +810,17 @@ class H3NativeConditioningRuntime:
             rotary_sin=tensors["rotary_sin"].to(device),
         )
         del tensors
+        repaint = None
+        execution_nfe = self.overlay.schedule.nfe
+        execution_schedule = self.overlay.schedule.to_mapping()
+        if video_repaint is not None:
+            from vflash.native.h3_refinement import VideoRepaint
+
+            repaint = VideoRepaint(
+                engine, video_repaint.schedule, video_repaint.tables, video_repaint.encoded_rows
+            )
+            execution_nfe = video_repaint.steps
+            execution_schedule = video_repaint.execution_schedule()
         torch.cuda.synchronize(device)
         prepare_seconds = time.monotonic() - prepare_started
 
@@ -810,10 +842,13 @@ class H3NativeConditioningRuntime:
                 ring_profile_started = True
         try:
             with torch.inference_mode():
-                while not engine.complete:
+                while not (repaint.complete if repaint is not None else engine.complete):
                     evaluation = engine.evaluation_index
                     step_started = time.perf_counter() if profile_denoise else 0.0
-                    engine.step()
+                    if repaint is None:
+                        engine.step()
+                    else:
+                        repaint.advance(step=lambda owner, **kwargs: owner.step(**kwargs))
                     step_seconds = (
                         time.perf_counter() - step_started if profile_denoise else 0.0
                     )
@@ -829,7 +864,7 @@ class H3NativeConditioningRuntime:
                                     time.perf_counter() - fence_started
                                 )
                         callback_started = time.perf_counter() if profile_denoise else 0.0
-                        progress_callback(engine.evaluation_index, self.overlay.schedule.nfe)
+                        progress_callback(engine.evaluation_index, execution_nfe)
                         if profile_denoise:
                             callback_seconds = time.perf_counter() - callback_started
                     if profile_denoise:
@@ -901,7 +936,7 @@ class H3NativeConditioningRuntime:
             else None
         )
         if self._veda_attention is not None:
-            self._veda_attention.validate_calls(self.overlay.schedule.nfe)
+            self._veda_attention.validate_calls(execution_nfe)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         save_safetensors_atomic(
             output_path,
@@ -915,21 +950,22 @@ class H3NativeConditioningRuntime:
                 "audio_generated": str(generate_audio).lower(),
                 "frames": str(bundle.profile.frames),
                 "height": str(bundle.profile.height),
-                "schedule_nfe": str(self.overlay.schedule.nfe),
+                "schedule_nfe": str(execution_nfe),
                 "width": str(bundle.profile.width),
                 "parallel_strategy": self.parallel_strategy,
             },
         )
         export_seconds = time.monotonic() - export_started
         elapsed = time.monotonic() - total_started
-        del engine, state, packed_video, packed_audio, video_latents, audio_latents
+        refinement_record = repaint.record if repaint is not None else None
+        del repaint, engine, state, packed_video, packed_audio, video_latents, audio_latents
         torch.cuda.empty_cache()
         return H3NativeConditioningRuntimeResult(
             bundle_id=bundle.bundle_id,
             output_path=output_path.resolve(strict=True),
             conditioning_profile=asdict(bundle.profile),
-            execution_schedule=self.overlay.schedule.to_mapping(),
-            nfe=self.overlay.schedule.nfe,
+            execution_schedule=execution_schedule,
+            nfe=execution_nfe,
             elapsed_seconds=elapsed,
             peak_allocated_bytes=peak,
             attention_policy=_attention_policy(self._veda_attention or self._sol_attention),
@@ -940,6 +976,7 @@ class H3NativeConditioningRuntime:
             },
             peak_allocated_bytes_by_device=device_peaks,
             denoise_profile=denoise_profile,
+            refinement=refinement_record,
         )
 
     def _require_open(self) -> None:

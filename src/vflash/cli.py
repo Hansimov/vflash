@@ -64,7 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="torch-flash",
         choices=("torch-flash", "frost-flash", "cute-flash", "fa3-flash", "sageattention2"),
     )
-    denoise.add_argument("--veda-dense-edge-layers", type=int, choices=(3, 5), default=5)
+    denoise.add_argument("--veda-dense-edge-layers", type=int, choices=(0, 3, 5), default=5)
     denoise.add_argument("--bundle", type=Path, required=True)
     denoise.add_argument("--artifact", type=Path, required=True)
     denoise.add_argument("--schedule-overlay", type=Path, required=True)

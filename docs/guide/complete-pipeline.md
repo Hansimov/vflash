@@ -434,8 +434,46 @@ Controlled RTX PRO 6000 Server experiments with four-step hybrid FP8 and FROST m
 A separate 1MP ten-second A/B/A control measured 4.58%; limited multi-mode experiments
 also completed, but do not extend the public pipeline's mode or capacity admission.
 The timing samples used controlled experimental partitions before this session-owned API.
-The published option has CPU integration coverage; GPU replay of the exact release is pending.
+Exact 0.6.36 replay has since completed four modes, with matching video pixels against the
+corresponding earlier 44/6 runs; this does not establish broader perceptual or audio equivalence.
 Sampled context and consecutive detail frames found no new major defects in inspected
 regions. Complete perceptual, audio and cross-device qualification remains open.
 Use the default five-layer edge as the explicit rollback; other devices are not qualified
 by these measurements. Model startup and publication are outside those warm generation times.
+
+
+## Native repaint request and full Veda partition (current source)
+
+Current source adds `VideoRepaintRequest` to the preloaded `NativeEngineSession.generate`
+interface. It accepts independently matched two- or four-evaluation low-noise tables and
+packed video rows from the official VAE. The original four-step I2VA conditioning bundle
+still validates normally; the base session overlay stays intact and temporary head/modulation
+bindings are restored after each evaluation. Supply `generate_audio=False`; multi-device execution and denoise profiling are
+outside this interface. Detection, crop/keyframe alignment and final source-audio composition
+remain application-owned.
+
+```python
+from vflash.native.h3_refinement import VideoRepaintRequest
+from vflash.native.h3_refinement_schedule import load_tables
+
+_, schedule, tables = load_tables("face-modulation-two-step", mode="face")
+result = session.generate(
+    conditioning_bundle, output_latents, generate_audio=False,
+    video_repaint=VideoRepaintRequest(schedule, tuple(tables), encoded_rows),
+)
+```
+
+Compile two-step tables with `compile_refinement_tables(..., steps=2, denoise=0.035, mode="face")`.
+Do not truncate unrelated Turbo modulation. Result NFE, progress and Veda call coverage use
+the actual evaluation count. A repaint result's `execution_schedule` is explicitly labelled
+`video-low-noise-repaint`, starts at its low-noise sigma and reports frozen audio; it is not
+an ordinary conditioning-schedule artifact. The `refinement` receipt reports the actual pass.
+The two-step algorithm has bounded complete-media evidence; GPU qualification of this new
+native request interface remains pending.
+
+`veda_dense_edge_layers=0` is an explicit experimental 50-Veda/0-dense-layer option in current
+Python, CLI and HTTP source. The default remains 5 and the 44/6 option remains 3. Zero still
+keeps Veda's condition/audio/text connection protection; it does not make those connections
+sparse or exact. Actual backend metadata omits the unused dense backend, and its optional
+package is not required. Full-video quality and speed qualification of zero remains pending;
+44/6 acceptance does not qualify 50/0.

@@ -95,15 +95,18 @@ def test_new_schedule_row_indices_match_compiled_modulation(conditions, mode):
             )
 
 
-def test_face_low_noise_replaces_generated_suffix_and_keeps_prefix_audio():
+@pytest.mark.parametrize("steps", [2, 4])
+def test_face_low_noise_replaces_generated_suffix_and_keeps_prefix_audio(steps):
     engine = engine_fixture()
     state = engine.latent_state
     state.evaluation_index = 0
     attention = engine.denoiser.blocks[0]._veda_attention
     attention.sparse_calls = attention.dense_calls = 0
     video, audio = state.video_latents.clone(), state.audio_latents.clone()
-    schedule = refinement_schedule(steps=4, denoise=0.035)
-    tables = [torch.zeros(5, 9, 6, 2) for _ in range(50)] + [torch.zeros(5, 3, 2, 2)]
+    schedule = refinement_schedule(steps=steps, denoise=0.035)
+    tables = [torch.zeros(steps + 1, 9, 6, 2) for _ in range(50)] + [
+        torch.zeros(steps + 1, 3, 2, 2)
+    ]
     encoded = torch.full_like(video[:, 1:], 0.4)
     calls = []
 
@@ -119,29 +122,35 @@ def test_face_low_noise_replaces_generated_suffix_and_keeps_prefix_audio():
         return "completed"
 
     repaint = VideoRepaint(engine, schedule, tables, encoded)
-    for expected in range(1, 5):
+    for expected in range(1, steps + 1):
         result = repaint.advance(step=step)
         assert state.evaluation_index == expected
         assert engine.latent_state is state and engine.schedule is state.schedule
     record = repaint.record
-    assert calls == [1, 2, 3, 4] and result == "completed"
-    assert (attention.sparse_calls, attention.dense_calls) == (160, 40)
-    assert record["sigma"] < 0.31 and state.evaluation_index == 4
+    assert calls == list(range(1, steps + 1)) and result == "completed"
+    assert repaint.complete and state.schedule.nfe == 4
+    with pytest.raises(ValueError, match="owner"):
+        repaint.advance(step=step)
+    assert (attention.sparse_calls, attention.dense_calls) == (40 * steps, 10 * steps)
+    assert record["sigma"] < 0.31 and state.evaluation_index == steps
     assert torch.equal(state.audio_latents, audio) and torch.equal(
         state.video_latents[:, :1], video[:, :1]
     )
     assert not torch.equal(state.video_latents[:, 1:], video[:, 1:])
 
 
-def test_face_failure_restores_original_schedule_weights_and_latents():
+@pytest.mark.parametrize("steps", [2, 4])
+def test_face_failure_restores_original_schedule_weights_and_latents(steps):
     engine = engine_fixture()
     state = engine.latent_state
     state.evaluation_index = 0
     weights = tuple(b.weights for b in engine.denoiser.blocks)
     final = engine.final_layer.weights
     video, audio = state.video_latents.clone(), state.audio_latents.clone()
-    schedule = refinement_schedule(steps=4, denoise=0.035)
-    tables = [torch.zeros(5, 9, 6, 2) for _ in range(50)] + [torch.zeros(5, 3, 2, 2)]
+    schedule = refinement_schedule(steps=steps, denoise=0.035)
+    tables = [torch.zeros(steps + 1, 9, 6, 2) for _ in range(50)] + [
+        torch.zeros(steps + 1, 3, 2, 2)
+    ]
     repaint = VideoRepaint(engine, schedule, tables, torch.full_like(video[:, 1:], 0.4))
 
     def fail(engine, **kwargs):
@@ -176,3 +185,22 @@ def test_table_loader_rejects_unknown_modality_before_file_access(tmp_path):
 
     with pytest.raises(ValueError, match="unknown refinement"):
         load_tables(tmp_path / "missing", mode="invalid")
+
+
+def test_explicit_repaint_request_records_only_executed_low_noise_sigmas():
+    from vflash.native.h3_refinement import VideoRepaintRequest
+
+    schedule = refinement_schedule(steps=2, denoise=0.035)
+    tables = tuple(torch.zeros(3, 2) for _ in range(51))
+    request = VideoRepaintRequest(schedule, tables, torch.zeros(1, 3, 96))
+    result = request.execution_schedule()
+    assert request.steps == result["nfe"] == 2
+    assert len(result["video_sigmas"]) == 3
+    assert result["video_sigmas"][0] == schedule.video_sigmas[1]
+    assert result["video_sigmas"][-1] == 0 and result["audio_frozen"]
+    with pytest.raises(ValueError, match="matching tables"):
+        VideoRepaintRequest(schedule, tables[:-1], request.encoded_rows)
+    with pytest.raises(ValueError, match="matching tables"):
+        VideoRepaintRequest(
+            schedule, tuple(torch.zeros(5, 2) for _ in range(51)), request.encoded_rows
+        )

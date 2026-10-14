@@ -8,7 +8,7 @@ block-ring support requires its own target-device qualification.
 
 import time
 from contextlib import ExitStack, contextmanager
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 
 def refinement_plan(engine, schedule, *, mode):
@@ -185,6 +185,46 @@ def quality_pass(engine, schedule, tables, *, mode):
                 attention.sparse_calls, attention.dense_calls = sparse, dense
 
 
+@dataclass(frozen=True)
+class VideoRepaintRequest:
+    """Explicit encoded video and matching low-noise tables for one native call.
+
+    The ordinary conditioning bundle still validates against its base profile.
+    Repaint owns its evaluation count; no session overlay or checkpoint is changed.
+    """
+
+    schedule: object
+    tables: tuple
+    encoded_rows: object
+
+    def __post_init__(self):
+        from .h3_native_scheduler import H3NativeSchedule
+
+        if not isinstance(self.schedule, H3NativeSchedule):
+            raise ValueError("repaint requires an explicit compiled schedule")
+        steps = self.schedule.nfe - 1
+        if (
+            steps not in (2, 4)
+            or len(self.tables) != 51
+            or any(table.shape[0] != self.schedule.nfe for table in self.tables)
+        ):
+            raise ValueError("repaint requires two or four evaluations and matching tables")
+
+    @property
+    def steps(self):
+        return self.schedule.nfe - 1
+
+    def execution_schedule(self):
+        return {
+            **self.schedule.to_mapping(),
+            "kind": "video-low-noise-repaint",
+            "nfe": self.steps,
+            "video_sigmas": list(self.schedule.video_sigmas[1:]),
+            "audio_sigmas": list(self.schedule.audio_sigmas[1:]),
+            "audio_frozen": True,
+        }
+
+
 class VideoRepaint:
     """One low-noise evaluation per ordinary worker progress event."""
 
@@ -195,7 +235,7 @@ class VideoRepaint:
         suffix = state.video_latents[:, state.num_condition_video_rows :]
         if (
             state.evaluation_index != 0
-            or schedule.nfe - 1 != state.schedule.nfe
+            or not 0 < schedule.nfe - 1 <= state.schedule.nfe
             or encoded_rows.shape != suffix.shape
             or not encoded_rows.isfinite().all()
         ):
@@ -210,12 +250,16 @@ class VideoRepaint:
         )
         self.record = None
 
+    @property
+    def complete(self):
+        return self.state.evaluation_index >= self.schedule.nfe - 1
+
     def advance(self, *, step):
         import torch
 
         engine, state, schedule = self.engine, self.state, self.schedule
         evaluation = state.evaluation_index
-        if engine.latent_state is not state or state.complete:
+        if engine.latent_state is not state or self.complete:
             raise ValueError("face repaint lost its original request owner")
         try:
             with quality_pass(engine, schedule, self.tables, mode="face"):
@@ -227,7 +271,7 @@ class VideoRepaint:
                     )
                 result = step(engine, capture_packed_input=False)
             state.evaluation_index = evaluation + 1
-            if state.complete:
+            if self.complete:
                 if state.device.type == "cuda":
                     torch.cuda.synchronize(state.device)
                 if (

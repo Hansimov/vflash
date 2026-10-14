@@ -140,7 +140,8 @@ class H3Pipeline:
             attention_backend=self.attention_backend,
             capability=plan.target.compute_capability,
         )
-        require_dense_dependencies(veda_dense_backend)
+        if veda_dense_edge_layers != 0:
+            require_dense_dependencies(veda_dense_backend)
         self.veda_dense_backend = veda_dense_backend
         self.profile = model_profile(prepared.profile_id)
         if attention_adapter is not None and (
