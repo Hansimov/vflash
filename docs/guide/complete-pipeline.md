@@ -433,6 +433,8 @@ Controlled RTX PRO 6000 Server experiments with four-step hybrid FP8 and FROST m
 6.60%, 9.07% and 12.29% shorter complete generation for paired 1/2/4MP ten-second inputs.
 A separate 1MP ten-second A/B/A control measured 4.58%; limited multi-mode experiments
 also completed, but do not extend the public pipeline's mode or capacity admission.
+The timing samples used controlled experimental partitions before this session-owned API.
+The published option has CPU integration coverage; GPU replay of the exact release is pending.
 Sampled context and consecutive detail frames found no new major defects in inspected
 regions. Complete perceptual, audio and cross-device qualification remains open.
 Use the default five-layer edge as the explicit rollback; other devices are not qualified
