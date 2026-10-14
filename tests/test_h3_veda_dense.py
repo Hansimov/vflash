@@ -57,6 +57,7 @@ def test_only_ten_dense_layers_change_and_kernel_failure_never_falls_back(monkey
     monkeypatch.setattr(dense, "version", lambda _: "2.2.0")
     dense.require_dense_dependencies("sageattention2")
     op = VedaVideoAttention.__new__(VedaVideoAttention)
+    op.dense_layers = frozenset((*range(5), *range(45, 50)))
     op.dense_backend = "sageattention2"
     op.dense_attention = dense.sage_dense
     op.layout = SimpleNamespace(seq_len=2)

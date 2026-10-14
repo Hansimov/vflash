@@ -33,6 +33,7 @@ def test_generate_parser_preserves_reference_order():
     assert args.profile_denoise is False
     assert args.attention_backend == "auto"
     assert args.veda_dense_backend == "torch-flash"
+    assert args.veda_dense_edge_layers == 5
     assert args.media_video_threads is None
 
 
@@ -190,8 +191,9 @@ def test_generate_parser_exposes_last_frame_alone_for_l2va():
     assert args.duration == 10
 
 
+@pytest.mark.parametrize("dense_edges", [5, 3])
 def test_generate_cli_runs_one_owned_pipeline_and_keeps_progress_off_stdout(
-    tmp_path, monkeypatch, capsys
+    tmp_path, monkeypatch, capsys, dense_edges
 ):
     import vflash.pipeline
 
@@ -214,7 +216,10 @@ def test_generate_cli_runs_one_owned_pipeline_and_keeps_progress_off_stdout(
     class Pipeline:
         def __init__(self, prepared, **kwargs):
             assert prepared.profile_id == "ref2va-turbo4-exact-sm89"
-            assert kwargs == {"device": device, "trust_local_code": True}
+            expected = {"device": device, "trust_local_code": True}
+            if dense_edges != 5:
+                expected["veda_dense_edge_layers"] = dense_edges
+            assert kwargs == expected
 
         def __enter__(self):
             events.append("enter")
@@ -252,6 +257,8 @@ def test_generate_cli_runs_one_owned_pipeline_and_keeps_progress_off_stdout(
                 "--output",
                 str(output),
                 "--trust-local-code",
+                "--veda-dense-edge-layers",
+                str(dense_edges),
             ]
         )
         == 0

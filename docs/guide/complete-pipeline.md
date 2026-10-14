@@ -419,3 +419,21 @@ those responsibilities belong to the caller. Use `original` for unchanged encodi
 Smaller internal crops trade detail for time and need scene-specific final-video
 review; their dimensions are not the final delivery resolution. Measurements and
 quality limits are in the [release notes](../reference/releases.md).
+
+
+## Explicit Veda dense edge width (0.6.36) {#veda-dense-edges}
+
+`H3Pipeline(..., veda_dense_edge_layers=3)` and `vflash generate --veda-dense-edge-layers 3`
+select six dense layers (0–2 and 47–49), with 44 Veda sparse layers. The default remains
+five layers at each edge (40 sparse / 10 dense). This option requires Veda attention;
+it changes approximate inference and is not an equivalence claim. Each session owns
+its partition, and execution counts and metadata report the actual selected layers.
+
+Controlled RTX PRO 6000 Server experiments with four-step hybrid FP8 and FROST measured
+6.60%, 9.07% and 12.29% shorter complete generation for paired 1/2/4MP ten-second inputs.
+A separate 1MP ten-second A/B/A control measured 4.58%; limited multi-mode experiments
+also completed, but do not extend the public pipeline's mode or capacity admission.
+Sampled context and consecutive detail frames found no new major defects in inspected
+regions. Complete perceptual, audio and cross-device qualification remains open.
+Use the default five-layer edge as the explicit rollback; other devices are not qualified
+by these measurements. Model startup and publication are outside those warm generation times.

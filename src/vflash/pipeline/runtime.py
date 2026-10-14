@@ -63,6 +63,7 @@ class H3Pipeline:
         attention_backend: str = "auto",
         veda_predictor: Path | None = None,
         veda_dense_backend: str = "torch-flash",
+        veda_dense_edge_layers: int = 5,
         attention_adapter: AttentionAdapter | None = None,
         hybrid_model: HybridModel | None = None,
         weight_residency: str = "block-ring",
@@ -123,10 +124,12 @@ class H3Pipeline:
         self.media_video_input = media_video_input
         self.prepared = prepared
         self.attention_backend = resolve_attention_backend(plan, attention_backend)
-        from vflash.native.h3_veda_attention import validate_predictor
+        from vflash.native.h3_veda_attention import dense_layers_for_edges, validate_predictor
 
         validate_predictor(self.attention_backend, veda_predictor)
         self.veda_predictor = veda_predictor
+        dense_layers_for_edges(veda_dense_edge_layers, attention_backend=self.attention_backend)
+        self.veda_dense_edge_layers = veda_dense_edge_layers
         from vflash.native.h3_veda_dense import (
             require_dense_dependencies,
             validate_dense_backend,
@@ -239,6 +242,11 @@ class H3Pipeline:
             auxiliary_tensor=assets.auxiliary_tensor,
             weight_residency=self.weight_residency,
             attention_backend=self.attention_backend,
+            **(
+                {"veda_dense_edge_layers": self.veda_dense_edge_layers}
+                if self.veda_dense_edge_layers != 5
+                else {}
+            ),
             **(
                 {"veda_dense_backend": self.veda_dense_backend}
                 if self.veda_dense_backend != "torch-flash"

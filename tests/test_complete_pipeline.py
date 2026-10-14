@@ -139,6 +139,7 @@ def _pipeline(*, fail: str | None = None) -> tuple[H3Pipeline, list[str]]:
     pipeline.media_video_threads = None
     pipeline.conditioning_transport = "file"
     pipeline.veda_dense_backend = "torch-flash"
+    pipeline.veda_dense_edge_layers = 5
     pipeline.veda_predictor = None
     pipeline._reference_graph = None
     pipeline._adapter_stack = None

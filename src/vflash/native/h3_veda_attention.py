@@ -1,7 +1,8 @@
 """Explicit approximate Veda attention for original v0.1 on one supported GPU.
 
-The external MIT Veda core owns the predictor and INT8 sparse kernel. The first
-and last five layers use explicit Torch Flash or optional SageAttention2. Other
+The external MIT Veda core owns the predictor and INT8 sparse kernel. By default the first
+and last five layers use the selected dense backend; an explicit three-layer
+edge option trades more approximate work for speed. Other
 layers keep condition/audio/text connections dense but use approximate INT8
 attention. No silent fallback.
 """
@@ -15,6 +16,15 @@ from typing import Any
 from vflash.contracts import ContractError
 
 DENSE_LAYERS = frozenset((*range(5), *range(45, 50)))
+
+
+def dense_layers_for_edges(edge_layers: int, *, attention_backend: str) -> frozenset[int]:
+    """Resolve an explicit approximate partition without changing other sessions."""
+    if type(edge_layers) is not int or edge_layers not in (3, 5):
+        raise ContractError("Veda dense edge layers must be 3 or 5")
+    if edge_layers != 5 and attention_backend not in {"veda-sm89", "veda-triton"}:
+        raise ContractError("a custom dense edge partition requires Veda attention")
+    return frozenset((*range(edge_layers), *range(50 - edge_layers, 50)))
 
 
 def validate_predictor(backend: str, predictor: Path | None) -> None:
@@ -78,7 +88,9 @@ class VedaVideoAttention:
         *,
         backend: str = "veda-sm89",
         dense_backend: str = "torch-flash",
+        dense_edge_layers: int = 5,
     ) -> None:
+        self.dense_layers = dense_layers_for_edges(dense_edge_layers, attention_backend=backend)
         import torch
         from veda_comfy import backends
         from veda_comfy.core.bundle import load_bundle
@@ -151,7 +163,7 @@ class VedaVideoAttention:
             or any(t.dtype != torch.bfloat16 for t in (q, k, v))
         ):
             raise ValueError("Veda requires matching BF16 H3 BSHD tensors")
-        if index in DENSE_LAYERS:
+        if index in self.dense_layers:
             self.dense_calls += 1
             return (self.dense_attention or dense)(q, k, v)
         value = self.engine.attention(q[0], k[0], v[0], index, self.layout, self.choice.plan)
@@ -167,7 +179,7 @@ class VedaVideoAttention:
             "dense_precision": "INT8 QK / FP8 PV"
             if self.dense_backend == "sageattention2"
             else "BF16",
-            "dense_layers": sorted(DENSE_LAYERS),
+            "dense_layers": sorted(self.dense_layers),
             "generated_keep_ratio": 0.1,
             "condition_keep_ratio": 1.0,
             "protected_connections_dense": True,
@@ -182,5 +194,9 @@ class VedaVideoAttention:
         }
 
     def validate_calls(self, nfe: int) -> None:
-        if (self.sparse_calls, self.dense_calls) != (40 * nfe, 10 * nfe):
+        if type(nfe) is not int or nfe <= 0:
+            raise ValueError("a positive evaluation count is required")
+        dense_count = len(self.dense_layers)
+        expected = ((50 - dense_count) * nfe, dense_count * nfe)
+        if (self.sparse_calls, self.dense_calls) != expected:
             raise RuntimeError("Veda did not execute the declared logical block coverage")

@@ -57,6 +57,7 @@ class NativeEngineSession:
         attention_backend: str = "auto",
         veda_predictor: Path | None = None,
         veda_dense_backend: str = "torch-flash",
+        veda_dense_edge_layers: int = 5,
         hybrid_model: Any = None,
         native_denoiser_loader: Any = None,
     ) -> None:
@@ -137,9 +138,10 @@ class NativeEngineSession:
         ):
             raise ContractError("invalid physical GPU group for native parallel execution")
         attention_backend = resolve_attention_backend(plan, attention_backend)
-        from vflash.native.h3_veda_attention import validate_predictor
+        from vflash.native.h3_veda_attention import dense_layers_for_edges, validate_predictor
 
         validate_predictor(attention_backend, veda_predictor)
+        dense_layers_for_edges(veda_dense_edge_layers, attention_backend=attention_backend)
         from vflash.native.h3_veda_dense import (
             require_dense_dependencies,
             validate_dense_backend,
@@ -191,6 +193,11 @@ class NativeEngineSession:
             auxiliary_tensor_path=auxiliary_tensor,
             device="cuda:0",
             attention_backend=attention_backend,
+            **(
+                {"veda_dense_edge_layers": veda_dense_edge_layers}
+                if veda_dense_edge_layers != 5
+                else {}
+            ),
             **(
                 {"veda_dense_backend": veda_dense_backend}
                 if veda_dense_backend != "torch-flash"

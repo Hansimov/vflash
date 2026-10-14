@@ -76,6 +76,7 @@ def test_fa3_preserves_views_and_full_context_and_propagates_failures(monkeypatc
             else q
         )
         op = VedaVideoAttention.__new__(VedaVideoAttention)
+        op.dense_layers = frozenset((*range(5), *range(45, 50)))
         op.dense_backend = "fa3-flash"
         op.dense_attention = fa3.fa3_dense
         op.layout = SimpleNamespace(seq_len=32)

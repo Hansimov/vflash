@@ -6,6 +6,7 @@ import pytest
 from vflash.contracts import ContractError
 from vflash.native.h3_veda_attention import (
     VedaVideoAttention,
+    dense_layers_for_edges,
     target_layout,
     validate_predictor,
 )
@@ -53,10 +54,15 @@ def test_predictor_required_and_unrelated_backends_reject_it(tmp_path):
     validate_predictor("torch-flash", None)
 
 
-def test_attention_routes_every_logical_layer_and_rejects_missing_work():
+@pytest.mark.parametrize("edge_layers", [3, 5])
+def test_attention_routes_every_logical_layer_and_rejects_missing_work(
+    edge_layers, monkeypatch
+):
     torch = pytest.importorskip("torch")
     calls = []
     op = VedaVideoAttention.__new__(VedaVideoAttention)
+    op.dense_layers = dense_layers_for_edges(edge_layers, attention_backend="veda-triton")
+    monkeypatch.setattr("vflash.native.h3_veda_attention.DENSE_LAYERS", frozenset())
     op.dense_attention = None
     op.dense_backend = "torch-flash"
     op.layout = SimpleNamespace(seq_len=2)
@@ -73,8 +79,9 @@ def test_attention_routes_every_logical_layer_and_rejects_missing_work():
     for index in range(50):
         out = op(index, dense, q, q, q)
         assert out.shape == q.shape
-        assert bool((out == (1 if index < 5 or index >= 45 else 0)).all())
-    assert calls == list(range(5, 45))
+        expected = 1 if index < edge_layers or index >= 50 - edge_layers else 0
+        assert bool((out == expected).all())
+    assert calls == list(range(edge_layers, 50 - edge_layers))
     op.validate_calls(1)
     with pytest.raises(RuntimeError, match="coverage"):
         op.validate_calls(4)
@@ -82,6 +89,22 @@ def test_attention_routes_every_logical_layer_and_rejects_missing_work():
         op(50, dense, q, q, q)
     with pytest.raises(ValueError, match="matching BF16"):
         op(10, dense, q.float(), q, q)
+
+
+@pytest.mark.parametrize("value", [True, False, 0, 2, 4, 6, 7, None, "3"])
+def test_invalid_dense_partition_fails_before_loading(value):
+    with pytest.raises(ContractError, match="3 or 5"):
+        dense_layers_for_edges(value, attention_backend="veda-triton")
+
+
+def test_dense_partition_requires_veda_and_remains_session_local():
+    with pytest.raises(ContractError, match="requires Veda"):
+        dense_layers_for_edges(3, attention_backend="torch-flash")
+    a = dense_layers_for_edges(3, attention_backend="veda-triton")
+    b = dense_layers_for_edges(5, attention_backend="veda-triton")
+    assert a == frozenset((0, 1, 2, 47, 48, 49))
+    assert b == frozenset((*range(5), *range(45, 50)))
+    assert len(a) == 6 and len(b) == 10
 
 
 def test_actual_two_slot_loop_assigns_logical_indices_on_every_forward(monkeypatch):

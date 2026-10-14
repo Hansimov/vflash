@@ -1,5 +1,12 @@
 # 版本更新
 
+## 0.6.36
+
+新增每个会话独立持有的Veda密集边界宽度。`veda_dense_edge_layers=3`选择44稀疏/6密集层，
+默认仍为40/10；完整流水线、原生执行器及生成CLI贯通选项，元数据核对实际层调用。
+PRO 6000完整成片实测收益见[流水线指南](../guide/complete-pipeline.md#veda-dense-edges)。
+这是感知覆盖有限的近似选项，不是普遍等质保证，也不扩大默认硬件、模式或容量资格。
+
 ## 0.6.35
 
 - 新增可选的 `vflash.media.face_encoder.face_encoder` 完整H3人脸裁剪编码范围：

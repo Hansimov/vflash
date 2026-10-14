@@ -68,6 +68,13 @@ def add_pipeline_commands(commands: argparse._SubParsersAction) -> None:
         default="torch-flash",
         help="Veda dense blocks; CuTe/FA3 require SM90, FROST and SageAttention2 require SM120",
     )
+    generate.add_argument(
+        "--veda-dense-edge-layers",
+        type=int,
+        choices=(3, 5),
+        default=5,
+        help="dense edge width: 5 (default) or 3 (approximate speed option)",
+    )
     generate.add_argument("--attention-adapter-rank", type=int)
     generate.add_argument("--attention-adapter-scale", type=float)
     generate.add_argument(
@@ -196,6 +203,8 @@ def run_pipeline_command(args: argparse.Namespace) -> int:
         options["media_video_threads"] = args.media_video_threads
     if args.media_video_input != "file":
         options["media_video_input"] = args.media_video_input
+    if args.veda_dense_edge_layers != 5:
+        options["veda_dense_edge_layers"] = args.veda_dense_edge_layers
     if args.veda_dense_backend != "torch-flash":
         options["veda_dense_backend"] = args.veda_dense_backend
     if args.attention_backend != "auto":

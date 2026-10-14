@@ -1,5 +1,14 @@
 # Release notes
 
+## 0.6.36
+
+Adds an explicit session-owned Veda dense edge width. `veda_dense_edge_layers=3` selects
+44 sparse / 6 dense layers; the default stays 40/10. The complete pipeline, native
+owner and generation CLI carry the option, and metadata validates actual layer counts.
+PRO 6000 controlled complete-video gains are documented in the [pipeline guide](../guide/complete-pipeline.md#veda-dense-edges).
+This is an approximate option with limited perceptual coverage, not a universal quality
+claim or a change to default hardware, input-mode or capacity qualification.
+
 ## 0.6.35
 
 - Add the opt-in `vflash.media.face_encoder.face_encoder` context for complete H3

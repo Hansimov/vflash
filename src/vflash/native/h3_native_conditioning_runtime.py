@@ -189,6 +189,7 @@ class H3NativeConditioningRuntime:
         attention_backend: str = "torch-flash",
         veda_predictor: Path | None = None,
         veda_dense_backend: str = "torch-flash",
+        veda_dense_edge_layers: int = 5,
         expected_task: str | None = None,
         expected_weight_profile: str | None = None,
         expected_model_repository: str | None = None,
@@ -243,6 +244,10 @@ class H3NativeConditioningRuntime:
         )
         require_dense_dependencies(veda_dense_backend)
         self.veda_dense_backend = veda_dense_backend
+        from vflash.native.h3_veda_attention import dense_layers_for_edges
+
+        dense_layers_for_edges(veda_dense_edge_layers, attention_backend=attention_backend)
+        self.veda_dense_edge_layers = veda_dense_edge_layers
         if attention_backend == "sol-sm89" and (
             capability != (8, 9)
             or parallel_strategy != "single"
@@ -752,6 +757,7 @@ class H3NativeConditioningRuntime:
                     self.veda_predictor,
                     backend=self.attention_backend,
                     dense_backend=self.veda_dense_backend,
+                    dense_edge_layers=self.veda_dense_edge_layers,
                 )
             self._veda_attention.prepare(tensors, bundle.profile)
             for index, slot in enumerate(slots):
