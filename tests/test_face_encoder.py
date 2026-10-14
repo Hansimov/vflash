@@ -1,9 +1,10 @@
 from types import SimpleNamespace
 
 import pytest
-import torch
 
 from vflash.media.face_encoder import face_encoder, frame_group_norm
+
+torch = pytest.importorskip("torch")
 
 
 class Encoder:

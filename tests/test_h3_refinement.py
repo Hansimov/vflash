@@ -2,11 +2,12 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 
 import pytest
-import torch
 
 from vflash.native.h3_native_scheduler import H3NativeLatentState, H3NativeSchedule
 from vflash.native.h3_refinement import VideoRepaint, refinement_plan
 from vflash.native.h3_refinement_schedule import refinement_schedule
+
+torch = pytest.importorskip("torch")
 
 
 @dataclass

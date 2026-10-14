@@ -1,9 +1,10 @@
 from types import SimpleNamespace
 
 import pytest
-import torch
 
 from vflash.media.audio_headroom import audio_decoder_headroom
+
+torch = pytest.importorskip("torch")
 
 
 class BigVGAN(torch.nn.Module):
