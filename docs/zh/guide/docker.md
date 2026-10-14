@@ -2,10 +2,10 @@
 
 把 Vflash 作为本地 HTTP 服务运行。服务接收预编译条件包，返回视频和音频潜变量（latents，即解码前的张量）；加载一个固定配置后，连续串行处理多个请求。
 
-::: warning 镜像版本
-最新预构建 Docker 镜像仍为 **0.3.2**。0.7.0 发布源码和 wheel；如需 Base16 关键帧、
-五至十秒请求和新的精确双卡重排，请在本地构建 `runtime` 或 `pipeline` target。
-不得从 0.3.2 镜像推导 0.7.0 能力。
+::: tip 已发布镜像
+**0.7.0** 已提供 `hansimov/vflash:0.7.0`（原生 HTTP）和
+`hansimov/vflash:0.7.0-pipeline`（完整 MP4）。部署时固定[镜像清单](https://github.com/Hansimov/vflash/blob/v0.7.0/docker/images.json)中的摘要。
+镜像包含运行依赖，不包含模型权重或应用的人脸修复配置。
 :::
 
 标准`runtime`与`pipeline`构建均包含固定Sol依赖。单SM89官方Base16默认近似Sol，其他配置/双卡保持dense。
@@ -41,7 +41,7 @@ cp docker/.env.example docker/.env
 编辑 `docker/.env`，把所有示例路径换成 Docker 主机上的绝对路径：
 
 ```dotenv
-VFLASH_IMAGE=vflash:0.7.0
+VFLASH_IMAGE=hansimov/vflash:0.7.0
 VFLASH_PROFILE_ID=ref2va-turbo4-exact-sm89
 VFLASH_GPU_DEVICE=0
 
@@ -54,15 +54,15 @@ VFLASH_HOST_OUTPUTS=/path/to/outputs
 
 `VFLASH_GPU_DEVICE` 使用索引或 UUID 选中一张主机显卡。容器内会把它显示为设备 `0`。使用 3080 时，将配置改为 `ref2va-turbo4-exact-sm86` 并提供匹配的 SM86 资源；使用 4090 Turbo8 时，选择 `ref2va-turbo8-exact-sm89` 及相应资源。
 
-容器使用 UID/GID `10001` 运行。为这个用户创建可写输出目录，再从当前源码构建并启动服务：
+容器使用 UID/GID `10001` 运行。为这个用户创建可写输出目录，再拉取并启动发布镜像：
 
 ```bash
 sudo install -d -o 10001 -g 10001 /path/to/outputs
-docker compose --env-file docker/.env -f docker/compose.yaml build
+docker compose --env-file docker/.env -f docker/compose.yaml pull
 docker compose --env-file docker/.env -f docker/compose.yaml up -d --no-build
 ```
 
-带版本号的镜像已发布到 [Docker Hub](https://hub.docker.com/r/hansimov/vflash/tags)，不可变摘要见[镜像清单](https://github.com/Hansimov/vflash/blob/v0.3.2/docker/images.json)。模型只读挂载，输出和内核缓存使用独立的可写存储。需要本地构建 0.7.0 时，执行 `docker build --target runtime -t vflash:0.7.0 .`，然后在环境文件中选择该镜像。
+带版本号的镜像已发布到 [Docker Hub](https://hub.docker.com/r/hansimov/vflash/tags)，不可变摘要见[镜像清单](https://github.com/Hansimov/vflash/blob/v0.7.0/docker/images.json)。模型只读挂载，输出和内核缓存使用独立的可写存储。需要本地构建 0.7.0 时，执行 `docker build --target runtime -t vflash:0.7.0 .`，然后在环境文件中选择该镜像。
 
 Compose 默认只将接口绑定到 **127.0.0.1:8000**。引擎没有内置身份验证；本地使用时保留这个绑定，需要远程访问时则先接入应用的鉴权层。
 
@@ -70,10 +70,10 @@ Compose 默认只将接口绑定到 **127.0.0.1:8000**。引擎没有内置身�
 
 `pipeline` 镜像预装官方编码器与 VAE 适配器、CUDA 对应的 Torchvision、FFmpeg 和 FFprobe，入口是 `vflash`，用 `generate` 生成完整视频。独立的原生镜像运行 HTTP latent 服务。
 
-从发布版源码构建完整链路镜像：
+拉取完整链路镜像：
 
 ```bash
-docker build --target pipeline -t vflash:0.7.0-pipeline .
+docker pull hansimov/vflash:0.7.0-pipeline
 mkdir -p inputs outputs cache
 ```
 
@@ -87,7 +87,7 @@ docker run --rm --runtime=runc -e NVIDIA_VISIBLE_DEVICES=void \
   -v /absolute/model-directory:/models:ro \
   -v "$PWD/inputs:/inputs:ro" -v "$PWD/outputs:/outputs:rw" \
   -v "$PWD/cache:/cache:rw" \
-  vflash:0.7.0-pipeline prepare-pipeline \
+  hansimov/vflash:0.7.0-pipeline prepare-pipeline \
   --assets /inputs/pipeline-assets.json --receipt /outputs/prepared-assets.json
 ```
 
@@ -101,7 +101,7 @@ docker run --rm --gpus device=0 --shm-size 4g \
   -v /absolute/model-directory:/models:ro \
   -v "$PWD/inputs:/inputs:ro" -v "$PWD/outputs:/outputs:rw" \
   -v "$PWD/cache:/cache:rw" \
-  vflash:0.7.0-pipeline generate \
+  hansimov/vflash:0.7.0-pipeline generate \
   --prepared-assets /outputs/prepared-assets.json \
   --prompt-file /inputs/prompt.txt \
   --reference /inputs/subject.png --reference /inputs/setting.png \
@@ -114,7 +114,7 @@ docker run --rm --gpus device=0 --shm-size 4g \
 
 双张 RTX 3080 20 GB 使用 [SM86 编译资产](../reference/pipeline-profiles#sm86)，在 `prepare-pipeline` 后加 `--profile ref2va-turbo4-exact-sm86`。生成命令将 `--gpus device=0` 替换为 `--gpus '"device=0,1"'`，在 `--gpu 0` 后加 `--peer-gpu 1 --strategy sequence-head`。进程退出前，两张卡都由该实例持有；主卡执行编码和解码，双卡共同去噪。这里是完整链路配置，下文的 Compose 则部署原生 HTTP 接口。
 
-已发布镜像复用不可变的 0.3.1 镜像层，安装 0.3.2 wheel。[发行附件](https://github.com/Hansimov/vflash/releases/tag/v0.3.2)包含该 wheel 和 `Dockerfile.release`；[清单](https://github.com/Hansimov/vflash/blob/v0.3.2/docker/images.json)记录其摘要、依赖镜像与验证范围。这样不必重新下载未变更的依赖；上面的源码 Dockerfile 仍提供完整构建方法。 复现已发布的小增量镜像时，先检出清单中的 `implementation_revision`，把发行 wheel 放入 `dist/`，再使用 `Dockerfile.release`。最终标签补充文档和镜像清单，运行源码不变。
+镜像由清单 `implementation_revision` 对应的公开 Dockerfile 构建。发行 tag 只补充摘要清单和文档，不修改运行源码；选择 `runtime` 或 `pipeline` target 可复现构建。源码下载重试时保留已成功的依赖层与 BuildKit pip 缓存。清单分别说明安装后镜像检查、引擎 GPU 证据，并保留历史镜像清单链接。
 
 镜像默认使用 UID/GID `10001`；示例改用当前用户，方便写入输出。Jiterator 直接使用可写的 `/cache` 根目录，也支持新挂载的空目录。显式设置 Inductor 缓存后，即使这个用户未登记在容器中也能运行；此设置也适用于 0.1.0 镜像。`/cache` 必须允许加载编译后的共享库，不要放在 `noexec` 挂载点。准备记录中的资产路径和文件身份必须保持一致。连续生成时，建议在独立容器进程中复用 Python `H3Pipeline`，避免每次执行命令都重新加载模型。
 

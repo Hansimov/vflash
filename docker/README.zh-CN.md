@@ -4,8 +4,8 @@
 
 使用 [pipeline 镜像](https://hansimov.github.io/vflash/zh/guide/docker#pipeline)，可以在 SM89 上用纯文字或提示词与一至三张参考图生成完整 MP4，也支持双 SM86 的参考图生成。下文介绍独立的原生 HTTP 服务。
 
-历史预构建清单记录0.3.2。当前引擎请从0.7.0 tag构建`runtime`或`pipeline`，不能从旧镜像推导新能力。
-显式Veda密集后端、40/10或44/6配置、实际包版本核验及依赖检查见[完整指南](https://hansimov.github.io/vflash/zh/guide/docker)。
+0.7.0 已发布 `hansimov/vflash:0.7.0` 和 `hansimov/vflash:0.7.0-pipeline`。
+不可变摘要见[镜像清单](images.json)；源码构建、显式 Veda 依赖、40/10 或 44/6 配置及实际包版本核验见[完整指南](https://hansimov.github.io/vflash/zh/guide/docker)。
 
 服务接收预编译条件包，返回视频和音频潜变量（latents，即解码前的张量）。它使用一张 GPU 或一组协作双卡，并在多个串行请求之间复用已加载的模型。
 
@@ -19,7 +19,7 @@
 cp docker/.env.example docker/.env
 ```
 
-编辑`docker/.env`，填写资源绝对路径并选择显卡。`VFLASH_IMAGE=vflash:0.7.0`是本地构建名，不是仓库镜像。
+编辑`docker/.env`，填写资源绝对路径并选择显卡。`VFLASH_IMAGE=hansimov/vflash:0.7.0`选择已发布原生镜像。
 `VFLASH_ATTENTION_BACKEND=auto`仅在单SM89官方Base16选择Sol，`torch-flash`显式保留dense。配置可选：
 
 | 显卡 | `VFLASH_PROFILE_ID` |
@@ -30,11 +30,11 @@ cp docker/.env.example docker/.env
 
 3080 需要为 SM86 编译的资源。对于已测负载，建议为**每个 worker 至少预留 64 GiB 可用系统内存**，并为其他进程保留额外余量；更大输入需要重新检查容量。
 
-为 UID/GID `10001` 创建可写输出目录，把示例路径换成 `VFLASH_HOST_OUTPUTS` 对应的目录，再构建并启动：
+为 UID/GID `10001` 创建可写输出目录，把示例路径换成 `VFLASH_HOST_OUTPUTS` 对应的目录，再拉取并启动：
 
 ```bash
 sudo install -d -o 10001 -g 10001 /path/to/outputs
-docker compose --env-file docker/.env -f docker/compose.yaml build
+docker compose --env-file docker/.env -f docker/compose.yaml pull
 docker compose --env-file docker/.env -f docker/compose.yaml up -d --no-build
 curl -fsS http://127.0.0.1:8000/readyz
 ```

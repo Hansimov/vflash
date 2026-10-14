@@ -4,16 +4,14 @@
 
 Use the [pipeline image](https://hansimov.github.io/vflash/guide/docker#pipeline) to generate a complete MP4 from text alone or a prompt and one to three references on SM89, or from references on two SM86 GPUs. The separate native HTTP service is described below.
 
-The historical prebuilt inventory records 0.3.2. Build the `runtime` or `pipeline` target
-from the 0.7.0 tag for the current engine; do not infer current capabilities from an old image.
-The [full guide](https://hansimov.github.io/vflash/guide/docker) covers explicit Veda backend and
-40/10 or 44/6 settings, actual package-version verification and dependency checks.
+Published 0.7.0 images are `hansimov/vflash:0.7.0` and `hansimov/vflash:0.7.0-pipeline`.
+Pin their immutable digests from [the image inventory](images.json). The [full guide](https://hansimov.github.io/vflash/guide/docker) covers source builds, explicit Veda provisioning, 40/10 or 44/6 settings, and package-version verification.
 
 The service accepts compiled conditioning bundles and returns video and audio latents (tensors ready for decoding). It uses one GPU or a cooperating pair and reuses a loaded model across serial requests.
 
 You need Linux AMD64, Docker Compose v2, NVIDIA Container Toolkit, a CUDA 13.0-compatible driver, a supported GPU, and matching compiled runtime assets. The image does not contain model weights and serves the bundle-to-latent API. The separate [weights compiler](../docs/guide/compile-weights.md) prepares Ref4 assets for SM86/SM89 and Base4 assets for SM86/SM89; [complete MP4 generation](../docs/guide/complete-pipeline.md) uses the pipeline image or Python extra.
 
-## Build and start the released source
+## Pull and start the release
 
 From the repository root:
 
@@ -21,7 +19,7 @@ From the repository root:
 cp docker/.env.example docker/.env
 ```
 
-Edit `docker/.env` with your absolute asset paths and selected GPU. `VFLASH_IMAGE=vflash:0.7.0` names the local build, not a registry image. `VFLASH_ATTENTION_BACKEND=auto` selects Sol only for single-SM89 official Base16; `torch-flash` explicitly retains dense. Choose one of:
+Edit `docker/.env` with your absolute asset paths and selected GPU. `VFLASH_IMAGE=hansimov/vflash:0.7.0` selects the published native image. `VFLASH_ATTENTION_BACKEND=auto` selects Sol only for single-SM89 official Base16; `torch-flash` explicitly retains dense. Choose one of:
 
 | GPU | `VFLASH_PROFILE_ID` |
 | --- | --- |
@@ -31,11 +29,11 @@ Edit `docker/.env` with your absolute asset paths and selected GPU. `VFLASH_IMAG
 
 Use resources compiled for SM86 on the 3080. For the tested workload, we recommend **at least 64 GiB of available host RAM per worker**, plus headroom for other processes. Check capacity separately for larger inputs.
 
-Create your output directory with write access for UID/GID `10001`, replacing the example path with `VFLASH_HOST_OUTPUTS`, then build and start:
+Create your output directory with write access for UID/GID `10001`, replacing the example path with `VFLASH_HOST_OUTPUTS`, then pull and start:
 
 ```bash
 sudo install -d -o 10001 -g 10001 /path/to/outputs
-docker compose --env-file docker/.env -f docker/compose.yaml build
+docker compose --env-file docker/.env -f docker/compose.yaml pull
 docker compose --env-file docker/.env -f docker/compose.yaml up -d --no-build
 curl -fsS http://127.0.0.1:8000/readyz
 ```
