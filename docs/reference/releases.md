@@ -10,6 +10,9 @@ partition. Defaults remain unchanged. Installation and Docker examples now selec
 historical image inventories retain their original qualification instead of implying newer
 capabilities. Application-owned face restoration and production adoption remain separate.
 
+The pinned Sol installer fetches only its small source package, uses a Git partial fetch of the fixed commit,
+and bounds the source inventory, bytes and total download time instead of downloading the full upstream repository.
+
 ## 0.6.36
 
 Adds an explicit session-owned Veda dense edge width. `veda_dense_edge_layers=3` selects

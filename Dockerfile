@@ -35,7 +35,7 @@ RUN python -m pip install \
     && rm /tmp/requirements-api.txt /tmp/requirements-runtime.txt
 
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends gcc libc6-dev \
+    && apt-get install --yes --no-install-recommends gcc libc6-dev git \
     && rm -rf /var/lib/apt/lists/*
 
 # The ordinary native and complete images include the same fixed Sol dependency.

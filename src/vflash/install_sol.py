@@ -7,13 +7,12 @@ The upstream MIT implementation is fetched, not vendored into Vflash.
 from __future__ import annotations
 
 import argparse
-import io
+import shutil
 import subprocess
 import sys
-import tarfile
 import tempfile
+import time
 from pathlib import Path
-from urllib.request import Request, urlopen
 
 REVISION = "d0c0a4685ab5dc2336d18b7213d85f13def92418"
 DEPENDENCIES = ("nvidia-cutlass-dsl==4.5.0", "cuda-python==13.2.0", "apache-tvm-ffi==0.1.11")
@@ -28,29 +27,65 @@ def patch_stream_abi(path: Path) -> None:
 
 
 def fetch_package(destination: Path) -> None:
-    """Use one immutable archive, retaining only the small Sol source package."""
-    request = Request(
-        f"https://codeload.github.com/NVlabs/Sana/tar.gz/{REVISION}",
-        headers={"User-Agent": "vflash-installer"},
-    )
-    limit = 128 * 1024 * 1024
-    with urlopen(request, timeout=60) as response:
-        data = response.read(limit + 1)
-    if len(data) > limit:
-        raise RuntimeError("upstream source archive exceeds installation budget")
-    prefix = f"Sana-{REVISION}/techniques/sparse_backends/"
-    with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
-        for member in archive:
-            if not member.name.startswith(prefix) or member.isdir():
-                continue
-            relative = Path(member.name.removeprefix(prefix))
-            if not member.isfile() or relative.is_absolute() or ".." in relative.parts:
-                raise RuntimeError("unsupported Sol source entry")
-            if member.size > 4 * 1024 * 1024:
-                raise RuntimeError("unexpectedly large Sol source file")
-            target = destination / relative
+    """Materialize only the pinned small source tree, with one total deadline."""
+    if shutil.which("git") is None:
+        raise RuntimeError("install Git before installing the optional Sol dependency")
+    deadline = time.monotonic() + 120
+    with tempfile.TemporaryDirectory(prefix="vflash-sol-source-") as folder:
+        repository = Path(folder)
+
+        def git(*args: str) -> str:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("Sol source download deadline exceeded")
+            return subprocess.run(
+                ["git", "-c", "core.hooksPath=/dev/null", "-C", str(repository), *args],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=remaining,
+            ).stdout
+
+        git("init", "--quiet")
+        git("remote", "add", "origin", "https://github.com/NVlabs/Sana.git")
+        git("fetch", "--quiet", "--depth=1", "--filter=blob:none", "origin", REVISION)
+        if git("rev-parse", "FETCH_HEAD").strip() != REVISION:
+            raise RuntimeError("Sol source revision differs from the pinned commit")
+        prefix = "techniques/sparse_backends/"
+        entries = git("ls-tree", "-r", "-z", "FETCH_HEAD", "--", prefix).split("\0")
+        names = []
+        for entry in filter(None, entries):
+            metadata, name = entry.split("\t", 1)
+            mode, kind, _ = metadata.split()
+            relative = Path(name.removeprefix(prefix))
+            if (
+                mode != "100644"
+                or kind != "blob"
+                or not name.startswith(prefix)
+                or relative.is_absolute()
+                or ".." in relative.parts
+                or not relative.parts
+            ):
+                raise RuntimeError("unsupported pinned Sol source entry")
+            names.append(relative)
+        if (
+            not {Path("pyproject.toml"), Path("sol_attn/interface.py")} <= set(names)
+            or len(names) > 128
+            or len(set(names)) != len(names)
+        ):
+            raise RuntimeError("pinned Sol source inventory differs")
+        # Partial clone fetches these blobs together; unrelated media/history
+        # never enters the worktree. Git validates their pinned object identities.
+        git("checkout", "FETCH_HEAD", "--", prefix)
+        source = repository / prefix
+        sizes = [(source / name).stat().st_size for name in names]
+        if any(size > 256 * 1024 for size in sizes) or sum(sizes) > 2 * 1024 * 1024:
+            raise RuntimeError("pinned Sol source exceeds installation budget")
+        for name in names:
+            target = destination / name
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(archive.extractfile(member).read())
+            with target.open("xb") as output:
+                output.write((source / name).read_bytes())
 
 
 def main() -> None:

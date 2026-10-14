@@ -157,22 +157,66 @@ def test_installer_only_patches_the_pinned_stream_abi(tmp_path):
         patch_stream_abi(path)
 
 
-def test_installer_extracts_only_the_pinned_package(tmp_path, monkeypatch):
-    import io
-    import tarfile
+@pytest.mark.parametrize("defect", [None, "symlink", "missing", "oversized"])
+def test_installer_checks_pinned_source_and_copies_only_package(tmp_path, monkeypatch, defect):
+    import subprocess
 
     from vflash import install_sol
 
-    payload = io.BytesIO()
-    with tarfile.open(fileobj=payload, mode="w:gz") as archive:
-        for name in ("other/private.py", "techniques/sparse_backends/sol_attn/interface.py"):
-            member = tarfile.TarInfo(f"Sana-{install_sol.REVISION}/{name}")
-            member.size = 5
-            archive.addfile(member, io.BytesIO(b"hello"))
-    monkeypatch.setattr(install_sol, "urlopen", lambda *a, **kw: io.BytesIO(payload.getvalue()))
-    install_sol.fetch_package(tmp_path)
-    assert (tmp_path / "sol_attn/interface.py").read_text() == "hello"
-    assert list(tmp_path.iterdir()) == [tmp_path / "sol_attn"]
+    upstream = tmp_path / "upstream"
+    upstream.mkdir()
+    source = upstream / "techniques/sparse_backends"
+    (source / "sol_attn").mkdir(parents=True)
+    (source / "pyproject.toml").write_text("[build-system]\n")
+    if defect != "missing":
+        (source / "sol_attn/interface.py").write_text("# source\n")
+    (upstream / "unrelated.txt").write_text("not part of the installed package")
+    if defect == "symlink":
+        (source / "escape").symlink_to("../../unrelated.txt")
+    if defect == "oversized":
+        (source / "large.bin").write_bytes(b"x" * (256 * 1024 + 1))
+    run = subprocess.run
+    for args in (
+        ["init", "--quiet"],
+        ["add", "."],
+        [
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "Fixture",
+        ],
+    ):
+        run(["git", "-C", str(upstream), *args], check=True, capture_output=True)
+    revision = run(
+        ["git", "-C", str(upstream), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    monkeypatch.setattr(install_sol, "REVISION", revision)
+
+    def local_source(args, **kwargs):
+        args = [
+            str(upstream) if arg == "https://github.com/NVlabs/Sana.git" else arg
+            for arg in args
+        ]
+        return run(args, **kwargs)
+
+    monkeypatch.setattr(install_sol.subprocess, "run", local_source)
+    output = tmp_path / "package"
+    output.mkdir()
+    if defect:
+        with pytest.raises(RuntimeError):
+            install_sol.fetch_package(output)
+        assert not list(output.iterdir())
+    else:
+        install_sol.fetch_package(output)
+        assert (output / "sol_attn/interface.py").read_text() == "# source\n"
+        assert sorted(p.name for p in output.iterdir()) == ["pyproject.toml", "sol_attn"]
 
 
 def test_veda_is_explicit_original_v01_only():
