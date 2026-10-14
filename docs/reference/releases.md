@@ -1,5 +1,15 @@
 # Release notes
 
+## 0.7.0
+
+A minor release consolidating the complete pipeline, repaint building blocks and explicit
+attention controls accumulated in 0.6. The native HTTP service and one-shot `denoise` CLI now
+forward Veda dense backends and 40/10 or 44/6 partitions into the owned session. Readiness
+validates optional dense dependencies and architecture and reports the installed version and
+partition. Defaults remain unchanged. Installation and Docker examples now select 0.7.0;
+historical image inventories retain their original qualification instead of implying newer
+capabilities. Application-owned face restoration and production adoption remain separate.
+
 ## 0.6.36
 
 Adds an explicit session-owned Veda dense edge width. `veda_dense_edge_layers=3` selects

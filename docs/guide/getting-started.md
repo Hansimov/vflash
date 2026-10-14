@@ -1,19 +1,19 @@
 # Get started
 
-Install Vflash to inspect your GPU and choose a supported profile. For complete video generation on one RTX 4090 48 GB, optional paired Base16 keyframe generation on two matching 48 GB 4090s, or reference-image generation on two RTX 3080 20 GB GPUs, continue with the [complete pipeline](./complete-pipeline) and [official-weight preparation](./compile-weights). The native bundle workflow is described below.
+Install the released engine, select a qualified profile, and prepare its matching assets.
+`H3Pipeline`/`vflash generate` produce complete MP4s; `denoise` and the native HTTP service
+accept compiled conditioning and return latents. Model downloads and compilation are explicit.
 
-::: info Before you begin
-The Python pipeline and `vflash generate` support **text, one to three images, or one short reference video → a five-second MP4** on SM89, plus reference-image generation on a cooperating SM86 pair. The `denoise` command and HTTP service accept **compiled conditioning → video/audio latents**, including the supported SM86 profiles. Model downloads and compilation are explicit steps; no weights are bundled with the package.
-
-Version 0.4.0 also supports official Base16 I2VA/L2VA/FL2VA complete requests at integer durations from five through ten seconds. A prepared Base16 keyframe pipeline accepts a first frame, a last frame, or both without reloading weights. One ten-second, 736 × 992 SM89 L2VA case has bounded completion, media-integrity, endpoint and latency evidence; broader L2VA quality and other duration/canvas combinations remain unqualified. Turbo and reference-video output remain five seconds.
-:::
+For current modes, duration and reference limits, use the [complete pipeline contract](./complete-pipeline).
+For exact GPU memory and architecture qualifications, use the [profile guide](./profiles).
+The engine does not choose another model, device or precision to make an oversized request fit.
 
 ## Install the CLI {#install}
 
 Use Python 3.11 or newer. The base installation is lightweight and does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.5.2 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.7.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate

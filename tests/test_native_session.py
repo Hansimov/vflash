@@ -180,3 +180,62 @@ def test_session_rejects_a_target_outside_its_profile(tmp_path):
             schedule_overlay=tmp_path / "schedule",
             auxiliary_tensor=tmp_path / "auxiliary",
         )
+
+
+def test_one_shot_and_cli_forward_explicit_veda_partition(tmp_path, monkeypatch):
+    from vflash.cli import build_parser
+    from vflash.native.runner import denoise_conditioning_bundle
+
+    args = build_parser().parse_args(
+        [
+            "denoise",
+            "i2va-turbo4-v01-544-exact-sm89",
+            "--gpu",
+            "0",
+            "--bundle",
+            str(tmp_path),
+            "--artifact",
+            str(tmp_path),
+            "--schedule-overlay",
+            str(tmp_path),
+            "--auxiliary-tensor",
+            str(tmp_path),
+            "--output-latents",
+            str(tmp_path / "out"),
+            "--attention-backend",
+            "veda-triton",
+            "--veda-dense-backend",
+            "frost-flash",
+            "--veda-dense-edge-layers",
+            "3",
+        ]
+    )
+    captured = {}
+
+    class Session:
+        def __init__(self, plan, **options):
+            captured.update(options)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            captured["closed"] = True
+
+        def generate(self, bundle, output, **kwargs):
+            return {"complete": True}
+
+    monkeypatch.setattr("vflash.native.runner.NativeEngineSession", Session)
+    assert denoise_conditioning_bundle(
+        None,
+        bundle=tmp_path,
+        artifact=tmp_path,
+        schedule_overlay=tmp_path,
+        auxiliary_tensor=tmp_path,
+        output_latents=tmp_path / "out",
+        attention_backend=args.attention_backend,
+        veda_dense_backend=args.veda_dense_backend,
+        veda_dense_edge_layers=args.veda_dense_edge_layers,
+    ) == {"complete": True}
+    assert captured["veda_dense_backend"] == "frost-flash"
+    assert captured["veda_dense_edge_layers"] == 3 and captured["closed"]

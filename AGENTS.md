@@ -15,22 +15,13 @@ Keep it installable from this repository alone, without external project paths o
 - `docker/`: standalone deployment. `docs/`: matching English and Chinese guides.
 
 Inspect the current implementation and supported profiles before extending a surface. Preserve numerical evidence,
-licenses and attribution, but do not treat old module layout as a constraint. State the actual runnable boundary;
-the Python/container pipeline generates complete Ref4 videos from one to three ordered references on one SM89 GPU
-or a cooperating SM86 pair, and Base4 T2VA on one SM89 GPU. Base16 I2VA, L2VA and FL2VA accept integer durations
-from five through ten seconds on one SM89 GPU or a cooperating SM86 pair. They may also use an explicit pair of
-matching SM89 48 GB GPUs with block-ring `sequence-head` execution; this is a bounded single-request latency
-option, not automatic scheduling or the throughput default. A single SM89 Ref4 pipeline also accepts one
-2–5 second visual-only video reference, without mixing images. Complete SM86 uses `sequence-head`; single-SM86
-and native-only Turbo profiles retain their latent interface. Optional 544p keyframe Turbo pairs have separate
-complete-pipeline evidence and artifact identities; original v0.1 defaults to dense with explicit single-SM89 Sol.
-The explicit single-SM89 original-v0.1 hybrid/Veda expansion supports up to fifteen seconds and nine ordered
-images within its joint pixel-frame budget; expanded multi-image Ref remains five seconds / 960x544 area.
-H100 SXM/NVL and RTX PRO 6000 Server/Workstation have complete I2VA hybrid/Veda evidence. RTX 5090 has bounded I2VA evidence through 1536×864/15 s, 2048²/5 s and 1440²/10 s with owned FFN projection reuse. Other new-device profiles remain explicit previews. The current profile guide owns the supported boundary; archived release
-notes describe their original versions, not additional requirements for a new release.
-The dual-SM86 T2 Turbo4 native profile additionally requires `sequence-head` and Base-specific SM86 compilation.
-Its application-stage integration is qualified at two fixed geometries; the standalone five-second `H3Pipeline`
-wrapper has not been rerun on that new profile. Large-index kernel checks do not broaden the wrapper's duration API.
+licenses and attribution, but do not treat old module layout as a constraint. `docs/guide/profiles.md` owns hardware
+and capacity qualification; `docs/guide/complete-pipeline.md` owns complete-request modes, durations and optional
+repaint interfaces. Native sessions/HTTP return latents; Python/CLI complete pipelines deliver MP4s. Historical
+release notes and image inventories describe their exact versions, not current defaults or newly qualified GPUs.
+Keep English/Chinese installation commands, Docker examples and actual published image versions consistent.
+Use a minor release for a substantial compatible capability/integration update and a major release for a declared
+breaking public contract; reserve patch releases for bounded fixes. Do not expand quality claims from CPU checks.
 
 Install development dependencies with `python -m pip install -e '.[dev,server]'`. Use focused tests during iteration;
 public commits must pass the existing privacy hook. Never commit model payloads, private cases, credentials or GPU

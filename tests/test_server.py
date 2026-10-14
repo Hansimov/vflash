@@ -3,8 +3,10 @@ from dataclasses import replace
 from pathlib import Path
 from threading import Event
 
+import pytest
 from fastapi.testclient import TestClient
 
+from vflash.contracts import ContractError
 from vflash.hardware import NvidiaDevice
 from vflash.server import NativeDenoiseExecutor, ServerSettings, create_app
 
@@ -159,12 +161,19 @@ def test_stopped_worker_is_not_ready_to_accept_more_work(tmp_path: Path) -> None
 
 
 def test_native_executor_reuses_one_worker_and_closes_it(tmp_path: Path, monkeypatch) -> None:
-    settings = _settings(tmp_path)
+    settings = replace(
+        _settings(tmp_path),
+        profile_id="i2va-turbo4-v01-544-exact-sm89",
+        attention_backend="veda-triton",
+        veda_dense_edge_layers=3,
+    )
     workers = []
 
     class Worker:
         def __init__(self, plan, **_options):
             assert _options["attention_backend"] == settings.attention_backend
+            assert _options["veda_dense_edge_layers"] == 3
+            assert _options["veda_dense_backend"] == "torch-flash"
             self.plan = plan
             self.calls = 0
             self.closed = False
@@ -271,3 +280,58 @@ def test_parallel_environment_selects_one_device_group():
     )
     assert settings.peer_gpu_index == 1
     assert settings.parallel_strategy == "sequence-head"
+
+
+def test_veda_service_readiness_reports_partition_and_rejects_wrong_dense_gpu(
+    tmp_path, monkeypatch
+):
+    settings = replace(
+        _settings(tmp_path),
+        profile_id="i2va-turbo4-v01-544-exact-sm89",
+        attention_backend="veda-triton",
+        veda_dense_edge_layers=3,
+    )
+    monkeypatch.setattr(
+        "vflash.native.h3_veda_attention.validate_predictor", lambda *args: None
+    )
+    monkeypatch.setattr("vflash.server.require_attention_dependencies", lambda *args: None)
+    with TestClient(create_app(settings, device_provider=_sm89_devices)) as client:
+        ready = client.get("/readyz")
+        assert ready.status_code == 200
+        assert ready.json()["version"] == "0.7.0"
+        assert ready.json()["attention_selection"] == dict(
+            requested="veda-triton",
+            resolved="veda-triton",
+            exact=False,
+            executed=False,
+            dense_backend="torch-flash",
+            dense_edge_layers=3,
+            dense_layers=6,
+            sparse_layers=44,
+        )
+    with TestClient(
+        create_app(
+            replace(settings, veda_dense_backend="frost-flash"), device_provider=_sm89_devices
+        )
+    ) as client:
+        ready = client.get("/readyz")
+        assert ready.status_code == 503 and "SM120" in ready.json()["error"]
+        assert not ready.json()["checks"]["attention"]
+    parsed = ServerSettings.from_env(
+        {
+            "VFLASH_ATTENTION_BACKEND": "veda-triton",
+            "VFLASH_VEDA_DENSE_BACKEND": "frost-flash",
+            "VFLASH_VEDA_DENSE_EDGE_LAYERS": "3",
+        }
+    )
+    assert parsed.veda_dense_backend == "frost-flash" and parsed.veda_dense_edge_layers == 3
+    for value in ("2", "4", "6", "invalid"):
+        with pytest.raises((ValueError, RuntimeError, ContractError)):
+            ServerSettings.from_env(
+                {
+                    "VFLASH_ATTENTION_BACKEND": "veda-triton",
+                    "VFLASH_VEDA_DENSE_EDGE_LAYERS": value,
+                }
+            )
+    with pytest.raises(ContractError, match="requires Veda"):
+        ServerSettings(veda_dense_edge_layers=3)

@@ -1,4 +1,4 @@
-"""HTTP boundary for the released native-core preview.
+"""HTTP boundary for the resident native inference service.
 
 The service is deliberately CPU-only.  A resident spawned child owns the selected GPU
 and loaded weights; the HTTP process never initializes CUDA.
@@ -66,10 +66,25 @@ class ServerSettings:
     parallel_strategy: str | None = None
     attention_backend: str = "auto"
     veda_predictor: Path | None = None
+    veda_dense_backend: str = "torch-flash"
+    veda_dense_edge_layers: int = 5
 
     def __post_init__(self) -> None:
         if self.attention_backend not in ATTENTION_BACKENDS:
             raise ContractError("unknown attention backend")
+        from vflash.native.h3_veda_attention import dense_layers_for_edges
+
+        dense_layers_for_edges(
+            self.veda_dense_edge_layers, attention_backend=self.attention_backend
+        )
+        if self.veda_dense_backend not in {
+            "torch-flash",
+            "frost-flash",
+            "cute-flash",
+            "fa3-flash",
+            "sageattention2",
+        }:
+            raise ContractError("unknown Veda dense backend")
         if self.gpu_index < 0:
             raise ContractError("GPU index must be non-negative")
         if self.peer_gpu_index is not None and (
@@ -112,6 +127,8 @@ class ServerSettings:
             ),
             parallel_strategy=values.get("VFLASH_PARALLEL_STRATEGY"),
             attention_backend=values.get("VFLASH_ATTENTION_BACKEND", "auto"),
+            veda_dense_backend=values.get("VFLASH_VEDA_DENSE_BACKEND", "torch-flash"),
+            veda_dense_edge_layers=_integer(values, "VFLASH_VEDA_DENSE_EDGE_LAYERS", 5),
             veda_predictor=(
                 Path(values["VFLASH_VEDA_PREDICTOR"])
                 if values.get("VFLASH_VEDA_PREDICTOR")
@@ -173,6 +190,8 @@ class NativeDenoiseExecutor:
                 schedule_overlay=self.settings.schedule_overlay_path,
                 auxiliary_tensor=self.settings.auxiliary_tensor_path,
                 attention_backend=self.settings.attention_backend,
+                veda_dense_backend=self.settings.veda_dense_backend,
+                veda_dense_edge_layers=self.settings.veda_dense_edge_layers,
                 **(
                     {"veda_predictor": self.settings.veda_predictor}
                     if self.settings.veda_predictor is not None
@@ -451,6 +470,24 @@ def _readiness(
         from vflash.native.h3_veda_attention import validate_predictor
 
         validate_predictor(backend, settings.veda_predictor)
+        from vflash.native.h3_veda_dense import (
+            require_dense_dependencies,
+            validate_dense_backend,
+        )
+
+        validate_dense_backend(
+            settings.veda_dense_backend,
+            attention_backend=backend,
+            capability=plan.target.compute_capability,
+        )
+        require_dense_dependencies(settings.veda_dense_backend)
+        if backend in {"veda-sm89", "veda-triton"}:
+            attention.update(
+                dense_backend=settings.veda_dense_backend,
+                dense_edge_layers=settings.veda_dense_edge_layers,
+                dense_layers=2 * settings.veda_dense_edge_layers,
+                sparse_layers=50 - 2 * settings.veda_dense_edge_layers,
+            )
         require_attention_dependencies(backend)
         checks["attention"] = True
         gpu = {
@@ -469,6 +506,7 @@ def _readiness(
         error = str(exc) or f"GPU index {settings.gpu_index} was not found"
     return {
         "ready": all(checks.values()),
+        "version": __version__,
         "profile_id": settings.profile_id,
         "capabilities": CAPABILITIES,
         "checks": checks,

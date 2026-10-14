@@ -2,7 +2,7 @@ name: vflash
 
 services:
   native-core:
-    image: "${VFLASH_IMAGE:-vflash:0.5.0}"
+    image: "${VFLASH_IMAGE:-vflash:0.7.0}"
     build:
       context: ..
       target: runtime
@@ -17,6 +17,9 @@ services:
     environment:
       VFLASH_PROFILE_ID: "${VFLASH_PROFILE_ID:-ref2va-turbo4-exact-sm89}"
       VFLASH_ATTENTION_BACKEND: "${VFLASH_ATTENTION_BACKEND:-auto}"
+      VFLASH_VEDA_PREDICTOR: "${VFLASH_VEDA_PREDICTOR:-}"
+      VFLASH_VEDA_DENSE_BACKEND: "${VFLASH_VEDA_DENSE_BACKEND:-torch-flash}"
+      VFLASH_VEDA_DENSE_EDGE_LAYERS: "${VFLASH_VEDA_DENSE_EDGE_LAYERS:-5}"
       VFLASH_GPU_INDEX: "0"
       VFLASH_JOB_TIMEOUT_SECONDS: "${VFLASH_JOB_TIMEOUT_SECONDS:-1800}"
       VFLASH_MAX_PENDING_JOBS: "${VFLASH_MAX_PENDING_JOBS:-8}"

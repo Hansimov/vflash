@@ -2,7 +2,8 @@
 
 SageAttention changes precision and outputs; it is never a silent Flash fallback.
 CuTe/FA3 (SM90) and FROST (SM120) retain BF16 full-context dense attention.
-Only the ten dense blocks change. Sparse/protected Veda connections stay intact.
+Only the selected dense blocks change (ten by default, six when explicitly selected).
+Sparse/protected Veda connections stay intact.
 """
 
 from __future__ import annotations

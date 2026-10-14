@@ -309,6 +309,8 @@ def denoise_conditioning_bundle(
     weight_residency: str = "default",
     attention_backend: str = "auto",
     veda_predictor: Path | None = None,
+    veda_dense_backend: str = "torch-flash",
+    veda_dense_edge_layers: int = 5,
     profile_denoise: bool = False,
 ) -> dict[str, Any]:
     """One-shot CLI path; services retain a NativeEngineSession instead."""
@@ -319,6 +321,8 @@ def denoise_conditioning_bundle(
         auxiliary_tensor=auxiliary_tensor,
         weight_residency=weight_residency,
         attention_backend=attention_backend,
+        veda_dense_backend=veda_dense_backend,
+        veda_dense_edge_layers=veda_dense_edge_layers,
         **({"veda_predictor": veda_predictor} if veda_predictor is not None else {}),
     ) as session:
         return session.generate(bundle, output_latents, profile_denoise=profile_denoise)

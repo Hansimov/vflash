@@ -59,6 +59,12 @@ def build_parser() -> argparse.ArgumentParser:
     denoise.add_argument("--strategy", choices=("single", "tensor", "sequence-head"))
     denoise.add_argument("--attention-backend", choices=ATTENTION_BACKENDS, default="auto")
     denoise.add_argument("--veda-predictor", type=Path)
+    denoise.add_argument(
+        "--veda-dense-backend",
+        default="torch-flash",
+        choices=("torch-flash", "frost-flash", "cute-flash", "fa3-flash", "sageattention2"),
+    )
+    denoise.add_argument("--veda-dense-edge-layers", type=int, choices=(3, 5), default=5)
     denoise.add_argument("--bundle", type=Path, required=True)
     denoise.add_argument("--artifact", type=Path, required=True)
     denoise.add_argument("--schedule-overlay", type=Path, required=True)
@@ -141,6 +147,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 profile_denoise=args.profile_denoise,
                 attention_backend=args.attention_backend,
                 veda_predictor=args.veda_predictor,
+                veda_dense_backend=args.veda_dense_backend,
+                veda_dense_edge_layers=args.veda_dense_edge_layers,
             )
             print(json.dumps(result, indent=2))
             return 0

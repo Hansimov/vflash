@@ -1,45 +1,35 @@
 # Vflash
 
-面向 RTX 3080 20 GB 和 RTX 4090 48 GB 的原生 **MiniMax H3 推理引擎**。Vflash 使用 PyTorch 与 Triton 实现自己的去噪运行时，支持固定版本的 LightX2V Turbo LoRA。
+采用显式GPU配置的原生 **MiniMax H3 推理引擎**。Vflash 使用 PyTorch 与 Triton 实现自己的去噪运行时，支持固定版本的 LightX2V Turbo LoRA。
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
-**0.6.13.** [H100 SXM与PRO 6000 Server/Workstation I2VA预览](https://hansimov.github.io/vflash/zh/guide/profiles#heterogeneous)，CPU hybrid准备和分区显存探测。其他新卡/MIG模式仍未实卡资格，现役SM89默认不变。
+**0.7.0：统一 Python、CLI 与服务配置。** 原生HTTP服务和`denoise`命令现在支持与
+`H3Pipeline`、`generate`相同的显式Veda密集后端及层分配。默认首尾各五层密集（40稀疏/10密集），
+显式首尾各三层得到44/6；就绪检查验证依赖与GPU架构。该选项属于近似注意力，不承诺输出相同或普遍质量/速度改善。
 
-**0.6.12.** 显式单SM89 hybrid/Veda支持经过实卡验证的最长15秒与九张有序参考；[组合资源限制](https://hansimov.github.io/vflash/zh/guide/complete-pipeline#extended-hybrid)仍适用，
+Vflash提供两类入口：
 
-**0.6.8。** 新增显式[hybrid多参考](https://hansimov.github.io/vflash/zh/guide/complete-pipeline)，
-共享原始FL-v0.1主干，仅增加Ref调制表；同一Python实例可处理真正的参考图片和关键帧，
-分别保留实际条件身份。
-[原始LightX v0.1四步关键帧](https://hansimov.github.io/vflash/zh/reference/pipeline-profiles#lightx-v01)
-已有独立固定配置及SM89完整成片证据，默认保持dense；三条配对控制中可选Sol反而更慢。
-独立的[VDN/SelfLift管线](https://hansimov.github.io/vflash/zh/guide/community-vdn)、
-官方Base16、注意力adapter及VAE接口均保留。
+- **完整视频生成**：`H3Pipeline`与`vflash generate`管理条件编码、原生去噪、官方音视频解码和MP4编码。
+  文本、关键帧、内容参考使用各自prepared配置；原始LightX v0.1及hybrid遵守已验证的
+  [时长、参考数量与像素帧组合限制](https://hansimov.github.io/vflash/zh/guide/complete-pipeline#extended-hybrid)。
+- **原生推理服务**：常驻GPU进程接收预编译条件包并返回音视频潜变量；有界HTTP队列不管理账号和持久任务，
+  应用负责鉴权、调度与媒体交付。
 
-通过完整 Python 或容器 pipeline 生成同步视频和音频。Turbo profile 使用纯文字、
-一至三张图片或[一段短参考视频](https://hansimov.github.io/vflash/zh/guide/complete-pipeline#reference-video)
-生成五秒 MP4；官方 Base16 关键帧 profile 接受首帧、尾帧或两者，并支持五至十秒的整数时长。同一个
-prepared keyframe pipeline 可以在 I2VA、L2VA 和 FL2VA 之间切换，不重新加载权重。
-可选544p关键帧Turbo也接受首帧、尾帧及双端点，具备有限五秒/十秒实证；不能跨LoRA版本复用。
+显式配置覆盖单SM89、协作SM86/SM89双卡以及已验证的H100与Blackwell范围。准确显存、模式和几何必须符合
+[当前配置指南](https://hansimov.github.io/vflash/zh/guide/profiles)，不能用显卡名称或旧发行记录推导容量。
+设备和注意力后端不静默替换。
 
-原生核心面向 RTX 3080 20 GB（SM86）和 RTX 4090 48 GB（SM89）。**单SM89官方Base16默认
-使用近似Sol attention**；SM86、协作双卡及Turbo默认仍为dense。
-原始LightX v0.1关键帧可在单SM89显式选择Sol，其他Turbo不继承该能力。Python、CLI与原生HTTP服务共享该策略，
-可显式用`--attention-backend torch-flash`保留dense。标准Docker构建包含固定Sol依赖；Python安装
-GPU依赖后执行`python -m vflash.install_sol`。缺依赖明确报错，不静默切换后端。
-跨步cache与量化通信不进入默认；不承诺完整媒体质量等价。
-详见[采用、暂缓和拒绝的机制](https://hansimov.github.io/vflash/zh/reference/sol-engine-alignment)。
-
-十秒 Base16 边界在列出的硬件上已有有界完整请求证据，但不代表任意画布或提示词都得到保证。匹配的
-SM89 双卡是显式的单请求低延迟选项；两个独立 worker 仍是吞吐默认。Ref/T2及视频参考继续保持各自的
-五秒合同。[查看资格边界](https://hansimov.github.io/vflash/zh/reference/pipeline-profiles)。
+可复用的[人脸重绘与编码接口](https://hansimov.github.io/vflash/zh/guide/complete-pipeline)是可选基础模块；
+人脸检测、轨迹选择、修复模型和最终合成由接入应用负责。单独安装引擎不会自动开启产品的完整人脸修复链路。
+原模型、精度和注意力默认保持。
 
 ## 检查运行环境
 
 需要 Python 3.11 或更新版本。基础安装不会下载模型权重或 PyTorch。
 
 ```bash
-git clone --branch v0.6.8 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.7.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
@@ -50,16 +40,8 @@ vflash profiles
 vflash plan ref2va-turbo4-exact-sm89 --gpu 0
 ```
 
-| 显卡配置 | 已发布配置 | 权重放置 |
-| --- | --- | --- |
-| 单 RTX 4090 48 GB | Ref2VA Turbo4 / Turbo8；T2VA Turbo4；Base16及544p Turbo关键帧 | Sol分块加载，dense原生支持常驻 |
-| 单 RTX 3080 20 GB | Ref2VA Turbo4 | 从系统内存分块加载 |
-| 双 RTX 3080 20 GB | Ref2VA Turbo4；T2VA Turbo4；Base16 I2VA/L2VA/FL2VA | 共享主机权重，协作 `sequence-head` |
-| 双 RTX 4090 48 GB | Base16 I2VA/L2VA/FL2VA | 可选的协作低延迟路径，不是吞吐默认 |
-
-使用双 3080 时，通过 `--peer-gpu 1` 显式选择第二张卡。T2VA 必须使用 `sequence-head`；原生 Ref4 也可选择 `tensor`。引擎不会自动占用其他显卡。
-
-对于原生去噪器的已测负载，建议**每个 worker 预留至少 64 GiB 可用系统内存**，并保留额外余量。完整链路还需在主机上保存编码器和解码器，需要更大的内存预算。更大输入需要重新检查容量，详情见[硬件、LoRA 与质量限制](https://hansimov.github.io/vflash/zh/guide/profiles)。
+协作多卡须显式选择`--peer-gpu`，同一进程持有整个设备组直至关闭。主机内存需要覆盖权重、编码器、解码器及
+当前请求，参见[硬件与内存限制](https://hansimov.github.io/vflash/zh/guide/profiles)。
 
 ## 接入应用
 

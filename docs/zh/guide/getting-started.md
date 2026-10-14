@@ -1,19 +1,17 @@
 # 开始使用
 
-安装 Vflash 后，可以检查显卡并选择配置。需要在单张 RTX 4090 48 GB 上生成视频、用两张匹配的 48 GB 4090 可选加速 Base16 关键帧生成，或使用双张 RTX 3080 20 GB 生成参考图视频时，请接着阅读[完整链路](./complete-pipeline)和[官方权重准备流程](./compile-weights)。下文介绍原生条件包接口。
+安装当前发行版，选择经过验证的配置并准备对应资产。`H3Pipeline`/`vflash generate`生成完整MP4；
+`denoise`与原生HTTP服务接收预编译条件并返回潜变量。模型下载和编译均为显式步骤。
 
-::: info 开始前请确认
-Python 链路和 `vflash generate` 在 SM89 上支持**纯文字、一至三张图片，或一段短视频参考 → 五秒 MP4**，双 SM86 也支持参考图完整生成。`denoise` 命令和 HTTP 服务使用**预编译条件包 → 音视频 latent**，包含已支持的 SM86 配置。模型需要明确下载和编译，不随软件包附带。
-
-0.4.0 还支持官方 Base16 I2VA/L2VA/FL2VA 完整请求，接受五至十秒的整数时长。同一个已准备的 Base16 关键帧 pipeline 可输入首帧、尾帧或同时输入两者，无需重新加载权重。一个十秒、736 × 992 的 SM89 L2VA 案例已有完成性、媒体完整性、端点和延迟对照的有界证据；更广泛的 L2VA 质量以及其他时长/画布组合仍未资格化。Turbo 和视频参考的输出合同仍为五秒。
-:::
+当前模式、时长与参考限制以[完整链路合同](./complete-pipeline)为准，GPU显存与架构资格以
+[配置指南](./profiles)为准。引擎不会通过暗中更换模型、设备或精度来容纳超限请求。
 
 ## 安装命令行工具 {#install}
 
 需要 Python 3.11 或更新版本。基础安装很轻量，不会下载模型权重或 PyTorch。
 
 ```bash
-git clone --branch v0.5.2 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.7.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
