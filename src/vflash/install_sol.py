@@ -89,12 +89,27 @@ def fetch_package(destination: Path) -> None:
 
 
 def main() -> None:
-    argparse.ArgumentParser(description=__doc__).parse_args()
+    parser = argparse.ArgumentParser(description=__doc__)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--dependencies-only",
+        action="store_true",
+        help="Install pinned Python dependencies without fetching source",
+    )
+    mode.add_argument(
+        "--skip-dependencies",
+        action="store_true",
+        help="Reuse already installed pinned dependencies",
+    )
+    args = parser.parse_args()
 
     def run(*args: str, cwd: Path | None = None, timeout: int = 900) -> None:
         subprocess.run(args, cwd=cwd, check=True, timeout=timeout)
 
-    run(sys.executable, "-m", "pip", "install", *DEPENDENCIES)
+    if not args.skip_dependencies:
+        run(sys.executable, "-m", "pip", "install", *DEPENDENCIES)
+    if args.dependencies_only:
+        return
     with tempfile.TemporaryDirectory(prefix="vflash-sol-") as folder:
         package = Path(folder)
         fetch_package(package)

@@ -222,3 +222,11 @@ python -m vflash.server
 The Python server uses `VFLASH_ARTIFACT_PATH`, `VFLASH_SCHEDULE_OVERLAY_PATH`, `VFLASH_AUXILIARY_TENSOR_PATH`, `VFLASH_BUNDLE_ROOT`, and `VFLASH_OUTPUT_ROOT` for local paths, and `VFLASH_GPU_INDEX` for the physical GPU index. Set `VFLASH_API_HOST=127.0.0.1` for local access; the direct Python entry point otherwise binds to all interfaces. The profile, timeout, queue, and history settings use the names in this guide.
 
 For a two-device Python service, set `VFLASH_PEER_GPU_INDEX` and optionally `VFLASH_PARALLEL_STRATEGY=tensor`. With a peer selected, the default strategy is `sequence-head`. Both selected physical devices are owned by one worker.
+
+Dependency downloads and pinned Git source setup use separate cached layers. The Sol
+Python dependency step also retains a BuildKit pip cache, so a source-network failure
+does not discard successful wheel downloads. Select proxy bypasses per source using
+Docker's predefined `HTTPS_PROXY`/`NO_PROXY` build arguments; keep values in the caller
+environment. A loopback-only host proxy needs a reachable build route. Do not globally
+change the build network just to retry one source: that invalidates unrelated dependency
+layers. Mirrors must provide the pinned versions; compare a bounded real download first.

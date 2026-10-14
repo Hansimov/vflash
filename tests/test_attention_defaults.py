@@ -230,3 +230,20 @@ def test_veda_is_explicit_original_v01_only():
     ):
         with pytest.raises(ContractError, match=r"original LightX v0\.1"):
             resolve_attention_backend(selected, "veda-sm89")
+
+
+def test_installer_dependency_layer_never_fetches_source(monkeypatch):
+    from vflash import install_sol
+
+    calls = []
+    monkeypatch.setattr(install_sol.sys, "argv", ["install_sol", "--dependencies-only"])
+    monkeypatch.setattr(
+        install_sol.subprocess, "run", lambda args, **kwargs: calls.append(args)
+    )
+    monkeypatch.setattr(
+        install_sol,
+        "fetch_package",
+        lambda *_: pytest.fail("source fetched in dependency layer"),
+    )
+    install_sol.main()
+    assert len(calls) == 1 and tuple(calls[0][-3:]) == install_sol.DEPENDENCIES
