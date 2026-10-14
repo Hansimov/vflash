@@ -41,10 +41,7 @@ RUN apt-get update \
 # The ordinary native and complete images include the same fixed Sol dependency.
 # Selection remains architecture/profile-aware; SM86 and Turbo retain dense.
 COPY src/vflash/install_sol.py /tmp/vflash-install-sol.py
-# An opt-in host route is limited to this source-fetch step. Changing the
-# global build network would invalidate the large, already built CUDA layer.
-ARG VFLASH_SOURCE_NETWORK=default
-RUN --network=${VFLASH_SOURCE_NETWORK} python /tmp/vflash-install-sol.py && rm /tmp/vflash-install-sol.py
+RUN python /tmp/vflash-install-sol.py && rm /tmp/vflash-install-sol.py
 LABEL org.vflash.sol-attention.revision="d0c0a4685ab5dc2336d18b7213d85f13def92418" \
       org.vflash.sol-attention.patch="cutlass-4.5-positional-stream"
 

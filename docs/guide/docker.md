@@ -222,11 +222,3 @@ python -m vflash.server
 The Python server uses `VFLASH_ARTIFACT_PATH`, `VFLASH_SCHEDULE_OVERLAY_PATH`, `VFLASH_AUXILIARY_TENSOR_PATH`, `VFLASH_BUNDLE_ROOT`, and `VFLASH_OUTPUT_ROOT` for local paths, and `VFLASH_GPU_INDEX` for the physical GPU index. Set `VFLASH_API_HOST=127.0.0.1` for local access; the direct Python entry point otherwise binds to all interfaces. The profile, timeout, queue, and history settings use the names in this guide.
 
 For a two-device Python service, set `VFLASH_PEER_GPU_INDEX` and optionally `VFLASH_PARALLEL_STRATEGY=tensor`. With a peer selected, the default strategy is `sequence-head`. Both selected physical devices are owned by one worker.
-
-### Build proxy scope
-
-When a build needs a loopback HTTP proxy for GitHub source access, use BuildKit's
-`--build-arg VFLASH_SOURCE_NETWORK=host --build-arg HTTPS_PROXY` and provide the proxy
-through the caller environment. This changes only the small Sol source installation
-step; ordinary dependency layers retain their default network and cache. The default
-is `default`. Do not put credentials in Dockerfile `ENV` or explicit proxy `ARG` entries.
