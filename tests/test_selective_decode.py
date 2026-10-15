@@ -1,14 +1,14 @@
 import weakref
 
 import pytest
-import torch
 
 from vflash.media.selective_decode import needed_chunks, selective_stream
+
+torch = pytest.importorskip("torch")
 
 
 # CPU fixture preserves temporal spans, endpoint trimming and overlap blending.
 def decode_temporal_cpu(model, z, z_head, z_tail, num_chunks, pad_tokens, temporal_cat_dtype):
-    import torch
 
     if model.training or type(num_chunks) is not int or not 1 <= num_chunks <= 128:
         raise ValueError("CPU frame assembly requires bounded inference chunks")

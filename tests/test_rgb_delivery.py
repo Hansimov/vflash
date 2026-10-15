@@ -3,11 +3,12 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-import torch
 
 from vflash.media.encoding import MediaError
 from vflash.media.rgb_array import create_rgb_array
 from vflash.media.rgb_delivery import generate_rgb, validate_rgb_selection
+
+torch = pytest.importorskip("torch")
 
 
 @pytest.fixture

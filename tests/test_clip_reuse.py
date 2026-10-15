@@ -1,9 +1,10 @@
 from types import SimpleNamespace
 
 import pytest
-import torch
 
 from vflash.media.clip_reuse import encode_unique, unique_clips
+
+torch = pytest.importorskip("torch")
 
 
 class Encoder:
