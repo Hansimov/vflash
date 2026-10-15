@@ -177,3 +177,73 @@ def test_real_pipeline_routes_scope_and_releases_features_on_failure(
                 owner.check_request(_repaint(request))
             assert owner.report["source_captures"] == 1
     assert owner._features is None and pipeline._scene_conditioning is None
+
+
+@pytest.mark.parametrize("memory", [False, True])
+def test_adapter_keeps_fixed_source_schema_and_reports_scene_separately(
+    tmp_path, monkeypatch, memory
+):
+    from types import SimpleNamespace
+
+    from vflash.adapters.conditioning_capture import H3ConditioningCaptureComplete
+    from vflash.adapters.diffusers_h3 import DiffusersConditioner
+    from vflash.model_assets import model_profile
+    from vflash.native.h3_conditioning_bundle import _validate_source
+    from vflash.pipeline.assets import conditioning_source
+
+    reuse, components, reference, request, _calls = _fixture(monkeypatch)
+    reference.size_bytes = 128
+    owner = DiffusersConditioner.__new__(DiffusersConditioner)
+    owner.pipe = reuse.conditioner.pipe
+    owner.profile = model_profile("i2va-base16-bf16-sm89")
+    owner.prepared = reuse.conditioner.prepared
+    owner.versions = reuse.conditioner.versions
+    owner._closed, owner._cuda_active = False, True
+    owner.device, owner.transformer = "cpu", object()
+    owner._torch = SimpleNamespace(cuda=SimpleNamespace(synchronize=lambda _: None))
+    owner.pipe.scheduler = owner.pipe.audio_scheduler = SimpleNamespace(sigmas=list(range(17)))
+
+    def invoke(_request, _references):
+        owner.pipe._blocks.sub_blocks["text_encoder"](components, _State())
+        raise H3ConditioningCaptureComplete
+
+    owner._invoke = invoke
+
+    class Capture:
+        def __init__(self, _directory):
+            pass
+
+        def install(self, _transformer):
+            pass
+
+        def close(self):
+            pass
+
+        def discard(self):
+            pass
+
+        def prefix_counts(self):
+            return 1, 0
+
+        def reference_token_budget(self, **_kwargs):
+            return 1
+
+        def finish(self, **kwargs):
+            assert _validate_source(kwargs["source"]) == conditioning_source(
+                profile_id=owner.prepared.profile_id,
+                request_mode=request.mode,
+                runtime_versions=owner.versions,
+                reference_policy="match",
+            )
+            return kwargs
+
+        finish_in_memory = finish
+
+    monkeypatch.setattr("vflash.adapters.diffusers_h3.H3ConditioningCaptureSession", Capture)
+    scene = SourceSceneConditioning(request)
+    capture = owner.capture_in_memory if memory else owner.capture
+    result = capture(request, (reference,), tmp_path / "conditioning", scene_conditioning=scene)
+    assert "scene_conditioning" not in result["source"]
+    assert owner.last_capture_diagnostics["scene_conditioning"]["source_captures"] == 1
+    assert owner.last_capture_diagnostics["scene_conditioning"]["equivalent"] is False
+    scene.close()

@@ -491,8 +491,6 @@ class DiffusersConditioner:
                 runtime_versions=self.versions,
                 reference_policy=H3_VIDEO_REFERENCE_POLICY if is_video else "match",
             )
-            if scene_conditioning is not None:
-                source["scene_conditioning"] = scene_conditioning.report
             request_metadata = {
                 "source_case_id": "vflash-live",
                 "prompt": request.prompt,
