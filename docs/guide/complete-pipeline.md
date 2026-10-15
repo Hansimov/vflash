@@ -579,3 +579,50 @@ guarantee. Earlier complete-request experiments established a scoped benefit
 for source-scene reuse; this explicit implementation requires its own complete
 media qualification before release or adoption. Keep original audio and inspect
 identity, expression, temporal behavior and instruction adherence.
+
+
+## Owned row-FP8 model loaders (development)
+
+The native `create_row_fp8_native_loaders` factory and
+`load_row_fp8_text_encoder` accept explicitly prepared, approximate E4M3
+weights with FP32 row scales. They compose with `H3Pipeline`'s trusted Python
+`native_denoiser_loader` and `text_encoder_loader` callbacks. Each factory owns
+its block class and precision policy; it does not replace a global BF16 loader,
+alter the request envelope, select a GPU, or fetch models.
+
+```python
+from pathlib import Path
+from vflash.native.h3_fp8_linear import RowFP8Execution
+from vflash.native.h3_fp8_runtime import create_row_fp8_native_loaders
+
+precision = RowFP8Execution("w8a8", activation_quantizer="triton")
+native = create_row_fp8_native_loaders(
+    precision,
+    weights_directory=Path("prepared-fp8/artifact"),
+    token_tile_rows=16384,
+    whole_block_rows=32768,
+)
+# Pass native.denoiser_loader to an owned H3Pipeline with resident weights.
+```
+
+The caller validates the complete encoded inventory and passes a trusted
+artifact. Original BF16 digests establish lineage, not FP8 content identity.
+The normal prepared-asset receipt and CLI do not accept an FP8 bundle merely
+because these numerical loaders exist. A custom `open_weights(path)` context
+manager can supply bounded or prefetched tensor reads; the default uses local
+safetensors. Text shards are `RowFP8TextShard(path, quantized_names)` objects;
+unchanged text/vision weights come from the named original shard index. All
+parameters must be assigned before the encoder is returned. Duplicate entries,
+incomplete shards and invalid code/scale dtypes are rejected.
+
+Optional row tiling bounds projection/norm/MLP temporaries while preserving
+full-sequence attention. The whole-block shortcut is explicit and only applies
+below the configured row limit. Neither option qualifies larger requests.
+W8A8 remains approximate, requires supported SM90/SM120 execution and never
+silently switches to restored-weight arithmetic. BF16 serving defaults remain.
+
+Validation includes synthetic full-context block comparisons, isolated factory
+ownership, real mixed-shard assignment and four tiny Qwen/H3 conditioning modes.
+These are CPU checks, not complete-model GPU, media-quality or service-rollout
+qualification. The complete pipeline dependency image can run the loader checks
+without CUDA or network access using `python tests/test_fp8_loaders.py`.

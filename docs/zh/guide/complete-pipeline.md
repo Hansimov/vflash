@@ -438,3 +438,44 @@ with pipeline.source_scene_conditioning(source_request) as scene:
 这是开发候选接口，尚非默认方案或通用质量保证。既有完整请求实验支持源场景复用的
 有限净益；本显式实现仍需独立完整成片资格后再发布采用。保留原音轨，检查身份、表情、
 时序及指令遵循。
+
+
+## 独立持有的行级 FP8 模型加载器（开发中）
+
+原生 `create_row_fp8_native_loaders` 工厂与
+`load_row_fp8_text_encoder` 接受显式准备的 E4M3 近似权重及 FP32 行缩放，
+通过 `H3Pipeline` 受信任的 Python `native_denoiser_loader`、
+`text_encoder_loader` 回调接入。每个工厂独立持有 block 类和精度策略，
+不替换全局 BF16 加载器，不修改请求范围，不选择 GPU 或下载模型。
+
+```python
+from pathlib import Path
+from vflash.native.h3_fp8_linear import RowFP8Execution
+from vflash.native.h3_fp8_runtime import create_row_fp8_native_loaders
+
+precision = RowFP8Execution("w8a8", activation_quantizer="triton")
+native = create_row_fp8_native_loaders(
+    precision,
+    weights_directory=Path("prepared-fp8/artifact"),
+    token_tile_rows=16384,
+    whole_block_rows=32768,
+)
+# 向独立的、权重常驻的 H3Pipeline 传入 native.denoiser_loader。
+```
+
+调用者负责验证完整编码资产清单并传入可信 artifact。原 BF16 摘要仅说明来源，
+不能认证 FP8 文件内容。这些数值加载器的存在不代表普通资产凭据或 CLI 已接受
+FP8 bundle。`open_weights(path)` 上下文可提供有界或预读的张量读取；默认使用
+本地 safetensors。文本分片由 `RowFP8TextShard(path, quantized_names)` 声明，
+未量化的文本/视觉权重从具名原始分片索引读取。全部参数加载完成才返回编码器；
+重复声明、不完整分片及错误编码/缩放类型会被拒绝。
+
+可选按行分块限制投影、归一化和 MLP 临时存储，同时保留全序列注意力。
+整块捷径需要显式开启，且只在配置的行数范围内执行；这不扩大请求资格。
+W8A8 仍为近似算法，只在受支持的 SM90/SM120 路径执行，不静默退回还原权重运算。
+BF16 服务默认保持。
+
+验证包括合成完整上下文 block 对照、工厂所有权隔离、真实混合分片赋值及四种
+微型 Qwen/H3 条件输入。这些是 CPU 检查，不能代替完整模型 GPU、成片质量或
+服务上线验证。完整流水线依赖镜像可通过 `python tests/test_fp8_loaders.py`
+在无 CUDA、无网络条件下运行加载器检查。
