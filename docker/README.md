@@ -4,7 +4,7 @@
 
 Use the [pipeline image](https://hansimov.github.io/vflash/guide/docker#pipeline) to generate a complete MP4 from text alone or a prompt and one to three references on SM89, or from references on two SM86 GPUs. The separate native HTTP service is described below.
 
-Published 0.9.0 images are `hansimov/vflash:0.9.0` and `hansimov/vflash:0.9.0-pipeline`.
+Published 0.10.0 images are `hansimov/vflash:0.10.0` and `hansimov/vflash:0.10.0-pipeline`.
 Pin their immutable digests from [the image inventory](images.json). The [full guide](https://hansimov.github.io/vflash/guide/docker) covers source builds, explicit Veda provisioning, 40/10 or 44/6 settings, and package-version verification.
 
 The service accepts compiled conditioning bundles and returns video and audio latents (tensors ready for decoding). It uses one GPU or a cooperating pair and reuses a loaded model across serial requests.
@@ -19,7 +19,7 @@ From the repository root:
 cp docker/.env.example docker/.env
 ```
 
-Edit `docker/.env` with your absolute asset paths and selected GPU. `VFLASH_IMAGE=hansimov/vflash:0.9.0` selects the published native image. `VFLASH_ATTENTION_BACKEND=auto` selects Sol only for single-SM89 official Base16; `torch-flash` explicitly retains dense. Choose one of:
+Edit `docker/.env` with your absolute asset paths and selected GPU. `VFLASH_IMAGE=hansimov/vflash:0.10.0` selects the published native image. `VFLASH_ATTENTION_BACKEND=auto` selects Sol only for single-SM89 official Base16; `torch-flash` explicitly retains dense. Choose one of:
 
 | GPU | `VFLASH_PROFILE_ID` |
 | --- | --- |

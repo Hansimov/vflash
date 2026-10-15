@@ -1,6 +1,6 @@
 # Release notes
 
-## 0.10.0 (release preparation)
+## 0.10.0
 
 Adds the explicit `batch2-fp16-norm-reuse-untiled` face encoder profile for
 512-square, 124-frame inputs. It removes overlapping spatial encoder tiles,
@@ -13,8 +13,8 @@ one private prototype case. This is equivalence to that prototype, not to the
 previous tiled encoder. Spatial context, normalization and some visual details
 change; memory increases. See the complete-pipeline guide for timing and quality
 limits. No new restoration model, weights or application scheduling is bundled.
-The package version is staged; publishing artifacts and adopting the profile in
-consuming services are separate steps.
+Wheel, source distribution and native/pipeline images are published. Consuming
+applications opt in separately; release does not change their deployed recipe.
 
 ## 0.9.0
 
