@@ -4,12 +4,13 @@ Native **MiniMax H3 inference** with explicit GPU profiles. Vflash uses PyTorch 
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
-**0.8.0: consistent Python, CLI and service configuration.** The native HTTP service and
-`denoise` command now expose the same explicit Veda dense backend and layer partition as
-`H3Pipeline` and `generate`. Five dense layers at each end remain the default (40 sparse / 10 dense);
-three at each end explicitly select 44 / 6. Readiness validates the selected dependencies and GPU
-architecture before accepting work. This is an approximate attention option, not a promise of
-identical output or a universal quality/speed improvement.
+**0.9.0: direct RGB handoff and exact removal of repeated VAE work.** The Python
+pipeline can deliver video-only uint8 arrays directly to a compositor, decode
+only explicitly selected frames, and reuse identical padded encoder clips.
+The ordinary MP4 interface and explicit 44/6 attention remain unchanged.
+Two complete-video scenes preserved every final RGB frame and original audio
+on one RTX PRO 6000. Savings depend on repeated inputs and unused frame spans;
+this is a building block, not a general face-quality or latency guarantee.
 
 Vflash provides two interfaces:
 
@@ -37,7 +38,7 @@ face-restoration workflow. Existing model, precision and attention defaults rema
 Python 3.11 or newer is required. The base install does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.8.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.9.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate

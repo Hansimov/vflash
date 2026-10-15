@@ -2,7 +2,7 @@
 # Build the wheel from the selected public source before invoking this recipe.
 ARG VFLASH_BASE_IMAGE=hansimov/vflash@sha256:06734559ff58bce76078306340b2f7785627021c063c678c02fe453f8ce2a974
 FROM ${VFLASH_BASE_IMAGE}
-ARG VFLASH_VERSION=0.8.0
+ARG VFLASH_VERSION=0.9.0
 ARG VFLASH_REVISION
 USER root
 WORKDIR /opt/vflash

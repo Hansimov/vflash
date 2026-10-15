@@ -1,5 +1,20 @@
 # Release notes
 
+## 0.9.0
+
+Adds explicit `H3Pipeline.generate_rgb` with reserved uint8 NumPy output and
+optional selected-frame decoding. Partial arrays declare valid indices and zero
+unused frames; ordinary MP4 delivery keeps its original contract. The new
+`batch2-fp16-norm-reuse` profile skips identical 17-frame inputs on the qualified
+124-frame timeline, retaining batch-two arithmetic and the full posterior.
+
+Six complete same-GPU PRO6000 requests exercised the actual public API and
+application composition. Three matched pairs preserved all 120 RGB frames and
+source PCM. The two scenes include continuous and separated face tracks. This
+is scoped equivalence and execution evidence, not general perceptual or latency
+qualification. Detection, restoration assets, mask ownership and deployment stay
+with the application. No model weights are bundled.
+
 ## 0.8.0
 
 Adds an owned `VideoRepaintRequest` with independently matched two- or four-evaluation low-noise tables, actual NFE/progress receipts and frozen audio. Temporary head/modulation bindings remain request-scoped. Two complete PRO6000 scenes exercised the native path; one matched legacy/native two-step pair had identical decoded frames. See the complete-pipeline guide for timing scope and limits.

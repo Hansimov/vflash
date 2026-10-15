@@ -4,9 +4,10 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
-**0.8.0：统一 Python、CLI 与服务配置。** 原生HTTP服务和`denoise`命令现在支持与
-`H3Pipeline`、`generate`相同的显式Veda密集后端及层分配。默认首尾各五层密集（40稀疏/10密集），
-显式首尾各三层得到44/6；就绪检查验证依赖与GPU架构。该选项属于近似注意力，不承诺输出相同或普遍质量/速度改善。
+**0.9.0：直接RGB交付与VAE重复工作消除。** Python流水线可向合成器直接返回纯视频uint8数组，
+仅解码显式选中的帧，并复用完全相同的填充编码块。普通MP4接口及显式44/6注意力保持。
+同一张RTX PRO6000的两个完整视频场景中，最终RGB逐帧与原音轨均保持；收益取决于重复输入
+和不参与合成的帧区间。这是可复用基础接口，不作通用人脸质量或延迟保证。
 
 Vflash提供两类入口：
 
@@ -29,7 +30,7 @@ Vflash提供两类入口：
 需要 Python 3.11 或更新版本。基础安装不会下载模型权重或 PyTorch。
 
 ```bash
-git clone --branch v0.8.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.9.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
