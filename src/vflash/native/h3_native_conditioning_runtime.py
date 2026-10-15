@@ -721,8 +721,8 @@ class H3NativeConditioningRuntime:
                 or profile_denoise
                 or len(self.devices) != 1
                 or self.weight_residency != "resident"
-                or self._veda_attention is None
-                or self._veda_attention.dense_layers != frozenset((0, 1, 2, 47, 48, 49))
+                or self.attention_backend != "veda-triton"
+                or self.veda_dense_edge_layers != 3
                 or self.overlay.schedule.nfe != 4
             ):
                 raise H3NativeConditioningRuntimeError(

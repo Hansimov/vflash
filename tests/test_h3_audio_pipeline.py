@@ -121,3 +121,34 @@ def test_native_rejects_untyped_audio_before_loading(tmp_path):
     runtime._torch = N()
     with pytest.raises(H3NativeConditioningRuntimeError, match="audio refinement"):
         runtime.generate_latents(None, tmp_path / "latents.safetensors", audio_refinement=True)
+
+
+@pytest.mark.parametrize("cold", [True, False])
+def test_audio_admission_uses_configuration_before_lazy_request_layout(tmp_path, cold):
+    runtime = H3NativeConditioningRuntime.__new__(H3NativeConditioningRuntime)
+    runtime._closed = False
+    runtime._torch = N()
+    runtime.devices = (0,)
+    runtime.weight_residency = "resident"
+    runtime.attention_backend = "veda-triton"
+    runtime.veda_dense_edge_layers = 3
+    runtime.overlay = N(schedule=N(nfe=4))
+    runtime._veda_attention = None if cold else object()
+    calls = []
+
+    def load(conditioning):
+        calls.append(conditioning)
+        raise LookupError("reached request tensor loading")
+
+    runtime._load_request_tensors = load
+    with pytest.raises(LookupError, match="reached request tensor loading"):
+        runtime.generate_latents(
+            "owned request", tmp_path / "latents.safetensors", audio_refinement=audio_request()
+        )
+    assert calls == ["owned request"]
+    runtime.veda_dense_edge_layers = 5
+    with pytest.raises(H3NativeConditioningRuntimeError, match="Veda 44/6"):
+        runtime.generate_latents(
+            "owned request", tmp_path / "latents.safetensors", audio_refinement=audio_request()
+        )
+    assert calls == ["owned request"]
