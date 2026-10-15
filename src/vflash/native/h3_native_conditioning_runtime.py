@@ -173,6 +173,7 @@ class H3NativeConditioningRuntimeResult:
     peak_allocated_bytes_by_device: tuple[int, ...]
     denoise_profile: dict[str, Any] | None = None
     refinement: dict[str, Any] | None = None
+    audio_refinement: dict[str, Any] | None = None
 
 
 class H3NativeConditioningRuntime:
@@ -698,6 +699,7 @@ class H3NativeConditioningRuntime:
         profile_denoise: bool = False,
         generate_audio: bool = True,
         video_repaint: Any | None = None,
+        audio_refinement: Any | None = None,
     ) -> H3NativeConditioningRuntimeResult:
         """Run one live request and export target-only VAE-ready latents."""
 
@@ -709,6 +711,23 @@ class H3NativeConditioningRuntime:
         prepare_started = time.monotonic()
         if type(generate_audio) is not bool or (not generate_audio and len(self.devices) != 1):
             raise H3NativeConditioningRuntimeError("video-only generation requires one device")
+        if audio_refinement is not None:
+            from vflash.native.h3_audio_refinement import AudioRefinementRequest
+
+            if (
+                not isinstance(audio_refinement, AudioRefinementRequest)
+                or not generate_audio
+                or video_repaint is not None
+                or profile_denoise
+                or len(self.devices) != 1
+                or self.weight_residency != "resident"
+                or self._veda_attention is None
+                or self._veda_attention.dense_layers != frozenset((0, 1, 2, 47, 48, 49))
+                or self.overlay.schedule.nfe != 4
+            ):
+                raise H3NativeConditioningRuntimeError(
+                    "audio refinement requires unprofiled four-step resident AV with Veda 44/6"
+                )
         if video_repaint is not None:
             from vflash.native.h3_refinement import VideoRepaintRequest
 
@@ -727,6 +746,15 @@ class H3NativeConditioningRuntime:
         ):
             raise H3NativeConditioningRuntimeError(
                 "repaint requires a four-step I2VA base owner"
+            )
+        if audio_refinement is not None and (
+            bundle.profile.task != "i2va"
+            or bundle.profile.num_condition_audio_rows
+            or bundle.profile.num_condition_video_rows
+            != (bundle.profile.height // 32) * (bundle.profile.width // 32)
+        ):
+            raise H3NativeConditioningRuntimeError(
+                "audio refinement requires one same-canvas image keyframe and no audio prefix"
             )
         if not generate_audio:
             from vflash.native.h3_audio_mode import without_generated_audio
@@ -808,6 +836,7 @@ class H3NativeConditioningRuntime:
             rotary_cos=tensors["rotary_cos"].to(device),
             rotary_sin=tensors["rotary_sin"].to(device),
         )
+        audio_noise = state.audio_latents.clone() if audio_refinement is not None else None
         del tensors
         repaint = None
         execution_nfe = self.overlay.schedule.nfe
@@ -820,6 +849,9 @@ class H3NativeConditioningRuntime:
             )
             execution_nfe = video_repaint.steps
             execution_schedule = video_repaint.execution_schedule()
+        progress_nfe = execution_nfe + (
+            audio_refinement.steps if audio_refinement is not None else 0
+        )
         torch.cuda.synchronize(device)
         prepare_seconds = time.monotonic() - prepare_started
 
@@ -863,7 +895,7 @@ class H3NativeConditioningRuntime:
                                     time.perf_counter() - fence_started
                                 )
                         callback_started = time.perf_counter() if profile_denoise else 0.0
-                        progress_callback(engine.evaluation_index, execution_nfe)
+                        progress_callback(engine.evaluation_index, progress_nfe)
                         if profile_denoise:
                             callback_seconds = time.perf_counter() - callback_started
                     if profile_denoise:
@@ -908,6 +940,24 @@ class H3NativeConditioningRuntime:
                     self.denoiser.abort_denoise_profile()
             raise
         denoise_seconds = time.monotonic() - denoise_started
+        audio_record = None
+        if audio_refinement is not None:
+            from vflash.native.h3_audio_refinement import refine_audio
+
+            def audio_progress(completed, total):
+                if progress_callback is not None:
+                    torch.cuda.synchronize(device)
+                    progress_callback(execution_nfe + completed, progress_nfe)
+
+            with torch.inference_mode():
+                baseline_audio, audio_record = refine_audio(
+                    engine,
+                    audio_refinement,
+                    noise=audio_noise,
+                    progress_callback=audio_progress,
+                )
+            del baseline_audio
+        del audio_noise
         if not bool(
             torch.isfinite(engine.latent_state.video_latents).all()
             and torch.isfinite(engine.latent_state.audio_latents).all()
@@ -971,11 +1021,13 @@ class H3NativeConditioningRuntime:
             stage_durations={
                 "request_prepare": prepare_seconds,
                 "denoise": denoise_seconds,
+                **({"audio_refinement": audio_record["extra_seconds"]} if audio_record else {}),
                 "latent_export": export_seconds,
             },
             peak_allocated_bytes_by_device=device_peaks,
             denoise_profile=denoise_profile,
             refinement=refinement_record,
+            audio_refinement=audio_record,
         )
 
     def _require_open(self) -> None:

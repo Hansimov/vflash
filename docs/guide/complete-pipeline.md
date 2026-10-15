@@ -626,3 +626,50 @@ ownership, real mixed-shard assignment and four tiny Qwen/H3 conditioning modes.
 These are CPU checks, not complete-model GPU, media-quality or service-rollout
 qualification. The complete pipeline dependency image can run the loader checks
 without CUDA or network access using `python tests/test_fp8_loaders.py`.
+
+
+## Optional audio-only six-step refinement (source main)
+
+`AudioRefinementRequest` adds six original-model audio evaluations after a four-step
+hybrid I2VA generation. It freezes the completed video, retains every temporal
+position, and uniformly selects spatial context up to 500,000 pixels while keeping
+original rotary coordinates. This is approximate audio conditioning, not equivalent
+full-context inference or a second low-resolution video. The output video buffer,
+requested duration, and delivery clock remain unchanged. Sound quality and sync
+still require content-specific evaluation.
+
+```python
+from vflash.native.h3_audio_refinement import AudioRefinementRequest
+from vflash.native.h3_refinement_schedule import refinement_schedule
+
+# Supply 51 caller-owned compiled modulation tables matching this exact schedule.
+refinement = AudioRefinementRequest(
+    refinement_schedule(steps=6, denoise=0.5), tuple(audio_tables),
+)
+result = pipeline.generate(request, output_path, audio_refinement=refinement)
+```
+
+The explicit Python option requires resident hybrid weights, one device, Veda 44/6,
+one same-canvas first image, generated audio, and no denoise profiling. Existing
+profile and capacity limits still apply. It rejects silent delivery, video-only
+output, other reference modes, streamed weights, and simultaneous native repaint.
+Inputs already below the spatial budget retain full context. `context_pixels=None`
+selects the full-context six-step control. There is no CLI/HTTP switch or default
+activation. This interface is not part of the published 0.10.0 package.
+
+Main generation metadata stays at four evaluations; denoising progress reports ten
+(4 + 6). Added work is separately recorded as `audio_refinement`. Failure restores
+model bindings, attention, video, and original audio. The complete pipeline applies
+linked stereo headroom before the official decoder clamp and reports it separately.
+Native sessions return latents only; their decoder caller must provide this guard.
+
+The context algorithm was evaluated in two independent five-second high-resolution
+I2VA cases on an RTX PRO 6000 Blackwell Server GPU with FP8 weights and 44/6 attention.
+Compared with full-context six-step refinement, total generation changed from 83.88
+to 61.20 seconds at 1024² and from 186.35 to 111.94 seconds at 1536×1344. Both paired
+videos retained all 120 decoded frames; the two reduced-context audio results were
+accepted against their full-context controls. These are private integration results,
+not a universal quality guarantee or evidence that refined audio beats every original.
+The new owned Python wiring has focused CPU coverage; its complete target-GPU
+qualification and production adoption are pending. No additional hardware or mode
+qualification is implied.

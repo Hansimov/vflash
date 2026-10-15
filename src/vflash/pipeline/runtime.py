@@ -328,6 +328,7 @@ class H3Pipeline:
         progress: Callable[[PipelineProgress], None] | None = None,
         profile_denoise: bool = False,
         conditioning_reuse_scope: ConditioningReuseScope | None = None,
+        audio_refinement: Any | None = None,
     ) -> VideoResult:
         """Return a complete MP4; failed or concurrent requests never publish a partial file."""
         return self._generate(
@@ -336,6 +337,7 @@ class H3Pipeline:
             progress=progress,
             profile_denoise=profile_denoise,
             conditioning_reuse_scope=conditioning_reuse_scope,
+            **({"audio_refinement": audio_refinement} if audio_refinement is not None else {}),
         )
 
     def generate_rgb(
@@ -374,6 +376,7 @@ class H3Pipeline:
         progress: Callable[[PipelineProgress], None] | None = None,
         profile_denoise: bool = False,
         conditioning_reuse_scope: ConditioningReuseScope | None = None,
+        audio_refinement: Any | None = None,
     ) -> VideoResult:
         """Publish one complete artifact; failures never publish partial output."""
         started = time.monotonic()
@@ -393,6 +396,27 @@ class H3Pipeline:
             attention_backend=self.attention_backend,
             weight_residency=self.weight_residency,
         )
+        if audio_refinement is not None:
+            from vflash.media.audio_delivery import SILENT_AUDIO_PROFILE
+            from vflash.native.h3_audio_refinement import AudioRefinementRequest
+
+            if (
+                not isinstance(audio_refinement, AudioRefinementRequest)
+                or request.mode != "i2va"
+                or not request.generate_audio
+                or rgb
+                or request.audio_delivery_profile == SILENT_AUDIO_PROFILE
+                or profile_denoise
+                or self.hybrid_model is None
+                or self.weight_residency != "resident"
+                or self.attention_backend != "veda-triton"
+                or self._plan.parallel_strategy != "single"
+                or self.veda_dense_edge_layers != 3
+            ):
+                raise ContractError(
+                    "audio refinement requires an unprofiled resident hybrid I2VA "
+                    "pipeline with Veda"
+                )
         if rgb:
             from vflash.media.rgb_delivery import validate_rgb_selection
 
@@ -448,6 +472,11 @@ class H3Pipeline:
                     conditioning_reuse_scope=conditioning_reuse_scope,
                     rgb=rgb,
                     required_frames=required_frames,
+                    **(
+                        {"audio_refinement": audio_refinement}
+                        if audio_refinement is not None
+                        else {}
+                    ),
                 )
                 if scene is not None:
                     scene.request_complete()
@@ -500,6 +529,7 @@ class H3Pipeline:
         conditioning_reuse_scope: ConditioningReuseScope | None,
         rgb: bool = False,
         required_frames: tuple[int, ...] | None = None,
+        audio_refinement: Any | None = None,
     ) -> VideoResult:
         def report(stage: str, completed: int, total: int) -> None:
             if progress is not None:
@@ -583,7 +613,12 @@ class H3Pipeline:
                     None,
                 ),
             }
-            report("denoising", 0, self.profile.definition.nfe)
+            report(
+                "denoising",
+                0,
+                self.profile.definition.nfe
+                + (audio_refinement.steps if audio_refinement is not None else 0),
+            )
             native_options: dict[str, Any] = {
                 "progress_callback": lambda completed, total: report(
                     "denoising", completed, total
@@ -593,6 +628,8 @@ class H3Pipeline:
                 native_options["profile_denoise"] = True
             if not request.generate_audio:
                 native_options["generate_audio"] = False
+            if audio_refinement is not None:
+                native_options["audio_refinement"] = audio_refinement
             native = self._core.generate(
                 bundle if in_memory else bundle.directory,
                 directory / "latents.safetensors",
@@ -650,15 +687,25 @@ class H3Pipeline:
                 )
             else:
                 media_path = directory / "video.mp4"
-                media = self._media.generate_mp4(
-                    directory / "latents.safetensors",
-                    media_path,
-                    height=request.height,
-                    width=request.width,
-                    duration_seconds=request.duration_seconds,
-                    fps=24,
-                    **media_options,
-                )
+                headroom = {}
+                with ExitStack() as audio_guard:
+                    if audio_refinement is not None:
+                        from vflash.media.audio_headroom import audio_decoder_headroom
+
+                        audio_guard.enter_context(
+                            audio_decoder_headroom(self._media.audio, headroom)
+                        )
+                    media = self._media.generate_mp4(
+                        directory / "latents.safetensors",
+                        media_path,
+                        height=request.height,
+                        width=request.width,
+                        duration_seconds=request.duration_seconds,
+                        fps=24,
+                        **media_options,
+                    )
+                if headroom:
+                    stages["audio_decoder_headroom"] = headroom
             decode_call_seconds = time.monotonic() - call_started
             suspend_seconds = self._media.suspend_cuda()
             report("decoding", 1, 1)

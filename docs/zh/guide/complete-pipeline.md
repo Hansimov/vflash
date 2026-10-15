@@ -479,3 +479,38 @@ BF16 服务默认保持。
 微型 Qwen/H3 条件输入。这些是 CPU 检查，不能代替完整模型 GPU、成片质量或
 服务上线验证。完整流水线依赖镜像可通过 `python tests/test_fp8_loaders.py`
 在无 CUDA、无网络条件下运行加载器检查。
+
+
+## 可选的仅音频六步修复（源码 main） {#optional-audio-only-six-step-refinement-source-main}
+
+`AudioRefinementRequest` 在四步 hybrid I2VA 主生成后增加六次原模型音频评估。
+它冻结已完成的视频，保留所有时间位置，均匀选取不超过 500,000 像素的空间条件，
+沿用原始旋转位置坐标。这是近似音频条件，不是完整条件等价执行，也不是重新生成低分辨率视频。
+原视频缓冲区、请求时长与交付时间轴保持；音质和同步仍须按内容评估。
+
+```python
+from vflash.native.h3_audio_refinement import AudioRefinementRequest
+from vflash.native.h3_refinement_schedule import refinement_schedule
+
+# 调用者提供与此精确调度匹配的 51 份已编译调制表。
+refinement = AudioRefinementRequest(
+    refinement_schedule(steps=6, denoise=0.5), tuple(audio_tables),
+)
+result = pipeline.generate(request, output_path, audio_refinement=refinement)
+```
+
+该 Python 显式选项要求常驻 hybrid 权重、单卡、Veda 44/6、同画布单首帧、生成音频且关闭去噪分析。
+原 profile 和容量限制仍适用；不支持静音交付、纯视频、其他参考模式、流式权重或同时原生重绘。
+低于空间预算的输入保留完整条件；`context_pixels=None` 显式选择完整条件六步对照。
+没有 CLI/HTTP 开关，也不默认开启；已发布的 0.10.0 包不包含此接口。
+
+主生成元数据仍为四步，去噪进度报告十步（4 + 6），新增耗时单列 `audio_refinement`。
+失败恢复模型绑定、注意力、原视频和原音频。完整管线在官方解码器硬削波前使用双声道联动余量保护，
+另存观察记录。原生会话仅返回潜变量，其解码调用者须自行使用该保护。
+
+空间条件算法已在 RTX PRO 6000 Blackwell Server、FP8 权重和 44/6 注意力下验证两组独立五秒高清场景。
+相对完整条件六步，1024² 总生成 83.88→61.20 秒，1536×1344 为 186.35→111.94 秒。
+两组各 120 帧解码像素保持，用户均接受缩减条件版本相对完整六步的音质。
+这是私有集成证据，不是通用质量保证，也不代表所有修复音频都胜过原版。
+新的显式 Python 接线已通过聚焦 CPU 检查，目标 GPU 完整资格与生产采用仍待验证；
+不据此扩大其他硬件或输入模式资格。

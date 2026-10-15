@@ -234,6 +234,7 @@ class NativeEngineSession:
         progress_callback: Callable[[int, int], None] | None = None,
         profile_denoise: bool = False,
         generate_audio: bool = True,
+        audio_refinement: Any | None = None,
     ) -> dict[str, Any]:
         if self.closed:
             raise ContractError("the native engine session is closed")
@@ -247,6 +248,8 @@ class NativeEngineSession:
             raise ContractError("generate_audio must be boolean")
         if not generate_audio:
             options["generate_audio"] = False
+        if audio_refinement is not None:
+            options["audio_refinement"] = audio_refinement
         result = self.runtime.generate_latents(bundle, output_latents, **options)
         self.request_count += 1
         return {
