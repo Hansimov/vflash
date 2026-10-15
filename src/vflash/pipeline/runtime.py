@@ -301,6 +301,52 @@ class H3Pipeline:
         conditioning_reuse_scope: ConditioningReuseScope | None = None,
     ) -> VideoResult:
         """Return a complete MP4; failed or concurrent requests never publish a partial file."""
+        return self._generate(
+            request,
+            output_path,
+            progress=progress,
+            profile_denoise=profile_denoise,
+            conditioning_reuse_scope=conditioning_reuse_scope,
+        )
+
+    def generate_rgb(
+        self,
+        request: VideoRequest,
+        output_path: Path,
+        *,
+        required_frames: tuple[int, ...] | None = None,
+        progress: Callable[[PipelineProgress], None] | None = None,
+        profile_denoise: bool = False,
+        conditioning_reuse_scope: ConditioningReuseScope | None = None,
+    ) -> VideoResult:
+        """Return uint8 THWC NPY pixels without encoding an intermediate video.
+
+        This explicit video-only path preserves the model's padded timeline.
+        With required_frames, only those indices are valid; all others are zero.
+        The normal generate() method continues to deliver complete MP4 media.
+        """
+        return self._generate(
+            request,
+            output_path,
+            rgb=True,
+            required_frames=required_frames,
+            progress=progress,
+            profile_denoise=profile_denoise,
+            conditioning_reuse_scope=conditioning_reuse_scope,
+        )
+
+    def _generate(
+        self,
+        request: VideoRequest,
+        output_path: Path,
+        *,
+        rgb: bool = False,
+        required_frames: tuple[int, ...] | None = None,
+        progress: Callable[[PipelineProgress], None] | None = None,
+        profile_denoise: bool = False,
+        conditioning_reuse_scope: ConditioningReuseScope | None = None,
+    ) -> VideoResult:
+        """Publish one complete artifact; failures never publish partial output."""
         started = time.monotonic()
         if self._closed:
             raise ContractError("the pipeline is closed")
@@ -318,6 +364,18 @@ class H3Pipeline:
             attention_backend=self.attention_backend,
             weight_residency=self.weight_residency,
         )
+        if rgb:
+            from vflash.media.rgb_delivery import validate_rgb_selection
+
+            if (
+                request.generate_audio
+                or request.audio_delivery_profile != "unchanged"
+                or request.keyframe_delivery_profile != "decoded"
+            ):
+                raise ContractError("RGB delivery requires video-only decoded keyframes")
+            validate_rgb_selection(request.model_frames, required_frames)
+        elif required_frames is not None:
+            raise ContractError("partial decoding is only supported by RGB delivery")
         if output_path.exists() or output_path.is_symlink():
             raise ContractError("the output path already exists")
         if not self._lock.acquire(blocking=False):
@@ -356,6 +414,8 @@ class H3Pipeline:
                     progress=progress,
                     profile_denoise=profile_denoise,
                     conditioning_reuse_scope=conditioning_reuse_scope,
+                    rgb=rgb,
+                    required_frames=required_frames,
                 )
             except BaseException as exc:
                 try:
@@ -404,6 +464,8 @@ class H3Pipeline:
         progress: Callable[[PipelineProgress], None] | None,
         profile_denoise: bool,
         conditioning_reuse_scope: ConditioningReuseScope | None,
+        rgb: bool = False,
+        required_frames: tuple[int, ...] | None = None,
     ) -> VideoResult:
         def report(stage: str, completed: int, total: int) -> None:
             if progress is not None:
@@ -535,15 +597,31 @@ class H3Pipeline:
                     media_options["last_frame"] = references[0].image
                 elif request.mode == "fl2va":
                     media_options["last_frame"] = references[1].image
-            media = self._media.generate_mp4(
-                directory / "latents.safetensors",
-                directory / "video.mp4",
-                height=request.height,
-                width=request.width,
-                duration_seconds=request.duration_seconds,
-                fps=24,
-                **media_options,
-            )
+            if rgb:
+                from vflash.media.rgb_delivery import generate_rgb
+
+                media_path = directory / "video.npy"
+                media = generate_rgb(
+                    self._media,
+                    directory / "latents.safetensors",
+                    media_path,
+                    height=request.height,
+                    width=request.width,
+                    duration_seconds=request.duration_seconds,
+                    model_frames=request.model_frames,
+                    required_frames=required_frames,
+                )
+            else:
+                media_path = directory / "video.mp4"
+                media = self._media.generate_mp4(
+                    directory / "latents.safetensors",
+                    media_path,
+                    height=request.height,
+                    width=request.width,
+                    duration_seconds=request.duration_seconds,
+                    fps=24,
+                    **media_options,
+                )
             decode_call_seconds = time.monotonic() - call_started
             suspend_seconds = self._media.suspend_cuda()
             report("decoding", 1, 1)
@@ -555,9 +633,9 @@ class H3Pipeline:
                 "stage_durations": media.stage_durations,
                 "peak_allocated_bytes": media.peak_allocated_bytes,
             }
-            os.link(directory / "video.mp4", output_path)
+            os.link(media_path, output_path)
         self.request_count += 1
-        # A callback cannot turn a successfully published MP4 into a reported
+        # A callback cannot turn a successfully published artifact into a reported
         # generation failure. The final result is the completion notification.
         return VideoResult(
             output_path,

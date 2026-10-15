@@ -478,3 +478,38 @@ This does not establish general perceptual equivalence or a complete-request lat
 Use an explicitly qualified partition such as `veda_dense_edge_layers=3` (44 sparse / 6 dense).
 Zero dense-edge layers are not supported: full-sparse exploratory outputs showed material
 perceptual degradation and were not adopted. The default five-layer edge remains available.
+
+
+## Direct RGB handoff and repeated work elimination (next minor release)
+
+`H3Pipeline.generate_rgb(request, Path("repaint.npy"))` is an explicit Python
+video-only interface. It retains the same conditioning, denoising and original
+VAE, quantizes decoded pixels once to uint8, and publishes a NumPy array in
+`[model_frames, height, width, 3]` layout. A five-second request has 120 delivery
+frames and 124 model frames; the metadata reports both. The ordinary `generate`
+method continues to publish MP4. RGB delivery requires `generate_audio=False`
+and decoded keyframes; it does not silently discard requested audio or exact
+endpoint delivery.
+
+An optional `required_frames=(0, 1, ...)` tuple selects sorted, unique model-frame
+indices for a downstream compositor. The original temporal assembly and blend
+are retained, but VAE chunks without a contribution to those frames are skipped.
+Unselected array frames are zero and **must not be treated as a complete movie**.
+The metadata declares the selected indices and actual executed chunks. Source
+sound and final full-frame composition remain the caller's responsibility.
+Array storage is reserved before mapped writes, and failures do not publish a
+partial destination. Existing destinations remain untouched.
+
+The explicit `batch2-fp16-norm-reuse` encoder profile reuses only exactly equal
+17-frame inputs on the qualified 124-frame timeline. It keeps batch-two shape,
+FP16 computation/norm and the full posterior timeline before sampling. Other
+supported timelines retain the ordinary batch-two encoder. This does not turn
+the underlying FP16 encoder into an FP32-equivalent method.
+
+The algorithm prototypes have completed two five-second scenes on one RTX PRO
+6000, including consecutive faces and separated face tracks. Repeated-clip
+reuse plus selective decoding preserved all final RGB frames and the original
+soundtrack in that comparison. Savings depend on actual repeated inputs and
+unused output spans; there is no general speed guarantee. Qualification of this
+explicit public API and its direct RGB handoff is in progress; the existing
+MP4 default and released package remain unchanged until the next release.

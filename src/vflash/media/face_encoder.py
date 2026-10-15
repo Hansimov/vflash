@@ -14,6 +14,7 @@ PROFILES = {
     "batch2-fp16": (2, "fp16"),
     "batch4-fp16": (4, "fp16"),
     "batch2-fp16-norm": (2, "fp16"),
+    "batch2-fp16-norm-reuse": (2, "fp16"),
     "batch2-fp16-norm-channels-last": (2, "fp16"),
 }
 
@@ -83,6 +84,15 @@ def face_encoder(vae, profile="original"):
             raise ValueError("face encoder trial requires a bounded native timeline")
         if precision == "fp16" and x.device.type != "cuda":
             raise ValueError("face AMP trial requires CUDA")
+        if profile == "batch2-fp16-norm-reuse" and x.shape[2] == 124:
+            from vflash.media.clip_reuse import encode_unique
+
+            reuse = {}
+            result = encode_unique(vae, x, reuse)
+            report["calls"] += 1
+            report["temporal_clips"] += reuse["input_clips"]
+            report["exact_clip_reuse"] = reuse
+            return result
         length = vae.config.clip_length
         tail = (-x.shape[2]) % length
         if tail:

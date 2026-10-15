@@ -1187,3 +1187,43 @@ def test_video_only_request_reaches_native_and_media_without_changing_conditioni
     assert observed == {"native_generate_audio": False, "include_audio": False}
     assert result.media["generate_audio"] is False
     assert events.count("conditioning:capture") == 1
+
+
+def test_explicit_rgb_uses_numpy_destination_and_preserves_normal_media(
+    video_request, tmp_path, monkeypatch
+):
+    from vflash.media import rgb_delivery
+
+    pipeline, events = _pipeline()
+    native = pipeline._core.generate
+    pipeline._core.generate = lambda *a, generate_audio, **kw: native(*a, **kw)
+    pipeline._media.resume_cuda = lambda **kw: 0.0
+    calls = []
+
+    def raw(decoder, latent, output, **options):
+        assert output.suffix == ".npy" and options["required_frames"] == (0, 1, 119)
+        output.write_bytes(b"owned RGB test placeholder")
+        calls.append(options)
+        return SimpleNamespace(
+            stage_durations={}, peak_allocated_bytes=0, media={"format": "rgb8-npy"}
+        )
+
+    monkeypatch.setattr(rgb_delivery, "generate_rgb", raw)
+    result = pipeline.generate_rgb(
+        replace(video_request, generate_audio=False),
+        tmp_path / "pixels.npy",
+        required_frames=(0, 1, 119),
+    )
+    assert result.media["format"] == "rgb8-npy" and result.output_path.exists()
+    assert calls[0]["model_frames"] == 124 and "media:generate" not in events
+    assert not list(tmp_path.glob(".vflash-*")) and not pipeline._closed
+    pipeline._core.generate = native
+    ordinary = pipeline.generate(video_request, tmp_path / "movie.mp4")
+    assert ordinary.output_path.read_bytes() == b"complete media test placeholder"
+
+
+def test_invalid_rgb_contract_does_not_retire_or_activate_session(video_request, tmp_path):
+    pipeline, events = _pipeline()
+    with pytest.raises(ContractError, match="video-only"):
+        pipeline.generate_rgb(video_request, tmp_path / "pixels.npy")
+    assert not events and not pipeline._closed and not (tmp_path / "pixels.npy").exists()
