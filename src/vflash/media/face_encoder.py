@@ -15,6 +15,7 @@ PROFILES = {
     "batch4-fp16": (4, "fp16"),
     "batch2-fp16-norm": (2, "fp16"),
     "batch2-fp16-norm-reuse": (2, "fp16"),
+    "batch2-fp16-norm-reuse-untiled": (2, "fp16"),
     "batch2-fp16-norm-channels-last": (2, "fp16"),
 }
 
@@ -71,6 +72,10 @@ def face_encoder(vae, profile="original"):
     saved = vae.__dict__.get("_encode")
     channels_last = profile.endswith("channels-last")
     norm_owners = []
+    untiled = profile == "batch2-fp16-norm-reuse-untiled"
+    previous_tiling = getattr(vae, "use_tiling", None)
+    if untiled and type(previous_tiling) is not bool:
+        raise ValueError("whole-crop encoding requires an explicit original VAE tile policy")
 
     def encode(x):
         if (
@@ -82,9 +87,14 @@ def face_encoder(vae, profile="original"):
             raise ValueError("face encoder trial requires one complete bounded square crop")
         if not 120 <= x.shape[2] <= 362:
             raise ValueError("face encoder trial requires a bounded native timeline")
+        if untiled and (x.shape[2] != 124 or x.shape[-1] != 512):
+            raise ValueError("whole-crop encoding currently qualifies 124 frames at 512 square")
         if precision == "fp16" and x.device.type != "cuda":
             raise ValueError("face AMP trial requires CUDA")
-        if profile == "batch2-fp16-norm-reuse" and x.shape[2] == 124:
+        if (
+            profile in {"batch2-fp16-norm-reuse", "batch2-fp16-norm-reuse-untiled"}
+            and x.shape[2] == 124
+        ):
             from vflash.media.clip_reuse import encode_unique
 
             reuse = {}
@@ -123,6 +133,9 @@ def face_encoder(vae, profile="original"):
         return result
 
     try:
+        if untiled:
+            vae.use_tiling = False
+            report.update(spatial_tiling=False, spatial_context_changed=True)
         if "-norm" in profile:
             norms = [
                 m
@@ -156,6 +169,8 @@ def face_encoder(vae, profile="original"):
         vae._encode = encode
         yield report
     finally:
+        if untiled:
+            vae.use_tiling = previous_tiling
         if owned:
             vae._encode = saved
         elif "_encode" in vae.__dict__:

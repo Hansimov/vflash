@@ -514,3 +514,33 @@ unused output spans; there is no general speed guarantee. The explicit public AP
 control/candidate comparison. All three final pairs matched 120/120 RGB frames
 and preserved source PCM. Native two-step repaint and 44/6 attention were fixed.
 The normal MP4 default is unchanged; consuming-service deployment remains separate.
+
+
+## Whole-crop face encoding (next minor release)
+
+The explicit `batch2-fp16-norm-reuse-untiled` profile removes spatial tiling only
+inside its encoder scope. It accepts a 512-square, 124-model-frame face crop;
+other geometry is rejected so the caller can select the existing tiled profile.
+The original temporal clips, batch-two FP16 frame normalization, repeated-input
+reuse and posterior sampling remain. The prior tile policy and normalization
+methods are restored on exit, including failure. The separate video decoder is
+unchanged.
+
+This changes spatial context and normalization statistics; it is **not pixel
+or latent equivalence**. It also needs more memory. On one RTX 4090 with about
+48 GiB of memory, a batch-two encoder probe changed from 2.056 to 0.912 seconds
+and from 4.98 to 17.38 GB of peak allocated memory. These are component numbers,
+not complete-request speedups or a claim that a standard 24 GiB card can host
+the complete pipeline with this option.
+
+Three five-second integration scenes used original restoration, native two-step
+repaint and 44/6 attention. Complete face-pass times were 47.831→43.350,
+74.665→72.005 and 48.381→42.537 seconds. The third case also measured complete
+warm inference: 93.514→87.604 seconds, against 44.680 seconds without face repair.
+The added complete-request time remains 96.1% of that matched original; repair
+still accounts for substantial latency.
+Consecutive native face frames, context and unchanged original PCM were checked;
+no new obvious structural or paste-boundary defect was observed, but rendering
+changed, some details were softer, and identity/teeth truth remained unjudgeable.
+This is bounded prototype evidence. Exact released-API qualification, additional
+hardware and consuming-service rollout are separate checks; the default is unchanged.

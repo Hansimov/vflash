@@ -102,3 +102,41 @@ def test_norm_overrides_and_parameters_survive_a_failed_context():
     assert "forward" not in norm.__dict__ and "_encode" not in vae.__dict__
     for name, tensor in norm.state_dict().items():
         assert torch.equal(tensor, initial[name])
+
+
+@pytest.mark.parametrize("initial_tiling", (False, True))
+def test_whole_crop_restores_the_original_tile_policy_and_norms(initial_tiling):
+    class MiniMaxH3VideoGroupNorm(torch.nn.GroupNorm):
+        pass
+
+    vae = Encoder()
+    vae.use_tiling = initial_tiling
+    norm = MiniMaxH3VideoGroupNorm(2, 4)
+    vae.encoder = torch.nn.Sequential(norm)
+    original = vae._encode
+    with (
+        pytest.raises(RuntimeError, match="failed crop"),
+        face_encoder(vae, "batch2-fp16-norm-reuse-untiled") as report,
+    ):
+        assert not vae.use_tiling and report["spatial_context_changed"]
+        assert report["approximate"] and "forward" in norm.__dict__
+        raise RuntimeError("failed crop")
+    assert vae.use_tiling is initial_tiling and vae._encode == original
+    assert "forward" not in norm.__dict__
+
+
+@pytest.mark.parametrize("frames,side", ((124, 384), (242, 512)))
+def test_whole_crop_rejects_unqualified_geometry_before_cuda(frames, side):
+    class MiniMaxH3VideoGroupNorm(torch.nn.GroupNorm):
+        pass
+
+    vae = Encoder()
+    vae.use_tiling = True
+    vae.encoder = torch.nn.Sequential(MiniMaxH3VideoGroupNorm(1, 1))
+    pixels = torch.zeros(1, 1, 1, 1, 1).expand(1, 1, frames, side, side)
+    with (
+        pytest.raises(ValueError, match="124 frames at 512 square"),
+        face_encoder(vae, "batch2-fp16-norm-reuse-untiled"),
+    ):
+        vae._encode(pixels)
+    assert vae.use_tiling and "_encode" not in vae.__dict__
