@@ -580,6 +580,10 @@ python -m pip install -e .
 
 ## 能力状态 {#availability}
 
-公开包包含列表中的 **BF16 Ref2VA Turbo4 / Turbo8、SM89 与双 SM86 T2VA Turbo4 去噪器**，以及**单 SM89 或双 SM86 的 Ref4、单 SM89 的 T2VA、SM89 或双 SM86 的 Base16 I2VA/L2VA/FL2VA Python 完整链路**。匹配的双 SM89 还可显式选择 Base16 协作低延迟路径。官方权重编译器创建 SM86/SM89 的 Ref4 和 Base4 资源；Base16 关键帧 profile 使用其固定官方 Transformer 资产。最新预构建容器仍为 0.3.2，因此保留该版更窄的接口。模型权重不随包提供。
+当前支持的输入模式、精度选择与联合容量限制，以[配置与硬件说明](../guide/profiles)
+和[完整链路合同](../guide/complete-pipeline)为准。[镜像清单](https://github.com/Hansimov/vflash/blob/main/docker/images.json)
+标识已发布的原生与完整管线镜像。上方历史记录中的包和镜像可用性只描述各自发布时刻，
+不覆盖当前支持表。模型权重需单独获取并遵守其许可。
 
-新增模式、适配器和硬件分别完成安装、数值与解码检查后，才会进入支持列表。
+新增硬件、模式与修复功能须分别完成实际执行和完整媒体验证。
+源码选项不会自动升级已部署的服务。

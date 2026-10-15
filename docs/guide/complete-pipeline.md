@@ -670,6 +670,9 @@ to 61.20 seconds at 1024² and from 186.35 to 111.94 seconds at 1536×1344. Both
 videos retained all 120 decoded frames; the two reduced-context audio results were
 accepted against their full-context controls. These are private integration results,
 not a universal quality guarantee or evidence that refined audio beats every original.
-The new owned Python wiring has focused CPU coverage; its complete target-GPU
-qualification and production adoption are pending. No additional hardware or mode
-qualification is implied.
+The owned Python wiring subsequently completed both cases through a serial product
+worker on the same GPU class. It reproduced all 120 decoded frames and delivered
+audio PCM for each accepted experimental candidate. First-request admission and
+4+6 progress were exercised. This qualifies the interface in that integration;
+production adoption and combined face/audio behavior remain separate. No additional
+hardware or mode qualification is implied.

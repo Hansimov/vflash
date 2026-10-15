@@ -682,6 +682,13 @@ Added explicit block streaming on a 4090 and completed-step callbacks for integr
 
 ## Availability {#availability}
 
-The package provides the listed **BF16 Ref2VA Turbo4/Turbo8, SM89 T2VA Turbo4 and dual-SM86 T2VA Turbo4 denoisers**, plus the **Ref4 Python pipeline on SM89 or dual SM86, T2VA on SM89, and Base16 I2VA/L2VA/FL2VA on SM89 or dual SM86**. Matching SM89 devices have an opt-in cooperative Base16 latency path. The official-weight compiler creates Ref4 and Base4 assets for SM86/SM89; Base16 keyframe profiles use their fixed official transformer assets. The latest prebuilt containers remain 0.3.2 and therefore retain that release's narrower interface. Model weights are not bundled.
+The current [profile and hardware guide](../guide/profiles) and
+[complete-pipeline contract](../guide/complete-pipeline) define supported input
+modes, precision choices and joint capacity limits. The [image inventory](https://github.com/Hansimov/vflash/blob/main/docker/images.json)
+identifies the published native and pipeline images. Historical entries above
+retain the package and image availability at their own release dates; they do
+not override the current support tables. Model weights are separate downloads
+under their own licenses.
 
-New modes, adapters and hardware require their own installation, numerical and decoded-output checks before entering the support table.
+New hardware, modes and refinements need their own execution and complete-media
+qualification. A source option does not automatically upgrade a deployed service.
