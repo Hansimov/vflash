@@ -7,7 +7,7 @@ import tempfile
 import threading
 import time
 from collections.abc import Callable
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from dataclasses import asdict, replace
 from pathlib import Path
 from traceback import clear_frames
@@ -176,6 +176,7 @@ class H3Pipeline:
         self._plan = plan
         self._lock = threading.Lock()
         self._active_thread_id: int | None = None
+        self._scene_conditioning = None
         self._closed = self._released = False
         self._core = self._conditioner = self._media = None
         self.request_count = 0
@@ -291,6 +292,34 @@ class H3Pipeline:
         )
         self.initialization_stages["media"] = time.monotonic() - started
 
+    @contextmanager
+    def source_scene_conditioning(self, request: VideoRequest):
+        """Opt into non-equivalent source-scene context for related I2VA repaints.
+
+        Generate the declared source in this scope, then enter owner.repaint()
+        around derived video-only calls. The 128 MiB CPU feature owner is cleared
+        on exit/failure/close and cannot be used by another thread or pipeline.
+        Original-image Qwen context replaces the crop context; qualify quality
+        for the selected workflow. Ordinary generation remains unchanged.
+        """
+        from vflash.adapters.scene_conditioning import SourceSceneConditioning
+
+        if not self._lock.acquire(blocking=False):
+            raise ContractError("scene conditioning requires an idle pipeline")
+        try:
+            if self._closed or getattr(self, "_scene_conditioning", None) is not None:
+                raise ContractError("scene conditioning requires an open, unscoped pipeline")
+            owner = SourceSceneConditioning(request)
+            self._scene_conditioning = owner
+        finally:
+            self._lock.release()
+        try:
+            yield owner
+        finally:
+            with self._lock:
+                owner.close()
+                self._scene_conditioning = None
+
     def generate(
         self,
         request: VideoRequest,
@@ -387,6 +416,9 @@ class H3Pipeline:
         try:
             if self._closed:
                 raise ContractError("the pipeline is closed")
+            scene = getattr(self, "_scene_conditioning", None)
+            if scene is not None:
+                scene.check_request(request, reuse_scope=conditioning_reuse_scope)
             # Input errors are checked before stage activation and do not retire
             # an otherwise healthy session. Read/hash exactly the decoded bytes.
             self.prepared.check_unchanged()
@@ -417,6 +449,8 @@ class H3Pipeline:
                     rgb=rgb,
                     required_frames=required_frames,
                 )
+                if scene is not None:
+                    scene.request_complete()
             except BaseException as exc:
                 try:
                     self._close_owned()
@@ -491,6 +525,9 @@ class H3Pipeline:
                 if conditioning_reuse_scope is not None
                 else {}
             )
+            scene = getattr(self, "_scene_conditioning", None)
+            if scene is not None:
+                capture_options["scene_conditioning"] = scene
             capture_owner = (
                 self._reference_graph
                 if self._reference_graph is not None and request.mode == "ref2va"
@@ -657,6 +694,9 @@ class H3Pipeline:
         if self._released:
             return
         self._closed = True
+        scene = getattr(self, "_scene_conditioning", None)
+        if scene is not None:
+            scene.close()
         failures: list[BaseException] = []
         for name in ("_reference_graph", "_adapter_stack", "_conditioner", "_media", "_core"):
             owner = getattr(self, name)

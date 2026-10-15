@@ -545,3 +545,37 @@ changed, some details were softer, and identity/teeth truth remained unjudgeable
 The explicit public encoder reproduced all 120 final frames of one prototype
 case. Application integration, additional hardware and consuming-service rollout
 remain separate checks; the default is unchanged.
+
+
+## Source-scene conditioning (development candidate)
+
+`H3Pipeline.source_scene_conditioning(source_request)` can retain the original
+I2VA scene's Qwen features for related video-only repaints. This deliberately
+changes conditioning: the crop's image/text Qwen pass is replaced by the source
+scene's context. The crop's keyframe and video VAE, low-noise schedule, denoiser
+and media delivery still execute normally. It does not remove these remaining costs.
+
+```python
+with pipeline.source_scene_conditioning(source_request) as scene:
+    source = pipeline.generate(source_request, Path("source.mp4"))
+    # Prepare the restored crop and its explicit low-noise repaint configuration.
+    with scene.repaint():
+        result = pipeline.generate_rgb(crop_request, Path("repaint.npy"))
+    diagnostics = scene.report
+```
+
+The source must finish before repaint reuse. Repaints keep its prompt and seed,
+use I2VA with decoded keyframes and no audio, and cannot exceed its duration.
+The caller owns crop preparation, native repaint configuration and composition.
+Only one pipeline/thread can use a scope; nested scopes are rejected. A bounded
+128 MiB CPU copy is discarded on scope exit, pipeline failure or close, with a
+one-hour expiry. It composes with exact sibling conditioning reuse on the source,
+including a cache hit; repaint VAE encodings are never substituted. Repaints reject
+`conditioning_reuse_scope` so changed scene features cannot enter the exact cache. Diagnostics
+explicitly report non-equivalence and the number of avoided Qwen calls.
+
+This interface is a development candidate, not a default or general quality
+guarantee. Earlier complete-request experiments established a scoped benefit
+for source-scene reuse; this explicit implementation requires its own complete
+media qualification before release or adoption. Keep original audio and inspect
+identity, expression, temporal behavior and instruction adherence.

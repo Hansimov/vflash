@@ -410,3 +410,31 @@ RTX4090上，批次2编码组件从2.056降至0.912秒，峰值分配4.98→17.3
 完整新增时间仍为原流程96.1%，不能将编码组件提速当作完整流程收益。连续原生人脸、完整上下文及原PCM已检查，未见新增
 明显结构破损或贴回缝；细节渲染改变、个别时刻略软，身份与牙齿真实性仍不可判。精确公开编码配置已在一例复现原型全部120帧；
 应用接线、其他硬件和服务采用分别验收，默认保持。
+
+
+## 源场景条件复用（开发候选）
+
+`H3Pipeline.source_scene_conditioning(source_request)`可在同次请求内保留原始
+I2VA场景的Qwen特征，供关联的纯视频重绘使用。这会改变条件：用原场景上下文替代
+裁剪图的图文Qwen编码。裁剪图的关键帧/视频VAE、低噪调度、去噪和媒体交付仍正常
+执行，并未消除这些剩余成本。
+
+```python
+with pipeline.source_scene_conditioning(source_request) as scene:
+    source = pipeline.generate(source_request, Path("source.mp4"))
+    # 准备修复裁剪和显式低噪重绘配置。
+    with scene.repaint():
+        result = pipeline.generate_rgb(crop_request, Path("repaint.npy"))
+    diagnostics = scene.report
+```
+
+原片必须先完成。重绘保持原提示和seed，使用无音频、decoded关键帧的I2VA，时长不超过
+原请求。调用方负责裁剪、原生重绘配置和贴回。作用域只属于同一pipeline和线程，拒绝
+嵌套；CPU特征副本最多128 MiB，在退出、pipeline失败或关闭时释放，一小时后过期。
+原片兼容精确兄弟候选条件缓存及其命中；重绘的VAE编码不会被替代。重绘拒绝
+`conditioning_reuse_scope`，避免将改变语义的场景特征写入精确缓存。诊断明确标注非等价
+及省去的Qwen次数。
+
+这是开发候选接口，尚非默认方案或通用质量保证。既有完整请求实验支持源场景复用的
+有限净益；本显式实现仍需独立完整成片资格后再发布采用。保留原音轨，检查身份、表情、
+时序及指令遵循。

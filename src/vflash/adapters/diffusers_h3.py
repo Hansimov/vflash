@@ -368,6 +368,7 @@ class DiffusersConditioner:
         directory: Path,
         *,
         reuse_scope: ConditioningReuseScope | None = None,
+        scene_conditioning=None,
     ) -> H3ConditioningBundle:
         """Materialize a content-bound bundle for an external or persisted boundary."""
 
@@ -377,6 +378,7 @@ class DiffusersConditioner:
             directory,
             in_memory=False,
             reuse_scope=reuse_scope,
+            scene_conditioning=scene_conditioning,
         )
 
     def capture_in_memory(
@@ -386,6 +388,7 @@ class DiffusersConditioner:
         directory: Path,
         *,
         reuse_scope: ConditioningReuseScope | None = None,
+        scene_conditioning=None,
     ) -> H3InMemoryConditioning:
         """Capture a one-shot same-process payload for the complete pipeline."""
 
@@ -395,6 +398,7 @@ class DiffusersConditioner:
             directory,
             in_memory=True,
             reuse_scope=reuse_scope,
+            scene_conditioning=scene_conditioning,
         )
 
     def _capture(
@@ -405,6 +409,7 @@ class DiffusersConditioner:
         *,
         in_memory: bool,
         reuse_scope: ConditioningReuseScope | None,
+        scene_conditioning=None,
     ) -> H3ConditioningBundle | H3InMemoryConditioning:
         total_started = time.monotonic()
         total_counters = _process_counters()
@@ -460,7 +465,12 @@ class DiffusersConditioner:
             capture.install(self.transformer)
             invoke_started = time.monotonic()
             invoke_counters = _process_counters()
-            with reuse_context as reuse_report:
+            scene_capture = (
+                scene_conditioning.capture(self)
+                if scene_conditioning is not None
+                else nullcontext()
+            )
+            with reuse_context as reuse_report, scene_capture:
                 try:
                     self._invoke(request, references)
                 except H3ConditioningCaptureComplete as complete:
@@ -481,6 +491,8 @@ class DiffusersConditioner:
                 runtime_versions=self.versions,
                 reference_policy=H3_VIDEO_REFERENCE_POLICY if is_video else "match",
             )
+            if scene_conditioning is not None:
+                source["scene_conditioning"] = scene_conditioning.report
             request_metadata = {
                 "source_case_id": "vflash-live",
                 "prompt": request.prompt,
@@ -614,6 +626,11 @@ class DiffusersConditioner:
                 "finish_seconds": finish_seconds,
                 "finish_stage_seconds": dict(getattr(capture, "finish_stage_seconds", {})),
                 "conditioning_reuse": dict(reuse_report),
+                **(
+                    {"scene_conditioning": scene_conditioning.report}
+                    if scene_conditioning is not None
+                    else {}
+                ),
                 "process_deltas": {
                     "total": _counter_delta(total_counters, after_finish_counters),
                     "official_pipeline": _counter_delta(invoke_counters, after_invoke_counters),
