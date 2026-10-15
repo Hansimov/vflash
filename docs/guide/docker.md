@@ -3,9 +3,9 @@
 Generate a complete video with the [pipeline image](#pipeline), or run the native denoiser as a local HTTP service. The service accepts a compiled conditioning bundle and returns video and audio latents (tensors ready for decoding). It loads one profile and reuses it across serial requests.
 
 ::: tip Published images
-Version **0.8.0** is available as `hansimov/vflash:0.8.0` (native HTTP) and
-`hansimov/vflash:0.8.0-pipeline` (complete MP4). Pin the digest from the
-[image inventory](https://github.com/Hansimov/vflash/blob/v0.8.0/docker/images.json) for deployment.
+Version **0.9.0** is available as `hansimov/vflash:0.9.0` (native HTTP) and
+`hansimov/vflash:0.9.0-pipeline` (complete MP4). Pin the digest from the
+[image inventory](https://github.com/Hansimov/vflash/blob/v0.9.0/docker/images.json) for deployment.
 Images contain dependencies, not model weights or application face-restoration configuration.
 :::
 
@@ -17,7 +17,7 @@ the actual backend. Missing dependencies make the service unready rather than si
 
 ## Skip unused Sol dependencies in a dedicated build
 
-The published 0.8.0 images retain Sol for the supported single-SM89 Base16 `auto` path.
+The published 0.9.0 images retain Sol for the supported single-SM89 Base16 `auto` path.
 An installed backend is not necessarily executed: Veda requests select Veda explicitly.
 Release source builds also accept `--build-arg VFLASH_INSTALL_SOL=0` for either
 `runtime` or `pipeline`. This omits both Sol dependency installation and its source fetch;
@@ -34,7 +34,7 @@ optional dependencies remain a readiness error, with no silent fallback.
 
 ## Veda service configuration
 
-The 0.8.0 service accepts `VFLASH_VEDA_DENSE_BACKEND` (default `torch-flash`) and
+The 0.9.0 service accepts `VFLASH_VEDA_DENSE_BACKEND` (default `torch-flash`) and
 `VFLASH_VEDA_DENSE_EDGE_LAYERS` (default `5`; explicit `3` selects 44 sparse / 6 dense layers).
 Select `VFLASH_ATTENTION_BACKEND=veda-triton` and provide `VFLASH_VEDA_PREDICTOR` as a
 container path inside a read-only mounted runtime directory. Install the pinned Veda dependency
@@ -64,7 +64,7 @@ cp docker/.env.example docker/.env
 Edit `docker/.env`. Replace every example path with an absolute path on the Docker host:
 
 ```dotenv
-VFLASH_IMAGE=hansimov/vflash:0.8.0
+VFLASH_IMAGE=hansimov/vflash:0.9.0
 VFLASH_PROFILE_ID=ref2va-turbo4-exact-sm89
 VFLASH_GPU_DEVICE=0
 
@@ -85,7 +85,7 @@ docker compose --env-file docker/.env -f docker/compose.yaml pull
 docker compose --env-file docker/.env -f docker/compose.yaml up -d --no-build
 ```
 
-Versioned images are published on [Docker Hub](https://hub.docker.com/r/hansimov/vflash/tags). Their immutable digests are recorded in [the image inventory](https://github.com/Hansimov/vflash/blob/v0.8.0/docker/images.json). Models stay mounted read-only; outputs and kernel caches use separate writable storage. To build version 0.8.0 locally, use `docker build --target runtime -t vflash:0.8.0 .` and select that image in your environment file.
+Versioned images are published on [Docker Hub](https://hub.docker.com/r/hansimov/vflash/tags). Their immutable digests are recorded in [the image inventory](https://github.com/Hansimov/vflash/blob/v0.9.0/docker/images.json). Models stay mounted read-only; outputs and kernel caches use separate writable storage. To build version 0.9.0 locally, use `docker build --target runtime -t vflash:0.9.0 .` and select that image in your environment file.
 
 The Compose configuration binds the API to **127.0.0.1:8000**. The engine has no built-in authentication. Keep this binding for local use, or put the API behind your application's authentication before allowing remote access.
 
@@ -96,7 +96,7 @@ The `pipeline` image includes the official encoder/VAE adapters, CUDA-matched To
 Pull the complete-pipeline image:
 
 ```bash
-docker pull hansimov/vflash:0.8.0-pipeline
+docker pull hansimov/vflash:0.9.0-pipeline
 mkdir -p inputs outputs cache
 ```
 
@@ -110,7 +110,7 @@ docker run --rm --runtime=runc -e NVIDIA_VISIBLE_DEVICES=void \
   -v /absolute/model-directory:/models:ro \
   -v "$PWD/inputs:/inputs:ro" -v "$PWD/outputs:/outputs:rw" \
   -v "$PWD/cache:/cache:rw" \
-  hansimov/vflash:0.8.0-pipeline prepare-pipeline \
+  hansimov/vflash:0.9.0-pipeline prepare-pipeline \
   --assets /inputs/pipeline-assets.json --receipt /outputs/prepared-assets.json
 ```
 
@@ -124,7 +124,7 @@ docker run --rm --gpus device=0 --shm-size 4g \
   -v /absolute/model-directory:/models:ro \
   -v "$PWD/inputs:/inputs:ro" -v "$PWD/outputs:/outputs:rw" \
   -v "$PWD/cache:/cache:rw" \
-  hansimov/vflash:0.8.0-pipeline generate \
+  hansimov/vflash:0.9.0-pipeline generate \
   --prepared-assets /outputs/prepared-assets.json \
   --prompt-file /inputs/prompt.txt \
   --reference /inputs/subject.png --reference /inputs/setting.png \
@@ -135,9 +135,9 @@ Use one to three `--reference` arguments for Ref4. For T2VA, prepare Base4 asset
 
 For two RTX 3080 20 GB GPUs, use [SM86-compiled assets](../reference/pipeline-profiles#sm86) and add `--profile ref2va-turbo4-exact-sm86` to `prepare-pipeline`. In the generation command, replace `--gpus device=0` with `--gpus '"device=0,1"'` and add `--peer-gpu 1 --strategy sequence-head` after `--gpu 0`. Keep both cards assigned to this process until it exits. The primary owns encoding and decoding; the pair cooperates in denoising. These are complete-pipeline options, separate from the native HTTP Compose setup below.
 
-To build the complete image from the v0.8.0 tagged source, run `docker build --target pipeline -t vflash:0.8.0-pipeline .` and substitute that local image name in the commands.
+To build the complete image from the v0.9.0 tagged source, run `docker build --target pipeline -t vflash:0.9.0-pipeline .` and substitute that local image name in the commands.
 
-The images reuse the immutable 0.7.0 base for their matching interface. Build the 0.8.0 wheel from the inventory’s `implementation_revision`, then use `docker/release-from-wheel.Dockerfile` with `VFLASH_BASE_IMAGE`, `VFLASH_VERSION=0.8.0` and `VFLASH_REVISION` set from that inventory. The recipe installs offline and updates the visible source as well as the package. Native CMD and pipeline ENTRYPOINT are inherited from the selected base. The ordinary root Dockerfile remains available for fresh dependency builds; do not redownload CUDA for a code-only update. The inventory separates image checks from GPU evidence.
+The images reuse the immutable 0.8.0 base for their matching interface. Build the 0.9.0 wheel from the inventory’s `implementation_revision`, then use `docker/release-from-wheel.Dockerfile` with `VFLASH_BASE_IMAGE`, `VFLASH_VERSION=0.9.0` and `VFLASH_REVISION` set from that inventory. The recipe installs offline and updates the visible source as well as the package. Native CMD and pipeline ENTRYPOINT are inherited from the selected base. The ordinary root Dockerfile remains available for fresh dependency builds; do not redownload CUDA for a code-only update. The inventory separates image checks from GPU evidence.
 
 The image defaults to UID/GID `10001`; these examples instead use your current user so outputs remain writable. Jiterator uses the writable `/cache` root directly, including a newly mounted empty directory. The explicit Inductor cache also works when that user has no account entry inside the image, including with the 0.1.0 image. `/cache` must permit loading compiled shared libraries: do not put it on a `noexec` mount. Asset paths and filesystem identities must remain the same as during preparation. Repeated work should use a persistent Python `H3Pipeline` in a dedicated container process, avoiding a new model load per command.
 

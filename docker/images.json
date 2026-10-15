@@ -1,11 +1,11 @@
 {
   "schema_version": 2,
-  "version": "0.8.0",
+  "version": "0.9.0",
   "platform": "linux/amd64",
-  "implementation_revision": "4e70d6fca049d51313f52b6a8b5b228e9a8dea0f",
-  "wheel_sha256": "4a41224ad3fc39f2278cee47fe4edeb6a17a549a7684bae726908c32fe97544f",
-  "build_recipe": "https://github.com/Hansimov/vflash/blob/4e70d6fca049d51313f52b6a8b5b228e9a8dea0f/docker/release-from-wheel.Dockerfile",
-  "previous_inventory": "https://github.com/Hansimov/vflash/blob/v0.7.0/docker/images.json",
+  "implementation_revision": "5c4feb31b8f160ef3f23d14c80cdeab8f0cb1cab",
+  "wheel_sha256": "9c88d269422ee53eca6f9ad980350400773f750c152aa4205e940b9790a0da05",
+  "build_recipe": "https://github.com/Hansimov/vflash/blob/5c4feb31b8f160ef3f23d14c80cdeab8f0cb1cab/docker/release-from-wheel.Dockerfile",
+  "previous_inventory": "https://github.com/Hansimov/vflash/blob/v0.8.0/docker/images.json",
   "runtime_dependencies": {
     "torch": "2.11.0+cu130",
     "torchvision": "0.26.0+cu130",
@@ -17,26 +17,27 @@
     "sol_source_revision": "d0c0a4685ab5dc2336d18b7213d85f13def92418"
   },
   "qualification": {
-    "package": "Clean public wheel/sdist, focused CPU checks, unprivileged image imports, matching visible source and default pipeline CLI verified. Images reuse immutable published 0.7.0 dependencies and install the selected wheel offline. No model weights are bundled.",
-    "engine": "Owned two-step repaint executed two complete five-second scenes on one RTX PRO 6000 Blackwell Server with application-owned FP8 loaders and explicit 44 sparse / 6 dense attention. One legacy/native two-step pair matched all 120 decoded frames. The supported 44/6 repaint code is unchanged by removal of the rejected zero-dense option.",
-    "limits": "Installed public images have CPU/dependency/CLI verification, not a new GPU image matrix. Two-step repaint is approximate against four steps, not a general perceptual or full-request latency guarantee. Veda, FROST, restoration models and prepared tables require explicit provisioning. Zero dense-edge layers are unsupported. Consuming service deployment is separate."
+    "package": "Clean public wheel/sdist and 115 focused CPU checks; version/admission/CLI checks; unprivileged image imports, matching visible source and default pipeline CLI verified. Images reuse immutable 0.8.0 dependencies and install the selected wheel offline. No model weights are bundled.",
+    "engine": "Six same-GPU complete requests on RTX PRO 6000 Blackwell Server with application-owned FP8 loaders, original two-step repaint and explicit 44 sparse / 6 dense attention. Direct RGB, selected-frame VAE decoding and exact encoder clip reuse preserved all 120 final RGB frames and source PCM in three matched pairs across two scenes. The package version change after the qualified algorithm revision changes no inference implementation.",
+    "limits": "Public images have CPU/dependency/CLI verification, not a new GPU image matrix. Explicit RGB arrays may be partial and are not directly playable movies. Savings depend on repeated inputs and unused output spans; broader shapes, devices and perceptual quality are not newly qualified. Application restoration models, mask ownership, final audio composition and deployment remain separate. Zero dense-edge layers remain unsupported."
   },
   "images": {
     "native": {
-      "name": "hansimov/vflash:0.8.0",
-      "digest": "sha256:7e9e4b2b940ab701488a4e54f1fb82b81593ff15d3155ff4aec4262a3ed063e5",
+      "name": "hansimov/vflash:0.9.0",
+      "digest": "sha256:e991056a4ea46a200274178d62ce7d44939dafc24fc3ec7221452041ecd924d7",
       "target": "runtime",
       "interface": "Compiled conditioning bundles to audio/video latents through the native HTTP API.",
-      "base_image": "hansimov/vflash@sha256:06734559ff58bce76078306340b2f7785627021c063c678c02fe453f8ce2a974",
+      "base_image": "hansimov/vflash@sha256:7e9e4b2b940ab701488a4e54f1fb82b81593ff15d3155ff4aec4262a3ed063e5",
       "recipe_target": "inherited from immutable base"
     },
     "pipeline": {
-      "name": "hansimov/vflash:0.8.0-pipeline",
-      "digest": "sha256:dc52478d8ee03e57963fe8740eb468df0ad83cb676cd2b6a23d0d0ccbeead572",
+      "name": "hansimov/vflash:0.9.0-pipeline",
+      "digest": "sha256:0e6d71ea9c854ba86caf5815823f8c525c202181c33264e6ce6203a505a682f3",
       "target": "pipeline",
       "interface": "Complete MP4 generation using explicitly mounted prepared model assets; supported modes and limits follow the complete-pipeline guide.",
-      "base_image": "hansimov/vflash@sha256:0412e4016760e58efcfde95391523d26e7874b949353ccafeaa48545808750ab",
+      "base_image": "hansimov/vflash@sha256:dc52478d8ee03e57963fe8740eb468df0ad83cb676cd2b6a23d0d0ccbeead572",
       "recipe_target": "inherited from immutable base"
     }
-  }
+  },
+  "algorithm_qualified_revision": "0af9f06e7fd16721a27b4e974e24b77e44148d2e"
 }
