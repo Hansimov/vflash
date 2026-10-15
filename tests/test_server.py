@@ -298,7 +298,9 @@ def test_veda_service_readiness_reports_partition_and_rejects_wrong_dense_gpu(
     with TestClient(create_app(settings, device_provider=_sm89_devices)) as client:
         ready = client.get("/readyz")
         assert ready.status_code == 200
-        assert ready.json()["version"] == "0.8.0"
+        from vflash import __version__
+
+        assert ready.json()["version"] == __version__
         assert ready.json()["attention_selection"] == dict(
             requested="veda-triton",
             resolved="veda-triton",
