@@ -4,13 +4,14 @@ Native **MiniMax H3 inference** with explicit GPU profiles. Vflash uses PyTorch 
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
-**0.9.0: direct RGB handoff and exact removal of repeated VAE work.** The Python
-pipeline can deliver video-only uint8 arrays directly to a compositor, decode
-only explicitly selected frames, and reuse identical padded encoder clips.
-The ordinary MP4 interface and explicit 44/6 attention remain unchanged.
-Two complete-video scenes preserved every final RGB frame and original audio
-on one RTX PRO 6000. Savings depend on repeated inputs and unused frame spans;
-this is a building block, not a general face-quality or latency guarantee.
+**0.10.0: explicit whole-crop face encoding.** A bounded 512-square,
+124-frame encoder option removes overlapping spatial work while keeping temporal
+clips and restoring model state on exit. Three five-second integration scenes
+showed lower complete face-pass latency on a 48 GiB RTX 4090. Spatial context and
+some visual details change, and memory use increases; this is not equivalence to
+the tiled encoder or qualification of a standard 24 GiB card. Direct RGB,
+selected-frame decoding, ordinary MP4 and 44/6 attention remain available.
+See the complete-pipeline guide for timing scope and application-integration limits.
 
 Vflash provides two interfaces:
 
@@ -38,7 +39,7 @@ face-restoration workflow. Existing model, precision and attention defaults rema
 Python 3.11 or newer is required. The base install does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.9.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.10.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate

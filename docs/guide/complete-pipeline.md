@@ -516,7 +516,7 @@ and preserved source PCM. Native two-step repaint and 44/6 attention were fixed.
 The normal MP4 default is unchanged; consuming-service deployment remains separate.
 
 
-## Whole-crop face encoding (next minor release)
+## Whole-crop face encoding (0.10.0)
 
 The explicit `batch2-fp16-norm-reuse-untiled` profile removes spatial tiling only
 inside its encoder scope. It accepts a 512-square, 124-model-frame face crop;
@@ -542,5 +542,6 @@ still accounts for substantial latency.
 Consecutive native face frames, context and unchanged original PCM were checked;
 no new obvious structural or paste-boundary defect was observed, but rendering
 changed, some details were softer, and identity/teeth truth remained unjudgeable.
-This is bounded prototype evidence. Exact released-API qualification, additional
-hardware and consuming-service rollout are separate checks; the default is unchanged.
+The explicit public encoder reproduced all 120 final frames of one prototype
+case. Application integration, additional hardware and consuming-service rollout
+remain separate checks; the default is unchanged.
