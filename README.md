@@ -4,14 +4,14 @@ Native **MiniMax H3 inference** with explicit GPU profiles. Vflash uses PyTorch 
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
-**0.10.0: explicit whole-crop face encoding.** A bounded 512-square,
-124-frame encoder option removes overlapping spatial work while keeping temporal
-clips and restoring model state on exit. Three five-second integration scenes
-showed lower complete face-pass latency on a 48 GiB RTX 4090. Spatial context and
-some visual details change, and memory use increases; this is not equivalence to
-the tiled encoder or qualification of a standard 24 GiB card. Direct RGB,
-selected-frame decoding, ordinary MP4 and 44/6 attention remain available.
-See the complete-pipeline guide for timing scope and application-integration limits.
+**0.11.0: optional audio refinement and owned FP8 loaders.** An explicit
+six-step audio pass keeps the completed video and all temporal positions while
+reducing spatial context to about 0.5 MP. Native/text FP8 factories and bounded
+rowwise execution now have owned Python interfaces. Two high-resolution cases
+reproduced the accepted integration outputs, and two combined face/audio cases
+kept every frame of their face-only controls. These are scoped integration checks;
+quality, capacity and deployment limits remain explicit. Defaults are unchanged.
+See the [complete-pipeline guide](https://hansimov.github.io/vflash/guide/complete-pipeline).
 
 Vflash provides two interfaces:
 
@@ -39,7 +39,7 @@ face-restoration workflow. Existing model, precision and attention defaults rema
 Python 3.11 or newer is required. The base install does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.10.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.11.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate

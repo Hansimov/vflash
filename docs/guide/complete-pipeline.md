@@ -581,7 +581,7 @@ media qualification before release or adoption. Keep original audio and inspect
 identity, expression, temporal behavior and instruction adherence.
 
 
-## Owned row-FP8 model loaders (development)
+## Owned row-FP8 model loaders (0.11.0)
 
 The native `create_row_fp8_native_loaders` factory and
 `load_row_fp8_text_encoder` accept explicitly prepared, approximate E4M3
@@ -623,12 +623,17 @@ silently switches to restored-weight arithmetic. BF16 serving defaults remain.
 
 Validation includes synthetic full-context block comparisons, isolated factory
 ownership, real mixed-shard assignment and four tiny Qwen/H3 conditioning modes.
-These are CPU checks, not complete-model GPU, media-quality or service-rollout
-qualification. The complete pipeline dependency image can run the loader checks
-without CUDA or network access using `python tests/test_fp8_loaders.py`.
+The exact public factories subsequently completed 1024² and 1536×1344 five-second
+I2VA requests on an RTX PRO 6000 Blackwell Server GPU, with all 120 decoded frames
+and delivered audio PCM matching the previous owned audio integration. Two smaller
+face/audio combination requests also completed with unchanged face-repaired pixels
+and packet-copied refined audio. This is integration evidence, not a new capacity
+or cross-device guarantee. Synthetic loading checks remain runnable with
+`python tests/test_fp8_loaders.py` in the complete dependency image without CUDA
+or network access.
 
 
-## Optional audio-only six-step refinement (source main)
+## Optional audio-only six-step refinement (0.11.0) {#optional-audio-only-six-step-refinement-source-main}
 
 `AudioRefinementRequest` adds six original-model audio evaluations after a four-step
 hybrid I2VA generation. It freezes the completed video, retains every temporal
@@ -655,7 +660,7 @@ profile and capacity limits still apply. It rejects silent delivery, video-only
 output, other reference modes, streamed weights, and simultaneous native repaint.
 Inputs already below the spatial budget retain full context. `context_pixels=None`
 selects the full-context six-step control. There is no CLI/HTTP switch or default
-activation. This interface is not part of the published 0.10.0 package.
+activation. This explicit interface is introduced in 0.11.0.
 
 Main generation metadata stays at four evaluations; denoising progress reports ten
 (4 + 6). Added work is separately recorded as `audio_refinement`. Failure restores
@@ -676,3 +681,8 @@ audio PCM for each accepted experimental candidate. First-request admission and
 4+6 progress were exercised. This qualifies the interface in that integration;
 production adoption and combined face/audio behavior remain separate. No additional
 hardware or mode qualification is implied.
+
+
+The above high-resolution private integration used its separately validated capacity
+admission. The public resident profile envelope is unchanged; numerical factories
+and row tiling alone do not authorize larger requests.

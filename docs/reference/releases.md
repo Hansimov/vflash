@@ -1,5 +1,22 @@
 # Release notes
 
+## 0.11.0
+
+Adds optional six-step audio-only refinement with a roughly 0.5 MP spatial context,
+original video/time positions, matched modulation tables and decode headroom.
+It requires an explicit resident hybrid I2VA request on one device with Veda 44/6.
+Progress separates the four main and six additional evaluations; defaults stay unchanged.
+Owned FP8 native/text factories and full-context row tiling remove duplicated integration
+implementations without downloading weights or changing admission.
+
+Two independent high-resolution cases reproduced all decoded frames and audio PCM through
+the new API and the public FP8 factories. Two smaller combined face/audio requests kept
+all previously repaired video frames and preserved the refined soundtrack through face
+composition. These are limited RTX PRO 6000 Server integration checks; private expanded
+capacity, application assets and production rollout are separate. Optional source-scene
+conditioning retains its explicitly experimental qualification. No model weights are bundled.
+
+
 ## 0.10.0
 
 Adds the explicit `batch2-fp16-norm-reuse-untiled` face encoder profile for

@@ -440,7 +440,7 @@ with pipeline.source_scene_conditioning(source_request) as scene:
 时序及指令遵循。
 
 
-## 独立持有的行级 FP8 模型加载器（开发中）
+## 独立持有的行级 FP8 模型加载器（0.11.0）
 
 原生 `create_row_fp8_native_loaders` 工厂与
 `load_row_fp8_text_encoder` 接受显式准备的 E4M3 近似权重及 FP32 行缩放，
@@ -476,12 +476,14 @@ W8A8 仍为近似算法，只在受支持的 SM90/SM120 路径执行，不静默
 BF16 服务默认保持。
 
 验证包括合成完整上下文 block 对照、工厂所有权隔离、真实混合分片赋值及四种
-微型 Qwen/H3 条件输入。这些是 CPU 检查，不能代替完整模型 GPU、成片质量或
-服务上线验证。完整流水线依赖镜像可通过 `python tests/test_fp8_loaders.py`
-在无 CUDA、无网络条件下运行加载器检查。
+微型 Qwen/H3 条件输入。随后，精确公共工厂在 RTX PRO 6000 Blackwell Server 上完成1024²与
+1536×1344两组五秒I2VA，请求各120帧及交付音轨PCM均与此前显式音频接口一致。
+另两组较小画布的人脸/音频联合请求保持最佳人脸画面，并逐样本保留修复音轨。
+这些是集成证据，不扩大容量或跨设备资格。完整依赖镜像仍可通过
+`python tests/test_fp8_loaders.py`在无CUDA、无网络条件下运行合成加载检查。
 
 
-## 可选的仅音频六步修复（源码 main） {#optional-audio-only-six-step-refinement-source-main}
+## 可选的仅音频六步修复（0.11.0） {#optional-audio-only-six-step-refinement-source-main}
 
 `AudioRefinementRequest` 在四步 hybrid I2VA 主生成后增加六次原模型音频评估。
 它冻结已完成的视频，保留所有时间位置，均匀选取不超过 500,000 像素的空间条件，
@@ -502,7 +504,7 @@ result = pipeline.generate(request, output_path, audio_refinement=refinement)
 该 Python 显式选项要求常驻 hybrid 权重、单卡、Veda 44/6、同画布单首帧、生成音频且关闭去噪分析。
 原 profile 和容量限制仍适用；不支持静音交付、纯视频、其他参考模式、流式权重或同时原生重绘。
 低于空间预算的输入保留完整条件；`context_pixels=None` 显式选择完整条件六步对照。
-没有 CLI/HTTP 开关，也不默认开启；已发布的 0.10.0 包不包含此接口。
+没有 CLI/HTTP 开关，也不默认开启；该显式接口自 0.11.0 提供。
 
 主生成元数据仍为四步，去噪进度报告十步（4 + 6），新增耗时单列 `audio_refinement`。
 失败恢复模型绑定、注意力、原视频和原音频。完整管线在官方解码器硬削波前使用双声道联动余量保护，
@@ -515,3 +517,7 @@ result = pipeline.generate(request, output_path, audio_refinement=refinement)
 新的显式 Python 接线随后在同型号 GPU 的串行产品进程中完成两组请求，
 各自复现已认可实验候选的全部 120 帧与交付音轨 PCM，首次请求和 4+6 进度均通过。
 这仅验证该集成中的接口；生产采用及人脸/音频联合行为另验，不扩大其他硬件或输入模式资格。
+
+
+上述高清私有集成使用其独立验证的容量准入。公开常驻profile的请求范围不变，
+数值加载器和按行分块本身不授权更大的请求。

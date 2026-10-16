@@ -4,10 +4,11 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
-**0.10.0：显式整块人脸编码。** 512方形、124帧的受限编码配置移除重叠空间计算，
-保持时间块并在退出时恢复模型状态。约48GiB的RTX4090上三个五秒集成场景的完整人脸阶段均有提速。
-空间上下文和部分细节改变、显存增加；不等同原分块编码器，也不构成标准24GiB显卡资格。
-直接RGB、按需解码、普通MP4及44/6注意力保持；计时范围与应用接入边界见完整流水线文档。
+**0.11.0：可选音频修复与独立 FP8 加载器。** 显式六步音频补采保持已完成的视频与全部时间位置，
+将空间条件缩减至约0.5MP。原生/文本FP8工厂及有界按行执行通过独立 Python 接口提供。
+两组高清场景复现已认可的集成结果，两组人脸/音频联合场景保持最佳人脸对照的全部画面。
+这是限定范围的集成验证，质量、容量与部署边界仍须明确；默认行为不变。
+详见[完整流水线](https://hansimov.github.io/vflash/zh/guide/complete-pipeline)。
 
 Vflash提供两类入口：
 
@@ -30,7 +31,7 @@ Vflash提供两类入口：
 需要 Python 3.11 或更新版本。基础安装不会下载模型权重或 PyTorch。
 
 ```bash
-git clone --branch v0.10.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.11.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
