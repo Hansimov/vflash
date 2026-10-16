@@ -1,5 +1,21 @@
 # Release notes
 
+## 0.15.0
+
+Resident I2VA on one 96 GiB SM120 GPU is admitted by the same joint
+`width × height × model_frames ≤ 2048² × 124` budget as native HD, instead of a fixed
+1536×864 canvas. It therefore covers 1536×864 for fifteen seconds, 1920×1088 for ten
+seconds and true 4 MP canvases such as 2720×1536 for five seconds. SM90 keeps its measured
+1536×864 envelope; block ring remains the default and the rollback. No numerical path,
+schedule or default changes.
+
+On one RTX PRO 6000 Blackwell (96 GiB) with the resident FP8 trunk, Veda 44/6,
+two-step face repair and six-step audio refinement, complete I2VA requests finished
+1920×1088/5 s in 163 s, 2720×1536/5 s in 261 s and 1920×1088/10 s in 245 s, with a
+42.1 GiB device-memory peak across all three. Frames at the start, middle and end of each
+video and a native-resolution 4 MP crop showed coherent content without tiling. This is
+capacity and visual qualification, not a sound-quality claim.
+
 ## 0.14.0
 
 Qualifies a 2720-pixel long edge for image-conditioned native HD. The 2048² pixel cap,

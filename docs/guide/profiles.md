@@ -68,9 +68,11 @@ while both denoise ([dual-GPU setup](./getting-started#parallel), [measurement s
 
 `H3Pipeline(..., weight_residency="resident")` keeps the trunk on one SM90 GPU with at least 75 GiB VRAM or
 one SM120 GPU with at least 90 GiB. It requires the original-v0.1 `HybridModel`, `attention_backend="veda-triton"`
-and `PYTORCH_ALLOC_CONF=expandable_segments:True` set **before the Python process starts**. The measured envelope
-is I2VA with one first frame, up to 1536×864 pixels and 15 seconds; other modes and larger canvases use the
-block ring, which remains the default and the rollback.
+and `PYTORCH_ALLOC_CONF=expandable_segments:True` set **before the Python process starts**. Residency covers
+I2VA with one first frame for up to 15 seconds. On SM90 the canvas is at most 1536×864 pixels; on 96 GiB SM120 it
+follows the native-HD budget `width × height × model_frames ≤ 2048² × 124` (for example 2720×1536 for 5 s or
+1920×1088 for 10 s, at a measured 42.1 GiB peak with the FP8 trunk). Other modes and larger requests use the block
+ring, which remains the default and the rollback.
 
 | Same-instance A/B/A2 | H100 SXM ring / resident / ring | RTX PRO 6000 Server ring / resident / ring |
 | --- | --- | --- |

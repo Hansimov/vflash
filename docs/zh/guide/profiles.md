@@ -60,7 +60,7 @@ SM90/SM120 上的原始 v0.1 混合路径请准备至少 128 GB 主机内存并�
 
 `H3Pipeline(..., weight_residency="resident")` 可在至少 75 GiB 显存的单张 SM90，或至少 90 GiB 的单张 SM120 上常驻主干。需要原始 v0.1
 `HybridModel`、`attention_backend="veda-triton"`，并在**启动 Python 进程前**设置 `PYTORCH_ALLOC_CONF=expandable_segments:True`。实测范围为
-单首帧 I2VA、最多 1536×864 像素、15 秒；其他模式和更大画布使用块环，块环仍是默认与回滚方案。
+单首帧 I2VA、最长 15 秒：SM90 画布最多 1536×864 像素；96 GiB SM120 遵循原生高清预算 `宽×高×模型帧数 ≤ 2048²×124`（如 2720×1536 五秒、1920×1088 十秒，FP8 主干实测峰值 42.1 GiB）。其他模式和更大请求使用块环，块环仍是默认与回滚方案。
 
 | 同实例 A/B/A2 | H100 SXM 块环/常驻/块环 | RTX PRO 6000 Server 块环/常驻/块环 |
 | --- | --- | --- |
