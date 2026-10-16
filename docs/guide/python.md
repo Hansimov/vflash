@@ -6,7 +6,7 @@ For process isolation and an HTTP queue, use the [Docker service](./docker) inst
 
 ## Create a session {#session}
 
-In 0.5.0 both `NativeEngineSession` and `H3Pipeline` default to `attention_backend="auto"`:
+Both `NativeEngineSession` and `H3Pipeline` default to `attention_backend="auto"`:
 single-SM89 official Base16 selects approximate `sol-sm89`; other supported profiles and pairs
 select `torch-flash`. Set `attention_backend="torch-flash"` explicitly for dense execution.
 Sol native sessions use block-ring residency (`default` resolves to it); an explicit `resident`

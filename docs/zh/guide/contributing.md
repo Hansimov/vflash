@@ -26,7 +26,7 @@ npm run docs:build
 不要在 kernel 性能对照里同时改变 adapter、步数或精度。
 
 精确布局优化应先在代表性shape证明逐元素相等，再运行完整请求。近似必须具名并报告非精确，不能通过
-依赖环境的静默fallback引入。0.5.0明确将单SM89 Base16默认改为Sol，保留prepared模型身份及显式dense选项；
+依赖环境的静默fallback引入。单SM89 Base16默认明确为Sol（自0.5.0起），保留prepared模型身份及显式dense选项；
 这是公开的版本行为变更，不代表完整媒体质量门关闭，也不允许顺带引入其他未验证的近似。
 
 适用时增加 fail-closed 输入检查和 CPU 参考路径。运行时 fallback 必须在结果元数据中可见，或者严格限制为

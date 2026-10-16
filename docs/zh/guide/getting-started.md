@@ -84,7 +84,7 @@ vflash plan ref2va-turbo4-exact-sm86 --gpu 0 --peer-gpu 1 --strategy sequence-he
 
 两种方式均使用 BF16 权重、精确注意力和完整的四步调度。选择第二张卡后，默认策略是 `sequence-head`。实现说明见[双卡架构](../reference/architecture#parallel)。
 
-0.4.0 还允许已准备的 SM89 Base16 I2VA/L2VA/FL2VA profile 使用两张匹配的 RTX 4090 48 GB。传入同样的 peer 参数，但只能选择 `sequence-head`；`tensor` 仍会被拒绝。两张卡从同一份已准备的 SM89 工件分块流入权重。这是优先降低单个请求延迟的可选路径；已有两个就绪请求时，不应取代两个独立 worker。
+已准备的 SM89 Base16 I2VA/L2VA/FL2VA profile 也可使用两张匹配的 RTX 4090 48 GB。传入同样的 peer 参数，但只能选择 `sequence-head`；`tensor` 仍会被拒绝。两张卡从同一份已准备的 SM89 工件分块流入权重。这是优先降低单个请求延迟的可选路径；已有两个就绪请求时，不应取代两个独立 worker。
 
 并行计算改变 GEMM 形状或归约顺序，因此结果**不一定与单卡逐位一致**。一个负载已通过完整 latent 与解码后视频、音频的基础检查，跨案例指令遵循质量仍待评测。测量边界与内存口径见[性能测量](../reference/performance#parallel)。
 

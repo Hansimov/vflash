@@ -49,7 +49,7 @@ const sidebar = (zh = false) => {
 export default defineConfig({
   base: '/vflash/',
   title: 'Vflash',
-  description: 'Native MiniMax H3 inference for RTX 3080 20 GB and RTX 4090 48 GB.',
+  description: 'Native MiniMax H3 inference with explicit GPU profiles for RTX 3080/4090, H100 and RTX PRO 6000 Blackwell.',
   cleanUrls: true,
   appearance: true,
   sitemap: { hostname: 'https://hansimov.github.io/vflash/' },
@@ -78,7 +78,7 @@ export default defineConfig({
     zh: {
       label: '简体中文',
       lang: 'zh-CN',
-      description: '为 RTX 3080 20 GB 和 RTX 4090 48 GB 优化的原生 MiniMax H3 推理引擎。',
+      description: '面向 RTX 3080/4090、H100 与 RTX PRO 6000 Blackwell 显式配置的原生 MiniMax H3 推理引擎。',
       markdown: {
         container: {
           infoLabel: '说明', noteLabel: '备注', tipLabel: '提示', warningLabel: '注意',

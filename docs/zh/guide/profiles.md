@@ -1,198 +1,136 @@
 # 配置与硬件
 
-## 显式H100主干全驻留（0.6.14） {#h100-resident}
-
-`H3Pipeline(..., weight_residency="resident")`支持至少75GiB显存的单SM90，要求原始v0.1
-`HybridModel`、`veda-triton`，且启动Python进程前设置
-`PYTORCH_ALLOC_CONF=expandable_segments:True`。默认仍为`block-ring`。
-当前实测范围为单首帧I2VA、面积不超过1536×864、最长15秒；其他模式/更大画幅继续使用块环，
-SM120的独立资格见下节，不将H100结果外推到未测架构。
-
-同一H100 SXM以独立进程完成A/B/A2七片完整生成、解码和播放；三组均开启expandable segments，
-相同冻结模型/输入/seed及四步。文件驱逐提示不保证远端存储服务端冷缓存。
-私有集成来源`575f7986`的聚合数据如下：
-
-| 项目 | 块环A | 全驻留B | 回切块环A2 |
-| --- | ---: | ---: | ---: |
-| 初始化秒 | 119.049 | 128.154 | 115.268 |
-| 首条512²五秒视频 | 156.137 | 124.491 | 126.772 |
-| 暖态512²五秒视频 | 27.085 | 16.992 | 19.560 |
-| 小画幅主机RSS峰值GiB | 102.956 | 62.941 | 102.948 |
-
-相对更快的回切基线，暖态快13.1%，但初始化加首片多10.6秒；在本样本中约需五条后续暖请求
-才能摊平额外启动。适用于持续小任务批次和降低主机内存需求，不是无条件冷启动提速。
-单次租赁不足以保证SLA；CPU、存储和编译状态仍属测量条件。
-
-全驻留另完成1536×864十五秒，227.337秒；主机RSS峰值68.180GiB，**去噪分配峰值70.344GiB**。
-解码后计数只有59.200GiB，不能代替去噪峰值。此前未使用expandable segments的同类大任务OOM。
-未声明长片速度提升。多时间点检查仍有基线已有的背景/风格漂移，不声称画质提升；音频语义未独立审听。
-回滚使用`weight_residency="block-ring"`。
-
-## 大显存Blackwell全驻留（0.6.17） {#sm120-resident}
-
-同一显式驻留选项现允许**单SM120、至少90GiB显存**。完整成片证据来自PRO 6000 Blackwell
-Server 96GB；Workstation驻留尚未独立实测。5090和MIG48不在驻留范围内。
-仍要求上文hybrid/Veda、allocator与I2VA画幅/时长合同，默认仍为块环。
-
-同实例、独立进程A/B/A2固定输入、精简资产、四步、seed和expandable allocator；
-主机约251GB/16vCPU，文件驱逐提示不能保证远端服务冷缓存。九片全部完整解码与实际播放通过。
-私有集成来源`2f0444f7`的聚合数据：
-
-| 秒，除非另注 | 块环A | 驻留B | 块环A2 |
-| --- | ---: | ---: | ---: |
-| 初始化 | 105.228 | 123.279 | 108.208 |
-| 首片512²/五秒 | 77.668 | 86.367 | 83.024 |
-| 暖片512²/五秒 | 21.015 | 15.693 | 19.168 |
-| 1536×864/十五秒 | 256.104 | 245.326 | 253.650 |
-| 完整三片arm | 469.730 | 474.786 | 471.519 |
-| 主机RSS峰值GiB | 108.739 | 68.718 | 108.710 |
-
-相对更快回切，暖短片快**18.1%**、长片快**3.3%**；初始化加首片多18.4秒，约六条后续短片
-摊平。当前三片整批仍慢3.3秒；适用于持续暖批次或降低主机内存，部署选择须计完整启动与批次。
-去噪分配峰值**70.324GiB**，解码后59.177GiB不可代替该峰值。逐片五时间点查看仍有基线既有
-推近/跟拍问题，未观察到新的显著视觉退化；不声明画质或音频语义改善。回滚到块环。
-此版本不分发模型权重或私有媒体。
-
-## H100 与 Blackwell 预览（0.6.13） {#heterogeneous}
-
-原始v0.1 I2VA、显式hybrid和`veda-triton`已在 **H100 SXM 80GB（SM90）**与
-**RTX PRO 6000 Blackwell Server/Workstation 96GB（SM120）**取得完整成片证据。原有`veda-sm89`名称、
-默认设置和行为保留。后续H100 NVL和5090的有限I2VA证据见下节；SM103、H100 PCIe、MIG和新卡FL2VA仍为未实卡资格的显式预览，
-不能由目录或CUDA探测推断完整任务能力。
-
-同输入四步、BF16主权重、双槽block ring、Veda Triton INT8稀疏注意力、24fps诊断对照：
-
-| 任务 | PRO Server秒 | H100 SXM秒 |
-| --- | ---: | ---: |
-| 512² / 五秒 | 19.969 | 25.403 |
-| 928×512 / 五秒 | 29.534 | 28.949 |
-| 1280×704 / 五秒 | 51.855 | 48.656 |
-| 1536² / 五秒 | 144.122 | 135.542 |
-| 512² / 十五秒 | 43.624 | 52.007 |
-
-初始化分别169.575/147.109秒，首条冷生成112.538/110.788秒，均不含容器申请。
-主机RSS峰值106.7/106.2GiB，建议至少128GB并留余量，不能仅看显存。每卡六片完整AV、尺寸、帧率和
-时长通过；多时间帧观察仍有背景漂移与运动/形状遵循问题，未独立审听音频语义，不构成普遍质量保证。
-
-另一条保持等比例cover与decoded关键帧的PRO产品集成，暖态对应18.552、24.996、48.441、
-**199.668**和41.905秒；其中高清媒体阶段92.540秒。主机CPU及处理不同，不能作严格加速/退化对照。
-完整成本应计条件编码、媒体、初始化和实际预处理。聚合证据来自产品实验至`1865e6ff`，
-不包含产品账户、租赁逻辑、提示、媒体或机器配置。
-
-分区/容器可显式设置`VFLASH_DEVICE_DISCOVERY=cuda-visible`：独立CUDA子进程与NVIDIA枚举匹配
-可见UUID及分区实际显存，不误用整卡容量。MIG身份映射只有CPU合同测试，未取得MIG实卡生成证据。
-
-可在租GPU前调用`vflash.pipeline.portable.prepare_portable_assets`从已摄入SM89原始v0.1工件创建
-SM90/SM103/SM120目标视图，再用`vflash.native.h3_prepared_hybrid.prepare`在CPU预计算hybrid小表。
-公开core的后续产品通路对照：Server/Workstation相同五组合的暖耗时分别为
-17.885/21.192、30.097/43.778、63.470/62.591、181.772/220.547和45.182/52.446秒。
-主机为188GB/32vCPU与282GB/16vCPU，因此比较的是实际整机，不是隔离GPU速比；
-分配至首片336.573/372.868秒。两批全部AV解码及逐片六时间点查看通过，云/背景漂移及未审听音频的边界保持。
-Workstation增加一个有完整I2VA证据的选择，不代表更快默认。聚合产品来源至`4322801e`。
-
-[英文完整调用示例](../../guide/profiles#heterogeneous)展示如何传入现有`HybridModel`和`veda-triton`。
-准备过程复用固定来源清单，记录原编译目标与小清单摘要，不重哈希大型权重、不创建来源硬链接；
-来源保持只读。硬链接会改变ctime并破坏旧回执。小表独立核对摘要、形状、dtype、有限值及主干/调度绑定。
-本版只发布源码/wheel，不附权重或新预构建镜像，运行环境须明确选用兼容CUDA/Torch/Triton版本。
-
-
-一个运行配置（profile）确定模型、LoRA 版本、步数和计算方式；默认显存策略取决于所选硬件。选择时，需要让配置、硬件和编译资源相互匹配。
-
-## 可用配置 {#available}
-
-Ref2VA 基于参考素材生成视频和音频；T2VA 使用文本条件，不需要参考图片；I2VA 锚定第零帧，L2VA 只锚定尾帧，FL2VA 同时锚定片段两端。Base 与 Ref 权重相互独立。[完整链路](./complete-pipeline)通过相互匹配的固定配置接收这些输入。下列原生接口接收预编译条件包，其默认驻留策略与完整链路不同。
-
-| 显卡 | 配置 | 步数 | 权重加载方式 |
-| --- | --- | ---: | --- |
-| RTX 4090 48 GB | `ref2va-turbo4-exact-sm89` | 4 | 常驻显存 |
-| RTX 4090 48 GB | `ref2va-turbo8-exact-sm89` | 8 | 常驻显存 |
-| RTX 3080 20 GB | `ref2va-turbo4-exact-sm86` | 4 | 从系统内存分块加载 |
-| RTX 4090 48 GB | `t2va-turbo4-exact-sm89` | 4 | 常驻显存；见下方验证范围 |
-| 双 RTX 3080 20 GB | `t2va-turbo4-exact-sm86` | 4 | 分块加载；仅 `sequence-head` |
-| RTX 4090 48 GB | `i2va-base16-bf16-sm89` | 16 | 常驻显存 |
-| 双 RTX 3080 20 GB | `i2va-base16-bf16-sm86` | 16 | 分块加载；`sequence-head` |
-| RTX 4090 48 GB | `fl2va-base16-bf16-sm89` | 16 | 常驻显存 |
-| 双 RTX 3080 20 GB | `fl2va-base16-bf16-sm86` | 16 | 分块加载；`sequence-head` |
-
-HTTP 服务默认使用 4090 Turbo4。切换配置时，需要同时更换匹配的资源并重启服务。
-
-Base16 与 [544p关键帧Turbo成对配置](../reference/pipeline-profiles#lightx-v01)在各自的一对内部共享工件，已加载的 `H3Pipeline` 可串行接受 I2VA、L2VA 和 FL2VA，无需重启。L2VA 是请求合同而非重复的权重身份；已准备的 profile ID 保留作为来源身份。不能跨 LoRA 版本复用工件，也不适用于 Ref2VA 和 T2VA。
+配置（profile）固定模型、LoRA 版本、步数和计算精度，默认内存策略随所选硬件而定。请选择同时匹配显卡和已编译资源的配置。
+Vflash 不会自动替换设备或注意力后端；目录条目或 CUDA 探测都不能证明某个任务可以运行或达到质量要求。
 
 ```bash
 vflash profiles
 vflash plan ref2va-turbo8-exact-sm89 --gpu 0
 ```
 
-## 文生视频 {#t2va}
+## 可用配置 {#available}
 
-自 **0.2.0** 起支持 `t2va-turbo4-exact-sm89` 的完整文生视频链路。[准备 Base4 资产](../reference/pipeline-profiles)后，生成请求不再需要参考图。
+Ref2VA 根据参考图生成，T2VA 仅用文本，关键帧配置处理 I2VA（首帧）、L2VA（尾帧）和 FL2VA（首尾）。Base 与 Ref 权重相互独立。
+[完整流水线](./complete-pipeline)使用匹配的固定配置接收这些输入；原生接口使用编译后的条件 bundle，默认驻留方式可能不同。
 
-需要 Base4 v1.0 权重工件、Base 辅助张量、video/audio shift 6/3 调度，以及没有参考图的 T2VA 条件包。Ref2VA 工件不能执行这个任务；切换模式需要建立独立会话并加载对应资源。
+| 显卡 | 配置 | 步数 | 权重加载 |
+| --- | --- | ---: | --- |
+| RTX 4090 48 GB | `ref2va-turbo4-exact-sm89` | 4 | 常驻显存 |
+| RTX 4090 48 GB | `ref2va-turbo8-exact-sm89` | 8 | 常驻显存 |
+| RTX 3080 20 GB | `ref2va-turbo4-exact-sm86` | 4 | 从主机内存流式加载 |
+| RTX 4090 48 GB | `t2va-turbo4-exact-sm89` | 4 | 常驻显存 |
+| 两张 RTX 3080 20 GB | `t2va-turbo4-exact-sm86` | 4 | 流式；`sequence-head` |
+| RTX 4090 48 GB | `i2va-base16-bf16-sm89`、`fl2va-base16-bf16-sm89` | 16 | 常驻显存 |
+| 两张 RTX 3080 20 GB | `i2va-base16-bf16-sm86`、`fl2va-base16-bf16-sm86` | 16 | 流式；`sequence-head` |
+| RTX 4090 48 GB | LightX v0.1 / v1.0 544p 关键帧配对（`i2va-turbo4-v01-544-exact-sm89` 等） | 4 / 8 | 见[流水线配置](../reference/pipeline-profiles#lightx-v01) |
 
-实际 SM89 T2VA 容器重复执行同一个固定请求，全部 14 个官方条件张量和最终 FP32 音视频 latent 精确一致。两段五秒视频及音轨完整解码，重复请求的画面一致，取消后资源正确释放。官方音频 VAE 的原始输出可能存在微小浮点变化。这些是实现和生命周期验证，不代表广泛的指令遵循或音频质量资格。T2VA Turbo8 和更新的 Base4 适配器仍不在此配置范围内。
+匹配的关键帧配对共享产物，一个已加载的 `H3Pipeline` 可串行处理 I2VA、L2VA 和 FL2VA；L2VA 是请求契约，不是独立的权重配置。
+HTTP 服务只加载一个配置（4090 上默认 Turbo4），更换配置需用匹配资源重启服务。
 
-0.3.2 新增 `t2va-turbo4-exact-sm86`，仅使用双 3080 和 `sequence-head`。应编译独立的 Base SM86 资产，并向原生会话提供匹配的 T2 条件包。应用持有的阶段已完成五秒 928 × 512 和十秒 640 × 352 请求；新配置的独立五秒 `H3Pipeline` 包装尚未重跑，两个已测形状不能覆盖任意更大输入。详见[版本证据](../reference/releases#v0-3-2)。
+## 支持的显卡 {#heterogeneous}
 
-## 内存与部署 {#memory}
-
-| 硬件 | 显存策略 | 选择时考虑 |
+| 显卡 | 路径 | 说明 |
 | --- | --- | --- |
-| 单 4090 48 GB | 默认权重常驻 | 多次请求复用权重；为中间结果留出足够显存 |
-| 单或双 3080 20 GB | 从系统内存分块加载 | 权重保存在系统内存；双卡共同处理一个请求 |
-| 单 4090，显存需要更多余量 | 显式选择 `block-ring` | 用系统内存换取显存余量，需要单独测量延迟 |
+| RTX 4090 48 GB（SM89） | 上述全部配置；原始 v0.1 混合模型（稠密或 Veda）；[最长边 2720 的原生高清](./complete-pipeline#modes-and-limits)；[5–15 秒/九图扩展混合](./complete-pipeline#extended-hybrid) | 参考平台。实测设备报告 48 GiB，24 GiB 显卡未确认能承载相同任务。 |
+| 两张 RTX 3080 20 GB（SM86） | Ref4 原生（`sequence-head` 或 `tensor`）与完整流水线（`sequence-head`）；T2VA 与 Base16 关键帧使用 `sequence-head` | PCIe 3.0 x16、无 peer access，不需要 NVLink。 |
+| 单张 RTX 3080 20 GB | Ref4 原生 latent | 已检查容量及串行/重叠加载的可重复性。 |
+| H100 SXM 80 GB（SM90） | 原始 v0.1 混合 I2VA + `veda-triton`；≥75 GiB 可[主干常驻](#h100-resident) | 有完整成片证据；H100 PCIe 仍为预览。 |
+| RTX PRO 6000 Blackwell 96 GB（SM120） | 混合 I2VA + `veda-triton`；≥90 GiB（Server）可[主干常驻](#sm120-resident) | Workstation 为已实测的 I2VA 选项，未单独测量常驻。 |
+| H100 NVL、RTX 5090 32 GB | [有界块环 I2VA](#small-blackwell) | 几何与时长须在各自实测范围内。 |
+| SM103、MIG 分区、新设备 FL2VA | 仅预览 | 未完成整卡资格。 |
 
-CLI 使用 `--weight-residency block-ring`，Python 使用同名的[会话选项](./python#memory)。HTTP 服务使用所选配置的默认策略。
+SM90/SM120 上的原始 v0.1 混合路径请准备至少 128 GB 主机内存并留余量；仅凭显存不能判断是否兼容。
 
-已测的 928 × 512、124 模型帧、4 步负载，建议**每个 worker 至少预留 64 GiB 可用系统内存**，并为操作系统和其他进程留出余量。使用分块加载时，显存占用不包括系统内存中的完整权重。更大输入和并发 worker 都需要重新检查容量。
+## 内存与驻留 {#memory}
 
-完整 Ref4 和 T2VA 链路还需保存编码器和 VAE 的 CPU 权重，采用原生分块加载，为这些阶段留出显存。完整链路验证使用 240 GiB 主机内存上限；这是已测预算，不是最低要求，不能套用去噪器的 64 GiB 建议。SM89 的各阶段轮流使用同一卡；双 SM86 由主卡执行编码和解码、两卡共同去噪。一个三参考图请求的主机 RSS 峰值为 114.67 GiB，整卡占用为 11.05/6.85 GiB；部署时仍须为其他开销留出余量。
+| 策略 | 权重位置 | 适用场景 |
+| --- | --- | --- |
+| 常驻（单 4090 原生配置默认） | 显存 | 多次请求复用权重，且显存足够放激活 |
+| `block-ring`（完整流水线核心与 SM86 默认） | 主机内存，按块流式加载 | 用主机内存换显存余量；20 GB 显卡必需 |
+| SM90/SM120 显式 `weight_residency="resident"` | 显存主干 | 持续暖态批次或降低主机内存（见下文） |
 
-原生 Ref4 latent 接口的双 3080 可选择 `sequence-head` 或 `tensor`；T2VA 和完整生成必须使用 `sequence-head`。第二张卡由调用方显式指定。已测拓扑为无 peer access 的 PCIe 3.0 x16 主机桥连接，不需要 NVLink。设置方法见[双卡执行](./getting-started#parallel)，对照范围见[实测数据](../reference/benchmarks#sm86-parallel)。
+命令行用 `--weight-residency block-ring`，或使用 [Python 会话选项](./python#memory)。按实测的 928×512、四步原生任务，**每个 worker 至少预留
+64 GiB 可用系统内存**。完整流水线还持有编码器和官方 VAE：集成检查使用 240 GiB 主机内存上限，一条代表性的三图 SM86 请求主机 RSS 达
+114.67 GiB。这些是测试预算而非最低要求；更大输入和并发 worker 需各自测量。双 SM86 的编码与解码在主卡上进行，两卡共同去噪
+（[双卡设置](./getting-started#parallel)、[测量范围](../reference/benchmarks#sm86-parallel)）。
 
-上述支持范围只覆盖 20 GB 版 3080 和 48 GB 版 4090。其他显存容量、型号、更大的 GPU 组，以及任意分辨率或帧数组合尚未获得相同验证。
+<a id="sm120-resident"></a>
+
+### H100 与 Blackwell 主干常驻 {#h100-resident}
+
+`H3Pipeline(..., weight_residency="resident")` 可在至少 75 GiB 显存的单张 SM90，或至少 90 GiB 的单张 SM120 上常驻主干。需要原始 v0.1
+`HybridModel`、`attention_backend="veda-triton"`，并在**启动 Python 进程前**设置 `PYTORCH_ALLOC_CONF=expandable_segments:True`。实测范围为
+单首帧 I2VA、最多 1536×864 像素、15 秒；其他模式和更大画布使用块环，块环仍是默认与回滚方案。
+
+| 同实例 A/B/A2 | H100 SXM 块环/常驻/块环 | RTX PRO 6000 Server 块环/常驻/块环 |
+| --- | --- | --- |
+| 初始化（秒） | 119.0 / 128.2 / 115.3 | 105.2 / 123.3 / 108.2 |
+| 暖态 512²/5 秒（秒） | 27.1 / 17.0 / 19.6 | 21.0 / 15.7 / 19.2 |
+| 1536×864/15 秒（秒） | — / 227.3 / — | 256.1 / 245.3 / 253.7 |
+| 主机 RSS 峰值（GiB） | 103.0 / 62.9 / 102.9 | 108.7 / 68.7 / 108.7 |
+| 去噪分配峰值（GiB） | 70.3（常驻，15 秒） | 70.3（常驻） |
+
+常驻缩短暖态请求，但启动成本更高；本样本中约五到六条暖态短请求可摊平差异。适合持续批次或需要降低主机内存时，应以启动加批次总时间判断。
+
+### NVL 与 RTX 5090 有界案例 {#small-blackwell}
+
+| 显卡 | 已完成 I2VA（生成秒） | 限制 |
+| --- | --- | --- |
+| H100 NVL | 1920×1088/10 秒 288.1，1536×864/15 秒 263.9，2048²/5 秒 321.6，1440²/10 秒 289.9 | 初始化 46.6 秒；其他模式未资格 |
+| RTX 5090 32 GB / 600 W | 2048²/5 秒 451.0（峰值 27.0 GiB），1440²/10 秒 392.4，1536×864/15 秒 364.9 | 块环 + expandable segments；500 W 卡 2048²/5 秒失败 |
+
+这些是完整解码并多时间点目视检查的容量结果，不是质量保证或路由默认值。
+
+### 容器中的设备发现
+
+在分区或容器环境中设置 `VFLASH_DEVICE_DISCOVERY=cuda-visible`。隔离的 CUDA 子进程会将可见 UUID 与**分区显存**和 NVIDIA 枚举核对，绝不
+用整卡容量代替。设备发现需显式启用，失败时明确报错。
+
+### 为其他架构做可移植准备
+
+可以在租用 GPU 之前完成 CPU 准备：
+
+```python
+from pathlib import Path
+from vflash.pipeline.assets import load_prepared_pipeline_assets
+from vflash.pipeline.portable import prepare_portable_assets
+from vflash.native.h3_runtime_artifact import load_h3_runtime_artifact
+from vflash.native.h3_schedule_overlay import load_h3_schedule_overlay
+from vflash.native.h3_prepared_hybrid import prepare
+from vflash.adapters.checkpoints import IndexedCheckpoint
+
+source = load_prepared_pipeline_assets(Path("/models/prepared-sm89.json"))
+prepared = prepare_portable_assets(source.assets, Path("/models/sm120-view"), "sm120")
+artifact = load_h3_runtime_artifact(prepared.assets.artifact, verify_content_hashes=False)
+overlay = load_h3_schedule_overlay(prepared.assets.schedule_overlay, artifact=artifact)
+prepare(Path("/models/hybrid-sm120"), artifact, overlay, IndexedCheckpoint(Path("/models/transformer_ref")))
+```
+
+把新凭据和 `HybridModel(Path("/models/hybrid-sm120"))` 传给流水线，并选择 `attention_backend="veda-triton"`。已导入的源资源保持只读挂载。
+可移植准备记录原编译目标，创建目录视图和小型调度副本，不对超大权重计算哈希；不得对服务文件建立硬链接，否则链接计数变化会使已有凭据失效。
+
+## 文本生成视频 {#t2va}
+
+`t2va-turbo4-exact-sm89` 使用 Base4 v1.0 产物、Base 辅助张量、6/3 视频/音频调度和不含参考图的 bundle，仅凭文本生成
+（[准备资源](../reference/pipeline-profiles)）。Ref2VA 产物不能执行该任务。`t2va-turbo4-exact-sm86` 需要两张 3080 并使用 `sequence-head`；
+应用自有阶段完成了 928×512/5 秒和 640×352/10 秒，不代表更大输入。SM89 上重复固定请求时，14 个条件张量和两个最终 FP32 latent 全部一致。
 
 ## Turbo LoRA 支持 {#lora}
 
-Vflash 可以直接执行固定版本的 [LightX2V H3 Turbo](https://huggingface.co/lightx2v/Minimax-h3-Turbo) LoRA，无需安装 LightX2V 推理框架。配置中的 LoRA、调度方式和步数必须与编译资源一致。
+Vflash 无需 LightX2V 框架即可运行固定版本的 [LightX2V H3 Turbo](https://huggingface.co/lightx2v/Minimax-h3-Turbo) 适配器。适配器、调度和步数必须与已编译资源一致。
 
-| 适配器 | 已支持硬件 | 上游文件 |
+| 适配器 | 硬件 | 上游文件 |
 | --- | --- | --- |
-| Turbo4 v0.1 | 单/双 3080、单 4090 | `minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors` |
-| Turbo8 v1.0 768p | 单 4090 | `minimax_h3_ref2v_turbo_8step_v1.0_768p_bf16.safetensors` |
-| 关键帧 Turbo4 v0.1 544p（预览） | 单4090；有限I2VA/L2VA/FL2VA成片证据 | `minimax_h3_fl2v_turbo_4step_v0.1.safetensors` |
-| 关键帧 Turbo8 v1.0 544p（预览） | 单4090 | `minimax_h3_fl2v_turbo_8step_v1.0_bf16.safetensors` |
+| Ref Turbo4 v0.1 | 一/两张 3080、一张 4090 | `minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors` |
+| Ref Turbo8 v1.0 768p | 一张 4090 | `minimax_h3_ref2v_turbo_8step_v1.0_768p_bf16.safetensors` |
+| 关键帧 Turbo4 v0.1 544p | 一张 4090 | `minimax_h3_fl2v_turbo_4step_v0.1.safetensors` |
+| 关键帧 Turbo8 v1.0 544p | 一张 4090 | `minimax_h3_fl2v_turbo_8step_v1.0_bf16.safetensors` |
+| T2VA Turbo4 v1.0 768p | SM89 或 SM86 双卡（alpha 128 / rank 128） | `minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors` |
 
-固定修订与来源见[运行资源](../reference/runtime-assets#versions)。T2VA 还支持用于 SM89 或双 SM86 T2VA 的 `minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors`，alpha128 / rank128。Base16关键帧不使用LoRA；上述544p Turbo成对配置则为rank128 / alpha8、shift12 / 3。仅支持明确列出的文件和修订；ComfyUI、自定义 LoRA 和未来上游版本需要单独适配。
+固定版本见[运行资源](../reference/runtime-assets#versions)。Base16 关键帧配置不使用适配器，只支持表中列出的文件与版本。Turbo4/8 为蒸馏配置：
+步数更少、计算更省，但不承诺达到 50 步基础模型的质量；`exact` 指注意力路径，不代表不同显卡产生相同张量。双卡保持精确注意力，但浮点舍入不同。
 
-Turbo4 和 Turbo8 都是蒸馏配置。减少步数可以降低计算量，但不代表输出质量与 50 步基础模型相同。名称中的 `exact` 描述所用注意力路径和指定 LoRA 的执行方式，不承诺不同 GPU 上的张量完全一致。
+## 不在支持范围内 {#scope}
 
-双卡模式已执行完整轨迹，并完成一个案例的视频与音频解码对照。它们保留精确注意力，但浮点舍入不同，不承诺输出一致或质量相同。
-
-单卡 3080 配置已检查容量，以及同一显卡上串行加载与传输计算重叠时的结果一致性。独立参考实现对照和更广泛的质量评测仍待完成。
-
-## 当前版本的边界 {#scope}
-
-[完整配置表](../reference/pipeline-profiles)记录各配置当前的成片验证范围，包括544p关键帧预览配置。单SM86与Ref Turbo8保留条件包到latent的原生接口；544p关键帧Turbo8成对配置另有完整pipeline。未列出的模式、LoRA、量化和时长帧率组合不在这些配置中。HTTP接口一次串行执行一个任务；账号、计费和分布式GPU调度由接入Vflash的应用负责。
-
-
-## NVL与RTX5090的有限I2VA证据（0.6.21） {#small-blackwell}
-
-H100 NVL使用公开0.6.17核心完成六片I2VA，其中1920×1088/十秒、1536×864/十五秒、
-2048²/五秒、1440²/十秒分别生成288.072、263.939、321.574、289.858秒；初始化46.590秒，
-此处不含容器与权重准备。全部完整AV和多时间点检查通过技术交付，镜头漂移与未审听音频语义仍存在，
-不由此扩大其他模式资格。
-
-0.6.20采用有实测的SM120 hybrid FFN/QKV融合及非逐块profiling路径的较短FFN生命周期。
-32GB RTX5090同卡1920×1088/五秒生命周期A/B/A2去噪峰值17.949/16.961/17.949GiB，
-完整MP4字节一致；生成198.377/200.900/198.355秒，只支持显存收益，不支持速度提升。
-独立融合对照测得去噪约快2.1%、峰值少2.137GiB；宿主和媒体阶段波动，不能叠加成整片加速声明。
-
-两项结合后，500W卡/约342GiB主机RAM/23核配额完成1536×864十五秒：431.601秒、
-去噪峰值27.916GiB。2048²五秒仍在4.28GiB FFN输出分配处失败，随后1440²十秒未执行。
-按已实测的尺寸/时长使用；这是`PYTORCH_ALLOC_CONF=expandable_segments:True`块环I2VA证据，
-不是全权重驻留或生产默认调度。完整媒体及多时间点已检查，仍有镜头跟随。
-私有证据来自`video-gen` `674c84fc`，不包含私有媒体、提示或机器身份。
-
-0.6.21复用独占base投影，补齐32GB/600W RTX5090的2048²五秒（451.039秒、去噪峰值26.982GiB）及1440²十秒（392.383秒）技术成片证据；同批1536×864十五秒364.943秒、24.143GiB。宿主约342GiB RAM/61核配额，与上述500W宿主不同。1920×1088五秒同卡A/B/A2的完整MP4一致，峰值16.960GiB不变，无已证速度收益。新增资格是这些几何/时长下的容量，不扩展其他模式或宣称严格镜头/音频意图全部通过。
-
-新增集成证据：`video-gen` `3e20f9f3`。
+各配置的媒体验证范围以[完整配置表](../reference/pipeline-profiles)为准。单 SM86 与 Ref Turbo8 提供原生 bundle 到 latent 的接口。未列出的模式、适配器、
+量化、时间设置、显存规格和更大的设备组都不在这些配置之内。HTTP API 提供一条串行去噪通道；账户、计费和分布式调度由应用负责。

@@ -86,7 +86,7 @@ Add the same `--gpu`, `--peer-gpu`, and `--strategy` options to `vflash denoise`
 
 Both strategies use BF16 weights, exact attention and the complete four-step schedule. Selecting a peer defaults to `sequence-head`. See [the architecture guide](../reference/architecture#parallel) for the implementation.
 
-Version 0.4.0 also accepts two matching RTX 4090 48 GB devices for a prepared SM89 Base16 I2VA/L2VA/FL2VA profile. Pass the same peer options, but use `sequence-head`; `tensor` remains rejected. Both devices stream blocks from one prepared SM89 artifact. This opt-in path prioritizes one request's latency and should not replace two independent workers when two requests are ready.
+Two matching RTX 4090 48 GB devices are also accepted for a prepared SM89 Base16 I2VA/L2VA/FL2VA profile. Pass the same peer options, but use `sequence-head`; `tensor` remains rejected. Both devices stream blocks from one prepared SM89 artifact. This opt-in path prioritizes one request's latency and should not replace two independent workers when two requests are ready.
 
 Parallel execution changes GEMM shapes or reduction order, so results **need not be bitwise identical to single-GPU execution**. Full latent and decoded-media smoke checks passed on one workload; cross-case instruction-quality qualification remains pending. See [performance measurement](../reference/performance#parallel) for scope and memory accounting.
 

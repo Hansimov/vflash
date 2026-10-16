@@ -6,7 +6,7 @@
 
 ## 创建会话 {#session}
 
-0.5.0的`NativeEngineSession`与`H3Pipeline`默认`attention_backend="auto"`：单SM89官方Base16
+`NativeEngineSession`与`H3Pipeline`默认`attention_backend="auto"`：单SM89官方Base16
 选择近似`sol-sm89`，其他受支持配置和双卡保持`torch-flash`。显式设置`attention_backend="torch-flash"`
 即可使用dense。Sol原生会话的默认权重策略变为block-ring，不兼容显式`resident`。
 先安装GPU/pipeline依赖，再执行`python -m vflash.install_sol`，或使用标准Docker构建。

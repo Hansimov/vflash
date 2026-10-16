@@ -69,7 +69,7 @@ permute 和 concat 的物化中间张量。该路径已分别在 SM86 与 SM89 �
 
 两种方式都执行完整配置，并以事件保护缓冲区。任一卡失败时会中止另一卡。分片改变浮点归约顺序，因此双卡结果不一定与单卡逐位相同；已测范围见[性能测量](./performance#parallel)。
 
-0.4.0 仅将同一套 block-ring `sequence-head` 实现扩展到两张匹配的 SM89 48 GB 显卡上的 Base16 I2VA/L2VA/FL2VA。其他 SM89 profile 和 `tensor` 会被拒绝，调用方仍必须显式选择两张卡。这是范围有限的低延迟选项，不是自动调度或默认吞吐策略；有两个就绪请求时，两个独立 worker 仍更合适。
+同一套 block-ring `sequence-head` 实现仅用于两张匹配的 SM89 48 GB 显卡上的 Base16 I2VA/L2VA/FL2VA。其他 SM89 profile 和 `tensor` 会被拒绝，调用方仍必须显式选择两张卡。这是范围有限的低延迟选项，不是自动调度或默认吞吐策略；有两个就绪请求时，两个独立 worker 仍更合适。
 
 ## 优化准入 {#optimization-admission}
 

@@ -75,7 +75,7 @@ dense执行使用PyTorch Flash SDPA和精确BF16传输。这里的“精确”�
 用`attention_backend="torch-flash"`、`--attention-backend torch-flash`或对应HTTP环境值显式保留dense。
 Sol需要串行block-ring；原生会话的`default`在Sol下解析为block-ring。显式选择不支持的Sol会报错，
 不会在SM86、双卡或Turbo上启用。prepared模型/调度身份不变，结果报告实际非精确策略。
-0.4.0和旧预构建镜像不含该能力。
+0.5.0之前的镜像不含该能力。
 
 适配器调用[NVIDIA Sol-Attn](https://nvlabs.github.io/Sana/Sol-Engine/docs/techniques/sparse/sol_attn/)，
 固定源码`d0c0a4685ab5dc2336d18b7213d85f13def92418`、版本0.5.0。

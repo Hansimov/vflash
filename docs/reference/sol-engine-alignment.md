@@ -86,7 +86,7 @@ and HTTP (`VFLASH_ATTENTION_BACKEND=auto`). Use `attention_backend="torch-flash"
 Sol requires serial block-ring residency; native `default` resolves to block-ring for Sol.
 An explicit unsupported Sol selection fails. It does not enable Sol on SM86, pairs or Turbo.
 The prepared model/scheduler identity is unchanged; results report the actual non-exact policy.
-Version 0.4.0 and older prebuilt images do not contain this option.
+Images before 0.5.0 do not contain this option.
 
 The adapter calls [NVIDIA Sol-Attn](https://nvlabs.github.io/Sana/Sol-Engine/docs/techniques/sparse/sol_attn/)
 at pinned source `d0c0a4685ab5dc2336d18b7213d85f13def92418`, version 0.5.0. It requires

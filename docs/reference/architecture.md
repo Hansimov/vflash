@@ -70,7 +70,7 @@ SM89; see [Sol-Engine alignment](./sol-engine-alignment).
 
 Both strategies preserve the complete profile and use event-protected buffers. A rank failure aborts its peer. Partitioning changes floating-point reduction order, so parallel output need not be bitwise identical to single-GPU output. See the [measured scope](./performance#parallel).
 
-Version 0.4.0 extends only Base16 I2VA/L2VA/FL2VA on two matching SM89 48 GB devices to the same block-ring `sequence-head` implementation. Other SM89 profiles and `tensor` are rejected. The caller must still select both devices explicitly. This is a bounded latency option, not automatic scheduling or a throughput default; two independent workers remain preferable when two requests are ready.
+Only Base16 I2VA/L2VA/FL2VA on two matching SM89 48 GB devices use the same block-ring `sequence-head` implementation. Other SM89 profiles and `tensor` are rejected. The caller must still select both devices explicitly. This is a bounded latency option, not automatic scheduling or a throughput default; two independent workers remain preferable when two requests are ready.
 
 ## Optimization admission {#optimization-admission}
 
