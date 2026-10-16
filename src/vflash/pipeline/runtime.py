@@ -408,14 +408,13 @@ class H3Pipeline:
                 or request.audio_delivery_profile == SILENT_AUDIO_PROFILE
                 or profile_denoise
                 or self.hybrid_model is None
-                or self.weight_residency != "resident"
-                or self.attention_backend != "veda-triton"
+                or (self.weight_residency, self.attention_backend)
+                not in {("resident", "veda-triton"), ("block-ring", "veda-sm89")}
                 or self._plan.parallel_strategy != "single"
                 or self.veda_dense_edge_layers != 3
             ):
                 raise ContractError(
-                    "audio refinement requires an unprofiled resident hybrid I2VA "
-                    "pipeline with Veda"
+                    "audio refinement requires an unprofiled hybrid I2VA pipeline with Veda"
                 )
         if rgb:
             from vflash.media.rgb_delivery import validate_rgb_selection

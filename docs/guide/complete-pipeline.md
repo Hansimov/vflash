@@ -654,10 +654,12 @@ refinement = AudioRefinementRequest(
 result = pipeline.generate(request, output_path, audio_refinement=refinement)
 ```
 
-The explicit Python option requires resident hybrid weights, one device, Veda 44/6,
-one same-canvas first image, generated audio, and no denoise profiling. Existing
-profile and capacity limits still apply. It rejects silent delivery, video-only
-output, other reference modes, streamed weights, and simultaneous native repaint.
+The explicit Python option requires hybrid weights, one device, Veda 44/6,
+one same-canvas first image, generated audio, and no denoise profiling. Published
+0.11.0 supports resident weights with `veda-triton`. Source main additionally
+supports the native two-slot BF16 `block-ring` with `veda-sm89`. Existing profile
+and capacity limits still apply. It rejects silent delivery, video-only output,
+other reference modes, other residency/backend pairs, and simultaneous native repaint.
 Inputs already below the spatial budget retain full context. `context_pixels=None`
 selects the full-context six-step control. There is no CLI/HTTP switch or default
 activation. This explicit interface is introduced in 0.11.0.
@@ -686,3 +688,25 @@ hardware or mode qualification is implied.
 The above high-resolution private integration used its separately validated capacity
 admission. The public resident profile envelope is unchanged; numerical factories
 and row tiling alone do not authorize larger requests.
+
+
+### SM89 block-ring audio (source main)
+
+The streamed pass replaces all 50 host modulation tables and the two device-slot
+copy plans, disables Turbo residuals on both sides only for audio refinement,
+and restores the original bindings on success or failure. Reduced spatial context
+rebinds the shared attention owner on both slots, retaining original temporal and
+rotary positions. This does not make the full trunk resident on a 24 GiB GPU.
+
+Two five-second single-RTX-4090 private integration pairs completed with the BF16
+ring and Veda 44/6. The 1024² audio-only pair and a 512² pair with unchanged native
+two-step face refinement each kept all 120 decoded video frames exactly. The added
+audio passes took 55.12 and 33.98 seconds. Complete requests were 132.98/180.81 and
+87.65/120.74 seconds without/with audio refinement; the first request was cold and
+subsequent requests warm, so those differences are not isolated speedup estimates.
+One initialization took 100.45 seconds. No larger or longer SM89 audio workload is
+qualified by these measurements, and the evidence does not establish a 15% overhead
+target or a general audio-quality improvement. Machine transcription retained the
+seven requested words in the speech pair; listening and fine lip synchronization
+remain separate checks. Original audio and complete comparison media remain in
+the private integration evidence (source snapshot `d08abd6e`).

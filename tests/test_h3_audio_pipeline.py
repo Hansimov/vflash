@@ -25,14 +25,17 @@ def audio_request():
     )
 
 
-def test_pipeline_owns_refinement_and_decode_guard(video_request, tmp_path, monkeypatch):
+@pytest.mark.parametrize("execution", ["resident", "block-ring"])
+def test_pipeline_owns_refinement_and_decode_guard(
+    video_request, tmp_path, monkeypatch, execution
+):
     pipeline, events = _pipeline()
     pipeline.profile = model_profile("i2va-turbo4-v01-544-exact-sm120")
     pipeline.prepared.profile_id = pipeline.profile.definition.id
     pipeline.hybrid_model = object()
     pipeline._check_hybrid_unchanged = lambda: None
-    pipeline.weight_residency = "resident"
-    pipeline.attention_backend = "veda-triton"
+    pipeline.weight_residency = execution
+    pipeline.attention_backend = "veda-triton" if execution == "resident" else "veda-sm89"
     pipeline.veda_dense_edge_layers = 3
     pipeline._core.runtime = N(metadata=lambda: {"model_variant": {"hybrid": True}})
     pipeline._media.audio = object()
@@ -124,13 +127,16 @@ def test_native_rejects_untyped_audio_before_loading(tmp_path):
 
 
 @pytest.mark.parametrize("cold", [True, False])
-def test_audio_admission_uses_configuration_before_lazy_request_layout(tmp_path, cold):
+@pytest.mark.parametrize("execution", ["resident", "block-ring"])
+def test_audio_admission_uses_configuration_before_lazy_request_layout(
+    tmp_path, cold, execution
+):
     runtime = H3NativeConditioningRuntime.__new__(H3NativeConditioningRuntime)
     runtime._closed = False
     runtime._torch = N()
     runtime.devices = (0,)
-    runtime.weight_residency = "resident"
-    runtime.attention_backend = "veda-triton"
+    runtime.weight_residency = execution
+    runtime.attention_backend = "veda-triton" if execution == "resident" else "veda-sm89"
     runtime.veda_dense_edge_layers = 3
     runtime.overlay = N(schedule=N(nfe=4))
     runtime._veda_attention = None if cold else object()

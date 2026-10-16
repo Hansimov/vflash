@@ -25,21 +25,33 @@ class ContextSelection:
     protected_rows: int
 
 
+def _attention_blocks(engine):
+    """One attention owner shared by all resident blocks or both ring slots."""
+    denoiser = engine.denoiser
+    if hasattr(denoiser, "host_blocks"):
+        if len(denoiser.host_blocks) != 50 or len(denoiser.slots) != 2:
+            raise ValueError("audio context needs the complete two-slot native ring")
+        return denoiser.slots
+    blocks = getattr(denoiser, "blocks", ())
+    if len(blocks) != 50:
+        raise ValueError("audio context needs all 50 native blocks")
+    return blocks
+
+
 def select_context(engine, *, max_pixels=500_000):
     import torch
 
     if type(max_pixels) is not int or max_pixels != 500_000:
         raise ValueError("audio context reduction supports the qualified 0.5MP budget")
     state = engine.latent_state
-    blocks = getattr(engine.denoiser, "blocks", ())
+    blocks = _attention_blocks(engine)
     if (
         not engine.complete
         or state.num_condition_audio_rows
         or not state.audio_latents.numel()
-        or len(blocks) != 50
         or engine._denoise_profile_records is not None
     ):
-        raise ValueError("context reduction needs completed resident AV generation")
+        raise ValueError("context reduction needs completed AV generation")
     attention = getattr(blocks[0], "_veda_attention", None)
     if attention is None or any(
         getattr(b, "_veda_attention", None) is not attention for b in blocks
@@ -151,7 +163,7 @@ def reduced_audio_context(engine, *, max_pixels=500_000):
         rotary_cos=engine.rotary_cos.index_select(0, selection.packed_rows),
         rotary_sin=engine.rotary_sin.index_select(0, selection.packed_rows),
     )
-    blocks = engine.denoiser.blocks
+    blocks = _attention_blocks(engine)
     original = blocks[0]._veda_attention
     attention = _attention_view(original, selection)
     record = {

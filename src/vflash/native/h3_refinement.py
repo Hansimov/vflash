@@ -48,7 +48,7 @@ def refinement_plan(engine, schedule, *, mode):
 
 
 @contextmanager
-def _ring_modulation(engine, tables):
+def _ring_modulation(engine, tables, *, mode="face"):
     """Rebind only modulation storage and its prevalidated copy pairs.
 
     The two-slot executor captures tensor addresses during construction; merely
@@ -61,7 +61,7 @@ def _ring_modulation(engine, tables):
 
     ring = engine.denoiser
     if len(ring.host_blocks) != 50 or len(ring.slots) != 2:
-        raise ValueError("face refinement requires the complete two-slot native ring")
+        raise ValueError("refinement requires the complete two-slot native ring")
     names = (
         "host_blocks",
         "_ring_copy_pairs",
@@ -76,13 +76,25 @@ def _ring_modulation(engine, tables):
     try:
         host_tables = [table.to("cpu").contiguous() for table in tables[:-1]]
         host_tables = [t if t.is_pinned() else t.pin_memory() for t in host_tables]
+        residuals = (
+            dict(
+                qkv_residuals=(),
+                attention_out_residual=None,
+                ffn_in_residual=None,
+                ffn_out_residual=None,
+            )
+            if mode == "audio"
+            else {}
+        )
         ring.host_blocks = tuple(
-            replace(w, adaln_table=t)
+            replace(w, adaln_table=t, **residuals)
             for w, t in zip(saved["host_blocks"], host_tables, strict=True)
         )
         for slot, table in zip(ring.slots, host_tables[:2], strict=True):
             slot.weights = replace(
-                slot.weights, adaln_table=torch.empty_like(table, device=ring.device)
+                slot.weights,
+                adaln_table=torch.empty_like(table, device=ring.device),
+                **residuals,
             )
         ring._ring_copy_pairs = tuple(
             _bf16_block_copy_pairs(ring.slots[i % 2].weights, w)
@@ -114,8 +126,6 @@ def quality_pass(engine, schedule, tables, *, mode):
     ring = hasattr(engine.denoiser, "host_blocks")
     blocks = engine.denoiser.slots if ring else engine.denoiser.blocks
     block_count = len(engine.denoiser.host_blocks) if ring else len(blocks)
-    if ring and mode != "face":
-        raise ValueError("block-ring refinement currently supports face repaint only")
     if block_count != 50 or len(tables) != 51 or engine._denoise_profile_records is not None:
         raise ValueError("refinement requires an unprofiled complete 50-block native engine")
     original = (engine.schedule, state, engine.row_timestep_plan, engine.final_layer.weights)
@@ -130,7 +140,7 @@ def quality_pass(engine, schedule, tables, *, mode):
     try:
         plan = refinement_plan(engine, schedule, mode=mode)
         if ring:
-            stack.enter_context(_ring_modulation(engine, tables))
+            stack.enter_context(_ring_modulation(engine, tables, mode=mode))
         else:
             for block, table in zip(blocks, tables[:-1], strict=True):
                 options = dict(adaln_table=table.to(state.device))
