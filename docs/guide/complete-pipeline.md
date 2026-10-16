@@ -1,204 +1,122 @@
-# Generate a video
+# Generate a video {#generate-a-video}
 
-Vflash 0.5.1 generates a five-second MP4 from text alone, or from a prompt and one to three ordered reference images. Version 0.4.0 supports official Base16 I2VA, L2VA and FL2VA requests with one first-frame anchor, one last-frame anchor, or both anchors. Use the Python API for repeated requests or the container CLI for a single generation. The complete pipeline supports T2VA Base4 and Ref2VA Turbo4 on one RTX 4090 48 GB; Ref4 also runs on two RTX 3080 20 GB GPUs. The Base16 keyframe profiles target one RTX 4090 48 GB, an optional cooperating pair of matching RTX 4090 48 GB GPUs, or a cooperating pair of RTX 3080 20 GB GPUs.
+`H3Pipeline` (Python) and `vflash generate` (CLI) produce a complete MP4 from a prompt and optional
+images or a short reference video. Vflash owns the native denoiser, stage lifetimes, local media loading
+and MP4 delivery; the text/image encoders use pinned Diffusers and Transformers code and the official
+H3 VAEs decode video and audio. No LightX2V runtime or application server is required.
 
-On one 4090, Ref4 also accepts [a short reference video](#reference-video). The same instance can alternate images and video without switching weights.
+This page describes the current release. Per-version changes and their exact evidence are in the
+[release notes](../reference/releases); hardware capacity is in [profiles and hardware](./profiles).
 
-## Check a request before allocating hardware
+## Modes and limits {#modes-and-limits}
 
-Source main exposes `validate_request` from `vflash.pipeline`. It runs the same
-software admission checks as `H3Pipeline.generate`, without importing Torch,
-loading weights, opening reference media or initializing CUDA:
+| Mode | Inputs | Prompt labels | Profiles |
+| --- | --- | --- | --- |
+| T2VA | prompt only | — | `t2va-turbo4-exact-sm89` |
+| Ref2VA | 1–3 ordered images (1–9 with the extended hybrid) | `<Picture 1>` … in input order | Ref4 (`ref2va-turbo4-exact-*`) |
+| I2VA | one first-frame anchor | `<Picture 1>` | Base16 or LightX v0.1 keyframe profiles |
+| L2VA | one last-frame anchor | `<Picture 1>` | the same keyframe profiles |
+| FL2VA | first and last anchors | `<Picture 1>`, `<Picture 2>` in time order | the same keyframe profiles |
+| Reference video | one 2–5 s clip | `<Video 1>` | Ref4 on one RTX 4090 48 GB |
+
+Reference images are visual references, not timeline positions. The keyframe profiles serve I2VA,
+L2VA and FL2VA serially from one prepared pipeline without a restart; `result.request_mode` records
+the actual input type and `profile_id` the prepared identity. Other profiles reject mode changes before
+execution. The prompt is used verbatim; describe each image's subject and role.
+
+**Canvas.** Width and height are multiples of 32 with an aspect ratio between 1:4 and 4:1. Ordinary
+requests allow up to 1,048,576 pixels. Image-conditioned native HD allows up to 2048² pixels with a
+long edge of at most 2720, for example 2720×1536 (16:9), 1536×2720 (9:16), 2368×1760 (4:3) or 2048².
+A reference-video request keeps its own 475,136-pixel output limit.
+
+**Duration.** Turbo T2VA and Ref4 are five seconds. Base16 keyframe profiles accept integer durations
+of 5–10 seconds. The [extended hybrid](#extended-hybrid) accepts 5–15 seconds. Delivery is 24 fps:
+for example 5 s uses 124 model / 120 delivered frames and 15 s uses 362 / 360.
+
+**Joint budget.** Canvas and duration are not independent: `width × height × model_frames` must not exceed
+`2048² × 124`, so a 4 MP canvas is a five-second request and 2048² at fifteen seconds is rejected.
+Multiple-image Ref above three images is limited to five seconds and 960×544. These are software
+ceilings; a serving system must advertise only combinations qualified on its actual hardware.
+
+### Check a request before allocating hardware {#check-a-request-before-allocating-hardware}
+
+`validate_request` runs the same admission checks as `H3Pipeline.generate` without importing Torch,
+loading weights, opening media or initializing CUDA:
 
 ```python
 from pathlib import Path
 from vflash.pipeline import VideoRequest, validate_request
 
 request = VideoRequest("Describe the motion.", first_frame=Path("first.png"),
-                       width=2048, height=2048, duration_seconds=5)
-validate_request(request, profile_id="i2va-turbo4-v01-544-exact-sm90",
+                       width=2720, height=1536, duration_seconds=5)
+validate_request(request, profile_id="i2va-turbo4-v01-544-exact-sm89",
                  hybrid=True, attention_backend="veda-triton",
                  parallel_strategy="single", weight_residency="block-ring")
 ```
 
-Use the exact engine revision and resolved options intended for execution.
-A legal width and duration individually do not imply a legal combination:
-2048 × 2048 at fifteen seconds exceeds the current joint pixel-frame budget.
-Passing admission establishes software eligibility, not available GPU memory,
-prepared-asset integrity, hardware qualification or output quality.
+Passing admission establishes software eligibility, not GPU memory, asset integrity, hardware
+qualification or output quality.
 
+## Install and prepare assets {#installation-and-assets}
 
-## What runs where
-
-Vflash owns the native denoiser, stage lifetimes, local image loading and MP4 delivery. The text and image encoders use pinned Diffusers and Transformers code; Turbo profiles additionally use PEFT adapters. Video and audio decoding use the official H3 VAE code. These components are explicit dependencies; they are not described as new native kernels. No LightX2V runtime or application server is needed.
-
-Turbo requests use four denoising evaluations and retain their five-second contract. The Base16 keyframe profiles use 16 evaluations and accept integer durations from five through ten seconds on the native 24 fps clock. The corresponding model/delivery frame pairs are 5s 124/120, 6s 158/144, 7s 175/168, 8s 192/192, 9s 226/216 and 10s 243/240. Width and height must be multiples of 32, with at most 1,048,576 canvas pixels and an aspect ratio between 1:4 and 4:1. A video-reference request retains its separate 475,136-pixel output limit. These are API ceilings; a serving system must still advertise only duration-and-canvas combinations qualified on its actual hardware. The prompt is used verbatim. For Ref2VA, the one to three images are numbered in the order supplied: `<Picture 1>`, `<Picture 2>` and `<Picture 3>`. Describe each image’s subject and role in your prompt. These are visual references, not frame positions or guaranteed keyframes. I2VA takes one distinct frame-zero anchor, L2VA takes one final-frame anchor, and either may call its single image `<Picture 1>`. FL2VA takes both anchors, exposed as `<Picture 1>` and `<Picture 2>` in temporal order. Five- and ten-second I2VA/FL2VA paths have bounded hardware evidence. One ten-second, 736 × 992 SM89 L2VA case now has bounded completion, media-integrity, endpoint and latency evidence; broader L2VA quality, other canvases and intermediate durations still require target-hardware qualification before a serving system can claim delivery.
-
-Choose the [fixed model profile](../reference/pipeline-profiles) before preparing assets. Ref2VA uses `transformer_ref` and Ref4 v0.1; T2VA uses `transformer` and Base4 v1.0; Base16 keyframe requests use the official `transformer` at 16 evaluations without an adapter. The paired Base16 I2VA and FL2VA profile identities for the same hardware share the exact model artifact and schedule, so either prepared keyframe pipeline can serve I2VA, L2VA and FL2VA serially without a profile restart or cold initialization. Conditioning metadata remains specific to the actual request. The result keeps the prepared identity in `profile_id` and records the actual input type in `request_mode`. Per-request stage residency still follows the selected memory strategy. Other profiles reject mode changes before execution.
-
-### Full binary-megapixel budget in 0.5.0
-
-Version 0.5.0 (from `53d6687`) raises the Base16 pipeline and native conditioning
-ceiling to **1,048,576 pixels**: a 1024 × 1024 square is no longer reduced to 992 × 992.
-The existing 0.4.0 tag retains its 1,032,192-pixel ceiling. Dimensions remain multiples
-of 32; total area does not require either dimension to equal 1024. This does not
-enlarge the separate reference-video contract.
-
-A cooperating pair of RTX 3080 20 GB GPUs completed one five-second 1024 × 1024 I2VA
-request (120 delivered frames, full decode). With the same latent, normal and
-`silent-v1` delivery produced identical compressed video streams and zero-valued
-decoded silent audio. This is a bounded capacity and media-contract screen, not
-a semantic-quality or end-to-end speed claim. Other duration/hardware combinations
-must retain their own serving qualification; API validation alone does not qualify them.
-
-## Hybrid reference model in 0.6.8 (opt-in)
-
-`HybridModel` keeps the original FL LightX v0.1 four-evaluation backbone and
-replaces only block 25–49 AdaLN projections with the pinned official Ref component.
-The FL timestep MLP, final layer and adapter remain unchanged. About 55.4 MiB of
-compiled modulation tables are added; a second denoiser is not loaded. This is a
-distinct model combination, not the standalone official Ref4 profile.
-
-```python
-from pathlib import Path
-from vflash.pipeline import H3Pipeline, HybridModel, VideoRequest
-
-# prepared: original i2va/fl2va-turbo4-v01-544-exact-sm89 assets
-with H3Pipeline(
-    prepared, device=device, trust_local_code=True,
-    attention_backend="torch-flash",
-    hybrid_model=HybridModel(Path("models/MiniMax-H3/transformer_ref")),
-) as pipeline:
-    result = pipeline.generate(
-        VideoRequest("Describe the ordered references and their actions.",
-                     references=(Path("subject.png"), Path("setting.png")),
-                     width=960, height=544),
-        Path("reference-video.mp4"),
-    )
-```
-
-This explicit Python option requires single SM89 with dense or explicit Veda attention. Ref accepts one to three
-ordered image references for five seconds; video references and hybrid Sol are
-not qualified. Keyframes use their ordinary FL graph; Ref uses a real official
-Ref graph sharing the same prefix, text encoder and VAEs, with an in-memory
-native handoff. `request_mode` and `stages.model_variant` record the actual contract.
-Reference weight inventory/headers and per-request file stamps are checked without
-rehashing large weights. The caller supplies the pinned official model files;
-no checkpoint or merged model is distributed.
-
-Native prototype complete-video evidence covers I2VA, FL2VA and three-image Ref.
-The public Python interface also completed Ref → I2VA → Ref in one persistent
-RTX 4090 48 GB session: 960×544, five seconds, four evaluations, dense attention,
-BF16 trunk, block-ring residency. Request times were 86.542 / 72.074 / 76.631 seconds;
-one initialization took 104.094 seconds separately. All delivered 120 frames at
-24 fps and passed complete audio/video decode. Two reference requests use different
-seeds but the same source family; this is lifetime coverage, not three diverse scenes
-or a matched speed comparison. Existing pauses and imperfect object contacts remain;
-sampled identity/scene retention is not a universal quality guarantee.
-
-This option does not change the default profile or claim a fix for fine contact,
-faces or motion quality. Video/audio semantics and broader scenes require their own
-assessment; do not infer a serving-system rollout from the presence of this option.
-
-## Exact text-encoder prefix
-
-Version 0.5.1 retains 51 Qwen3-VL decoder layers for H3 conditioning instead of executing all 64.
-The pinned H3 adapter consumes `hidden_states[50]`; keeping one extra layer preserves that raw
-intermediate state rather than substituting the final normalized state. The first 50 layers,
-vision encoder, weights and BF16 arithmetic are unchanged. The unused tail is removed before
-offloading hooks are installed. This is independent of Sol and does not change denoising.
-
-The ordinary official checkpoint still loads first, so this is not a smaller download or a
-guaranteed cold-start improvement. [Target-hardware conditioning checks](../reference/benchmarks#encoder-prefix)
-separate the local stage benefit from complete-request speed. No configuration flag or alternate
-checkpoint is needed.
-
-## Installation and assets
-
-Version 0.5.0 defaults to approximate Sol on single-SM89 official Base16. Other profiles and pairs
-remain dense. Use `--attention-backend torch-flash` or `H3Pipeline(..., attention_backend="torch-flash")`
-for the previous dense behavior. [Selection, dependencies and quality limits](../reference/sol-engine-alignment#sol-default)
-are part of this changed default, not a promise of identical media.
-
-Install the pipeline extra from the release checkout and provide `ffmpeg` and `ffprobe` on `PATH`:
+Install the pipeline extra from a release checkout and provide `ffmpeg` and `ffprobe` on `PATH`:
 
 ```bash
 python -m pip install '.[pipeline]'
-# For the single-SM89 Base16 default; needs Git and network access, no model downloads.
-python -m vflash.install_sol
+python -m vflash.install_sol   # only for the single-SM89 Base16 Sol default; no model downloads
 ```
 
-The extra pins the adapter implementation, including Diffusers commit `d035dcd7cc7c88e0a154609b62887d50bba9fdc2`. It does not download model weights.
-
-Prepare a local asset configuration with six explicit paths:
+The extra pins the adapter implementation, including Diffusers commit
+`d035dcd7cc7c88e0a154609b62887d50bba9fdc2`. Choose the [fixed model profile](../reference/pipeline-profiles)
+first, then describe its assets with six explicit paths:
 
 | Field | Contents |
 | --- | --- |
-| `model_directory` | The official Diffusers components from `MiniMaxAI/MiniMax-H3` at `42ed227ee7df40d41602854ae760620d6eb651fe`, with the selected `transformer_ref` or `transformer` component |
-| `adapter_path` | The selected Turbo profile's pinned BF16 adapter from [runtime assets](../reference/runtime-assets), or `null` for Base16 I2VA and FL2VA profiles |
-| `decoder_directory` | The `FL2VA` directory from that same official H3 revision, containing `video_vae` and `audio_vae` |
-| `artifact` | The selected profile's complete BF16 native artifact, with runtime LoRA residuals only for Turbo profiles |
-| `schedule_overlay` | Matching training-Euler schedule: four evaluations for Turbo profiles or 16 for Base16 I2VA/FL2VA; Base16 uses video/audio shifts 12/3 |
+| `model_directory` | Official Diffusers components from `MiniMaxAI/MiniMax-H3` at `42ed227ee7df40d41602854ae760620d6eb651fe`, with `transformer_ref` (Ref) or `transformer` (T2VA, keyframes) |
+| `adapter_path` | The Turbo profile's pinned BF16 adapter from [runtime assets](../reference/runtime-assets), or `null` for Base16 |
+| `decoder_directory` | The `FL2VA` directory of the same revision, with `video_vae` and `audio_vae` |
+| `artifact` | The profile's complete BF16 native artifact |
+| `schedule_overlay` | Matching training-Euler schedule (4 evaluations for Turbo, 16 for Base16 with shifts 12/3) |
 | `auxiliary_tensor` | Its matching native input and output tensors |
 
-The last three are prepared native assets, not arbitrary upstream checkpoint files. Follow the [official-weight compiler recipe](./compile-weights) to create them, or check the [asset contracts](../reference/runtime-assets) before supplying an existing artifact. A ready-made model package is not currently published.
-
-Place assets in their final read-only snapshot before preparation. The ingestion step hashes all consumed files against the bundled upstream inventory or native artifact manifest. It also verifies source, LoRA and schedule identities. This is intentionally a one-time disk operation. The resulting local receipt is bound to this filesystem: model startup and requests check file identity and timestamps without rehashing model weights. Moving or changing an asset requires a new receipt.
+Create the last three with the [official-weight compiler](./compile-weights) or check the
+[asset contracts](../reference/runtime-assets). No ready-made model package is published. Place assets in
+their final read-only location, then prepare once:
 
 ```bash
-vflash prepare-pipeline \
-  --assets pipeline-assets.json --receipt prepared-assets.json
+vflash prepare-pipeline --assets pipeline-assets.json --receipt prepared-assets.json
 ```
 
-## Generate from the command line
+Preparation hashes every consumed file against the upstream inventory or artifact manifest and binds a
+receipt to this filesystem; later startups check identity and timestamps without rehashing. Moving or
+changing an asset requires a new receipt.
 
-Write the H3 prompt in `prompt.txt`, then list reference images in the intended order:
+## Generate from the command line {#generate-from-the-command-line}
 
 ```bash
 vflash generate \
-  --prepared-assets prepared-assets.json \
-  --prompt-file prompt.txt \
+  --prepared-assets prepared-assets.json --prompt-file prompt.txt \
   --reference subject.png --reference setting.png \
   --width 928 --height 512 --seed 1234 --gpu 0 \
   --output video.mp4 --trust-local-code
 ```
 
-Supply one, two or three `--reference` arguments for Ref2VA. For T2VA, prepare with `--profile t2va-turbo4-exact-sm89` and omit all image arguments. A prepared SM89 or SM86 Base16 keyframe profile accepts exactly one `--first-frame first-frame.png` for I2VA, exactly one `--last-frame last-frame.png` for L2VA, or both for FL2VA. Add `--duration 10` for the native ten-second contract; omitting it keeps five seconds. The explicit `i2va-*` and `fl2va-*` profile IDs remain stable preparation and provenance identities; there is no duplicate L2VA weight profile. Do not mix keyframes with `--reference`. The SM86 profiles require `--peer-gpu 1 --strategy sequence-head`; version 0.4.0 accepts the same options for an optional two-SM89 Base16 keyframe execution. The Python forms are `VideoRequest(last_frame=Path("last-frame.png"), ...)` for L2VA and `VideoRequest(first_frame=Path("first-frame.png"), last_frame=Path("last-frame.png"), ...)` for FL2VA.
+- Ref2VA: one to three `--reference` arguments, in prompt order.
+- T2VA: prepare `t2va-turbo4-exact-sm89` and omit image arguments.
+- Keyframes: `--first-frame` (I2VA), `--last-frame` (L2VA) or both (FL2VA); add `--duration N`.
+  Do not mix keyframes with `--reference`.
+- Paired GPUs: `--gpu 0 --peer-gpu 1 --strategy sequence-head` (required for SM86 pairs; optional for
+  two matching RTX 4090 48 GB Base16 keyframe GPUs).
+- Explicit Veda edge width: `--veda-dense-edge-layers 3` (see [attention](#veda-dense-edges)).
 
-By default, delivered keyframes remain the official VAE reconstruction. Set `keyframe_delivery_profile="exact-v1"`, or pass `--keyframe-delivery-profile exact-v1`, to restore each supplied temporal endpoint after decode. The image is stretched to the requested canvas with LANCZOS, matching the official conditioning geometry; the endpoint is exact before H.264 quantization, followed by a fixed four-frame linear feather into decoded motion. The result records the applied profile and modified frame indices. This is an explicit delivery policy, not a claim that the model preserves fine detail throughout the clip.
+Progress is emitted as JSON lines on stderr and the result on stdout. Each command loads and closes its
+own models; use one Python pipeline to keep models resident across requests. For a container, see
+[Docker generation](./docker#pipeline).
 
-Set `audio_delivery_profile="web-v1"`, or pass `--audio-delivery-profile web-v1`, to apply bounded post-decode gain toward -18 LUFS with a -2 dBTP peak limit; the default `unchanged` path preserves the decoded waveform. This delivery option does not improve sound identity or synchronization. Progress is emitted as JSON lines on stderr; stdout contains the final result. Each command starts and closes its own models. Use one Python `H3Pipeline` instance to realize cross-mode residency across repeated requests. For a ready-made environment and complete mounting example, see [Docker generation](./docker#pipeline).
+## Generate from Python {#generate-from-python}
 
-### Video-only generation (0.6.32)
-
-Python requests can set `VideoRequest(..., generate_audio=False)`. This single-device
-option removes generated audio rows before denoising, skips audio projections and
-scheduler updates, omits audio latent export and waveform decoding, and writes an MP4
-with no audio stream. Keep `audio_delivery_profile="unchanged"`; gain normalization and
-silent-track delivery cannot be combined with this mode. Audio conditioning is not supported.
-
-Removing joint audio context can change the video, even with the same seed. This is a
-separate generation mode, not a promise of identical pixels or a large speed improvement.
-End-to-end evidence covers an experimental FP8 hybrid backbone on one RTX PRO 6000
-Blackwell Server GPU: same-process audio/video-only switching, 576×864 five-second
-people clips, and video-only 1248×832, 1728×1152 and 2048×2048 ten-second clips. Outputs
-were fully decoded and played; local face-crop inspection is not general quality approval.
-Other architectures, the default BF16 backbone and multi-device execution have not been
-qualified for this option. The option is included in 0.6.32 as a Python API, without an additional CLI flag.
-
-## One owned pipeline
-
-Source main adds `audio_delivery_profile="silent-v1"` (CLI: `--audio-delivery-profile silent-v1`)
-to enforce digital silence in a stereo AAC track with the original duration and sample rate.
-It skips the unused waveform decoder, not joint audio/video denoising; video latents,
-video decoding and endpoint delivery stay unchanged. The engine never infers this policy
-from a prompt. Applications must request it only for explicit whole-video silence, not for
-unspecified audio or a request to omit music. The default remains `unchanged`.
-
-This is a deterministic delivery contract, not improved model audio understanding or a
-denoising acceleration claim. It is included in 0.5.0, not the 0.4.0 tag.
-
-Run a pipeline in a dedicated process before any other code initializes CUDA. Choose the device explicitly. This example expects exactly one visible compatible GPU:
+Run the pipeline in a dedicated process before anything else initializes CUDA, and choose devices
+explicitly:
 
 ```python
 from pathlib import Path
@@ -206,547 +124,186 @@ from vflash.hardware import discover_nvidia_devices
 from vflash.pipeline import H3Pipeline, VideoRequest, load_prepared_pipeline_assets
 
 devices = discover_nvidia_devices()
-if len(devices) != 1:
-    raise RuntimeError("make one SM89 GPU visible to this process")
 prepared = load_prepared_pipeline_assets(Path("prepared-assets.json"))
 with H3Pipeline(prepared, device=devices[0], trust_local_code=True) as pipeline:
+    pipeline.prepare()                       # optional preload before accepting requests
     result = pipeline.generate(
-        VideoRequest(
-            prompt=Path("prompt.txt").read_text(encoding="utf-8"),
-            references=(Path("subject.png"), Path("setting.png")),
-            seed=1234,
-        ),
+        VideoRequest(prompt=Path("prompt.txt").read_text(encoding="utf-8"),
+                     references=(Path("subject.png"), Path("setting.png")), seed=1234),
         Path("video.mp4"),
         progress=lambda event: print(event.stage, event.completed, event.total),
     )
     print(result.output_path, result.elapsed_seconds)
 ```
 
-The original single-image `reference=Path(...)` argument remains supported. Use it or `references=(...)`, never both.
+Keyframe requests use `first_frame=`, `last_frame=` or both. For a cooperating pair pass
+`peer_device=devices[1], strategy="sequence-head"`; encoding and decoding stay on the first device.
+Two RTX 4090s on one request reduce latency but consume more GPU-seconds: when two requests are ready,
+prefer two independent single-GPU workers.
 
-In 0.4.0, construction checks the profile on the CPU. The first `generate` call reads and validates its inputs before loading any models. To preload a fixed pipeline before accepting requests, call `pipeline.prepare()` explicitly. Repeated calls reuse its stages; invalid inputs preserve a healthy loaded instance. Preloading does not run conditioning or compile every input shape: first use can still incur operator preparation costs.
+**Lifetimes.** Construction checks the profile on the CPU; the first `generate` validates inputs before
+loading models. Invalid inputs leave a healthy loaded instance; a failed execution retires the pipeline and
+removes temporary files. The output path must not exist, and a video is published only after encoding,
+probing and stage cleanup succeed. `close()` releases owned models after a CUDA completion fence and never
+resets another owner's context. The native block ring leaves device memory for the encoders and VAEs,
+while CPU model masters stay resident, so host memory must cover them. Progress callbacks run synchronously
+and may raise to cancel, but must not call `close`. `trust_local_code=True` loads the official decoder files
+from the verified local snapshot; review the [licenses](../reference/license) first.
 
-For two RTX 3080 20 GB GPUs, prepare the [SM86 assets](../reference/pipeline-profiles#sm86) and pass `peer_device=devices[1], strategy="sequence-head"` to `H3Pipeline`, with exactly that pair visible. Encoding and decoding use `devices[0]`; native denoising uses both. Single-SM86 and `tensor` complete pipelines are rejected before model loading. The equivalent CLI options are `--gpu 0 --peer-gpu 1 --strategy sequence-head`.
+In a read-only container give Triton a writable, executable cache directory; a `noexec` temporary
+filesystem cannot serve as that cache.
 
-Current main also accepts those Python and CLI peer options for the SM89 Base16 keyframe profiles when exactly two matching RTX 4090 48 GB devices are visible. Only `sequence-head` is accepted; both devices use the same SM89 artifact and block-ring residency. One fixed 10-second, 736 × 992 L2VA request reduced successful `generate` time from 774.153 to 484.232 seconds and produced a byte-identical MP4, but consumed 968.464 aggregate GPU-seconds instead of 774.153. This is a bounded single-request latency result, not a throughput default: use two independent single-GPU workers when two requests are ready.
+## Delivery options {#delivery-options}
 
-`trust_local_code=True` permits loading the official decoder Python files from the verified local snapshot. Review the [model and code licenses](../reference/license) first.
+| Option | Effect |
+| --- | --- |
+| `keyframe_delivery_profile="exact-v1"` | Restores each supplied endpoint after decode (LANCZOS to the canvas, four-frame feather). Default keeps the VAE reconstruction. |
+| `audio_delivery_profile="web-v1"` | Bounded gain toward −18 LUFS with a −2 dBTP limit. Default `unchanged` keeps the decoded waveform. |
+| `audio_delivery_profile="silent-v1"` | Digital-silence stereo track of the original length; skips only the waveform decoder. Use only for explicit whole-video silence. |
+| `generate_audio=False` | Video-only generation: removes audio rows before denoising and writes no audio stream. Can change the video for the same seed. |
+| `generate_rgb(request, Path("x.npy"))` | Video-only uint8 RGB array `[model_frames, H, W, 3]`; `required_frames=` decodes only the VAE chunks those frames need. |
 
-Reuse the same pipeline for sequential requests. Its native block ring leaves device memory available while the encoder and VAE take turns. CPU model masters remain owned for reuse, so sufficient host memory is also required. A progress callback runs synchronously and may raise to cancel; it must not call `close` from inside that callback. Application queues, accounts, storage and parallel worker scheduling stay outside this API.
-
-Current main also provides opt-in, exact reuse of the seed-independent text and keyframe encodings for sequential sibling I2VA, L2VA or FL2VA candidates. A trusted scheduler creates one opaque `ConditioningReuseScope` for candidates from the same accepted request and passes it to each `generate` call as `conditioning_reuse_scope`. Never derive the scope from public prompt or media content, accept it from an end user, or reuse it for a different owner or request. Calls without a scope retain the ordinary uncached path.
-
-The cache holds one copied CPU entry, is capped at 128 MiB, and expires after one hour of inactivity with the deadline refreshed by each hit. A scope or input change, an unscoped call, a failed capture, or `close()` clears it immediately. It contains only Qwen3-VL text outputs, token tags and clean keyframe VAE latents. Initial noise, noised reference latents, packed state, scheduler state, DiT/attention/FFN activations, decoded latents and media are never reused. Inspect `result.stages["encoding"]["capture_diagnostics"]["conditioning_reuse"]` for `hit`, `miss` or `capacity-bypass` plus encoder-call and timing counters.
-
-On one dual-SM86 sequence-head pipeline, a warmed five-second 512 × 512 A/B/A reduced the two sequential candidates' makespan from a 352.393-second control median to 340.403 seconds (3.402%) without delaying the first candidate; both candidates' H.264 and AAC streams matched across arms. This is bounded SM86 evidence, not an SM89 or serving-system claim. When independent GPUs are available, keep one candidate per worker: serializing otherwise parallel candidates merely to obtain a cache hit loses first-result latency and fleet throughput.
-
-### Explicit in-memory conditioning {#memory-conditioning}
-
-`H3Pipeline(..., conditioning_transport="memory")` opts a single-device, same-process pipeline into a validated, one-shot handoff from its encoder to native denoising. The tensors retain their original storage and are consumed once; this removes intermediate conditioning tensor writes and rereads without caching prompts or tensors across requests. Typed sibling reuse scopes keep their existing ownership and expiry rules. Hybrid Ref2VA already uses its separate in-memory reference graph; this option does not change that graph.
-
-The default remains `conditioning_transport="file"`. Persisted bundles retain their content-bound contract for standalone native calls, service jobs and cross-process transport. Memory handoff rejects paired-device pipelines and rejects an encoder that fails to return the typed one-shot owner. Inspect `result.stages["encoding"]` for actual transport, tensor bytes and finishing time. Earlier hardware A/B/A preserved output bytes without a wall-time win; removing file I/O does not remove model-transition or host-memory costs. Keep cold initialization and warmed requests separate when evaluating this option.
-
-A later same-GPU H100 SXM comparison used six frozen I2VA requests, FP8 native/text weights, forty Veda sparse and ten BF16 CuTe dense layers, staged text, prepared BF16 VAE and CPU frame assembly. All twelve outputs fully decoded and played; every pair had identical decoded video planes and audio PCM. Integration source: `video-gen` `bf708735`; aggregate evidence recorded at `a70b3907`. These are private-integration measurements of the reusable handoff, not a new public quantized-model API.
-
-| Canvas / seconds | File request (s) | Memory request (s) | File finish (s) | Memory finish (s) |
-| --- | ---: | ---: | ---: | ---: |
-| 512² / 5 | 59.856 | 16.277 | 0.267 | 0.001 |
-| 768² / 10 | 45.686 | 37.389 | 0.970 | 0.008 |
-| 1024² / 15 | 117.724 | 110.484 | 2.537 | 0.006 |
-| 1536 × 1344 / 10 | 180.765 | 166.866 | 3.141 | 0.004 |
-| 2048² / 5 | 205.243 | 192.746 | 4.472 | 0.005 |
-| 2048² / 15 | 908.845 | 886.411 | 9.758 | 0.015 |
-
-The directly removed finishing work totaled **21.107 seconds**. Initialization plus six requests decreased from 1565.830 to 1427.246 seconds (8.85% observed), but the memory arm ran second with warm file/compiler caches: this entire gain cannot be attributed to handoff. A second worker shared read-only model storage after the first two memory requests. The largest conditioning owner was 5.392 GB; matching denoiser peaks reached 65.756 GB, and the container's cumulative lifetime peak reached 93.305 GB. The cumulative host peak does not establish per-request equality or a minimum RAM requirement. Output equivalence supports this copy-only change; it is not new semantic-quality qualification or evidence for other hardware/input modes.
-
-The integration checks used a 240 GiB host-memory limit. This is a tested budget, not a measured minimum. The 64 GiB recommendation for the denoiser alone does not cover these additional encoders and decoders.
-
-`VideoResult.elapsed_seconds` covers the successful `generate` call from input validation through reference cleanup, including a first model load. `stages.initialization_seconds` records loading during this call (zero after explicit preloading); `stages.request_elapsed_seconds` excludes only that load. `stages.session_initialization_seconds` records the session's original loading cost, also available as `pipeline.initialization_seconds`. `stages.input_preparation` includes asset checks and reference loading; its `reference_loading_seconds` is nested inside preparation. Encoding and media stages report `weight_resume_seconds`, `suspend_seconds`, and `capture_call_seconds` or `decode_call_seconds`. Encoding also identifies `conditioning_transport` and the captured `conditioning_tensor_bytes`. Their outer durations cover synchronous callbacks and orchestration. Do not sum nested durations as independent costs.
-
-`stages.encoding.capture_diagnostics` further separates the official conditioning call,
-capture-hook waits, metadata work, and persisted-bundle finishing. The finish record separates tensor
-writing from sealing/reloading, while `process_deltas` reports page faults, block I/O, and context
-switches for the relevant intervals. Hook waits are nested in `official_pipeline_seconds`, and all of
-these values are nested in `capture_call_seconds`; they are diagnostic attribution, not additive stage
-totals. The counters describe this process only and are not host-wide resource measurements.
-
-The output path must not already exist. A video is published only after encoding, media probing and GPU stage cleanup have succeeded. A failed execution retires the pipeline and removes temporary files. `close()` releases owned models and hooks after a CUDA completion fence; it never resets another owner's CUDA context. CUDA libraries may retain process-level workspaces after a model closes. Exit the dedicated process when the application needs to relinquish its entire CUDA context.
-
-When running in a read-only container, give Triton a writable cache directory that permits loading compiled shared libraries. A temporary filesystem mounted with `noexec` cannot serve as that cache.
+The CLI accepts `--keyframe-delivery-profile` and `--audio-delivery-profile`. `generate_audio=False` and
+RGB delivery are Python-only and require the single-device path. The complete pipeline also applies linked
+stereo headroom before the official audio decoder clamp; the reusable context is
+`vflash.media.audio_headroom.audio_decoder_headroom`, a sample-peak guard that never boosts quiet audio.
+None of these options improves sound identity or synchronization.
 
 ## Use a reference video {#reference-video}
 
-Install the pipeline extra or use the versioned pipeline container. Use the same prepared `ref2va-turbo4-exact-sm89` assets as for images and one RTX 4090 48 GB. This input produces a new video guided by the source; it does not provide frame-accurate editing.
-
 ```bash
-vflash generate \
-  --prepared-assets prepared-assets.json --prompt-file video-prompt.txt \
-  --reference-video reference.mp4 --gpu 0 --seed 1234 \
-  --output variation.mp4 --trust-local-code
+vflash generate --prepared-assets prepared-assets.json --prompt-file video-prompt.txt \
+  --reference-video reference.mp4 --gpu 0 --seed 1234 --output variation.mp4 --trust-local-code
 ```
 
-In Python, use `VideoRequest(prompt=..., reference_video=Path("reference.mp4"))`. Refer to that clip as **`<Video 1>`**, including the space. A Ref4 session can process image requests, video requests, and then images again without swapping models or LoRAs. A previously generated local MP4 can be the next request's `reference_video`; the engine adds no conversation memory or automatic prompt rewriting.
-
-The boundary accepts one complete **2–5 second MP4, MOV or WebM**, at most **20 MiB** and **475,136 source pixels** (928×512 area). Source frame rates may be fractional and must be readable, positive and no higher than 240 fps. Only one video stream with square pixels and an unambiguous right-angle rotation is accepted. Existing source audio is discarded; it does not condition the new soundtrack. Mixed image/video inputs, audio inputs, SM86 and Ref8 video conditioning are not supported. Output remains five seconds at 24 fps, with the ordinary 32-aligned canvas limit above.
-
-The CPU decoder takes an immutable copy, checks the full clip and resamples it to 24 fps, retaining a final partial frame interval. It passes source-sized RGB to the official video setup, which resizes once. Video sizing is independent of the output canvas and does **not** use the downscale-only image `match` policy. Admission also bounds the resulting canvas to a 1376-pixel long edge, 1376×768 total pixels and 33,024 temporal reference rows; extreme aspect ratios may therefore be rejected even when source pixels fit. Those budgets are limits, not quality guarantees across every ratio. Temporary files and decoded RGB have request-scoped lifetimes.
-
-This is more expensive than a still image: the official VAE consumes complete temporal chunks and the text encoder samples the clip. Use the reported input, encoding, denoising and media durations to budget a deployment; no video-input latency guarantee is made. See the [typed conditioning contract](../reference/runtime-assets#video-conditioning) for the native interface and supported boundary.
-
-## What a correctness result means
-
-Compare conditioning and final latents to the fixed reference implementation separately from visual quality. Assess generated motion, appearance, instructions and sound against the original request. A matching latent tensor does not qualify a poor result.
-
-Media checks cover decoded video and audio before encoding, the selected five-through-fifteen-second delivery clock, frame count and channel layout. H.264 and AAC are lossy formats. An MP4 hash is not a numerical equivalence test for the denoiser or audio decoder.
-
-Release checks separate all 14 conditioning tensors, final FP32 audio/video latents, decoded video and playable delivery. The official audio VAE can produce small floating-point differences between repeated requests before PCM or AAC encoding. Audio bitwise reproducibility is not promised; finite output, channel layout, frame count, clock and complete decoding are checked. See [release validation](../reference/releases) for the tested cases and scope.
-
-The explicit [Veda backend](./veda) also supports this single-SM89 hybrid; its approximate contract and evidence are separate.
-
-## Fifteen seconds and nine images (0.6.12) {#extended-hybrid}
-
-The explicit original-v0.1 **single-SM89 hybrid with Veda** accepts integer image-conditioned durations from 5 to 15 seconds and up to nine ordered image references. Standard Ref4/Base16, SM86, paired execution and video-reference contracts do not inherit this expansion. H100 is not a supported or tested target of this release.
-
-The bounds are joint, not independently combinable: width and height stay 32-aligned, image-conditioned native HD stays within 2048² pixels with a long edge of at most 2720 (so 16:9 reaches 2720×1536 and 9:16 1536×2720), and `width × height × model_frames` must not exceed `2048² × 124`, which limits a 4 MP canvas to five seconds. Expanded multiple-image Ref requests are limited to five seconds and 960×544 total pixels. Fifteen-second keyframes or a single image reference use 362 internal model frames and deliver exactly 360 frames at 24 fps with 480000 audio samples per channel. Internal padding does not extend the requested duration. Unsupported combinations fail before model activation.
-
-The pinned official conditioning adapter accepts the aligned temporal boundary without changing its logical duration limit. Nine references preserve input order and labels `<Picture 1>` through `<Picture 9>`; they are visual references, not nine timeline keyframes. More inputs increase conditioning work and do not guarantee that every requested detail is followed. Full target-hardware cases and visual limitations are recorded in [performance](../reference/performance#extended-hybrid).
-
-
-## Pre-clamp audio headroom
-
-Version 0.6.33 provides an explicit adapter context for an exclusively owned,
-original H3 audio VAE component. It wraps exactly one complete stereo decode:
-
-```python
-from vflash.media.audio_headroom import audio_decoder_headroom
-
-observation = {}
-with audio_decoder_headroom(audio_component, observation):
-    waveform = decode_official_h3_audio_latents(
-        audio_component, latents, device=device, torch_module=torch
-    )
-```
-
-The fixed 0.98 sample ceiling uses a uniform gain across both channels and never
-boosts quiet audio. The hook is removed even when decoding or an optional diagnostic
-callback fails. `on_unclamped(tensor)` can record the original `[2, 1, samples]`
-waveform; diagnostic I/O is the caller's responsibility and cost. This scoped context
-must not share its component with another request. Decoder defaults, samplers and
-complete-pipeline profiles remain unchanged; there is no new CLI quality selector.
-
-This prevents the original decoder from destroying peaks before delivery processing.
-The existing `web-v1` post-decode loudness option cannot recover clipped samples.
-Neither option fixes synthesized timbre, speech, or audio/video synchronization.
-The ceiling is a sample-peak guard, not a true-peak or lossy-codec guarantee.
-Real evidence covers two refined stereo clips on one RTX PRO 6000 Blackwell Server:
-one was unchanged, while the other required about 0.31 dB attenuation to avoid new
-sample clipping. This does not establish general refinement quality or qualify a
-new hardware profile.
-
-
-## Explicit native face repaint
-
-Version 0.6.34 adds an opt-in native low-noise repaint building block. It keeps
-Turbo residuals, uses newly compiled FL/Ref modulation at the actual low-noise
-sigmas, preserves conditioned video rows and freezes audio latents. It does not
-change ordinary generation defaults or select people automatically.
-
-```python
-from pathlib import Path
-from vflash.compiler.refinement import compile_refinement_tables
-from vflash.native.h3_refinement import VideoRepaint
-from vflash.native.h3_refinement_schedule import load_tables
-
-compile_refinement_tables(
-    Path("fl-transformer"), Path("ref-transformer"), Path("face-modulation"),
-    steps=4, denoise=0.035, mode="face",
-)
-_, schedule, tables = load_tables(Path("face-modulation"), mode="face")
-# `engine` owns a fresh request; `encoded_rows` are the original video crop
-# encoded by the matching official VAE, in native packed generated-row layout.
-repaint = VideoRepaint(engine, schedule, tables, encoded_rows)
-for _ in range(4):
-    repaint.advance(step=ordinary_native_step)
-```
-
-The caller owns detection, unambiguous tracking, crop/keyframe alignment, original
-media preservation and localized compositing. Never infer identity continuity
-from detector confidence alone. Copy source audio when composing; frozen audio
-latents alone do not prove preserved mouth motion. This is a mathematical engine
-API, not an automatic face-swap or an independently qualified product flow.
-
-Complete-video evidence covers 512-pixel crops of 5- and 10-second material on a
-resident RTX PRO 6000 Server hybrid trunk. One resident audiovisual generation →
-fresh face preparation → silent repaint → full-frame composition measured
-32.31 + 2.91 + 22.71 + 0.99 seconds, excluding initialization and delivery. This
-is a supported example, not a universal speed or quality promise. Single-shot
-selected tracks have user-accepted improvements; crowded/cut/occluded scenes
-retain separate qualification requirements.
-
-The two-slot BF16 ring can now temporarily rebind its host modulation, slot
-storage and prevalidated copy pairs together. It synchronizes restoration of the
-original tables on completion/failure. A 100-copy CUDA check on RTX 3080 verified
-both successful and failed context restoration; it is **not complete H3 media
-qualification on SM89**, and must not be presented as a default serving upgrade.
-The stream/ring path currently permits face repaint only. Multi-GPU refinement
-is not supported by this API.
-
-The track/crop/repaint/stitch workflow was informed by the MIT-licensed
-[ComfyUI H3 FaceRefine](https://github.com/Carasibana/ComfyUI-H3-FaceRefine).
-No external face-restoration or identity-recognition weights are bundled.
-
-
-### Optional crop encoder execution
-
-For original H3 refinement crops, version 0.6.35 offers an explicit scoped option:
-
-```python
-from vflash.media.face_encoder import face_encoder
-
-with face_encoder(vae, "batch2-fp16-norm") as observation:
-    # Use the pinned official normalization/encoding function on the complete crop.
-    encoded = encode_vae_condition(vae, pixels, pixel_mean, pixel_std, encode_seed)
-```
-
-The crop must have batch size one, square 320/384/512 pixels and 120–362 model
-frames with the original 17-frame clip / 3-token-drop geometry. Temporal blocks
-are batched independently, not mixed. The original FP32 parameters and FP32
-posterior remain intact; FP16 operations and affine copies are approximate.
-The context requires exclusive ownership of the VAE. It restores the encoder and
-per-frame normalization methods on success or failure. It does not select faces,
-change the decoder, shorten a video, preserve audio or compose the final canvas;
-those responsibilities belong to the caller. Use `original` for unchanged encoding.
-Smaller internal crops trade detail for time and need scene-specific final-video
-review; their dimensions are not the final delivery resolution. Measurements and
-quality limits are in the [release notes](../reference/releases.md).
-
-
-## Explicit Veda dense edge width (0.6.36) {#veda-dense-edges}
-
-`H3Pipeline(..., veda_dense_edge_layers=3)` and `vflash generate --veda-dense-edge-layers 3`
-select six dense layers (0–2 and 47–49), with 44 Veda sparse layers. The default remains
-five layers at each edge (40 sparse / 10 dense). This option requires Veda attention;
-it changes approximate inference and is not an equivalence claim. Each session owns
-its partition, and execution counts and metadata report the actual selected layers.
-
-Controlled RTX PRO 6000 Server experiments with four-step hybrid FP8 and FROST measured
-6.60%, 9.07% and 12.29% shorter complete generation for paired 1/2/4MP ten-second inputs.
-A separate 1MP ten-second A/B/A control measured 4.58%; limited multi-mode experiments
-also completed, but do not extend the public pipeline's mode or capacity admission.
-The timing samples used controlled experimental partitions before this session-owned API.
-Exact 0.6.36 replay has since completed four modes, with matching video pixels against the
-corresponding earlier 44/6 runs; this does not establish broader perceptual or audio equivalence.
-Sampled context and consecutive detail frames found no new major defects in inspected
-regions. Complete perceptual, audio and cross-device qualification remains open.
-Use the default five-layer edge as the explicit rollback; other devices are not qualified
-by these measurements. Model startup and publication are outside those warm generation times.
-
-
-## Native repaint request (0.8.0)
-
-Current source adds `VideoRepaintRequest` to the preloaded `NativeEngineSession.generate`
-interface. It accepts independently matched two- or four-evaluation low-noise tables and
-packed video rows from the official VAE. The original four-step I2VA conditioning bundle
-still validates normally; the base session overlay stays intact and temporary head/modulation
-bindings are restored after each evaluation. Supply `generate_audio=False`; multi-device execution and denoise profiling are
-outside this interface. Detection, crop/keyframe alignment and final source-audio composition
-remain application-owned.
-
-```python
-from vflash.native.h3_refinement import VideoRepaintRequest
-from vflash.native.h3_refinement_schedule import load_tables
-
-_, schedule, tables = load_tables("face-modulation-two-step", mode="face")
-result = session.generate(
-    conditioning_bundle, output_latents, generate_audio=False,
-    video_repaint=VideoRepaintRequest(schedule, tuple(tables), encoded_rows),
-)
-```
-
-Compile two-step tables with `compile_refinement_tables(..., steps=2, denoise=0.035, mode="face")`.
-Do not truncate unrelated Turbo modulation. Result NFE, progress and Veda call coverage use
-the actual evaluation count. A repaint result's `execution_schedule` is explicitly labelled
-`video-low-noise-repaint`, starts at its low-noise sigma and reports frozen audio; it is not
-an ordinary conditioning-schedule artifact. The `refinement` receipt reports the actual pass.
-The native request has now completed two five-second face-repaint scenes on one RTX PRO
-6000 Blackwell Server GPU with explicit 44/6 attention. A matched legacy/native two-step
-comparison produced identical decoded pixels for all 120 frames in one scene. Two-step
-repaint reduced the measured conditioning/repaint/media/composition interval by 17.5–18.6%
-against four evaluations; reused restoration inputs and shared initialization were excluded.
-This does not establish general perceptual equivalence or a complete-request latency target.
-
-Use an explicitly qualified partition such as `veda_dense_edge_layers=3` (44 sparse / 6 dense).
-Zero dense-edge layers are not supported: full-sparse exploratory outputs showed material
-perceptual degradation and were not adopted. The default five-layer edge remains available.
-
-
-## Direct RGB handoff and repeated work elimination (0.9.0)
-
-`H3Pipeline.generate_rgb(request, Path("repaint.npy"))` is an explicit Python
-video-only interface. It retains the same conditioning, denoising and original
-VAE, quantizes decoded pixels once to uint8, and publishes a NumPy array in
-`[model_frames, height, width, 3]` layout. A five-second request has 120 delivery
-frames and 124 model frames; the metadata reports both. The ordinary `generate`
-method continues to publish MP4. RGB delivery requires `generate_audio=False`
-and decoded keyframes; it does not silently discard requested audio or exact
-endpoint delivery.
-
-An optional `required_frames=(0, 1, ...)` tuple selects sorted, unique model-frame
-indices for a downstream compositor. The original temporal assembly and blend
-are retained, but VAE chunks without a contribution to those frames are skipped.
-Unselected array frames are zero and **must not be treated as a complete movie**.
-The metadata declares the selected indices and actual executed chunks. Source
-sound and final full-frame composition remain the caller's responsibility.
-Array storage is reserved before mapped writes, and failures do not publish a
-partial destination. Existing destinations remain untouched.
-
-The explicit `batch2-fp16-norm-reuse` encoder profile reuses only exactly equal
-17-frame inputs on the qualified 124-frame timeline. It keeps batch-two shape,
-FP16 computation/norm and the full posterior timeline before sampling. Other
-supported timelines retain the ordinary batch-two encoder. This does not turn
-the underlying FP16 encoder into an FP32-equivalent method.
-
-The algorithm prototypes have completed two five-second scenes on one RTX PRO
-6000, including consecutive faces and separated face tracks. Repeated-clip
-reuse plus selective decoding preserved all final RGB frames and the original
-soundtrack in that comparison. Savings depend on actual repeated inputs and
-unused output spans; there is no general speed guarantee. The explicit public API completed six complete requests in a same-GPU
-control/candidate comparison. All three final pairs matched 120/120 RGB frames
-and preserved source PCM. Native two-step repaint and 44/6 attention were fixed.
-The normal MP4 default is unchanged; consuming-service deployment remains separate.
-
-
-## Whole-crop face encoding (0.10.0)
-
-The explicit `batch2-fp16-norm-reuse-untiled` profile removes spatial tiling only
-inside its encoder scope. It accepts a 512-square, 124-model-frame face crop;
-other geometry is rejected so the caller can select the existing tiled profile.
-The original temporal clips, batch-two FP16 frame normalization, repeated-input
-reuse and posterior sampling remain. The prior tile policy and normalization
-methods are restored on exit, including failure. The separate video decoder is
-unchanged.
-
-This changes spatial context and normalization statistics; it is **not pixel
-or latent equivalence**. It also needs more memory. On one RTX 4090 with about
-48 GiB of memory, a batch-two encoder probe changed from 2.056 to 0.912 seconds
-and from 4.98 to 17.38 GB of peak allocated memory. These are component numbers,
-not complete-request speedups or a claim that a standard 24 GiB card can host
-the complete pipeline with this option.
-
-Three five-second integration scenes used original restoration, native two-step
-repaint and 44/6 attention. Complete face-pass times were 47.831→43.350,
-74.665→72.005 and 48.381→42.537 seconds. The third case also measured complete
-warm inference: 93.514→87.604 seconds, against 44.680 seconds without face repair.
-The added complete-request time remains 96.1% of that matched original; repair
-still accounts for substantial latency.
-Consecutive native face frames, context and unchanged original PCM were checked;
-no new obvious structural or paste-boundary defect was observed, but rendering
-changed, some details were softer, and identity/teeth truth remained unjudgeable.
-The explicit public encoder reproduced all 120 final frames of one prototype
-case. Application integration, additional hardware and consuming-service rollout
-remain separate checks; the default is unchanged.
-
-
-## Source-scene conditioning (development candidate)
-
-`H3Pipeline.source_scene_conditioning(source_request)` can retain the original
-I2VA scene's Qwen features for related video-only repaints. This deliberately
-changes conditioning: the crop's image/text Qwen pass is replaced by the source
-scene's context. The crop's keyframe and video VAE, low-noise schedule, denoiser
-and media delivery still execute normally. It does not remove these remaining costs.
-
-```python
-with pipeline.source_scene_conditioning(source_request) as scene:
-    source = pipeline.generate(source_request, Path("source.mp4"))
-    # Prepare the restored crop and its explicit low-noise repaint configuration.
-    with scene.repaint():
-        result = pipeline.generate_rgb(crop_request, Path("repaint.npy"))
-    diagnostics = scene.report
-```
-
-The source must finish before repaint reuse. Repaints keep its prompt and seed,
-use I2VA with decoded keyframes and no audio, and cannot exceed its duration.
-The caller owns crop preparation, native repaint configuration and composition.
-Only one pipeline/thread can use a scope; nested scopes are rejected. A bounded
-128 MiB CPU copy is discarded on scope exit, pipeline failure or close, with a
-one-hour expiry. It composes with exact sibling conditioning reuse on the source,
-including a cache hit; repaint VAE encodings are never substituted. Repaints reject
-`conditioning_reuse_scope` so changed scene features cannot enter the exact cache. Diagnostics
-explicitly report non-equivalence and the number of avoided Qwen calls.
-
-This interface is a development candidate, not a default or general quality
-guarantee. Earlier complete-request experiments established a scoped benefit
-for source-scene reuse; this explicit implementation requires its own complete
-media qualification before release or adoption. Keep original audio and inspect
-identity, expression, temporal behavior and instruction adherence.
-
-
-## Owned row-FP8 model loaders (0.11.0)
-
-The native `create_row_fp8_native_loaders` factory and
-`load_row_fp8_text_encoder` accept explicitly prepared, approximate E4M3
-weights with FP32 row scales. They compose with `H3Pipeline`'s trusted Python
-`native_denoiser_loader` and `text_encoder_loader` callbacks. Each factory owns
-its block class and precision policy; it does not replace a global BF16 loader,
-alter the request envelope, select a GPU, or fetch models.
-
-```python
-from pathlib import Path
-from vflash.native.h3_fp8_linear import RowFP8Execution
-from vflash.native.h3_fp8_runtime import create_row_fp8_native_loaders
-
-precision = RowFP8Execution("w8a8", activation_quantizer="triton")
-native = create_row_fp8_native_loaders(
-    precision,
-    weights_directory=Path("prepared-fp8/artifact"),
-    token_tile_rows=16384,
-    whole_block_rows=32768,
-)
-# Pass native.denoiser_loader to an owned H3Pipeline with resident weights.
-```
-
-The caller validates the complete encoded inventory and passes a trusted
-artifact. Original BF16 digests establish lineage, not FP8 content identity.
-The normal prepared-asset receipt and CLI do not accept an FP8 bundle merely
-because these numerical loaders exist. A custom `open_weights(path)` context
-manager can supply bounded or prefetched tensor reads; the default uses local
-safetensors. Text shards are `RowFP8TextShard(path, quantized_names)` objects;
-unchanged text/vision weights come from the named original shard index. All
-parameters must be assigned before the encoder is returned. Duplicate entries,
-incomplete shards and invalid code/scale dtypes are rejected.
-
-Optional row tiling bounds projection/norm/MLP temporaries while preserving
-full-sequence attention. The whole-block shortcut is explicit and only applies
-below the configured row limit. Neither option qualifies larger requests.
-W8A8 remains approximate, requires supported SM90/SM120 execution and never
-silently switches to restored-weight arithmetic. BF16 serving defaults remain.
-
-Validation includes synthetic full-context block comparisons, isolated factory
-ownership, real mixed-shard assignment and four tiny Qwen/H3 conditioning modes.
-The exact public factories subsequently completed 1024² and 1536×1344 five-second
-I2VA requests on an RTX PRO 6000 Blackwell Server GPU, with all 120 decoded frames
-and delivered audio PCM matching the previous owned audio integration. Two smaller
-face/audio combination requests also completed with unchanged face-repaired pixels
-and packet-copied refined audio. This is integration evidence, not a new capacity
-or cross-device guarantee. Synthetic loading checks remain runnable with
-`python tests/test_fp8_loaders.py` in the complete dependency image without CUDA
-or network access.
-
-
-## Optional audio-only six-step refinement (0.11.0) {#optional-audio-only-six-step-refinement-source-main}
-
-`AudioRefinementRequest` adds six original-model audio evaluations after a four-step
-hybrid I2VA generation. It freezes the completed video, retains every temporal
-position, and uniformly selects spatial context up to 500,000 pixels while keeping
-original rotary coordinates. This is approximate audio conditioning, not equivalent
-full-context inference or a second low-resolution video. The output video buffer,
-requested duration, and delivery clock remain unchanged. Sound quality and sync
-still require content-specific evaluation.
+In Python use `VideoRequest(prompt=..., reference_video=Path("reference.mp4"))` and refer to the clip as
+**`<Video 1>`**. One Ref4 session alternates image and video requests without swapping weights. The input is
+one complete 2–5 s MP4, MOV or WebM, at most 20 MiB and 475,136 source pixels, with one square-pixel video
+stream at no more than 240 fps. Source audio is discarded. The official setup normalizes the canvas to a
+1376-pixel long edge, 1376×768 pixels and 33,024 temporal reference rows, so extreme ratios may be rejected.
+Output is five seconds; this guides a new video and is not frame-accurate editing. See the
+[conditioning contract](../reference/runtime-assets#video-conditioning).
+
+## Hybrid model and extended requests {#extended-hybrid}
+
+`HybridModel(Path(".../transformer_ref"))` keeps the LightX v0.1 four-evaluation backbone and replaces block
+25–49 AdaLN projections with the pinned official Ref component (about 55 MiB of tables, no second denoiser).
+Keyframes use the ordinary FL graph and Ref uses a real official Ref graph sharing the prefix, text encoder
+and VAEs. It requires single SM89 with dense or explicit Veda attention.
+
+With Veda, the single-SM89 hybrid accepts **5–15 s** image-conditioned requests and up to **nine** ordered
+references (`<Picture 1>` … `<Picture 9>`), within the [joint budget](#modes-and-limits). Standard
+Ref4/Base16, SM86, paired execution and reference video do not inherit this expansion.
+
+## Text encoder prefix {#exact-text-encoder-prefix}
+
+Conditioning keeps 51 of the 64 Qwen3-VL decoder layers: the pinned H3 adapter consumes `hidden_states[50]`,
+so the raw intermediate state is preserved while the unused tail is removed before offloading hooks are
+installed. Weights, vision encoder and BF16 arithmetic are unchanged; the full checkpoint still loads first,
+so this is not a smaller download or a guaranteed cold-start gain.
+
+## Attention {#veda-dense-edges}
+
+Single-SM89 official Base16 defaults to approximate Sol; other profiles and pairs stay dense. Select dense
+explicitly with `attention_backend="torch-flash"`. [Veda](./veda) is an explicit sparse backend with five
+dense layers at each edge by default (40 sparse / 10 dense); `veda_dense_edge_layers=3` selects 44 sparse /
+6 dense. Each session owns its partition and reports the layers it ran. These are approximate inference
+choices, not equivalence claims; Sol's [selection and limits](../reference/sol-engine-alignment#sol-default)
+are documented separately.
+
+## Optional audio refinement {#optional-audio-only-six-step-refinement-source-main}
+
+`AudioRefinementRequest` adds six original-model audio evaluations after a four-step hybrid I2VA generation.
+It freezes the completed video, keeps every temporal position and uniformly samples spatial context up to
+500,000 pixels with the original rotary coordinates. Video pixels, duration and delivery clock are unchanged.
 
 ```python
 from vflash.native.h3_audio_refinement import AudioRefinementRequest
 from vflash.native.h3_refinement_schedule import refinement_schedule
 
-# Supply 51 caller-owned compiled modulation tables matching this exact schedule.
-refinement = AudioRefinementRequest(
-    refinement_schedule(steps=6, denoise=0.5), tuple(audio_tables),
-)
+refinement = AudioRefinementRequest(refinement_schedule(steps=6, denoise=0.5), tuple(audio_tables))
 result = pipeline.generate(request, output_path, audio_refinement=refinement)
 ```
 
-The explicit Python option requires hybrid weights, one device, Veda 44/6,
-one same-canvas first image, generated audio, and no denoise profiling. 0.11.0 introduced resident weights with `veda-triton`. Version 0.12.0 additionally
-supports the native two-slot BF16 `block-ring` with `veda-sm89`. Existing profile
-and capacity limits still apply. It rejects silent delivery, video-only output,
-other reference modes, other residency/backend pairs, and simultaneous native repaint.
-Inputs already below the spatial budget retain full context. `context_pixels=None`
-selects the full-context six-step control. There is no CLI/HTTP switch or default
-activation. This explicit interface is introduced in 0.11.0.
+It requires hybrid weights, one device, Veda 44/6, one same-canvas first image and generated audio, with
+either resident weights and `veda-triton` or the native two-slot BF16 `block-ring` and `veda-sm89`. Silent
+delivery, video-only output, other modes and simultaneous repaint are rejected. `context_pixels=None`
+selects full-context six-step control. Progress reports 4 + 6 evaluations and `audio_refinement` records the
+added work; failure restores bindings, attention, video and original audio. There is no CLI or HTTP switch
+and no default activation.
 
-Main generation metadata stays at four evaluations; denoising progress reports ten
-(4 + 6). Added work is separately recorded as `audio_refinement`. Failure restores
-model bindings, attention, video, and original audio. The complete pipeline applies
-linked stereo headroom before the official decoder clamp and reports it separately.
-Native sessions return latents only; their decoder caller must provide this guard.
+### Hidden-context reuse {#audio-hidden-context}
 
-The context algorithm was evaluated in two independent five-second high-resolution
-I2VA cases on an RTX PRO 6000 Blackwell Server GPU with FP8 weights and 44/6 attention.
-Compared with full-context six-step refinement, total generation changed from 83.88
-to 61.20 seconds at 1024² and from 186.35 to 111.94 seconds at 1536×1344. Both paired
-videos retained all 120 decoded frames; the two reduced-context audio results were
-accepted against their full-context controls. These are private integration results,
-not a universal quality guarantee or evidence that refined audio beats every original.
-The owned Python wiring subsequently completed both cases through a serial product
-worker on the same GPU class. It reproduced all 120 decoded frames and delivered
-audio PCM for each accepted experimental candidate. First-request admission and
-4+6 progress were exercised. This qualifies the interface in that integration;
-production adoption and combined face/audio behavior remain separate. No additional
-hardware or mode qualification is implied.
+`reuse_hidden_context=True` reuses first-evaluation BF16 non-audio hidden states; all six audio evaluations
+remain, later steps rebuild K/V and process only audio rows. This is an explicit approximation, never changes
+video latents and defaults to false. The cache is scoped to one refinement (at most 40 GiB, with at least
+12 GiB of device memory kept free) and released on success or failure.
 
+## Face repaint building blocks {#explicit-native-face-repaint}
 
-The above high-resolution private integration used its separately validated capacity
-admission. The public resident profile envelope is unchanged; numerical factories
-and row tiling alone do not authorize larger requests.
+These are opt-in engine APIs. Detection, tracking, crop/keyframe alignment, restoration models, source-audio
+preservation and compositing belong to the application.
 
+- `VideoRepaint` / `VideoRepaintRequest`: low-noise repaint with compiled FL/Ref modulation at the actual
+  sigmas, preserved conditioned rows and frozen audio. Compile tables with
+  `compile_refinement_tables(..., steps=2 or 4, denoise=0.035, mode="face")`. The native request runs on a
+  preloaded `NativeEngineSession` with `generate_audio=False`; single device only.
+- `vflash.media.face_encoder.face_encoder(vae, profile)`: scoped crop encoding for square 320/384/512 crops
+  of 120–362 model frames. `batch2-fp16-norm` and `batch2-fp16-norm-reuse` are approximate FP16 batches
+  (the latter reuses exactly equal clips); `batch2-fp16-norm-reuse-untiled` removes spatial tiling for
+  512-square, 124-frame crops at higher memory. `original` keeps unchanged encoding.
+- `H3Pipeline.source_scene_conditioning(source)` (development candidate): reuses the source scene's Qwen
+  features for related video-only repaints. This deliberately changes conditioning.
 
-### SM89 block-ring audio (0.12.0)
+The workflow was informed by the MIT-licensed [ComfyUI H3 FaceRefine](https://github.com/Carasibana/ComfyUI-H3-FaceRefine).
+No face-restoration or identity weights are bundled.
 
-The streamed pass replaces all 50 host modulation tables and the two device-slot
-copy plans, disables Turbo residuals on both sides only for audio refinement,
-and restores the original bindings on success or failure. Reduced spatial context
-rebinds the shared attention owner on both slots, retaining original temporal and
-rotary positions. This does not make the full trunk resident on a 24 GiB GPU.
+## Conditioning reuse and handoff {#memory-conditioning}
 
-Two five-second single-RTX-4090 (48 GiB reported memory) private integration pairs completed with the BF16
-ring and Veda 44/6. The 1024² audio-only pair and a 512² pair with unchanged native
-two-step face refinement each kept all 120 decoded video frames exactly. The added
-audio passes took 55.12 and 33.98 seconds. Complete requests were 132.98/180.81 and
-87.65/120.74 seconds without/with audio refinement; the first request was cold and
-subsequent requests warm, so those differences are not isolated speedup estimates.
-One initialization took 100.45 seconds. No larger or longer SM89 audio workload is
-qualified by these measurements, and the evidence does not establish a 15% overhead
-target or a general audio-quality improvement. Machine transcription retained the
-seven requested words in the speech pair; listening and fine lip synchronization
-remain separate checks. Original audio and complete comparison media remain in
-the private integration evidence (source snapshot `d08abd6e`).
+- **Sibling reuse.** A trusted scheduler passes one opaque `ConditioningReuseScope` to sequential I2VA/L2VA/FL2VA
+  candidates of the same accepted request. One copied CPU entry (≤128 MiB, one-hour idle expiry) holds text
+  outputs, token tags and clean keyframe latents only; noise, scheduler state, activations and media are never
+  reused. Never derive a scope from public content or reuse it across owners.
+- **In-memory handoff.** `conditioning_transport="memory"` passes encoder tensors to native denoising once,
+  without writing a bundle, on a single device. The default `file` transport keeps the persisted contract
+  for standalone native calls and services.
 
+## Approximate FP8 loaders {#fp8-loaders}
 
-### Opt-in hidden context reuse (0.13.0) {#audio-hidden-context}
+`create_row_fp8_native_loaders` and `load_row_fp8_text_encoder` load explicitly prepared E4M3 weights with FP32
+row scales through `H3Pipeline`'s trusted `native_denoiser_loader` / `text_encoder_loader` callbacks. Row
+tiling bounds temporaries while keeping full-sequence attention. W8A8 is approximate, requires SM90/SM120 and
+never silently switches arithmetic; BF16 remains the default, and the prepared-asset receipt and CLI do not
+accept FP8 bundles.
 
-Set `reuse_hidden_context=True` on `AudioRefinementRequest` to reuse first-evaluation
-BF16 non-audio hidden states. All six audio evaluations remain; later steps rebuild
-context K/V and inject current audio projections, while processing only audio
-queries and feed-forward rows. This is approximate: later audio no longer updates
-the cached video/text states. It never changes the completed video latents.
+## Timing and diagnostics {#timing-and-diagnostics}
 
-The cache belongs to one serial refinement scope, with hooks and buffers released
-on success or failure. Two physical weight slots are indexed by their current
-logical layer. Maximum cache allocation is 40 GiB and at least 12 GiB of free device
-memory is reserved; insufficient headroom fails before allocating the full cache.
-The option defaults to false. There is no CLI/HTTP cache switch or automatic capacity
-expansion. A cache request does not qualify other shapes or GPUs.
+`VideoResult.elapsed_seconds` spans the successful `generate` call including a first model load.
+`stages.initialization_seconds` is loading inside this call, `stages.request_elapsed_seconds` excludes it, and
+`stages.session_initialization_seconds` (also `pipeline.initialization_seconds`) is the session's original
+load. Encoding and media stages report resume, suspend and call durations; `capture_diagnostics` separates
+the official call, hook waits, bundle finishing and per-process resource deltas. Nested durations are
+attribution, not additive totals.
 
-Two independent 512×512, five-second I2VA comparisons on one RTX 4090 with 48 GiB reported memory used the
-native BF16 ring, four main evaluations, six audio evaluations, Veda 44/6 and no
-face pass. Each cache used about 5.27 GiB. Audio time fell from 34.06/33.96 to
-22.57/22.55 seconds. Complete generation changed from 86.50 to 68.75 seconds for
-speech and 79.73 to 68.18 seconds for ambience; the first speech control was cold,
-while ambience reversed the order. All 120 decoded video frames matched in each
-pair. Both cache soundtracks were accepted relative to full six-step controls;
-this is limited listening evidence, not universal quality or exact synchronization.
-The private prototype source is `a71bebc0`; the promoted cache function has the same
-AST. Request-owned integration and failure restoration also have CPU coverage.
+## What a correctness result means {#what-a-correctness-result-means}
 
-Both tested canvases were already below the spatial context budget. Cache use with
-actual spatial thinning, larger canvases, longer durations, or resident FP8 remains
-unqualified on GPU. Ordinary uncached six-step refinement is separate: additional
-RTX 4090 integration completed 1248×832/10 seconds and 1536×1344/5 seconds, preserving
-240/120 video frames; audio took 108.39/57.00 seconds respectively. These results
-neither expand public profile admission nor establish a 15% added-time target.
+Compare conditioning and final latents to the reference implementation separately from visual quality, and
+judge motion, appearance, instructions and sound against the original request. H.264 and AAC are lossy, so an
+MP4 hash is not numerical equivalence; the official audio VAE can differ slightly between repeated requests.
+Release checks cover the 14 conditioning tensors, final FP32 latents, decoded media and playable delivery.
 
+## Qualification evidence {#qualification-evidence}
 
-**Memory evidence correction:** the local RTX 4090 devices used for these audio
-measurements report 49,140 MiB (approximately 48 GiB), not the standard 24 GiB.
-Earlier application metadata and the 0.12 overview incorrectly said 24 GiB.
-Timings, cache byte counts and media/listening results are unchanged. Measured
-peak allocation alone does not qualify the same complete workflow on 24 GiB.
+The table summarises what the current interfaces have been run on; numbers, scopes and limits for each
+are in the [release notes](../reference/releases) and [performance records](../reference/performance).
+
+| Capability | Evidence |
+| --- | --- |
+| 2720-pixel native HD (0.14) | Five 120-frame I2VA requests on RTX 4090 48 GB, BF16 hybrid Veda 44/6: 2720×1536 ×2, 1536×2720, 2368×1760, 2720×1152 |
+| Extended hybrid (0.6.12) | 15 s and nine-image cases on single SM89 with Veda |
+| Six-step audio (0.11–0.13) | RTX PRO 6000 FP8 (1024², 1536×1344) and RTX 4090 48 GB BF16 ring (512², 1024², 1248×832/10 s); hidden-context reuse on two 512² cases |
+| Face repaint (0.6.34–0.10) | RTX PRO 6000 Server complete-video scenes, two- and four-step; crop-encoder profiles with matched final frames |
+| In-memory handoff | Six H100 SXM requests with identical decoded planes and PCM |
+| Sibling reuse | Dual-SM86 A/B/A with matching streams |
+
+Evidence on one GPU class or canvas does not qualify others; serving systems keep their own qualification.

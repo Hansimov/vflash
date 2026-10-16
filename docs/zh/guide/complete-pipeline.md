@@ -1,161 +1,107 @@
-# 生成视频
+# 生成视频 {#generate-a-video}
 
-## 在申请硬件之前检查请求
+`H3Pipeline`（Python）和 `vflash generate`（命令行）根据提示词，以及可选的图片或一段短参考视频，生成完整 MP4。
+Vflash 负责原生去噪、阶段生命周期、本地媒体读取和 MP4 交付；文本/图像编码器使用固定版本的 Diffusers 与
+Transformers 代码，视频与音频由官方 H3 VAE 解码。不需要 LightX2V 运行时或应用服务器。
 
-源码主线从 `vflash.pipeline` 导出 `validate_request`，与
-`H3Pipeline.generate` 共用软件准入检查，不导入 Torch、不加载权重、
-不打开参考素材，也不初始化 CUDA：
+本页描述当前版本。各版本的改动与对应证据见[版本更新](../reference/releases)，硬件容量见[配置与硬件](./profiles)。
+
+## 模式与限制 {#modes-and-limits}
+
+| 模式 | 输入 | 提示词标签 | 配置 |
+| --- | --- | --- | --- |
+| T2VA | 仅提示词 | — | `t2va-turbo4-exact-sm89` |
+| Ref2VA | 1–3 张有序图片（扩展混合模型可到 9 张） | 按输入顺序 `<Picture 1>` … | Ref4（`ref2va-turbo4-exact-*`） |
+| I2VA | 一张首帧锚点 | `<Picture 1>` | Base16 或 LightX v0.1 关键帧配置 |
+| L2VA | 一张尾帧锚点 | `<Picture 1>` | 同一组关键帧配置 |
+| FL2VA | 首尾两张锚点 | 按时间顺序 `<Picture 1>`、`<Picture 2>` | 同一组关键帧配置 |
+| 参考视频 | 一段 2–5 秒视频 | `<Video 1>` | 单张 RTX 4090 48 GB 上的 Ref4 |
+
+参考图是视觉参考，不是时间轴位置。关键帧配置可用同一个已准备的流水线串行处理 I2VA、L2VA 和 FL2VA，无需重启；
+`result.request_mode` 记录实际输入类型，`profile_id` 记录已准备的配置身份。其他配置会在执行前拒绝模式切换。
+提示词按原文使用；请说明每张图的主体和作用。
+
+**画布。** 宽高须为 32 的倍数，宽高比在 1:4 到 4:1 之间。普通请求最多 1,048,576 像素。图像条件原生高清最多
+2048² 像素、最长边不超过 2720，例如 2720×1536（16:9）、1536×2720（9:16）、2368×1760（4:3）或 2048²。
+参考视频请求保留独立的 475,136 像素输出上限。
+
+**时长。** Turbo T2VA 与 Ref4 为五秒。Base16 关键帧配置接受 5–10 秒整数时长；[扩展混合模型](#extended-hybrid)
+接受 5–15 秒。交付为 24 fps，例如 5 秒对应 124 个模型帧/120 个交付帧，15 秒对应 362/360。
+
+**联合预算。** 画布与时长不能独立组合：`宽×高×模型帧数` 不得超过 `2048²×124`，因此 4MP 画布只能是五秒请求，
+2048² 十五秒会被拒绝。三张以上的多图 Ref 限五秒和 960×544。这些是软件上限，服务系统只能对外提供在实际硬件上
+通过资格验证的组合。
+
+### 分配硬件前检查请求 {#check-a-request-before-allocating-hardware}
+
+`validate_request` 执行与 `H3Pipeline.generate` 相同的准入检查，但不导入 Torch、不加载权重、不打开媒体，也不初始化 CUDA：
 
 ```python
 from pathlib import Path
 from vflash.pipeline import VideoRequest, validate_request
 
-request = VideoRequest("描述画面中的运动。", first_frame=Path("first.png"),
-                       width=2048, height=2048, duration_seconds=5)
-validate_request(request, profile_id="i2va-turbo4-v01-544-exact-sm90",
+request = VideoRequest("Describe the motion.", first_frame=Path("first.png"),
+                       width=2720, height=1536, duration_seconds=5)
+validate_request(request, profile_id="i2va-turbo4-v01-544-exact-sm89",
                  hybrid=True, attention_backend="veda-triton",
                  parallel_strategy="single", weight_residency="block-ring")
 ```
 
-检查应使用实际执行的引擎版本与解析后的选项。尺寸和时长分别合法，
-不代表组合合法：2048 × 2048、十五秒仍超出现有像素与帧数联合预算。
-准入通过只表示软件允许，不代表显存足够、素材凭据有效、目标硬件已验证或画质通过。
+通过准入只说明软件上可执行，不代表显存、资源完整性、硬件资格或输出质量。
 
+## 安装与准备资源 {#installation-and-assets}
 
-## 0.6.8：显式 hybrid 多参考模型
-
-`H3Pipeline(..., hybrid_model=HybridModel(Path("models/MiniMax-H3/transformer_ref")))`
-在原始 FL LightX v0.1 四步配置上，仅替换第25–49块的官方 Ref AdaLN 投影。
-FL 的时间 MLP、输出层及适配器不变，新增约55.4 MiB调制表，不加载第二个去噪主干。
-这是一种明确标识的模型组合，不是独立官方 Ref4，也不改变未指定该选项时的行为。
-
-从 `vflash.pipeline` 导入 `HybridModel`。当前仅支持单 SM89 与
-`attention_backend="torch-flash"`或显式`veda-sm89`，使用已准备的原始 v0.1 I2/FL 工件。
-同一实例保留普通首/尾帧条件图，并为1–3张有序参考图片使用真实官方 Ref 条件图，
-共享条件前缀、文本编码器和 VAE，以内存包交给原生引擎。Ref仍为五秒，
-不接受视频参考或未经验证的hybrid Sol组合。
-结果以 `request_mode` 和 `stages.model_variant` 区分实际合同。
-官方权重通过清单/大小/头部与每请求文件标识检查，不反复哈希大文件；仓库不分发合并权重。
-
-原生原型已完成I2、FL及三参考完整视频。公共Python接口又在同一RTX 4090 48 GB实例中
-连续执行Ref→I2→Ref：960×544、五秒、四次前向、BF16/dense/block-ring，
-每请求86.542/72.074/76.631秒，单次初始化104.094秒另列；均交付120帧/24fps并完整AV解码。
-两次Ref使用同一来源族的不同seed，是组件寿命检查，不是三个独立场景或配对速度比较。
-抽样中角色和场景保持，但起始停留、接触细节仍有瑕疵；声音语义与更广画质资格未外推。
-不能据此宣称网站已部署或人物、接触及动态瑕疵已修复。
-完整代码示例见[英文接口说明](../../guide/complete-pipeline#hybrid-reference-model-in-0-6-8-opt-in)。
-
-Vflash 0.5.1 支持纯文字生成，也支持提示词加一至三张有序参考图，输出五秒 MP4。0.4.0 支持官方 Base16 I2VA、L2VA 和 FL2VA 请求，分别输入一张明确的首帧、一张明确的尾帧，或同时输入首尾帧。连续请求使用 Python 接口，单次生成也可以使用容器命令行。完整链路支持单张 RTX 4090 48 GB 上的 T2VA Base4 和 Ref2VA Turbo4；Ref4 也支持双张 RTX 3080 20 GB。Base16 关键帧配置支持单张 RTX 4090 48 GB、可选的双张匹配 RTX 4090 48 GB 协作，或协作的双张 RTX 3080 20 GB。
-
-单张 4090 的 Ref4 还支持[短视频参考](#reference-video)，同一实例可以交替处理图片和视频，无需切换权重。
-
-## 各阶段的职责
-
-Vflash 负责原生去噪、模型生命周期、本地图像读取和 MP4 输出。文本和图像编码采用固定版本的 Diffusers 与 Transformers；Turbo 配置还使用 PEFT 适配器。音视频解码采用 H3 官方 VAE。它们是明确列出的依赖，不会被描述成新实现的原生内核。运行时不依赖 LightX2V 或业务服务。
-
-Turbo 请求使用四次去噪计算，并保留五秒合同；Base16 关键帧请求使用 16 次，接受五至十秒的整数时长并采用原生 24 fps 时钟。对应的模型帧/交付帧为：5 秒 124/120、6 秒 158/144、7 秒 175/168、8 秒 192/192、9 秒 226/216、10 秒 243/240。宽高必须是 32 的整数倍，画布总像素不超过 1,048,576，宽高比在 1:4 至 4:1 之间。视频参考请求仍保留独立的 475,136 像素输出上限。这些是 API 天花板；服务端仍只能声明已在实际硬件上通过资格验证的时长与画布组合。提示词原样传入。Ref2VA 的一至三张图片按照传入顺序编号为 `<Picture 1>`、`<Picture 2>`、`<Picture 3>`，请在提示词中说明每张图的主体和用途。这些是视觉参考，不代表视频中的帧位置，也不是严格的关键帧约束。I2VA 输入第零帧锚点，L2VA 只输入尾帧锚点；这两种单图请求都可将图片称为 `<Picture 1>`。FL2VA 同时输入首尾锚点，提示词按时间顺序将其称为 `<Picture 1>` 和 `<Picture 2>`。I2VA/FL2VA 的五秒和十秒路径已有有界硬件实证。一个十秒、736 × 992 的 SM89 L2VA 案例现已有完成性、媒体完整性、端点和延迟对照的有界证据；更广泛的 L2VA 质量、其他画布与中间时长仍需在目标硬件上资格化。
-
-准备资产前先选择[固定模型配置](../reference/pipeline-profiles)。Ref2VA 使用 `transformer_ref` 与 Ref4 v0.1；T2VA 使用 `transformer` 与 Base4 v1.0；Base16 关键帧请求使用官方 `transformer`，无 LoRA 执行 16 次计算。同一硬件上的成对 Base16 I2VA/FL2VA 配置具有完全相同的模型工件和调度，因此任一已准备的关键帧 pipeline 都能串行处理 I2VA、L2VA 和 FL2VA，无需重启 profile 或执行冷初始化。条件信息仍按实际请求模式生成；结果以 `profile_id` 保留已准备身份，并以 `request_mode` 记录实际输入类型。每次请求的阶段驻留仍遵循所选内存策略。其他配置会在执行前拒绝模式切换。
-
-### 0.5.0的完整二进制百万像素预算
-
-0.5.0（包含`53d6687`）将Base16 pipeline及原生条件合同上限统一为**1,048,576像素**：
-1024×1024方形不再缩成992×992。现有0.4.0标签仍保留1,032,192像素上限。宽高仍为32的倍数；
-总面积不要求某条边必须为1024，也不扩大独立的视频参考合同。
-
-一对协作的RTX 3080 20GB完成了一次五秒1024×1024 I2VA：交付120帧，完整解码通过。
-同一latent的正常和`silent-v1`交付具有完全相同的压缩视频流，静音轨解码采样全零。
-这只是有界容量和媒体合同筛选，不是语义质量或端到端加速结论。其他时长/硬件组合仍须保留各自的
-服务资格边界，不能用API校验通过代替实卡资格。
-
-## 精确的条件编码前缀
-
-0.5.1将Qwen3-VL语言层从64层保留为51层。固定H3适配器只使用`hidden_states[50]`；
-多保留一层是为了取得原始中间态，而非最终归一化后的状态。前50层、视觉编码器、权重及BF16
-运算均不变，在安装卸载钩子之前移除未使用尾层。此优化独立于Sol，不改变去噪计算。
-
-仍先加载原官方检查点，因此不减少下载体积，也不承诺冷启动倍率。
-[目标硬件条件编码对照](../reference/benchmarks#encoder-prefix)将阶段收益与整片耗时分开；
-无需新增选项或下载另一套权重。
-
-## 安装和模型资产
-
-0.5.0的单SM89官方Base16默认近似Sol，其他配置和双卡保持dense。用`--attention-backend torch-flash`
-或`H3Pipeline(..., attention_backend="torch-flash")`保留之前的dense行为。
-详见[选择策略、依赖和质量边界](../reference/sol-engine-alignment)，不承诺成片相同。
-
-从发布版源码安装完整链路依赖，并在 `PATH` 中提供 `ffmpeg` 与 `ffprobe`：
+从发布版本的检出目录安装 pipeline 扩展，并确保 `PATH` 中有 `ffmpeg` 和 `ffprobe`：
 
 ```bash
 python -m pip install '.[pipeline]'
-# 单SM89 Base16默认所需；需要Git和网络，不下载模型。
-python -m vflash.install_sol
+python -m vflash.install_sol   # 仅单张 SM89 Base16 默认的 Sol 需要；不下载模型
 ```
 
-依赖固定到经过核查的适配器版本，其中 Diffusers 的提交为 `d035dcd7cc7c88e0a154609b62887d50bba9fdc2`。安装包不会自动下载模型权重。
-
-本地资产配置明确指定六个路径：
+扩展会固定适配器实现，包括 Diffusers 提交 `d035dcd7cc7c88e0a154609b62887d50bba9fdc2`。先选择
+[固定模型配置](../reference/pipeline-profiles)，再用六个显式路径描述资源：
 
 | 字段 | 内容 |
 | --- | --- |
-| `model_directory` | `MiniMaxAI/MiniMax-H3` 在 `42ed227ee7df40d41602854ae760620d6eb651fe` 版本的官方 Diffusers 组件，包含所选模式的 `transformer_ref` 或 `transformer` |
-| `adapter_path` | Turbo 配置使用[运行资产](../reference/runtime-assets)中的固定 BF16 LoRA；Base16 I2VA 和 FL2VA 配置均填 `null` |
-| `decoder_directory` | 同一官方 H3 版本的 `FL2VA` 目录，包含 `video_vae` 和 `audio_vae` |
-| `artifact` | 所选配置的完整 BF16 原生资产；只有 Turbo 配置包含运行时 LoRA 残差 |
-| `schedule_overlay` | 对应的 training-Euler 调度：Turbo 为四次计算，Base16 I2VA/FL2VA 为 16 次且视频/音频 shift 为 12/3 |
-| `auxiliary_tensor` | 与上述资产匹配的原生输入、输出权重 |
+| `model_directory` | `MiniMaxAI/MiniMax-H3` 在 `42ed227ee7df40d41602854ae760620d6eb651fe` 的官方 Diffusers 组件，含 `transformer_ref`（Ref）或 `transformer`（T2VA、关键帧） |
+| `adapter_path` | Turbo 配置固定的 BF16 适配器（见[运行资源](../reference/runtime-assets)），Base16 为 `null` |
+| `decoder_directory` | 同一版本的 `FL2VA` 目录，含 `video_vae` 和 `audio_vae` |
+| `artifact` | 该配置完整的 BF16 原生产物 |
+| `schedule_overlay` | 匹配的训练 Euler 调度（Turbo 4 次评估；Base16 16 次，偏移 12/3） |
+| `auxiliary_tensor` | 与之匹配的原生输入/输出张量 |
 
-后三项是准备好的原生资产，不能直接填入任意官方 checkpoint。可以按[官方权重编译流程](./compile-weights)创建；使用已有资产前，请核对[资产合同](../reference/runtime-assets)。目前尚未发布可直接下载的原生模型包。
-
-先把资产放入最终的只读快照，再执行准备步骤。该步骤会按照内置的官方文件清单或原生资产清单，逐一核验实际字节，并检查来源、LoRA 和调度。这是一次性的磁盘操作。准备记录绑定到当前文件系统；后续启动和请求仅检查文件身份、大小及时间戳，不会反复计算模型权重哈希。移动或修改资产后需要重新准备。
+后三项可用[官方权重编译](./compile-weights)生成，或对照[资源契约](../reference/runtime-assets)检查已有产物；目前不提供现成模型包。
+把资源放到最终的只读位置后执行一次准备：
 
 ```bash
-vflash prepare-pipeline \
-  --assets pipeline-assets.json --receipt prepared-assets.json
+vflash prepare-pipeline --assets pipeline-assets.json --receipt prepared-assets.json
 ```
 
-## 使用命令行生成
+准备过程会按上游清单或产物 manifest 校验所有被使用的文件，并生成绑定本机文件系统的凭据；之后启动只检查文件身份和时间戳，
+不再重复计算哈希。移动或修改资源后需要重新准备。
 
-将 H3 提示词写入 `prompt.txt`，然后按期望的顺序传入参考图片：
+## 命令行生成 {#generate-from-the-command-line}
 
 ```bash
 vflash generate \
-  --prepared-assets prepared-assets.json \
-  --prompt-file prompt.txt \
+  --prepared-assets prepared-assets.json --prompt-file prompt.txt \
   --reference subject.png --reference setting.png \
   --width 928 --height 512 --seed 1234 --gpu 0 \
   --output video.mp4 --trust-local-code
 ```
 
-Ref2VA 的 `--reference` 可以出现一至三次。T2VA 在准备时指定 `--profile t2va-turbo4-exact-sm89`，生成时不传图像参数。一个已准备的 SM89 或 SM86 Base16 关键帧配置可只传 `--first-frame first-frame.png` 生成 I2VA，只传 `--last-frame last-frame.png` 生成 L2VA，或同时传两者生成 FL2VA；`--duration` 接受 5–10 的整数秒，省略时仍为五秒。显式的 `i2va-*` 与 `fl2va-*` profile ID 继续用于稳定的准备和来源记录；L2VA 复用 FL2VA 权重，不增加重复 profile。关键帧不可与 `--reference` 混用；SM86 配置须传入 `--peer-gpu 1 --strategy sequence-head`，0.4.0 也允许 SM89 Base16 关键帧配置用同样参数选择可选的双卡执行。Python 中，L2VA 使用 `VideoRequest(last_frame=Path("last-frame.png"), ...)`，FL2VA 使用 `VideoRequest(first_frame=Path("first-frame.png"), last_frame=Path("last-frame.png"), ...)`。
+- Ref2VA：一到三个 `--reference`，顺序与提示词一致。
+- T2VA：准备 `t2va-turbo4-exact-sm89`，不传图片参数。
+- 关键帧：`--first-frame`（I2VA）、`--last-frame`（L2VA）或两者（FL2VA）；用 `--duration N` 指定时长。不要与 `--reference` 混用。
+- 双卡：`--gpu 0 --peer-gpu 1 --strategy sequence-head`（SM86 双卡必需；两张相同 RTX 4090 48 GB 的 Base16 关键帧可选）。
+- 显式 Veda 边缘层数：`--veda-dense-edge-layers 3`（见[注意力](#veda-dense-edges)）。
 
-默认交付仍保留官方 VAE 重建后的关键帧。设置 `keyframe_delivery_profile="exact-v1"` 或传入 `--keyframe-delivery-profile exact-v1` 后，解码阶段会恢复每个已提供的时间端点。图像先按照官方条件编码的拉伸几何，用 LANCZOS 调整到目标画布；端点在 H.264 量化前与输入一致，再用固定四帧线性过渡衔接模型运动。结果会记录实际策略和被修改的帧序号。这是一项显式交付策略，并不代表模型能在整个视频中保留同等精细度。
+进度以 JSON 行写到 stderr，结果写到 stdout。每条命令都会自行加载并关闭模型；要在多次请求间常驻模型，请使用同一个
+Python 流水线。容器用法见 [Docker 生成](./docker#pipeline)。
 
-进度以 JSON 行写入 stderr，stdout 输出最终结果。每次命令独立加载并释放模型；要在多次请求间实现跨模式常驻，应复用同一个 Python `H3Pipeline` 实例。预装环境及完整挂载示例见 [Docker 生成](./docker#pipeline)。
+## Python 生成 {#generate-from-python}
 
-### 无音频生成（0.6.32）
-
-Python 请求可设置 `VideoRequest(..., generate_audio=False)`。此单卡选项在去噪前移除生成音频行，
-跳过音频投影、调度更新、音频 latent 导出及波形解码，交付不含音轨的 MP4。
-须保留 `audio_delivery_profile="unchanged"`，不能同时使用增益归一化或静音音轨交付；不支持音频条件输入。
-
-移除联合音频上下文可能改变相同种子下的视频。这是一种独立生成模式，不保证像素相同或大幅提速。
-完整实测覆盖一张 RTX PRO 6000 Blackwell Server 上的实验 FP8 hybrid：同进程有声/无声切换、
-576×864 五秒人物片，以及1248×832、1728×1152、2048×2048十秒无音轨片。
-输出已完整解码与播放；局部连续人脸裁剪不构成通用质量资格。
-其他架构、默认 BF16 主干及多卡执行尚未取得此选项的实卡资格。
-0.6.32 包含此 Python 选项，尚未增加对应 CLI 参数。
-
-## 一个明确拥有资源的实例
-
-源码 main 新增 `audio_delivery_profile="silent-v1"`（CLI：`--audio-delivery-profile silent-v1`），
-按原时长和采样率交付数字零的立体声 AAC 音轨，并跳过不需要的波形解码。联合音视频去噪、视频 latent、
-视频解码与端点交付均不改变。引擎不解析提示词来猜测静音；应用必须根据明确的全片静音意图选择此项，
-不能把未指定声音或不要配乐当作静音。默认仍是 `unchanged`。
-
-这是确定性交付合同，不代表模型音频理解提升，也不是去噪加速；现有 0.4.0 tag 不包含此能力。
-
-在独立进程中创建实例，且此前不能由其他代码初始化 CUDA。显卡由调用方明确选择。下例要求该进程只能看到一张兼容显卡：
+在其他代码初始化 CUDA 之前，于独立进程中运行流水线，并显式选择设备：
 
 ```python
 from pathlib import Path
@@ -163,406 +109,147 @@ from vflash.hardware import discover_nvidia_devices
 from vflash.pipeline import H3Pipeline, VideoRequest, load_prepared_pipeline_assets
 
 devices = discover_nvidia_devices()
-if len(devices) != 1:
-    raise RuntimeError("make one SM89 GPU visible to this process")
 prepared = load_prepared_pipeline_assets(Path("prepared-assets.json"))
 with H3Pipeline(prepared, device=devices[0], trust_local_code=True) as pipeline:
+    pipeline.prepare()                       # 可选：接收请求前预加载
     result = pipeline.generate(
-        VideoRequest(
-            prompt=Path("prompt.txt").read_text(encoding="utf-8"),
-            references=(Path("subject.png"), Path("setting.png")),
-            seed=1234,
-        ),
+        VideoRequest(prompt=Path("prompt.txt").read_text(encoding="utf-8"),
+                     references=(Path("subject.png"), Path("setting.png")), seed=1234),
         Path("video.mp4"),
         progress=lambda event: print(event.stage, event.completed, event.total),
     )
     print(result.output_path, result.elapsed_seconds)
 ```
 
-原有的单图参数 `reference=Path(...)` 仍可使用；它与 `references=(...)` 二选一。
+关键帧请求使用 `first_frame=`、`last_frame=` 或两者。双卡时传入 `peer_device=devices[1], strategy="sequence-head"`，
+编码与解码仍在第一张卡上。两张 RTX 4090 处理一个请求能降低延迟，但消耗更多 GPU 秒；同时有两个请求时，应使用两个独立的单卡 worker。
 
-使用双张 RTX 3080 20 GB 时，先准备 [SM86 资产](../reference/pipeline-profiles#sm86)，让进程仅看到这两张卡，并向 `H3Pipeline` 传入 `peer_device=devices[1], strategy="sequence-head"`。编码和解码使用 `devices[0]`，原生去噪使用双卡。单 SM86 或 `tensor` 完整链路会在模型加载前拒绝。命令行对应选项为 `--gpu 0 --peer-gpu 1 --strategy sequence-head`。
+**生命周期。** 构造时在 CPU 上检查配置；首次 `generate` 会先校验输入再加载模型。无效输入不会破坏已加载的实例；执行失败会
+退役该流水线并清理临时文件。输出路径不得已存在，只有编码、探测和阶段清理全部成功后才发布视频。`close()` 在 CUDA 完成栅栏后
+释放自有模型，绝不重置其他所有者的上下文。原生分块环为编码器和 VAE 留出显存，CPU 上的模型主副本常驻，因此主机内存需要容纳它们。
+进度回调同步执行，可抛出异常取消，但不能在回调中调用 `close`。`trust_local_code=True` 会从已校验的本地快照加载官方解码器文件，
+请先阅读[许可证](../reference/license)。
 
-0.4.0 也允许 SM89 Base16 关键帧配置在恰好可见两张匹配 RTX 4090 48 GB 时使用同一组 Python 与命令行参数。这里只接受 `sequence-head`；两张卡共享同一 SM89 工件，并各自使用 block ring。一个固定的十秒、736 × 992 L2VA 请求把成功 `generate` 耗时从 774.153 秒降到 484.232 秒，输出 MP4 字节一致，但总共消耗 968.464 GPU 秒，而单卡为 774.153 GPU 秒。这只是有界的单请求低延迟结果，不是吞吐默认值；同时有两个待执行请求时，应使用两个独立单卡 worker。
+在只读容器中，请为 Triton 提供可写且可执行的缓存目录；`noexec` 临时文件系统不能作为该缓存。
 
-0.4.0 的构造函数只在 CPU 上检查配置；首次 `generate` 先完整读取、校验素材，再加载模型。服务可在接单前调用 `pipeline.prepare()` 预加载模型。重复调用会复用已有阶段，输入错误也不会销毁健康、已加载的实例。预加载不会执行条件编码或编译每种输入形状；首次使用仍可能产生算子准备成本。
+## 交付选项 {#delivery-options}
 
-`trust_local_code=True` 允许加载已核验本地快照中的官方解码器 Python 文件。请先阅读[模型与代码许可证](../reference/license)。
+| 选项 | 作用 |
+| --- | --- |
+| `keyframe_delivery_profile="exact-v1"` | 解码后恢复每个输入端点（LANCZOS 缩放到画布，四帧羽化）；默认保留 VAE 重建 |
+| `audio_delivery_profile="web-v1"` | 有界增益，目标 −18 LUFS、−2 dBTP 限幅；默认 `unchanged` 保留解码波形 |
+| `audio_delivery_profile="silent-v1"` | 原时长的数字静音立体声轨，只跳过波形解码；仅用于明确要求整段静音 |
+| `generate_audio=False` | 仅视频生成：去噪前去掉音频行，不写音轨；同一 seed 下画面可能不同 |
+| `generate_rgb(request, Path("x.npy"))` | 仅视频的 uint8 RGB 数组 `[模型帧, 高, 宽, 3]`；`required_frames=` 只解码所需帧对应的 VAE 块 |
 
-同一实例可以连续处理多个请求。原生权重采用 block ring，为轮流使用显卡的编码器与 VAE 留出空间；CPU 模型副本由实例持有以便复用，因此也需要足够的主机内存。进度回调同步执行，抛出异常可取消请求；不要在回调内部调用 `close`。任务队列、账号、存储及多进程调度由应用负责。
-
-当前 main 还提供默认关闭的精确复用：同一创作请求中串行执行的 I2VA、L2VA 或 FL2VA 候选，可共享不受 seed 影响的文本和关键帧编码。可信调度器为同一次已受理请求的兄弟候选创建一个不透明 `ConditioningReuseScope`，并在每次 `generate` 时以 `conditioning_reuse_scope` 传入。不能从公开提示词或媒体内容推导scope，不能让终端用户传入，也不能跨owner或请求复用；不传scope时完全保持普通无缓存路径。
-
-缓存只保存一个CPU副本，最多128 MiB；一小时无活动后过期，每次命中会刷新期限。scope或输入变化、无scope调用、捕获失败、以及`close()`都会立即清空。缓存仅包含Qwen3-VL文本输出、token tag和干净关键帧VAE latent；初始噪声、加噪后的参考latent、packed状态、scheduler状态、DiT/attention/FFN激活、解码latent和媒体都不会复用。可从`result.stages["encoding"]["capture_diagnostics"]["conditioning_reuse"]`读取`hit`、`miss`或`capacity-bypass`，以及编码器调用次数和耗时。
-
-在一个双SM86 sequence-head实例上，预热后的5秒、512 × 512完整A/B/A把两个串行候选的总耗时从控制中位`352.393`秒降到`340.403`秒（`3.402%`），首候选没有变慢，两个候选的H.264和AAC流均跨三臂一致。这只是有界的SM86证据，不代表SM89或线上服务已经获得同样收益。有独立显卡时仍应一张卡一个worker并行执行；为了命中缓存而把本可并行的候选串行化，会损害首结果时延和全fleet吞吐。
-
-### 显式内存条件交接 {#memory-conditioning}
-
-`H3Pipeline(..., conditioning_transport="memory")` 为单设备、同进程流水线启用经过校验的一次性条件交接。张量保留原存储、只消费一次，去掉中间条件张量的写入与重读，不跨请求缓存提示词或张量。typed sibling reuse scope 的既有所有权和过期规则保持；hybrid Ref2VA 已有独立内存参考图，此选项不改变该图。
-
-默认仍为 `conditioning_transport="file"`。独立原生调用、服务任务和跨进程传输保留内容绑定的持久条件包。内存选项拒绝双设备流水线，也拒绝没有返回一次性 typed owner 的编码器。实际路径、张量字节和完成耗时见 `result.stages["encoding"]`。此前硬件 A/B/A 保持输出字节一致但未获总耗时收益；去掉文件 I/O 不会消除模型切换与主机内存成本，评估时应区分冷初始化和暖请求。
-
-后续同一H100 SXM六组I2VA实测采用原生／文本FP8、Veda四十层与BF16 CuTe十层、阶段化文本、预准备BF16 VAE及CPU帧装配。十二片均完整解码与播放，六对解码视频平面和音频PCM一致。私有集成源码为`video-gen` `bf708735`，汇总依据`a70b3907`；这不新增公开量化模型API。
-
-| 画布 / 秒 | 文件整片秒 | 内存整片秒 | 文件finish秒 | 内存finish秒 |
-| --- | ---: | ---: | ---: | ---: |
-| 512² / 5 | 59.856 | 16.277 | 0.267 | 0.001 |
-| 768² / 10 | 45.686 | 37.389 | 0.970 | 0.008 |
-| 1024² / 15 | 117.724 | 110.484 | 2.537 | 0.006 |
-| 1536 × 1344 / 10 | 180.765 | 166.866 | 3.141 | 0.004 |
-| 2048² / 5 | 205.243 | 192.746 | 4.472 | 0.005 |
-| 2048² / 15 | 908.845 | 886.411 | 9.758 | 0.015 |
-
-直接省去的finish合计**21.107秒**。初始化加六例1565.830→1427.246秒，观察减少8.85%；后臂共享文件／编译暖缓存，因此不能全归因于交接。另一worker在内存前两例后共享只读模型存储。最大条件所有者5.392GB，两臂对应去噪峰值最高65.756GB，容器累计生命周期峰值93.305GB；累计峰值不能证明逐请求内存相同或最小RAM要求。媒体一致支持此次纯交接改动，不新增语义质量或其他设备／输入模式资格。
-
-集成验证使用了 240 GiB 主机内存上限。这是已测预算，不是测得的最低要求；去噪器单独运行时的 64 GiB 建议不包含这些编码器和解码器。
-
-`VideoResult.elapsed_seconds` 覆盖成功 `generate` 从输入校验到参考素材清理的完整耗时，包括首次模型加载。`stages.initialization_seconds` 是本次调用中的加载耗时，显式预加载后为零；`stages.request_elapsed_seconds` 仅扣除这部分加载，便于比较请求。`stages.session_initialization_seconds` 保留实例最初的加载成本，也可读取 `pipeline.initialization_seconds`。`stages.input_preparation` 包含资产检查和素材加载，其中 `reference_loading_seconds` 已计入准备耗时。编码和媒体阶段还分别记录 `weight_resume_seconds`、`suspend_seconds`，以及 `capture_call_seconds` 或 `decode_call_seconds`；编码阶段也会记录 `conditioning_transport` 和捕获的 `conditioning_tensor_bytes`。外层阶段同时包含同步回调和协调开销。这些明细存在包含关系，不能全部视作独立耗时相加。
-
-`stages.encoding.capture_diagnostics` 会进一步拆分官方 conditioning 调用、捕获钩子等待、metadata 处理和持久化 bundle 收尾。收尾记录区分 tensor 写入与 seal/reload，`process_deltas` 则报告对应区间的页故障、块 I/O 和上下文切换。钩子等待已包含在 `official_pipeline_seconds` 中，全部字段又都包含在 `capture_call_seconds` 中；它们只用于归因，不能作为独立阶段相加。进程计数也不是整机资源统计。
-
-输出路径不能已经存在。编码、媒体核验以及 GPU 阶段清理成功后才发布视频。执行失败会关闭此实例并移除临时文件。`close()` 在等待 CUDA 完成后释放持有的模型与 hook，不会重置其他调用方的 CUDA 上下文。模型关闭后，CUDA 库仍可能保留进程级工作缓冲；需要释放整个 CUDA 上下文时，应退出该独立进程。
-
-在只读容器中运行时，需要为 Triton 提供可写、且允许加载编译后共享库的缓存目录。带有 `noexec` 的临时文件系统不能作为该缓存目录。
+命令行支持 `--keyframe-delivery-profile` 和 `--audio-delivery-profile`。`generate_audio=False` 与 RGB 交付仅限 Python 单卡路径。
+完整流水线还会在官方音频解码器截断前施加联动立体声余量；可复用的上下文为
+`vflash.media.audio_headroom.audio_decoder_headroom`，它是采样峰值保护，不会放大安静音频。以上选项都不能改善音色或同步。
 
 ## 使用参考视频 {#reference-video}
 
-安装完整链路依赖或使用带版本号的 pipeline 镜像，使用与图片生成相同的 `ref2va-turbo4-exact-sm89` 准备资产和单张 RTX 4090 48 GB。这是依据参考生成新视频，不是逐帧精确编辑。
-
 ```bash
-vflash generate \
-  --prepared-assets prepared-assets.json --prompt-file video-prompt.txt \
-  --reference-video reference.mp4 --gpu 0 --seed 1234 \
-  --output variation.mp4 --trust-local-code
+vflash generate --prepared-assets prepared-assets.json --prompt-file video-prompt.txt \
+  --reference-video reference.mp4 --gpu 0 --seed 1234 --output variation.mp4 --trust-local-code
 ```
 
-Python 使用 `VideoRequest(prompt=..., reference_video=Path("reference.mp4"))`。提示词以 **`<Video 1>`** 指代视频，保留其中的空格。同一 Ref4 实例可先接收图片、再接收视频、再回到图片，不切换模型或 LoRA。此前生成的本地 MP4 也可以作为下一次的 `reference_video`；引擎不会自动载入对话历史或改写提示词。
+Python 中使用 `VideoRequest(prompt=..., reference_video=Path("reference.mp4"))`，并以 **`<Video 1>`** 指代该视频。同一个 Ref4
+会话可交替处理图片与视频请求而无需切换权重。输入为一段完整的 2–5 秒 MP4、MOV 或 WebM，最多 20 MiB、475,136 源像素，
+只含一路方形像素视频流、帧率不超过 240 fps，源音频会被丢弃。官方 setup 会把画布归一化到最长边 1376、1376×768 像素和
+33,024 个时序参考行，因此极端比例可能被拒绝。输出为五秒；这是在参考引导下生成新视频，不是逐帧编辑。见[条件契约](../reference/runtime-assets#video-conditioning)。
 
-输入限一段完整的 **2–5 秒 MP4、MOV 或 WebM**，最大 **20 MiB**，源画面最多 **475,136 像素**（928×512 的面积）。源帧率可以是分数，必须可读取、大于零且不超过 240 fps。只接受一个视频流、方形像素和无歧义的直角旋转。已有源音轨会被丢弃，不参与新音轨生成；暂不支持图视频混合、音频输入、SM86 或 Ref8 视频条件。输出仍为五秒、24 fps，沿用上文的 32 对齐与画布面积限制。
+## 混合模型与扩展请求 {#extended-hybrid}
 
-CPU 解码器先固定文件副本，检查完整视频并重采样到 24 fps，保留片尾不足一帧的时间区间。它向官方视频 setup 传递源尺寸 RGB，再由官方缩放一次。视频参考尺寸独立于输出画布，**不使用图片的只缩小 `match` 策略**。入口也限制官方归一化后的画布：长边最多 1376、面积最多 1376×768、时序参考行最多 33,024。因此，即使源像素合格，过于狭长的比例仍可能被拒绝。预算限制不代表每种比例都已通过质量验证。临时文件和解码 RGB 只存活于当前请求。
+`HybridModel(Path(".../transformer_ref"))` 保留 LightX v0.1 四次评估主干，只把第 25–49 块的 AdaLN 投影替换为固定版本的官方 Ref
+组件（约 55 MiB 调制表，不加载第二个去噪器）。关键帧使用普通 FL 图，Ref 使用共享前缀、文本编码器和 VAE 的真实官方 Ref 图。
+需要单张 SM89，配合稠密或显式 Veda 注意力。
 
-视频条件比静态图片更耗资源：官方 VAE 编码完整时序块，文本编码器从视频中采样。请根据输入准备、条件编码、去噪和媒体交付的实际耗时规划服务；这里不承诺视频输入延迟。原生接口和支持范围见[视频条件包](../reference/runtime-assets#video-conditioning)。
+配合 Veda 时，单 SM89 混合模型接受 **5–15 秒**图像条件请求，以及最多**九张**有序参考图（`<Picture 1>` … `<Picture 9>`），
+仍受[联合预算](#modes-and-limits)约束。标准 Ref4/Base16、SM86、双卡执行和参考视频不继承此扩展。
 
-## 如何理解正确性验证
+## 文本编码器前缀 {#exact-text-encoder-prefix}
 
-条件张量与最终 latent 的实现一致性，应与画面质量分别评估。动作、外观、指令与声音都需要对照用户原始要求；张量一致不能让质量不合格的结果通过。
+条件编码保留 Qwen3-VL 64 层解码器中的 51 层：固定的 H3 适配器读取 `hidden_states[50]`，因此保留原始中间状态，并在安装卸载
+钩子前移除未使用的尾部层。权重、视觉编码器和 BF16 计算不变；完整检查点仍会先加载，所以这不是更小的下载，也不保证冷启动更快。
 
-媒体验证分别检查编码前的画面与音频、所选的五至十五秒交付时钟、帧数和声道。H.264 和 AAC 均为有损编码，整段 MP4 的哈希不能用于判断去噪器或音频解码器的数值等价性。
+## 注意力 {#veda-dense-edges}
 
-发布检查分别覆盖 14 个条件张量、最终 FP32 音视频 latent、解码画面及可播放成片。官方音频 VAE 在重复请求间可能产生微小浮点差异，早于 PCM 或 AAC 编码；因此不承诺音频逐位复现。音频有限值、声道、帧数、时钟及完整解码仍须通过检查。具体案例与适用范围见[发布验收](../reference/releases)。
+单 SM89 官方 Base16 默认使用近似的 Sol；其他配置和双卡保持稠密。用 `attention_backend="torch-flash"` 显式选择稠密。
+[Veda](./veda) 是显式稀疏后端，默认两端各五个稠密层（40 稀疏 / 10 稠密）；`veda_dense_edge_layers=3` 选择 44 稀疏 / 6 稠密。
+每个会话持有自己的分区并报告实际运行的层。这些都是近似推理选项，不是等价声明；Sol 的[选择与限制](../reference/sol-engine-alignment#sol-default)另行说明。
 
-显式[Veda后端](./veda)也接受单SM89 hybrid；近似执行合同和证据单独记录。
+## 可选音频补采 {#optional-audio-only-six-step-refinement-source-main}
 
-## 十五秒与九张图像（0.6.12） {#extended-hybrid}
-
-显式原始v0.1 **单SM89 hybrid＋Veda**接受5–15整数秒的图像条件请求及最多九张有序图像参考。普通Ref4/Base16、SM86、双卡和视频参考合同不继承该扩展。H100不属于本版支持或实测硬件。
-
-限制必须组合判断：宽高32对齐；图像条件原生高清面积不超过2048²、最长边不超过2720（16:9可达2720×1536，9:16为1536×2720）；且`宽×高×模型帧数`不得超过`2048²×124`，因此4MP画布限五秒。扩展多图Ref限五秒和960×544总像素。十五秒关键帧或单图参考使用362内部模型帧，精确交付24fps的360帧及每声道480000音频采样；内部padding不延长用户指定时长。不合格组合在模型激活前拒绝。
-
-固定官方条件适配器接受VAE对齐后的时间边界，不修改其逻辑时长上限。九张图按传入顺序保留`<Picture 1>`至`<Picture 9>`标签，属于视觉参考而非九个时间线关键帧。更多输入增加条件处理量，不能保证所有细节都遵循。完整目标硬件案例和视觉限制见[性能记录](../reference/performance#extended-hybrid)。
-
-
-## 解码硬削波前的音频余量 {#pre-clamp-audio-headroom}
-
-0.6.33新增适用于独占原始H3音频VAE组件的显式上下文，一次只包裹完整双声道解码：
-
-```python
-from vflash.media.audio_headroom import audio_decoder_headroom
-
-observation = {}
-with audio_decoder_headroom(audio_component, observation):
-    waveform = decode_official_h3_audio_latents(
-        audio_component, latents, device=device, torch_module=torch
-    )
-```
-
-固定0.98采样峰值上限对双声道使用相同增益，不放大小音量。解码或诊断回调失败也会
-移除钩子。可选 `on_unclamped(tensor)` 接收原始 `[2, 1, samples]` 波形；诊断读写
-及其开销由调用方负责。此上下文内不得让另一请求共享组件。普通解码、采样器和完整
-流水线默认配置保持，不新增CLI质量选择器。
-
-这避免原解码器在交付处理前破坏越界峰值；已有 `web-v1` 后置响度处理无法恢复已被
-削平的样本。两者都不能修复模型生成的音色、人声或音画对应。采样峰值上限也不等于
-真峰值或有损编码后的上限保证。实测来自一张RTX PRO 6000 Blackwell Server的两条
-补采双声道音轨：一条完全保持，另一条约衰减0.31 dB即消除了新增削波；不由此宣称
-补采感知质量全面合格，也不扩大显卡资格。
-
-
-## 显式原模型人脸低噪重绘
-
-0.6.34新增可选的原生低噪重绘基础接口 `VideoRepaint` 与
-`compile_refinement_tables` / `load_tables`。保留Turbo残差，按实际低噪sigma
-编译原FL/Ref调制表，保护已给定视频行并冻结音频潜变量；不改变普通生成默认值。
-用法见英文页的完整Python示例：四步、denoise=0.035，需要同一官方VAE编码得到的
-原裁剪视频packed rows，而非重新生成的独立人脸图。
-
-调用方负责检测、无歧义连续跟踪、端点匹配、保留原片及局部合成。检测置信度不是身份
-一致性的证明；合成复制原音轨也不代表口型绝对不变。本接口不是自动换脸服务。
-完整视频证据限定PRO 6000 Server驻留hybrid主干的512裁剪、5/10秒素材。一次真实
-同进程串联为：有声生成32.31秒、重新检测/准备2.91秒、静音重绘22.71秒、全尺寸合成
-0.99秒，初始化与交付另计。已选单镜头人物有用户认可的改善；多人、遮挡和切镜头不能
-据此宣称普遍修复。
-
-两槽BF16流水路径同时替换主存调制表、设备槽及预校验复制映射，并在成功/失败后同步
-恢复原状态。RTX 3080上100次真实CUDA复制验证通过；这不是SM89完整H3成片资格，
-也不表示正式服务已升级。流水路径目前仅允许人脸重绘，多GPU重绘未支持。
-
-跟踪/裁剪/重绘/回贴思路参考MIT许可的
-[ComfyUI H3 FaceRefine](https://github.com/Carasibana/ComfyUI-H3-FaceRefine)，
-没有附带身份识别或第三方人脸恢复权重。
-
-
-### 可选的裁剪编码执行方式
-
-0.6.35提供 `vflash.media.face_encoder.face_encoder(vae, "batch2-fp16-norm")` 上下文。
-在其中对完整裁剪调用固定官方 `encode_vae_condition`，保持官方归一化和FP32后验。
-仅支持batch=1、320/384/512方形、120–362模型帧、原17帧块/丢弃3个token的几何。
-时间块在batch维独立编码，不混合时间；原模型FP32参数不变，但FP16运算和仿射副本属于近似。
-VAE必须由当前调用独占，成功或异常退出均恢复编码和逐帧归一化方法。默认 `original` 不改执行。
-检测、最终画布合成及原声保留由调用方负责；此接口不替换解码器或减少帧数。
-较小内部裁剪需要最终视频的细节检查，不能把它的尺寸当成交付分辨率。
-实际收益与质量边界见[版本记录](../reference/releases.md)。
-
-
-## 显式Veda密集边界宽度（0.6.36） {#veda-dense-edges}
-
-`H3Pipeline(..., veda_dense_edge_layers=3)` 或 `vflash generate --veda-dense-edge-layers 3`
-选择六个密集层（0–2、47–49）和44个Veda稀疏层。默认仍是前后各五层（40稀疏/10密集）。
-该选项要求Veda注意力，改变近似推理，不承诺数值等价；每个会话独立持有分配，实际调用计数及元数据一致。
-
-RTX PRO 6000 Server同卡、四步hybrid FP8/FROST控制实验中，1/2/4MP十秒完整生成分别少
-6.60%/9.07%/12.29%；另一个1MP十秒A/B/A对照少4.58%。有限多模式研究也已完成，
-不扩大公开流水线原有模式或容量准入。抽样上下文和连续局部帧未见新增明显缺陷，但完整感知、
-声音及跨设备资格仍开放。显式改回5即可回滚；暖态生成时钟不包含模型启动和发布。
-
-上述耗时来自会话独立接口发布前的受控实验分层；精确0.6.36现已完成四模式GPU重放，
-视频像素与对应早期44/6结果一致，不据此宣称更广感知质量或音频等价。
-
-
-## 原生重绘请求（0.8.0）
-
-当前源码在常驻`NativeEngineSession.generate`中增加`VideoRepaintRequest`，接收独立匹配的
-两步或四步低噪声调制表，以及官方VAE产生的打包视频行。原四步I2VA条件包照常校验，
-会话基础overlay保持，临时输出头/调制绑定在每次执行后恢复。必须指定`generate_audio=False`；该接口暂不支持多卡或
-去噪profile。检测、裁剪/关键帧一致性和原音轨合成仍由应用负责。
-
-```python
-from vflash.native.h3_refinement import VideoRepaintRequest
-from vflash.native.h3_refinement_schedule import load_tables
-
-_, schedule, tables = load_tables("face-modulation-two-step", mode="face")
-result = session.generate(
-    conditioning_bundle, output_latents, generate_audio=False,
-    video_repaint=VideoRepaintRequest(schedule, tuple(tables), encoded_rows),
-)
-```
-
-两步表使用`compile_refinement_tables(..., steps=2, denoise=0.035, mode="face")`编译，不能截取
-不相关的Turbo调制表。结果NFE、进度及Veda调用覆盖按实际执行次数记录。重绘结果的
-`execution_schedule`明确标注`video-low-noise-repaint`，从真实低噪声sigma开始并声明音频冻结；
-它不是普通条件调度工件，`refinement`另记实际执行。
-
-新接口已在一张RTX PRO6000 Blackwell Server、显式44/6下完成两个五秒人脸场景；其中一组
-旧/原生两步对照的全部120帧解码像素一致。两步相对四步的编码/重绘/媒体/合成区间减少17.5–18.6%，
-不含复用的修复输入及公共初始化，不据此宣称普遍感知等价或完整请求耗时达标。
-
-使用已明确验证的分配，例如`veda_dense_edge_layers=3`（44层稀疏/6层密集）。零密集边界不受支持：
-全量稀疏探索结果存在明显感知质量退化，未采用；默认五层密集边界仍可选择。
-
-
-## 直接RGB交付与重复计算消除（0.9.0）
-
-`H3Pipeline.generate_rgb(request, Path("repaint.npy"))`是显式Python纯视频接口，
-保持相同条件、去噪与原始VAE，解码后仅量化一次uint8，返回形状
-`[model_frames, height, width, 3]`的NumPy数组。五秒请求有120个交付帧和124个模型帧，
-元数据分别声明。普通`generate`继续交付MP4。RGB接口要求`generate_audio=False`和
-decoded关键帧，不会静默丢弃请求的音频或精确端点交付。
-
-可选`required_frames=(0, 1, ...)`必须为排序、唯一的模型帧索引，供后续合成器使用。
-保留原始时间组装与重叠融合，仅跳过对这些帧没有贡献的VAE块。未选帧写零，
-**不能将部分数组当作完整视频**。元数据声明有效索引和实际解码块数；原音轨和完整画面合成
-仍由调用方负责。数组在映射写入前实际预留磁盘空间，失败不发布部分输出，不覆盖现有文件。
-
-显式`batch2-fp16-norm-reuse`编码器在已验证的124帧时间线上仅复用完全相同的17帧输入，
-保持batch-two形状、FP16计算/归一化以及采样前的完整后验时间线。其它受支持时长沿用普通
-batch-two计算。这不意味着原有FP16编码器与FP32等价。
-
-算法原型已在同一张RTX PRO6000上完成连续人物与分段人物两个五秒场景；重复编码复用与
-选择性解码的最终RGB帧和原音轨均保持。收益取决于实际重复输入和未使用的输出区间，
-不作通用速度保证。此显式公开API已完成同卡控制/候选共六次完整请求，三对结果各120帧RGB及原音轨PCM保持。
-原生两步与44/6固定；普通MP4默认保持，接入服务的实际部署单独验收。
-
-
-## 整块人脸编码（0.10.0）
-
-显式`batch2-fp16-norm-reuse-untiled`只在编码作用域中关闭空间分块，接受512方形、124模型帧的
-人脸裁剪；其他几何拒绝，由调用方选择现有分块配置。原时间块、batch2/FP16逐帧归一化、重复输入
-复用及后验采样保持。退出和失败均恢复原分块开关与归一化方法，独立视频解码器保持原实现。
-
-空间上下文与归一化统计发生变化，**不是像素或潜变量等价**，显存需求也更高。在一张约48GiB的
-RTX4090上，批次2编码组件从2.056降至0.912秒，峰值分配4.98→17.38GB。这些不是完整请求提速，
-也不能证明标准24GiB显卡能同时容纳整个管线及此配置。
-
-三个五秒集成场景固定原始修复、原生两步与44/6；完整人脸阶段47.831→43.350、74.665→72.005、
-48.381→42.537秒。第三例另有匹配完整暖态推理：93.514→87.604秒，关闭修复44.680秒；
-完整新增时间仍为原流程96.1%，不能将编码组件提速当作完整流程收益。连续原生人脸、完整上下文及原PCM已检查，未见新增
-明显结构破损或贴回缝；细节渲染改变、个别时刻略软，身份与牙齿真实性仍不可判。精确公开编码配置已在一例复现原型全部120帧；
-应用接线、其他硬件和服务采用分别验收，默认保持。
-
-
-## 源场景条件复用（开发候选）
-
-`H3Pipeline.source_scene_conditioning(source_request)`可在同次请求内保留原始
-I2VA场景的Qwen特征，供关联的纯视频重绘使用。这会改变条件：用原场景上下文替代
-裁剪图的图文Qwen编码。裁剪图的关键帧/视频VAE、低噪调度、去噪和媒体交付仍正常
-执行，并未消除这些剩余成本。
-
-```python
-with pipeline.source_scene_conditioning(source_request) as scene:
-    source = pipeline.generate(source_request, Path("source.mp4"))
-    # 准备修复裁剪和显式低噪重绘配置。
-    with scene.repaint():
-        result = pipeline.generate_rgb(crop_request, Path("repaint.npy"))
-    diagnostics = scene.report
-```
-
-原片必须先完成。重绘保持原提示和seed，使用无音频、decoded关键帧的I2VA，时长不超过
-原请求。调用方负责裁剪、原生重绘配置和贴回。作用域只属于同一pipeline和线程，拒绝
-嵌套；CPU特征副本最多128 MiB，在退出、pipeline失败或关闭时释放，一小时后过期。
-原片兼容精确兄弟候选条件缓存及其命中；重绘的VAE编码不会被替代。重绘拒绝
-`conditioning_reuse_scope`，避免将改变语义的场景特征写入精确缓存。诊断明确标注非等价
-及省去的Qwen次数。
-
-这是开发候选接口，尚非默认方案或通用质量保证。既有完整请求实验支持源场景复用的
-有限净益；本显式实现仍需独立完整成片资格后再发布采用。保留原音轨，检查身份、表情、
-时序及指令遵循。
-
-
-## 独立持有的行级 FP8 模型加载器（0.11.0）
-
-原生 `create_row_fp8_native_loaders` 工厂与
-`load_row_fp8_text_encoder` 接受显式准备的 E4M3 近似权重及 FP32 行缩放，
-通过 `H3Pipeline` 受信任的 Python `native_denoiser_loader`、
-`text_encoder_loader` 回调接入。每个工厂独立持有 block 类和精度策略，
-不替换全局 BF16 加载器，不修改请求范围，不选择 GPU 或下载模型。
-
-```python
-from pathlib import Path
-from vflash.native.h3_fp8_linear import RowFP8Execution
-from vflash.native.h3_fp8_runtime import create_row_fp8_native_loaders
-
-precision = RowFP8Execution("w8a8", activation_quantizer="triton")
-native = create_row_fp8_native_loaders(
-    precision,
-    weights_directory=Path("prepared-fp8/artifact"),
-    token_tile_rows=16384,
-    whole_block_rows=32768,
-)
-# 向独立的、权重常驻的 H3Pipeline 传入 native.denoiser_loader。
-```
-
-调用者负责验证完整编码资产清单并传入可信 artifact。原 BF16 摘要仅说明来源，
-不能认证 FP8 文件内容。这些数值加载器的存在不代表普通资产凭据或 CLI 已接受
-FP8 bundle。`open_weights(path)` 上下文可提供有界或预读的张量读取；默认使用
-本地 safetensors。文本分片由 `RowFP8TextShard(path, quantized_names)` 声明，
-未量化的文本/视觉权重从具名原始分片索引读取。全部参数加载完成才返回编码器；
-重复声明、不完整分片及错误编码/缩放类型会被拒绝。
-
-可选按行分块限制投影、归一化和 MLP 临时存储，同时保留全序列注意力。
-整块捷径需要显式开启，且只在配置的行数范围内执行；这不扩大请求资格。
-W8A8 仍为近似算法，只在受支持的 SM90/SM120 路径执行，不静默退回还原权重运算。
-BF16 服务默认保持。
-
-验证包括合成完整上下文 block 对照、工厂所有权隔离、真实混合分片赋值及四种
-微型 Qwen/H3 条件输入。随后，精确公共工厂在 RTX PRO 6000 Blackwell Server 上完成1024²与
-1536×1344两组五秒I2VA，请求各120帧及交付音轨PCM均与此前显式音频接口一致。
-另两组较小画布的人脸/音频联合请求保持最佳人脸画面，并逐样本保留修复音轨。
-这些是集成证据，不扩大容量或跨设备资格。完整依赖镜像仍可通过
-`python tests/test_fp8_loaders.py`在无CUDA、无网络条件下运行合成加载检查。
-
-
-## 可选的仅音频六步修复（0.11.0） {#optional-audio-only-six-step-refinement-source-main}
-
-`AudioRefinementRequest` 在四步 hybrid I2VA 主生成后增加六次原模型音频评估。
-它冻结已完成的视频，保留所有时间位置，均匀选取不超过 500,000 像素的空间条件，
-沿用原始旋转位置坐标。这是近似音频条件，不是完整条件等价执行，也不是重新生成低分辨率视频。
-原视频缓冲区、请求时长与交付时间轴保持；音质和同步仍须按内容评估。
+`AudioRefinementRequest` 在四步混合 I2VA 生成后追加六次原模型音频评估。它冻结已完成的视频，保留全部时间位置，并以原始旋转坐标
+均匀采样最多 500,000 像素的空间上下文。视频像素、时长和交付时钟不变。
 
 ```python
 from vflash.native.h3_audio_refinement import AudioRefinementRequest
 from vflash.native.h3_refinement_schedule import refinement_schedule
 
-# 调用者提供与此精确调度匹配的 51 份已编译调制表。
-refinement = AudioRefinementRequest(
-    refinement_schedule(steps=6, denoise=0.5), tuple(audio_tables),
-)
+refinement = AudioRefinementRequest(refinement_schedule(steps=6, denoise=0.5), tuple(audio_tables))
 result = pipeline.generate(request, output_path, audio_refinement=refinement)
 ```
 
-该 Python 显式选项要求 hybrid 权重、单卡、Veda 44/6、同画布单首帧、生成音频且关闭去噪分析。
-0.11.0引入 `resident` 权重与 `veda-triton`；0.12.0另支持原生双槽 BF16
-`block-ring` 与 `veda-sm89`。原 profile 和容量限制仍适用；不支持静音交付、纯视频、
-其他参考模式、其他常驻/注意力组合或同时原生重绘。
-低于空间预算的输入保留完整条件；`context_pixels=None` 显式选择完整条件六步对照。
-没有 CLI/HTTP 开关，也不默认开启；该显式接口自 0.11.0 提供。
+要求混合权重、单设备、Veda 44/6、一张同画布首帧和生成音频，并使用常驻权重加 `veda-triton`，或原生双槽 BF16 `block-ring`
+加 `veda-sm89`。静音交付、仅视频输出、其他模式以及同时重绘会被拒绝。`context_pixels=None` 选择全上下文六步对照。进度报告
+4 + 6 次评估，`audio_refinement` 记录额外工作；失败时恢复绑定、注意力、视频和原音频。没有命令行或 HTTP 开关，也不默认启用。
 
-主生成元数据仍为四步，去噪进度报告十步（4 + 6），新增耗时单列 `audio_refinement`。
-失败恢复模型绑定、注意力、原视频和原音频。完整管线在官方解码器硬削波前使用双声道联动余量保护，
-另存观察记录。原生会话仅返回潜变量，其解码调用者须自行使用该保护。
+### 隐藏上下文复用 {#audio-hidden-context}
 
-空间条件算法已在 RTX PRO 6000 Blackwell Server、FP8 权重和 44/6 注意力下验证两组独立五秒高清场景。
-相对完整条件六步，1024² 总生成 83.88→61.20 秒，1536×1344 为 186.35→111.94 秒。
-两组各 120 帧解码像素保持，用户均接受缩减条件版本相对完整六步的音质。
-这是私有集成证据，不是通用质量保证，也不代表所有修复音频都胜过原版。
-新的显式 Python 接线随后在同型号 GPU 的串行产品进程中完成两组请求，
-各自复现已认可实验候选的全部 120 帧与交付音轨 PCM，首次请求和 4+6 进度均通过。
-这仅验证该集成中的接口；生产采用及人脸/音频联合行为另验，不扩大其他硬件或输入模式资格。
+`reuse_hidden_context=True` 复用首次评估的 BF16 非音频隐藏状态；六次音频评估都保留，后续步骤重建 K/V，只处理音频行。
+这是显式近似，绝不改变视频 latent，默认关闭。缓存只属于一次补采（最多 40 GiB，并至少保留 12 GiB 空闲显存），成功或失败都会释放。
 
+## 人脸重绘构件 {#explicit-native-face-repaint}
 
-上述高清私有集成使用其独立验证的容量准入。公开常驻profile的请求范围不变，
-数值加载器和按行分块本身不授权更大的请求。
+以下都是需显式启用的引擎接口。检测、跟踪、裁剪/关键帧对齐、修复模型、源音频保留和合成由应用负责。
 
+- `VideoRepaint` / `VideoRepaintRequest`：在实际 sigma 上使用编译后的 FL/Ref 调制做低噪声重绘，保留条件行并冻结音频。
+  用 `compile_refinement_tables(..., steps=2 或 4, denoise=0.035, mode="face")` 编译调制表。原生请求在预加载的
+  `NativeEngineSession` 上运行，需 `generate_audio=False`，仅限单设备。
+- `vflash.media.face_encoder.face_encoder(vae, profile)`：方形 320/384/512 裁剪、120–362 模型帧的作用域编码。
+  `batch2-fp16-norm` 与 `batch2-fp16-norm-reuse` 为近似 FP16 批处理（后者复用完全相同的片段）；`batch2-fp16-norm-reuse-untiled`
+  对 512 方形、124 帧裁剪去除空间分块，显存更高。`original` 保持原编码。
+- `H3Pipeline.source_scene_conditioning(source)`（开发候选）：为相关的仅视频重绘复用源场景的 Qwen 特征，会刻意改变条件。
 
-### SM89 分块音频（0.12.0）
+流程参考了 MIT 许可的 [ComfyUI H3 FaceRefine](https://github.com/Carasibana/ComfyUI-H3-FaceRefine)。不包含人脸修复或身份识别权重。
 
-音频补采临时替换全部50层CPU调制表和两个GPU槽的拷贝计划，同时只在音频阶段
-关闭两端Turbo残差，并在成功/失败后恢复原绑定。降低空间条件时同步切换两个槽的
-共享注意力，保留原时间与旋转位置；没有把整套模型常驻到24 GiB显存。
+## 条件复用与内存交接 {#memory-conditioning}
 
-单张报告48 GiB显存的RTX4090、BF16双槽与44/6的两组五秒私有集成对照均完成：1024²音频单独修复，
-以及512²保留原生两步人脸修复的联合方案，各自120帧解码画面完全一致。
-新增音频阶段分别55.12/33.98秒，完整请求无/有音频补采为132.98/180.81及
-87.65/120.74秒；第一条冷请求、后续暖请求，不能用总差值作隔离加速估计。
-一次初始化100.45秒。本次不资格更大或更长SM89音频请求，未达到15%附加耗时目标，
-也不证明音质普遍改善。对白两版本自动转写均保持原要求的七词，听感与细微口型
-同步仍另验。原音轨与完整对照保留于私有集成证据，源码快照为 `d08abd6e`。
+- **同组复用。** 可信调度器为同一受理请求的串行 I2VA/L2VA/FL2VA 候选传入同一个不透明 `ConditioningReuseScope`。
+  一条 CPU 副本（≤128 MiB，空闲一小时过期）只保存文本输出、token 标记和干净的关键帧 latent；噪声、调度状态、激活和媒体从不复用。
+  切勿从公开内容派生作用域，也不要跨所有者复用。
+- **内存交接。** `conditioning_transport="memory"` 在单设备上把编码器张量一次性交给原生去噪，不写 bundle。默认的 `file`
+  传输保留独立原生调用和服务所需的持久化契约。
 
+## 近似 FP8 加载器 {#fp8-loaders}
 
-### 显式隐藏上下文复用（0.13.0） {#audio-hidden-context}
+`create_row_fp8_native_loaders` 与 `load_row_fp8_text_encoder` 通过 `H3Pipeline` 的可信 `native_denoiser_loader` /
+`text_encoder_loader` 回调，加载显式准备、带 FP32 行缩放的 E4M3 权重。行分块限制临时内存，同时保持全序列注意力。W8A8 为近似计算，
+需要 SM90/SM120，不会静默切换算法；默认仍是 BF16，准备凭据和命令行不接受 FP8 bundle。
 
-在`AudioRefinementRequest`设置`reuse_hidden_context=True`，复用第一次音频评估的
-BF16非音频隐藏状态。六次音频评估保持；后五次重新投影上下文K/V并注入实时音频，
-只计算音频查询和前馈行。后续音频不再反馈到已缓存的视频/文本状态，因此这是近似，
-不是数值无损缓存；最终视频latent不变。
+## 计时与诊断 {#timing-and-diagnostics}
 
-缓存由单次串行修复拥有，成功或失败均恢复方法、释放缓存。两个物理权重槽按当前
-逻辑层区分；缓存上限40GiB并保留至少12GiB空闲显存，余量不足在分配全缓存前拒绝。
-默认关闭，没有CLI/HTTP缓存开关，也不自动扩大画布或硬件资格。
+`VideoResult.elapsed_seconds` 覆盖一次成功的 `generate`，包括首次模型加载。`stages.initialization_seconds` 是本次调用内的加载时间，
+`stages.request_elapsed_seconds` 不含加载，`stages.session_initialization_seconds`（亦即 `pipeline.initialization_seconds`）是会话的初始加载。
+编码与媒体阶段报告恢复、挂起和调用时间；`capture_diagnostics` 区分官方调用、钩子等待、bundle 收尾和本进程资源增量。嵌套时间用于归因，不能相加。
 
-单张报告48 GiB显存的RTX4090的两组独立512×512、5秒I2VA对照采用原生BF16双槽、主生成四步、
-音频六步、44/6注意力并关闭人脸，每请求缓存约5.27GiB。音频34.06/33.96秒降至
-22.57/22.55秒；对白完整86.50→68.75秒，环境声79.73→68.18秒。对白控制为首条冷态，
-环境声反序；两对各120帧完全一致，两组缓存音轨相对完整六步均获试听认可。
-这不保证普遍音质或精确同步。私有原型来源`a71bebc0`，提升后的缓存函数AST相同；
-自有请求接入和异常恢复另有CPU验证。
+## 正确性结果的含义 {#what-a-correctness-result-means}
 
-两组输入均已低于空间预算，实际降采样条件、更大画布、更长时长及常驻FP8缓存还
-没有GPU资格。普通无缓存六步另完成4090的1248×832/10秒和1536×1344/5秒，
-240/120帧保持，音频108.39/57.00秒。以上不扩大公共profile准入，也不证明15%附加目标。
+条件与最终 latent 应与参考实现分开比较，画面质量另行评估，并对照原始请求判断动作、外观、指令和声音。H.264 与 AAC 为有损格式，
+MP4 哈希不代表数值等价；官方音频 VAE 在重复请求间可能有细微差异。发布检查覆盖 14 个条件张量、最终 FP32 latent、解码媒体和可播放交付。
 
+## 资格证据 {#qualification-evidence}
 
-**显存证据更正：**以上本地音频实验的RTX4090实际报告49,140MiB（约48GiB），
-并非标准24GiB。早先应用登记及0.12概述误写了24GiB；耗时、缓存字节和画面/试听
-结果保持。单看显存峰值不能证明标准24GiB卡可执行同样完整流程。
+下表汇总当前接口实际运行过的范围；每项的数值、范围与限制见[版本更新](../reference/releases)和[性能记录](../reference/performance)。
+
+| 能力 | 证据 |
+| --- | --- |
+| 2720 像素原生高清（0.14） | RTX 4090 48 GB、BF16 混合 Veda 44/6 五条 120 帧 I2VA：2720×1536 两条、1536×2720、2368×1760、2720×1152 |
+| 扩展混合模型（0.6.12） | 单 SM89 配合 Veda 的 15 秒与九图案例 |
+| 六步音频（0.11–0.13） | RTX PRO 6000 FP8（1024²、1536×1344）与 RTX 4090 48 GB BF16 双槽（512²、1024²、1248×832/10 秒）；两组 512² 隐藏上下文复用 |
+| 人脸重绘（0.6.34–0.10） | RTX PRO 6000 Server 完整视频场景，两步与四步；裁剪编码配置最终帧一致 |
+| 内存交接 | 六条 H100 SXM 请求，解码画面与 PCM 完全一致 |
+| 同组复用 | 双 SM86 A/B/A，码流一致 |
+
+单一 GPU 型号或画布上的证据不能推广到其他情况；服务系统需各自完成资格验证。

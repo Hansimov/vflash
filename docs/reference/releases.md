@@ -148,7 +148,7 @@ sample clamp; the ordinary decode path is unchanged. This is clipping prevention
 not an audio refinement sampler or a claim of improved timbre. Two real RTX PRO
 6000 Blackwell Server refinement outputs validate it: one remains unchanged; an
 otherwise clipped waveform needs approximately 0.31 dB attenuation. Broader perceptual
-quality remains unqualified. [Usage and limits](../guide/complete-pipeline#pre-clamp-audio-headroom).
+quality remains unqualified. [Usage and limits](../guide/complete-pipeline#delivery-options).
 Promoted from private integration `video-gen` `a5f87c44` without private media or identities.
 
 
@@ -162,7 +162,7 @@ the default; multi-device execution and audio effects are rejected for this opti
 Real integration covers four video-only clips and audio/video switching on one RTX PRO 6000
 Blackwell Server with an experimental FP8 hybrid backbone. Complete decoding and application
 playback passed. Other architectures and the default BF16 path are not newly qualified;
-reported face and audio defects remain open. See [scope](../guide/complete-pipeline#video-only-generation-0-6-32).
+reported face and audio defects remain open. See [scope](../guide/complete-pipeline#delivery-options).
 Private integration source: `video-gen` `3b9cccef`; no private media or machine identities are published.
 
 ## 0.6.31
@@ -313,7 +313,7 @@ The fixed model adds about 55.4 MiB of modulation tables rather than another bac
 Ref → I2VA → Ref complete requests passed in one RTX 4090 48 GB session, with full media
 decode and bounded cross-mode lifetime checks. Source/provenance, ownership/error cleanup
 and unchanged default paths have CPU regression coverage. See
-[scope, timings and quality limitations](../guide/complete-pipeline#hybrid-reference-model-in-0-6-8-opt-in).
+[scope, timings and quality limitations](../guide/complete-pipeline#extended-hybrid).
 No claim of universal quality improvement, video-reference support or hybrid Sol qualification.
 Source/wheel only; no model weights, new prebuilt image or automatic downstream deployment.
 
