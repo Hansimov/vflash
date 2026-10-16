@@ -4,7 +4,11 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
-**0.14.0：显式音频隐藏上下文复用。** 自有六步音频接口可复用首次非音频隐藏状态，
+**0.14.0：真4MP原生高清。** 图像条件原生高清保持2048²像素上限，但最长边放宽到2720，
+五秒请求可达2720×1536（16:9）、1536×2720（9:16）或2368×1760（4:3）。五条RTX4090完整请求
+画面连贯；联合像素帧预算不变。见[画布限制](https://hansimov.github.io/vflash/zh/guide/complete-pipeline#extended-hybrid)。
+
+**0.13.0：显式音频隐藏上下文复用。** 自有六步音频接口可复用首次非音频隐藏状态，
 后续每步保持实时音频并重建K/V。两组48GiB RTX4090的512²/5秒对照画面逐帧保持、试听获认可，
 音频阶段约少34%。这是默认关闭的近似选项，较大缓存场景未资格，见
 [音频指南](docs/zh/guide/complete-pipeline.md#audio-hidden-context)。
