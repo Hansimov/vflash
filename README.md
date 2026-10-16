@@ -6,18 +6,15 @@ Native **MiniMax H3 inference** with explicit GPU profiles. Vflash uses PyTorch 
 
 **0.13.0: opt-in audio hidden-context reuse.** The owned six-step audio interface
 can freeze first-evaluation non-audio hidden states, with current audio and rebuilt
-K/V on every later step. Two 512²/5s RTX 4090 comparisons retained every video frame
+K/V on every later step. Two 512²/5s comparisons on a 48 GiB RTX 4090 retained every video frame
 and received listening acceptance, with about 34% less audio time. This is an
 explicit approximation, disabled by default; larger cached workloads remain
 unqualified. See the [audio guide](docs/guide/complete-pipeline.md#audio-hidden-context).
 
-**0.12.0: six-step audio on the SM89 weight ring.** The explicit audio pass now
-supports a native two-slot BF16 trunk on an RTX 4090 with 48 GiB reported memory with Veda 44/6 and
-approximately 0.5 MP spatial context. Two five-second pairs, including application
-face repair, kept all 120 decoded frames. This extends execution support; it does
-not establish a 15% overhead target or universal sound-quality improvement.
-Resident FP8 interfaces and existing defaults remain available.
-See the [complete-pipeline guide](https://hansimov.github.io/vflash/guide/complete-pipeline).
+The optional six-step audio pass supports the native BF16 weight ring and
+qualified resident FP8 paths with Veda 44/6 and approximately 0.5 MP spatial
+context. Complete video pixels remain unchanged. The [pipeline guide](https://hansimov.github.io/vflash/guide/complete-pipeline)
+separates hardware qualification, listening evidence and execution cost.
 
 Vflash provides two interfaces:
 
