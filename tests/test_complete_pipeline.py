@@ -447,7 +447,7 @@ def test_bad_input_and_busy_session_do_not_run_models_or_destroy_outputs(
     [
         {"width": 641},
         {"height": 0},
-        {"width": 2080, "height": 768},
+        {"width": 2752, "height": 768},
         {"prompt": " "},
         {"seed": True},
         {"seed": -1},

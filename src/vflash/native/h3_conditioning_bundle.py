@@ -33,6 +33,8 @@ H3_FIRST_FRAME_POLICY = "official-fl2va-first-frame-stretch-v1"
 H3_FL2VA_KEYFRAME_POLICY = "official-fl2va-first-last-frame-v1"
 H3_LAST_FRAME_POLICY = "official-fl2va-last-frame-stretch-v1"
 H3_BASE16_MAX_CANVAS_PIXELS = 1024**2
+# Equals vflash.pipeline.contracts.NATIVE_HD_MAX_LONG_EDGE: native HD, 2048**2 area.
+H3_NATIVE_HD_MAX_LONG_EDGE = 2720
 
 _BUNDLE_ID = re.compile(r"h3-conditioning-[a-z0-9][a-z0-9-]{0,95}")
 _IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,255}")
@@ -735,7 +737,7 @@ def _keyframe_canvas_supported(profile: H3ConditioningProfile) -> bool:
     return profile.width * profile.height <= H3_BASE16_MAX_CANVAS_PIXELS or (
         profile.nfe == 4
         and profile.frames in _COMPLETE_TEMPORAL_PROFILES
-        and max(profile.width, profile.height) <= 2048
+        and max(profile.width, profile.height) <= H3_NATIVE_HD_MAX_LONG_EDGE
     )
 
 

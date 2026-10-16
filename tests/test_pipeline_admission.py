@@ -60,3 +60,33 @@ def test_admission_import_does_not_load_accelerator_libraries():
         "assert 'vflash.pipeline.runtime' not in sys.modules"
     )
     subprocess.run([sys.executable, "-c", program], check=True, timeout=10)
+
+
+@pytest.mark.parametrize(
+    "width,height", [(2720, 1536), (1536, 2720), (2368, 1760), (2720, 1152)]
+)
+def test_native_hd_qualifies_a_2720_long_edge_within_the_2048_squared_area(width, height):
+    options = dict(
+        profile_id="i2va-turbo4-v01-544-exact-sm89",
+        hybrid=True,
+        attention_backend="veda-triton",
+    )
+    frame = Path("/unused/source.png")
+    validate_request(
+        VideoRequest("Motion", first_frame=frame, width=width, height=height), **options
+    )
+    with pytest.raises(ContractError, match="joint"):
+        validate_request(
+            VideoRequest(
+                "Motion", first_frame=frame, width=width, height=height, duration_seconds=10
+            ),
+            **options,
+        )
+
+
+def test_native_hd_long_edge_and_area_stay_bounded():
+    frame = Path("/unused/source.png")
+    with pytest.raises(ContractError, match="2720 pixels per side"):
+        VideoRequest("Motion", first_frame=frame, width=2752, height=1504)
+    with pytest.raises(ContractError, match="canvas pixels"):
+        VideoRequest("Motion", first_frame=frame, width=2720, height=1568)

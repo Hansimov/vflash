@@ -19,6 +19,8 @@ from vflash.model_assets import MODEL_REVISION as MODEL_REVISION
 PIPELINE_PROFILE = DEFAULT_MODEL_PROFILE
 MAX_CANVAS_PIXELS = 1024**2
 NATIVE_HD_MAX_PIXELS = 2048**2
+# Native HD keeps the 2048**2 area with a 2720-pixel long edge (16:9 reaches 2720x1536).
+NATIVE_HD_MAX_LONG_EDGE = 2720
 VIDEO_REFERENCE_CANVAS_PIXELS = 928 * 512
 
 
@@ -203,11 +205,12 @@ class VideoRequest:
         if self.reference_video is not None and self.duration_seconds != 5:
             raise ContractError("video reference delivery supports five seconds")
         if self.width * self.height > MAX_CANVAS_PIXELS and (
-            max(self.width, self.height) > 2048
+            max(self.width, self.height) > NATIVE_HD_MAX_LONG_EDGE
             or self.mode not in {"i2va", "l2va", "fl2va", "ref2va"}
         ):
             raise ContractError(
-                "native HD requires image conditioning within 2048 pixels per side"
+                "native HD requires image conditioning within "
+                f"{NATIVE_HD_MAX_LONG_EDGE} pixels per side"
             )
         if type(self.generate_audio) is not bool:
             raise ContractError("generate_audio must be boolean")

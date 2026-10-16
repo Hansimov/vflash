@@ -13,6 +13,7 @@ from vflash.native.h3_conditioning_bundle import (
     H3_FL2VA_KEYFRAME_POLICY,
     H3_LAST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION,
     H3_LAST_FRAME_POLICY,
+    H3_NATIVE_HD_MAX_LONG_EDGE,
     H3ConditioningBundleError,
     H3ConditioningProfile,
     _validate_first_frame_profile,
@@ -425,3 +426,30 @@ def test_native_hd_keyframe_conditioning_retains_both_endpoint_rows(task, valida
         other = H3ConditioningProfile(task, 2048, 2048, frames, nfe, 12, 3, rows, rows, 0)
         with pytest.raises(H3ConditioningBundleError):
             validator(other, request)
+
+
+@pytest.mark.parametrize("width,height", [(2720, 1536), (1536, 2720)])
+def test_native_hd_first_frame_conditioning_accepts_the_qualified_long_edge(width, height):
+    rows = (width // 32) * (height // 32)
+    request = {
+        "delivery_profiles": [
+            {"temporal_profile": "native-24fps-5s", "frames": 120, "fps": 24.0}
+        ]
+    }
+    assert (
+        _validate_first_frame_profile(
+            H3ConditioningProfile("i2va", width, height, 124, 4, 12, 3, rows, rows, 0), request
+        )
+        is None
+    )
+    wider = (2752 // 32) * (1504 // 32)
+    with pytest.raises(H3ConditioningBundleError):
+        _validate_first_frame_profile(
+            H3ConditioningProfile("i2va", 2752, 1504, 124, 4, 12, 3, wider, wider, 0), request
+        )
+
+
+def test_bundle_and_request_contract_share_the_native_hd_long_edge():
+    from vflash.pipeline.contracts import NATIVE_HD_MAX_LONG_EDGE
+
+    assert H3_NATIVE_HD_MAX_LONG_EDGE == NATIVE_HD_MAX_LONG_EDGE == 2720
