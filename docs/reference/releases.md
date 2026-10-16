@@ -1,5 +1,21 @@
 # Release notes
 
+## 0.14.0
+
+Qualifies a 2720-pixel long edge for image-conditioned native HD. The 2048² pixel cap,
+1:4–4:1 ratio range and joint `width × height × model_frames ≤ 2048² × 124` budget are
+unchanged, so true 4 MP canvases such as 2720×1536 (16:9), 1536×2720 (9:16) and
+2368×1760 (4:3) are five-second requests. The request contract and the first-frame
+conditioning bundle share `NATIVE_HD_MAX_LONG_EDGE`; wider long edges still fail before
+model activation. No numerical path, schedule or default changes.
+
+Five complete I2VA requests on one RTX 4090 (48 GiB reported memory) with BF16 hybrid
+Veda 44/6 produced coherent 120-frame videos without tiling or repeated structure:
+2720×1536 city and street scenes (672.0 and 658.9 s), 1536×2720 with a person
+(669.6 s), 2368×1760 (663.5 s) and 2720×1152 (462.5 s). The last three ran the
+unmodified release contract. This is visual qualification, not a sound-quality or
+other-GPU claim; longer 4 MP requests remain outside the joint budget.
+
 ## 0.13.0
 
 Adds explicit request-owned hidden-context reuse for six-step audio refinement.
