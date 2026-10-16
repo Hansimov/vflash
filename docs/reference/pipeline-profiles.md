@@ -144,7 +144,7 @@ files with two 3080s and `sequence-head`. SM86 compilation and the installed nat
 session have completed application-owned encoding/core/media requests at five seconds
 928 × 512 and ten seconds 640 × 352, both 24 fps. This is the native integration boundary;
 the standalone `H3Pipeline` wrapper has not been rerun on the new profile and still has
-a five-second temporal contract. See [the evidence limits](./releases#v0-3-2).
+a five-second temporal contract. See [the evidence limits](./releases#earlier).
 It requires independent SM86 receipts and compiled tables; changing an SM89 or Ref
 artifact label is invalid. Single-card, `tensor`, and eight-step T2VA are excluded.
 

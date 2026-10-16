@@ -189,7 +189,8 @@ Output is five seconds; this guides a new video and is not frame-accurate editin
 `HybridModel(Path(".../transformer_ref"))` keeps the LightX v0.1 four-evaluation backbone and replaces block
 25–49 AdaLN projections with the pinned official Ref component (about 55 MiB of tables, no second denoiser).
 Keyframes use the ordinary FL graph and Ref uses a real official Ref graph sharing the prefix, text encoder
-and VAEs. It requires single SM89 with dense or explicit Veda attention.
+and VAEs. It runs on one SM89, SM90 or SM120 GPU (SM103 preview) with dense or explicit Veda attention;
+the measured envelope of each GPU is in [choose hardware](./profiles#heterogeneous).
 
 With Veda, the single-SM89 hybrid accepts **5–15 s** image-conditioned requests and up to **nine** ordered
 references (`<Picture 1>` … `<Picture 9>`), within the [joint budget](#modes-and-limits). Standard
@@ -299,6 +300,7 @@ are in the [release notes](../reference/releases) and [performance records](../r
 
 | Capability | Evidence |
 | --- | --- |
+| SM120 resident pixel-frame budget (0.15) | RTX PRO 6000 96 GiB, FP8 resident trunk, Veda 44/6, face and six-step audio repair: 1920×1088/5 s 163 s, 2720×1536/5 s 261 s, 1920×1088/10 s 245 s, 42.1 GiB peak |
 | 2720-pixel native HD (0.14) | Five 120-frame I2VA requests on RTX 4090 48 GB, BF16 hybrid Veda 44/6: 2720×1536 ×2, 1536×2720, 2368×1760, 2720×1152 |
 | Extended hybrid (0.6.12) | 15 s and nine-image cases on single SM89 with Veda |
 | Six-step audio (0.11–0.13) | RTX PRO 6000 FP8 (1024², 1536×1344) and RTX 4090 48 GB BF16 ring (512², 1024², 1248×832/10 s); hidden-context reuse on two 512² cases |

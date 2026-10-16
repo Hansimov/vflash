@@ -1,106 +1,111 @@
 # 开始使用
 
-安装当前发行版，选择经过验证的配置并准备对应资产。`H3Pipeline`/`vflash generate`生成完整MP4；
-`denoise`与原生HTTP服务接收预编译条件并返回潜变量。模型下载和编译均为显式步骤。
+Vflash 把一段提示词和可选图片生成为带音轨的完整 MP4。大多数用户使用**完整流水线**
+（`vflash generate`、`H3Pipeline` 或 Docker 流水线镜像）。已自行构建条件输入的应用可以使用更底层的
+**原生去噪器**，它返回 latent 而不是视频（[见下文](#native-latents)）。
 
-当前模式、时长与参考限制以[完整链路合同](./complete-pipeline)为准，GPU显存与架构资格以
-[配置指南](./profiles)为准。引擎不会通过暗中更换模型、设备或精度来容纳超限请求。
+Vflash 不会隐式下载或编译任何内容：你选择与显卡匹配的配置、一次性准备其资源；超出该配置契约的请求会被直接拒绝，
+而不是悄悄更换模型、设备或精度。
 
-## 安装命令行工具 {#install}
+## 1. 安装 {#install}
 
-需要 Python 3.11 或更新版本。基础安装很轻量，不会下载模型权重或 PyTorch。
+需要 Linux、Python 3.11+、支持 CUDA 13.0 的 NVIDIA 驱动，以及 `PATH` 中的 `ffmpeg`/`ffprobe`。
+基础安装是不含 PyTorch 的轻量 CLI；按所用接口安装对应 extra。
 
 ```bash
 git clone --branch v0.15.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -e .
+python -m venv .venv && source .venv/bin/activate
+python -m pip install -e '.[pipeline]'     # 完整 MP4 流水线（已包含 GPU 依赖）
 ```
 
-## 检查显卡 {#check-your-gpu}
+只用原生去噪器时安装 `.[gpu]`，原生 HTTP 服务安装 `.[server]`。偏好容器时，[Docker 镜像](./docker)
+固定了相同环境（PyTorch 2.11 / CUDA 13.0）。
+
+## 2. 检查显卡 {#check-your-gpu}
 
 ```bash
-vflash doctor
-vflash profiles
+vflash doctor      # 当前进程可见的显卡
+vflash profiles    # 本版本提供的配置
 ```
 
-`doctor` 列出 `nvidia-smi` 能看到的 NVIDIA 显卡；`profiles` 列出当前版本支持的运行配置。
+选择与硬件对应的配置，用 `plan` 在不加载权重的情况下检查是否匹配：
 
-使用 `doctor` 显示的 GPU 索引，检查配置与显卡是否匹配：
-
-```bash
-# 配备 48 GB 显存的 RTX 4090
-vflash plan ref2va-turbo4-exact-sm89 --gpu 0
-
-# 两张配备 20 GB 显存的 RTX 3080
-vflash plan ref2va-turbo4-exact-sm86 --gpu 0 --peer-gpu 1
-```
-
-`plan` 只检查硬件匹配情况，不加载模型权重。对于 3080 配置，已测负载的部署建议是**每个 worker 至少预留 64 GiB 可用系统内存**，并为其他进程保留额外余量。更大输入需要重新检查容量。这里的支持范围只覆盖上述显存容量；常见的 10/12 GB 版 3080 和 24 GB 版 4090 不在本次支持范围内。
-
-完整列表见[配置与硬件](./profiles)。
-
-## 运行条件包 {#run-a-bundle}
-
-建议使用 [Docker](./docker) 获得固定版本的 GPU 运行环境。如果直接从 Python 源码运行，请安装 GPU 依赖：
-
-```bash
-python -m pip install -e '.[gpu]'
-```
-
-源码运行环境使用 Linux、PyTorch 2.11、Triton 3.6，以及兼容的 NVIDIA 驱动。Docker 构建固定使用 CUDA 13.0 版 PyTorch 和配套依赖。
-
-准备相互匹配的[权重包、调度包、辅助张量文件和条件包](../reference/runtime-assets)，将下面的示例路径换成实际文件路径：
-
-```bash
-vflash denoise ref2va-turbo4-exact-sm89 \
-  --gpu 0 \
-  --artifact /path/to/artifact \
-  --schedule-overlay /path/to/schedule \
-  --auxiliary-tensor /path/to/auxiliary.safetensors \
-  --bundle /path/to/example-bundle \
-  --output-latents ./result.safetensors
-```
-
-使用 3080 时，选择 `ref2va-turbo4-exact-sm86`，并提供为该配置编译的资源。修改配置名称或 GPU 后缀不会自动转换资源文件。
-
-命令会把视频和音频 latent 张量写入 `result.safetensors`，并打印 JSON 摘要。这些张量需要交给兼容的解码器；该文件还不是可播放的视频。
-
-## 用两张显卡执行一个请求 {#parallel}
-
-选择两张 RTX 3080 20 GB，继续使用相同的 SM86 Turbo4 资源：
-
-```bash
-vflash plan ref2va-turbo4-exact-sm86 --gpu 0 --peer-gpu 1 --strategy sequence-head
-```
-
-在 `vflash denoise` 中使用相同的 `--gpu`、`--peer-gpu` 和 `--strategy` 参数即可。两张卡共同执行一个请求；这不会创建两个独立 worker。
-
-| 策略 | 分片对象 | 选中第二张卡时的默认值 |
+| 显卡 | 常用配置 | 命令 |
 | --- | --- | --- |
-| `tensor` | QKV、注意力输出、FFN 和 LoRA 投影权重 | 否 |
-| `sequence-head` | GEMM 按 token 行分片，注意力按头分片并处理完整序列 | 是 |
+| RTX 4090 48 GB | `i2va-turbo4-v01-544-exact-sm89`（关键帧、混合模型、原生高清） | `vflash plan i2va-turbo4-v01-544-exact-sm89 --gpu 0` |
+| RTX PRO 6000 96 GB | `i2va-turbo4-v01-544-exact-sm120`（混合 I2VA，预览） | `vflash plan i2va-turbo4-v01-544-exact-sm120 --gpu 0` |
+| H100 80 GB | `i2va-turbo4-v01-544-exact-sm90`（混合 I2VA，预览） | `vflash plan i2va-turbo4-v01-544-exact-sm90 --gpu 0` |
+| 两张 RTX 3080 20 GB | `ref2va-turbo4-exact-sm86` | `vflash plan ref2va-turbo4-exact-sm86 --gpu 0 --peer-gpu 1 --strategy sequence-head` |
 
-两种方式均使用 BF16 权重、精确注意力和完整的四步调度。选择第二张卡后，默认策略是 `sequence-head`。实现说明见[双卡架构](../reference/architecture#parallel)。
+4090 上还提供纯文本（`t2va-turbo4-exact-sm89`）、参考图（`ref2va-turbo4-exact-sm89`）和 Base16
+关键帧配置。表中显存是硬性要求：24 GB 的 4090 与 10/12 GB 的 3080 不在支持范围内。主机内存、常驻方式
+与各显卡的实测范围见[选择硬件与配置](./profiles)。
 
-已准备的 SM89 Base16 I2VA/L2VA/FL2VA profile 也可使用两张匹配的 RTX 4090 48 GB。传入同样的 peer 参数，但只能选择 `sequence-head`；`tensor` 仍会被拒绝。两张卡从同一份已准备的 SM89 工件分块流入权重。这是优先降低单个请求延迟的可选路径；已有两个就绪请求时，不应取代两个独立 worker。
+## 3. 准备模型资源 {#prepare}
 
-并行计算改变 GEMM 形状或归约顺序，因此结果**不一定与单卡逐位一致**。一个负载已通过完整 latent 与解码后视频、音频的基础检查，跨案例指令遵循质量仍待评测。测量边界与内存口径见[性能测量](../reference/performance#parallel)。
+每个配置需要固定版本的官方 MiniMax H3 组件、其固定版本的 Turbo LoRA（如有），以及三个编译后的原生文件
+（artifact、调度和辅助张量）。用[官方权重编译器](./compile-weights)下载并编译，在 JSON 中填写六个路径
+（[字段说明](./complete-pipeline#installation-and-assets)），然后一次性绑定：
 
-## 复用已加载的模型 {#reuse}
+```bash
+vflash prepare-pipeline --assets pipeline-assets.json --receipt prepared-assets.json
+```
 
-连续处理多个请求时，使用 [Python 会话](./python)或 [HTTP 服务](./docker)。Python 会话在创建时加载模型，HTTP 服务在首个任务加载，后续请求继续复用；每次重新运行 `vflash denoise` 则会重新加载。
+凭据记录每个文件的哈希。之后启动只检查身份与时间戳，因此请把资源放在最终的只读位置；移动后需要重新生成凭据。
 
-<span id="python-lifetime"></span>
+## 4. 生成第一个视频 {#first-video}
 
-会话的创建、进度回调和关闭规则见 [Python 集成](./python#lifetime)。
+把提示词写入 UTF-8 文件后执行一次请求。以首帧图片（I2VA）为例：
+
+```bash
+vflash generate --prepared-assets prepared-assets.json --prompt-file prompt.txt \
+  --first-frame first.png --width 928 --height 512 --duration 5 --seed 1234 \
+  --gpu 0 --output video.mp4 --trust-local-code
+```
+
+- 纯文本：准备 `t2va-turbo4-exact-sm89`，省略图片参数。
+- 参考图：重复 `--reference`（提示词中按顺序称为 `<Picture 1>`、`<Picture 2>` …）。
+- 尾帧或首尾帧：`--last-frame`，或同时使用 `--first-frame` 与 `--last-frame`。
+
+进度以 JSON 行写到 stderr，结果写到 stdout。`--trust-local-code` 允许从已校验的本地快照加载官方解码器代码，
+使用前请阅读[许可证](../reference/license)。每次 CLI 调用都会加载并释放模型，因此首次运行包含模型加载时间。
+
+十五秒请求、最多九张参考图以及最高 2720×1536 的原生高清需要通过 Python 使用混合模型，
+做法见[生成视频](./complete-pipeline#extended-hybrid)。
+
+## 5. 保持模型常驻 {#reuse}
+
+需要处理多个请求时，保持一个进程运行：
+
+- **Python：** 一个 [`H3Pipeline`](./python) 串行处理请求并复用已加载的权重。
+- **Docker / HTTP：** [原生服务](./docker)排队处理任务并常驻模型。
+
+请把首个（冷）请求与重复（暖）请求分开测量，见[速度、显存与质量](../reference/performance)。
+
+## 原生 latent（进阶） {#native-latents}
+
+`vflash denoise` 和原生 HTTP 服务接收编译好的条件 bundle，输出视频与音频 **latent**（`.safetensors`），
+而不是 MP4。仅当你的应用自行负责条件构建与解码时使用：
+
+```bash
+vflash denoise ref2va-turbo4-exact-sm89 --gpu 0 \
+  --artifact /path/to/artifact --schedule-overlay /path/to/schedule \
+  --auxiliary-tensor /path/to/auxiliary.safetensors \
+  --bundle /path/to/bundle --output-latents result.safetensors
+```
+
+两张 RTX 3080 通过 `--peer-gpu 1 --strategy sequence-head` 协作处理一个请求（选择 peer 时默认使用该策略，
+另一种是 `tensor`）。结果不保证与单卡逐位一致。四类输入的定义见[运行资源](../reference/runtime-assets)。
 
 ## 检查失败时 {#troubleshooting}
 
-| 现象 | 检查方法 |
+| 现象 | 检查 |
 | --- | --- |
-| 没有列出显卡 | 运行 `nvidia-smi`，检查驱动和设备访问权限。使用 Docker 时，确认选中的 GPU 在容器内可见。 |
-| 配置与显卡不匹配 | 根据 `doctor` 显示的显卡型号和显存容量选择配置。 |
-| 资源缺失或不兼容 | 检查四类输入的模型、LoRA、调度和硬件版本。见[运行资源](../reference/runtime-assets)。 |
-| 3080 进程耗尽系统内存 | 释放系统内存或减少 worker 数量。已测负载建议每个 worker 预留至少 64 GiB 可用 RAM；更大输入需要重新检查容量。 |
+| 未列出显卡 | `nvidia-smi`；Docker 中确认设备已暴露给容器。 |
+| 配置与显卡不匹配 | 按 `doctor` 报告的计算能力和显存选择配置；改配置名不会转换资源。 |
+| 资源被拒绝 | 对最终、未改动的文件重新执行 `prepare-pipeline`。 |
+| 请求在加载前被拒绝 | 画布、时长或输入数量超出[模式与限制](./complete-pipeline#modes-and-limits)。 |
+| 主机内存不足 | 块环与 SM86 worker 把权重放在内存中：每个 worker 预留至少 64 GiB 可用内存。 |
+
+更多情况见[故障排查](./troubleshooting)。

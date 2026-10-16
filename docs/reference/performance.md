@@ -1,6 +1,23 @@
-# Measuring performance
+# Speed, memory and quality
 
-Measure the path that matters to your application, and keep its scope visible. The complete pipeline produces an MP4; the native denoiser produces latent tensors. Their timing boundaries differ.
+Measure the path that matters to your application and keep its scope visible: the complete pipeline produces an
+MP4, the native denoiser produces latents, and their timing boundaries differ. Current reference numbers are in
+[benchmark results](./benchmarks#current).
+
+## Speed levers {#levers}
+
+| Lever | Effect | Cost or limit |
+| --- | --- | --- |
+| Keep one pipeline loaded | Removes model loading from every request after the first | One process per GPU (group); requests run serially |
+| `weight_residency="resident"` (SM90 ≥75 GiB, SM120 ≥90 GiB) | Faster warm requests; lower host RAM | Higher startup; I2VA only, within the resident envelope |
+| Veda attention, `veda_dense_edge_layers=3` (44/6) | Sparse attention on 44 of 50 layers | Approximate; needs the hybrid model and predictor |
+| FP8 row-scaled loaders (SM90/SM120) | Smaller resident trunk and faster linear layers | Approximate; explicit application callbacks; BF16 stays default |
+| Six-step audio refinement | Better audio on hybrid I2VA | Adds six audio evaluations (for example 55 s at 1024²/5 s on an RTX 4090) |
+| Hidden-context audio reuse | About 34% less audio time in the measured cases | Approximation of later non-audio states; opt in per request |
+| Two GPUs on one request | Lower latency for that request | More GPU-seconds; with two ready requests, two single-GPU workers finish more work |
+
+Change one lever at a time against a fixed prompt, inputs, seed, canvas and duration, and review the output
+before adopting it ([quality](#quality)).
 
 ## Separate loading from repeated requests {#timing}
 

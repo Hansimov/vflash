@@ -1,104 +1,119 @@
 # Get started
 
-Install the released engine, select a qualified profile, and prepare its matching assets.
-`H3Pipeline`/`vflash generate` produce complete MP4s; `denoise` and the native HTTP service
-accept compiled conditioning and return latents. Model downloads and compilation are explicit.
+Vflash turns a prompt and optional images into a complete MP4 with audio. Most users want the
+**complete pipeline** (`vflash generate`, `H3Pipeline` or the Docker pipeline image). Applications
+that already build their own conditioning can use the lower-level **native denoiser**, which returns
+latents instead of video ([below](#native-latents)).
 
-For current modes, duration and reference limits, use the [complete pipeline contract](./complete-pipeline).
-For exact GPU memory and architecture qualifications, use the [profile guide](./profiles).
-The engine does not choose another model, device or precision to make an oversized request fit.
+Nothing is downloaded or compiled implicitly: you choose a profile that matches your GPU, prepare its
+assets once, and Vflash refuses requests outside that profile's contract instead of silently changing
+the model, device or precision.
 
-## Install the CLI {#install}
+## 1. Install {#install}
 
-Use Python 3.11 or newer. The base installation is lightweight and does not download model weights or PyTorch.
+Linux, Python 3.11+, an NVIDIA driver for CUDA 13.0, and `ffmpeg`/`ffprobe` on `PATH`. The base
+install is a light CLI without PyTorch; add the extra for the interface you use.
 
 ```bash
 git clone --branch v0.15.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -e .
+python -m venv .venv && source .venv/bin/activate
+python -m pip install -e '.[pipeline]'     # complete MP4 pipeline (includes GPU dependencies)
 ```
 
-## Check your GPU {#check-your-gpu}
+Use `.[gpu]` for the native denoiser only and `.[server]` for the native HTTP service. The
+[Docker images](./docker) pin the same environment (PyTorch 2.11 / CUDA 13.0) if you prefer containers.
+
+## 2. Check your GPU {#check-your-gpu}
 
 ```bash
-vflash doctor
-vflash profiles
+vflash doctor      # GPUs visible to this process
+vflash profiles    # profiles in this release
 ```
 
-`doctor` lists the NVIDIA GPUs visible through `nvidia-smi`. `profiles` lists the configurations supported by this release.
+Pick the profile for your hardware and let `plan` check the match without loading weights:
 
-Choose the GPU index shown by `doctor` and check a profile:
-
-```bash
-# RTX 4090 with 48 GB
-vflash plan ref2va-turbo4-exact-sm89 --gpu 0
-
-# Two RTX 3080 GPUs with 20 GB each
-vflash plan ref2va-turbo4-exact-sm86 --gpu 0 --peer-gpu 1
-```
-
-`plan` checks the hardware match without loading model weights. For the 3080 profile, we recommend **at least 64 GiB of available system memory per worker for the tested workload**, plus headroom for other processes. Larger inputs need separate capacity checks. These profiles target the stated memory capacities; the usual 10/12 GB 3080 and 24 GB 4090 are outside this release's supported configurations.
-
-See [profiles and hardware](./profiles) for the full support table.
-
-## Run a bundle {#run-a-bundle}
-
-Use [Docker](./docker) for a pinned GPU environment. For a Python source installation, install the GPU dependencies in your environment:
-
-```bash
-python -m pip install -e '.[gpu]'
-```
-
-The source runtime uses PyTorch 2.11 and Triton 3.6 on Linux with a compatible NVIDIA driver. The Docker build pins the CUDA 13.0 PyTorch build and its dependencies.
-
-Prepare a matching [artifact, schedule, auxiliary tensor file, and conditioning bundle](../reference/runtime-assets). Replace the example paths with your files:
-
-```bash
-vflash denoise ref2va-turbo4-exact-sm89 \
-  --gpu 0 \
-  --artifact /path/to/artifact \
-  --schedule-overlay /path/to/schedule \
-  --auxiliary-tensor /path/to/auxiliary.safetensors \
-  --bundle /path/to/example-bundle \
-  --output-latents ./result.safetensors
-```
-
-For a 3080, select `ref2va-turbo4-exact-sm86` and use assets compiled for that profile. Renaming a profile or changing its GPU suffix does not convert the assets.
-
-The command writes the video and audio latent tensors to `result.safetensors` and prints a JSON summary. The tensors are inputs for a compatible decoder; the file is not a playable video.
-
-## Use two GPUs for one request {#parallel}
-
-To use two RTX 3080 20 GB devices for one request, keep the same SM86 Turbo4 assets:
-
-```bash
-vflash plan ref2va-turbo4-exact-sm86 --gpu 0 --peer-gpu 1 --strategy sequence-head
-```
-
-Add the same `--gpu`, `--peer-gpu`, and `--strategy` options to `vflash denoise`. Both GPUs belong to one request; this does not start two independent workers.
-
-| Strategy | What is divided | Default when a peer is selected |
+| GPU | Typical profile | Command |
 | --- | --- | --- |
-| `tensor` | QKV, attention output, FFN, and LoRA projection weights | No |
-| `sequence-head` | Token rows for GEMMs, then attention heads for complete-sequence attention | Yes |
+| RTX 4090 48 GB | `i2va-turbo4-v01-544-exact-sm89` (keyframes, hybrid, native HD) | `vflash plan i2va-turbo4-v01-544-exact-sm89 --gpu 0` |
+| RTX PRO 6000 96 GB | `i2va-turbo4-v01-544-exact-sm120` (hybrid I2VA, preview) | `vflash plan i2va-turbo4-v01-544-exact-sm120 --gpu 0` |
+| H100 80 GB | `i2va-turbo4-v01-544-exact-sm90` (hybrid I2VA, preview) | `vflash plan i2va-turbo4-v01-544-exact-sm90 --gpu 0` |
+| Two RTX 3080 20 GB | `ref2va-turbo4-exact-sm86` | `vflash plan ref2va-turbo4-exact-sm86 --gpu 0 --peer-gpu 1 --strategy sequence-head` |
 
-Both strategies use BF16 weights, exact attention and the complete four-step schedule. Selecting a peer defaults to `sequence-head`. See [the architecture guide](../reference/architecture#parallel) for the implementation.
+Text-only (`t2va-turbo4-exact-sm89`), reference-image (`ref2va-turbo4-exact-sm89`) and Base16
+keyframe profiles are also available on the 4090. The memory sizes are requirements: 24 GB 4090s and
+10/12 GB 3080s are not supported configurations. See [choose hardware](./profiles) for host RAM,
+residency and the measured envelope of each GPU.
 
-Two matching RTX 4090 48 GB devices are also accepted for a prepared SM89 Base16 I2VA/L2VA/FL2VA profile. Pass the same peer options, but use `sequence-head`; `tensor` remains rejected. Both devices stream blocks from one prepared SM89 artifact. This opt-in path prioritizes one request's latency and should not replace two independent workers when two requests are ready.
+## 3. Prepare the model assets {#prepare}
 
-Parallel execution changes GEMM shapes or reduction order, so results **need not be bitwise identical to single-GPU execution**. Full latent and decoded-media smoke checks passed on one workload; cross-case instruction-quality qualification remains pending. See [performance measurement](../reference/performance#parallel) for scope and memory accounting.
+A profile needs the official MiniMax H3 components at a pinned revision, its pinned Turbo LoRA (if any),
+and three compiled native files (artifact, schedule and auxiliary tensors). Download and compile them
+with the [official-weight compiler](./compile-weights), describe the six paths in a JSON file
+([fields](./complete-pipeline#installation-and-assets)), then bind them once:
 
-## Reuse a loaded model {#reuse}
+```bash
+vflash prepare-pipeline --assets pipeline-assets.json --receipt prepared-assets.json
+```
 
-For repeated requests, use a [Python session](./python) or the [HTTP service](./docker). A Python session loads during construction; the HTTP service loads on its first job. Both then reuse the model. Every new `vflash denoise` process loads a fresh model.
+The receipt records the hash of every consumed file. Later starts only check identity and timestamps,
+so keep the assets in their final read-only location; moving them requires a new receipt.
+
+## 4. Generate a first video {#first-video}
+
+Write the prompt to a UTF-8 file and run one request. With a first-frame image (I2VA):
+
+```bash
+vflash generate --prepared-assets prepared-assets.json --prompt-file prompt.txt \
+  --first-frame first.png --width 928 --height 512 --duration 5 --seed 1234 \
+  --gpu 0 --output video.mp4 --trust-local-code
+```
+
+- Text only: prepare `t2va-turbo4-exact-sm89` and omit the image arguments.
+- Reference images: repeat `--reference` (refer to them as `<Picture 1>`, `<Picture 2>` … in the prompt).
+- Last frame or both ends: `--last-frame`, or `--first-frame` plus `--last-frame`.
+
+Progress is printed as JSON lines on stderr and the result on stdout. `--trust-local-code` allows the
+official decoder code from your verified local snapshot; review the [licenses](../reference/license)
+first. Each CLI call loads and releases the models, so the first run includes model loading.
+
+Fifteen-second requests, up to nine references and native HD up to 2720×1536 use the hybrid model from
+Python; the [generation guide](./complete-pipeline#extended-hybrid) shows how.
+
+## 5. Keep the models loaded {#reuse}
+
+For more than one request, keep one process alive:
+
+- **Python:** one [`H3Pipeline`](./python) serves requests serially and reuses loaded weights.
+- **Docker / HTTP:** the [native service](./docker) queues jobs and keeps its model resident.
+
+Measure the first (cold) request separately from repeated (warm) requests; see
+[speed, memory and quality](../reference/performance).
+
+## Native latents (advanced) {#native-latents}
+
+`vflash denoise` and the native HTTP service take a compiled conditioning bundle and write video and audio
+**latents** (`.safetensors`), not an MP4. Use them only if your application owns conditioning and decoding:
+
+```bash
+vflash denoise ref2va-turbo4-exact-sm89 --gpu 0 \
+  --artifact /path/to/artifact --schedule-overlay /path/to/schedule \
+  --auxiliary-tensor /path/to/auxiliary.safetensors \
+  --bundle /path/to/bundle --output-latents result.safetensors
+```
+
+Two RTX 3080s cooperate on one request with `--peer-gpu 1 --strategy sequence-head` (the default
+strategy when a peer is selected; `tensor` is the alternative). Results need not be bitwise identical to
+single-GPU execution. The [runtime assets](../reference/runtime-assets) page defines the four inputs.
 
 ## If a check fails {#troubleshooting}
 
 | Symptom | What to check |
 | --- | --- |
-| No GPU is listed | Run `nvidia-smi` and check driver access. In Docker, confirm that the selected GPU is visible in the container. |
-| The profile does not match the GPU | Select the profile for the device and memory capacity shown by `doctor`. |
-| Runtime assets are missing or incompatible | Check all four inputs and their model, adapter, schedule, and hardware versions. See [runtime assets](../reference/runtime-assets). |
-| The 3080 process runs out of host memory | Free system memory or reduce the number of workers. Start with 64 GiB or more of available RAM per worker for the tested workload; check capacity for larger inputs. |
+| No GPU listed | `nvidia-smi`; in Docker, that the device is exposed to the container. |
+| Profile does not match | Choose the profile for the compute capability and memory `doctor` reports; renaming a profile never converts assets. |
+| Assets rejected | Re-run `prepare-pipeline` on the final, unchanged files. |
+| Request rejected before loading | Canvas, duration or input count is outside the [modes and limits](./complete-pipeline#modes-and-limits). |
+| Out of host memory | Block-ring and SM86 workers keep weights in RAM: allow at least 64 GiB available per worker. |
+
+More cases are in [troubleshooting](./troubleshooting).

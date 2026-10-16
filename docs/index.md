@@ -1,8 +1,8 @@
 ---
 layout: home
-title: Vflash — native H3 inference
+title: Vflash — native H3 video generation
 titleTemplate: false
-description: A native MiniMax H3 inference engine with explicit GPU profiles for RTX 3080/4090, H100 and RTX PRO 6000 Blackwell, with LightX2V Turbo LoRAs.
+description: Native MiniMax H3 video generation from text, images or keyframes — 5–15 s, native 4 MP, optional six-step audio refinement — on RTX 4090 48 GB, RTX PRO 6000 Blackwell, H100 and RTX 3080 pairs.
 ---
 
 <HomePage />

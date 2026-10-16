@@ -52,7 +52,7 @@ SM90/SM120 上的原始 v0.1 混合路径请准备至少 128 GB 主机内存并�
 命令行用 `--weight-residency block-ring`，或使用 [Python 会话选项](./python#memory)。按实测的 928×512、四步原生任务，**每个 worker 至少预留
 64 GiB 可用系统内存**。完整流水线还持有编码器和官方 VAE：集成检查使用 240 GiB 主机内存上限，一条代表性的三图 SM86 请求主机 RSS 达
 114.67 GiB。这些是测试预算而非最低要求；更大输入和并发 worker 需各自测量。双 SM86 的编码与解码在主卡上进行，两卡共同去噪
-（[双卡设置](./getting-started#parallel)、[测量范围](../reference/benchmarks#sm86-parallel)）。
+（[双卡设置](./getting-started#native-latents)、[测量范围](../reference/benchmarks#sm86-parallel)）。
 
 <a id="sm120-resident"></a>
 

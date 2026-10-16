@@ -1,8 +1,47 @@
 # Benchmark results
 
-Each result belongs to its stated software version, hardware and workload. These published summaries preserve their original scope for reproduction; they are not a ranking of the current release. See [profiles and hardware](../guide/profiles) for current support and [performance and quality](./performance) for measurement guidance.
+Every number below belongs to its stated version, GPU and request. They are complete-generation times for
+one request unless noted, measured to compare configurations, not guarantees for other inputs. See
+[choose hardware](../guide/profiles) for support and [speed, memory and quality](./performance) for how to
+measure your own.
 
-## Native 544p-trained keyframes · bounded screen {#native544}
+## Current measurements (0.12–0.15) {#current}
+
+### Complete video generation {#current-generation}
+
+| GPU | Execution | Request | Time | Version |
+| --- | --- | --- | ---: | --- |
+| RTX PRO 6000 Blackwell 96 GiB | FP8 resident trunk, Veda 44/6, face + six-step audio repair | 1920×1088 / 5 s | 163 s | 0.15 |
+| RTX PRO 6000 Blackwell 96 GiB | same | 2720×1536 / 5 s | 261 s | 0.15 |
+| RTX PRO 6000 Blackwell 96 GiB | same | 1920×1088 / 10 s | 245 s | 0.15 |
+| RTX 4090 48 GiB | BF16 hybrid, Veda 44/6, block ring | 2720×1536 / 5 s | 658.9–672.0 s | 0.14 |
+| RTX 4090 48 GiB | same | 1536×2720 / 5 s | 669.6 s | 0.14 |
+| RTX 4090 48 GiB | same | 2720×1152 / 5 s | 462.5 s | 0.14 |
+| RTX PRO 6000 Server | BF16 hybrid, block ring / resident | 1536×864 / 15 s | 256.1 / 245.3 s | earlier |
+| H100 SXM 80 GB | BF16 hybrid, resident | 1536×864 / 15 s | 227.3 s | earlier |
+| H100 NVL | block ring | 2048² / 5 s | 321.6 s | earlier |
+| RTX 5090 32 GB (600 W) | block ring, expandable segments | 2048² / 5 s | 451.0 s | earlier |
+
+The 0.15 PRO 6000 runs peaked at 42.1 GiB of device memory across all three requests. Times exclude model
+loading; on a freshly started PRO 6000 instance, provider start plus FP8 resident loading to a ready worker took
+75–76 s in four starts.
+
+### Six-step audio refinement {#current-audio}
+
+| GPU | Request | Added audio time | Version |
+| --- | --- | ---: | --- |
+| RTX 4090 48 GiB, BF16 two-slot ring | 1024² / 5 s | 55.12 s | 0.12 |
+| RTX 4090 48 GiB, BF16 two-slot ring | 512² / 5 s (with application face repair) | 33.98 s | 0.12 |
+| RTX 4090 48 GiB, hidden-context reuse | 512² / 5 s (two cases) | about 34% less audio time | 0.13 |
+
+Audio refinement leaves every video frame unchanged. Listening acceptance covers only the cases named in the
+[release notes](./releases).
+
+## Earlier measurements {#earlier}
+
+The sections below preserve earlier results in their original scope for reproduction.
+
+### Native 544p-trained keyframes · bounded screen {#native544}
 
 Core `ce23c10`, with application experiment source `3648270f`, completed a same-device
 comparison on one RTX 4090 48 GB. Each arm used BF16 block-ring execution, fresh prompt/image
@@ -42,7 +81,7 @@ recompilation. Whole-video review retained the transition from a grounded animat
 to flight, with evolving appearance between the distinct endpoint designs. This is one
 longer execution/visual observation, not a matched quality or speed comparison.
 
-## Exact H3 text-encoder prefix {#encoder-prefix}
+### Exact H3 text-encoder prefix {#encoder-prefix}
 
 Pinned [Diffusers H3 encoding](https://github.com/huggingface/diffusers/blob/d035dcd7cc7c88e0a154609b62887d50bba9fdc2/src/diffusers/modular_pipelines/minimax_h3/encoders.py)
 reads Qwen3-VL `hidden_states[50]`, already bypassing the vocabulary head. Vflash now retains
@@ -82,7 +121,7 @@ whole video. Preloading, queueing and network delivery are outside these call ti
 itself took 79.601 / 74.667 / 72.101 seconds, without establishing a cold-start speedup. The
 implementation does not claim to repair pre-existing semantic or visual defects.
 
-## 4090 FFN fusion · promoted in 0.2.2 {#sm89-ffn}
+### 4090 FFN fusion · promoted in 0.2.2 {#sm89-ffn}
 
 The implementation promoted in 0.2.2 was measured against the 0.1.0a6 native runtime on the same RTX 4090 48 GB at its default 450 W limit. The fixed workload used BF16 Ref4 v0.1 (rank 128, alpha 8, scale 0.0625), 928 × 512, 124 model frames, 20,828 packed tokens and four evaluations through all 50 layers. Both implementations used block streaming, the same conditioning bundle, cuBLAS GEMMs, Torch Flash attention, PyTorch 2.11.0+cu130 and Triton 3.6.0. Only FFN adapter merge plus SiLU changed. Encoding, VAE decoding, MP4 export and model initialization are outside this native request boundary.
 
@@ -93,9 +132,9 @@ The implementation promoted in 0.2.2 was measured against the 0.1.0a6 native run
 
 The median reduction is **0.464 s / 1.08%**; the GPU allocation reduction is **597,180,416 B**. Interleaved requests bracketed the candidate with original-implementation runs; anchor drift was 0.204%, temperature reached 75°C and thermal counters did not grow. All final FP32 video/audio latents matched exactly. This is a target-hardware measurement of one fixed native workload, not a broad speed or quality guarantee.
 
-Complete-pipeline integration was then checked with a different packed length, 18,922 tokens, on the 0.2.1 pipeline using the same kernel. A three-reference original/fused/original sequence preserved conditioning, final latents and every decoded video frame, and cancellation released owned storage. In that case denoising allocation fell from 8,577,681,920 to 8,035,150,336 B; the maximum observed across pipeline stages stayed at 9,945,532,928 B. The runs had different first-use caches and only one sample per arm, so their total times do not establish an end-to-end speed ratio. Host RSS peaked at 114.38 GiB. The [0.2.2 release notes](./releases#v0-2-2) describe the supported dispatch and remaining audio limits.
+Complete-pipeline integration was then checked with a different packed length, 18,922 tokens, on the 0.2.1 pipeline using the same kernel. A three-reference original/fused/original sequence preserved conditioning, final latents and every decoded video frame, and cancellation released owned storage. In that case denoising allocation fell from 8,577,681,920 to 8,035,150,336 B; the maximum observed across pipeline stages stayed at 9,945,532,928 B. The runs had different first-use caches and only one sample per arm, so their total times do not establish an end-to-end speed ratio. Host RSS peaked at 114.38 GiB. The [0.2.2 release notes](./releases#earlier) describe the supported dispatch and remaining audio limits.
 
-## Two 3080s · a3 {#sm86-parallel}
+### Two 3080s · a3 {#sm86-parallel}
 
 The comparison below was measured on the **a3** runtime, before a4 introduced segmented pinned storage. Its original timings and memory figures are retained as historical evidence, not a benchmark of every later release. The a5 loader and lifecycle changes do not update this ranking.
 
@@ -116,7 +155,7 @@ These measurements stop at the exported latent file. Prompt/reference encoding, 
 
 Both parallel strategies completed full trajectories and a paired decoded-video/audio smoke. They are not bitwise equal to single-GPU execution. The pipelined head exchange itself matched the unpipelined sequence/head trajectory bitwise, but the partitioning changes GEMM shapes and standard tensor parallelism adds reduction boundaries. One decoded example is not cross-case quality qualification; no same-quality or general prompt-to-video speed claim is made.
 
-## 4090 host allocation · a4 {#sm89-host-memory}
+### 4090 host allocation · a4 {#sm89-host-memory}
 
 One Ref2VA check on a single **RTX 4090 48 GB / SM89** used three reference images, 928 × 512, and 124 model frames at 24 fps. It compared the 0.1.0a3 allocator with the allocator shipped in 0.1.0a4, using PyTorch 2.11.0+cu130. It kept the fixed BF16 Ref Turbo4 v0.1 configuration: 4 NFE, video/audio shifts 12/3, LoRA strength 1 and alpha 8. Active pinned weight storage fell from about **58.009 GiB to 40 GiB**. With identical inputs, final video and audio latents matched the previous allocator bit for bit. Warm native denoising took **41.607 s before and 41.641 s after**: the measured benefit is lower host memory use with comparable inference time. The 40 GiB figure covers pinned weight storage; the process still needs additional RAM.
 

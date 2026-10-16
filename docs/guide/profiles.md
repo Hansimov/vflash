@@ -60,7 +60,7 @@ measured 928×512, four-step native workload allow **at least 64 GiB of availabl
 Complete pipelines also own encoders and official VAEs: their integration checks used a 240 GiB host limit, and
 a representative three-reference SM86 request reached 114.67 GiB host RSS. These are tested budgets, not minima;
 larger inputs and concurrent workers need their own checks. Paired SM86 encoding and decoding use the primary GPU
-while both denoise ([dual-GPU setup](./getting-started#parallel), [measurement scope](../reference/benchmarks#sm86-parallel)).
+while both denoise ([dual-GPU setup](./getting-started#native-latents), [measurement scope](../reference/benchmarks#sm86-parallel)).
 
 <a id="sm120-resident"></a>
 

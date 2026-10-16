@@ -7,40 +7,52 @@ if (!version) throw new Error('Missing package version for documentation')
 
 const sidebar = (zh = false) => {
   const prefix = zh ? '/zh' : ''
+  const item = (en: string, cn: string, path: string) => ({ text: zh ? cn : en, link: `${prefix}${path}` })
   return [
     {
       text: zh ? '开始使用' : 'Start here',
       items: [
-        { text: zh ? '开始使用' : 'Get started', link: `${prefix}/guide/getting-started` },
-        { text: zh ? '配置与硬件' : 'Profiles and hardware', link: `${prefix}/guide/profiles` },
-        { text: zh ? '准备运行资源' : 'Prepare runtime assets', link: `${prefix}/reference/runtime-assets` },
+        item('Get started', '开始使用', '/guide/getting-started'),
+        item('Choose hardware', '选择硬件与配置', '/guide/profiles'),
+        item('Prepare runtime assets', '准备运行资源', '/reference/runtime-assets'),
+        item('Compile official weights', '编译官方权重', '/guide/compile-weights'),
       ],
     },
     {
-      text: zh ? '接入应用' : 'Build with Vflash',
+      text: zh ? '生成视频' : 'Generate',
       items: [
-        { text: zh ? 'Docker 与 HTTP API' : 'Docker and HTTP API', link: `${prefix}/guide/docker` },
-        { text: zh ? 'Python 集成' : 'Python integration', link: `${prefix}/guide/python` },
-        { text: zh ? '生成视频' : 'Generate a video', link: `${prefix}/guide/complete-pipeline` },
-        { text: zh ? 'VDN8 社区后端' : 'VDN8 community backend', link: `${prefix}/guide/community-vdn` },
-        { text: zh ? '按需画质增强' : 'Optional restoration', link: `${prefix}/guide/restoration` },
-        { text: zh ? 'Veda 稀疏注意力' : 'Veda sparse attention', link: `${prefix}/guide/veda` },
-        { text: zh ? '可选注意力 LoRA' : 'Optional attention LoRA', link: `${prefix}/reference/attention-lora` },
-        { text: zh ? '编译官方权重' : 'Compile official weights', link: `${prefix}/guide/compile-weights` },
-        { text: zh ? '测量性能与质量' : 'Measure speed and quality', link: `${prefix}/reference/performance` },
-        { text: zh ? 'Sol-Engine 对齐' : 'Sol-Engine alignment', link: `${prefix}/reference/sol-engine-alignment` },
-        { text: zh ? '故障排查' : 'Troubleshooting', link: `${prefix}/guide/troubleshooting` },
-        { text: zh ? '参与开发' : 'Contributing', link: `${prefix}/guide/contributing` },
+        item('Generate a video', '生成视频', '/guide/complete-pipeline'),
+        item('Python integration', 'Python 集成', '/guide/python'),
+        item('Docker and HTTP API', 'Docker 与 HTTP API', '/guide/docker'),
+      ],
+    },
+    {
+      text: zh ? '调优与运维' : 'Tune and operate',
+      items: [
+        item('Speed, memory and quality', '速度、显存与质量', '/reference/performance'),
+        item('Veda sparse attention', 'Veda 稀疏注意力', '/guide/veda'),
+        item('Troubleshooting', '故障排查', '/guide/troubleshooting'),
+      ],
+    },
+    {
+      text: zh ? '可选与实验功能' : 'Optional and experimental',
+      collapsed: true,
+      items: [
+        item('Attention LoRA', '注意力 LoRA', '/reference/attention-lora'),
+        item('Video restoration', '画质增强', '/guide/restoration'),
+        item('VDN8 community backend', 'VDN8 社区后端', '/guide/community-vdn'),
+        item('Sol-Engine alignment', 'Sol-Engine 对齐', '/reference/sol-engine-alignment'),
       ],
     },
     {
       text: zh ? '参考' : 'Reference',
       items: [
-        { text: zh ? '完整链路模型配置' : 'Complete model profiles', link: `${prefix}/reference/pipeline-profiles` },
-        { text: zh ? '实现方式' : 'How it works', link: `${prefix}/reference/architecture` },
-        { text: zh ? '实测数据' : 'Benchmark results', link: `${prefix}/reference/benchmarks` },
-        { text: zh ? '版本更新' : 'Release notes', link: `${prefix}/reference/releases` },
-        { text: zh ? '许可证与致谢' : 'License and acknowledgements', link: `${prefix}/reference/license` },
+        item('Model profiles', '模型配置', '/reference/pipeline-profiles'),
+        item('How it works', '实现方式', '/reference/architecture'),
+        item('Benchmark results', '实测数据', '/reference/benchmarks'),
+        item('Release notes', '版本更新', '/reference/releases'),
+        item('Contributing', '参与开发', '/guide/contributing'),
+        item('License and acknowledgements', '许可证与致谢', '/reference/license'),
       ],
     },
   ]
@@ -49,7 +61,7 @@ const sidebar = (zh = false) => {
 export default defineConfig({
   base: '/vflash/',
   title: 'Vflash',
-  description: 'Native MiniMax H3 inference with explicit GPU profiles for RTX 3080/4090, H100 and RTX PRO 6000 Blackwell.',
+  description: 'Native MiniMax H3 video generation: text, image and keyframe modes up to 15 s and native 4 MP with six-step audio refinement, on RTX 4090 48 GB, RTX PRO 6000 Blackwell, H100 and RTX 3080 pairs.',
   cleanUrls: true,
   appearance: true,
   sitemap: { hostname: 'https://hansimov.github.io/vflash/' },
@@ -65,7 +77,8 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: 'Get started', link: '/guide/getting-started' },
-          { text: 'Guides', link: '/guide/docker', activeMatch: '/guide/(docker|python)' },
+          { text: 'Generate', link: '/guide/complete-pipeline', activeMatch: '/guide/(complete-pipeline|docker|python)' },
+          { text: 'Hardware', link: '/guide/profiles' },
           { text: version, link: '/reference/releases' },
         ],
         sidebar: sidebar(),
@@ -78,7 +91,7 @@ export default defineConfig({
     zh: {
       label: '简体中文',
       lang: 'zh-CN',
-      description: '面向 RTX 3080/4090、H100 与 RTX PRO 6000 Blackwell 显式配置的原生 MiniMax H3 推理引擎。',
+      description: '原生 MiniMax H3 视频生成：文字、图像与关键帧模式，最长 15 秒、原生 4MP，可选六步音频修复；支持 RTX 4090 48GB、RTX PRO 6000 Blackwell、H100 与双 RTX 3080。',
       markdown: {
         container: {
           infoLabel: '说明', noteLabel: '备注', tipLabel: '提示', warningLabel: '注意',
@@ -90,7 +103,8 @@ export default defineConfig({
         outline: { level: [2, 3], label: '本页内容' },
         nav: [
           { text: '开始使用', link: '/zh/guide/getting-started' },
-          { text: '接入指南', link: '/zh/guide/docker', activeMatch: '/zh/guide/(docker|python)' },
+          { text: '生成视频', link: '/zh/guide/complete-pipeline', activeMatch: '/zh/guide/(complete-pipeline|docker|python)' },
+          { text: '硬件', link: '/zh/guide/profiles' },
           { text: version, link: '/zh/reference/releases' },
         ],
         sidebar: sidebar(true),
