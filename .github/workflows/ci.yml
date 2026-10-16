@@ -2,6 +2,9 @@ name: CI
 
 on:
   push:
+    # A release tag points to an already tested branch commit. Avoid repeating
+    # tensor dependency installation and the full CPU matrix for the same SHA.
+    branches: ["**"]
   pull_request:
 
 permissions:
