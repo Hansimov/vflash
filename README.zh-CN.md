@@ -4,10 +4,10 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
-**0.11.0：可选音频修复与独立 FP8 加载器。** 显式六步音频补采保持已完成的视频与全部时间位置，
-将空间条件缩减至约0.5MP。原生/文本FP8工厂及有界按行执行通过独立 Python 接口提供。
-两组高清场景复现已认可的集成结果，两组人脸/音频联合场景保持最佳人脸对照的全部画面。
-这是限定范围的集成验证，质量、容量与部署边界仍须明确；默认行为不变。
+**0.12.0：SM89双槽分块六步音频。** 显式音频补采现可使用24 GiB RTX4090的原生
+双槽BF16模型、Veda 44/6与约0.5MP空间条件。两组五秒对照（包含应用人脸修复）均保持
+120帧解码画面完全一致。本次扩展执行能力，不声称达到15%附加耗时或普遍改善音质。
+常驻FP8接口与既有默认行为保持。
 详见[完整流水线](https://hansimov.github.io/vflash/zh/guide/complete-pipeline)。
 
 Vflash提供两类入口：
@@ -31,7 +31,7 @@ Vflash提供两类入口：
 需要 Python 3.11 或更新版本。基础安装不会下载模型权重或 PyTorch。
 
 ```bash
-git clone --branch v0.11.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.12.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate

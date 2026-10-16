@@ -1,5 +1,18 @@
 # Release notes
 
+## 0.12.0
+
+Adds opt-in six-step audio refinement to the native two-slot BF16 SM89 weight ring
+with Veda 44/6 and approximately 0.5 MP spatial context. All host modulation tables,
+device copy plans, temporary Turbo-residual removal and attention bindings restore
+on success or failure. Existing resident execution and defaults stay unchanged.
+
+Two five-second RTX4090 pairs (1024² audio-only and 512² with application face repair)
+kept all 120 decoded frames. The audio passes took 55.12/33.98 seconds; initialization,
+cold/warm scope and quality limits are detailed in the complete-pipeline guide.
+No larger/longer SM89 audio workload, 15% overhead target or universal sound-quality
+improvement is established. Existing geometry and capacity limits remain unchanged.
+
 ## 0.11.0
 
 Adds optional six-step audio-only refinement with a roughly 0.5 MP spatial context,

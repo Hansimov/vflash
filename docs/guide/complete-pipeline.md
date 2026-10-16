@@ -655,8 +655,7 @@ result = pipeline.generate(request, output_path, audio_refinement=refinement)
 ```
 
 The explicit Python option requires hybrid weights, one device, Veda 44/6,
-one same-canvas first image, generated audio, and no denoise profiling. Published
-0.11.0 supports resident weights with `veda-triton`. Source main additionally
+one same-canvas first image, generated audio, and no denoise profiling. 0.11.0 introduced resident weights with `veda-triton`. Version 0.12.0 additionally
 supports the native two-slot BF16 `block-ring` with `veda-sm89`. Existing profile
 and capacity limits still apply. It rejects silent delivery, video-only output,
 other reference modes, other residency/backend pairs, and simultaneous native repaint.
@@ -690,7 +689,7 @@ admission. The public resident profile envelope is unchanged; numerical factorie
 and row tiling alone do not authorize larger requests.
 
 
-### SM89 block-ring audio (source main)
+### SM89 block-ring audio (0.12.0)
 
 The streamed pass replaces all 50 host modulation tables and the two device-slot
 copy plans, disables Turbo residuals on both sides only for audio refinement,

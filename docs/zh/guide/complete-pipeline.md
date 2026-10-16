@@ -502,7 +502,7 @@ result = pipeline.generate(request, output_path, audio_refinement=refinement)
 ```
 
 该 Python 显式选项要求 hybrid 权重、单卡、Veda 44/6、同画布单首帧、生成音频且关闭去噪分析。
-已发布的 0.11.0 支持 `resident` 权重与 `veda-triton`；源码主线另支持原生双槽 BF16
+0.11.0引入 `resident` 权重与 `veda-triton`；0.12.0另支持原生双槽 BF16
 `block-ring` 与 `veda-sm89`。原 profile 和容量限制仍适用；不支持静音交付、纯视频、
 其他参考模式、其他常驻/注意力组合或同时原生重绘。
 低于空间预算的输入保留完整条件；`context_pixels=None` 显式选择完整条件六步对照。
@@ -525,7 +525,7 @@ result = pipeline.generate(request, output_path, audio_refinement=refinement)
 数值加载器和按行分块本身不授权更大的请求。
 
 
-### SM89 分块音频（源码主线）
+### SM89 分块音频（0.12.0）
 
 音频补采临时替换全部50层CPU调制表和两个GPU槽的拷贝计划，同时只在音频阶段
 关闭两端Turbo残差，并在成功/失败后恢复原绑定。降低空间条件时同步切换两个槽的

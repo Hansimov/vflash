@@ -4,13 +4,12 @@ Native **MiniMax H3 inference** with explicit GPU profiles. Vflash uses PyTorch 
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
-**0.11.0: optional audio refinement and owned FP8 loaders.** An explicit
-six-step audio pass keeps the completed video and all temporal positions while
-reducing spatial context to about 0.5 MP. Native/text FP8 factories and bounded
-rowwise execution now have owned Python interfaces. Two high-resolution cases
-reproduced the accepted integration outputs, and two combined face/audio cases
-kept every frame of their face-only controls. These are scoped integration checks;
-quality, capacity and deployment limits remain explicit. Defaults are unchanged.
+**0.12.0: six-step audio on the SM89 weight ring.** The explicit audio pass now
+supports a native two-slot BF16 trunk on a 24 GiB RTX 4090 with Veda 44/6 and
+approximately 0.5 MP spatial context. Two five-second pairs, including application
+face repair, kept all 120 decoded frames. This extends execution support; it does
+not establish a 15% overhead target or universal sound-quality improvement.
+Resident FP8 interfaces and existing defaults remain available.
 See the [complete-pipeline guide](https://hansimov.github.io/vflash/guide/complete-pipeline).
 
 Vflash provides two interfaces:
@@ -39,7 +38,7 @@ face-restoration workflow. Existing model, precision and attention defaults rema
 Python 3.11 or newer is required. The base install does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.11.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.12.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
