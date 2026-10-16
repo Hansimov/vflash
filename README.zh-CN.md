@@ -4,6 +4,10 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
+**0.15.0：96 GiB Blackwell常驻4MP。** 单张SM120常驻I2VA改用原生高清像素帧预算，不再固定1536×864：
+RTX PRO 6000以FP8主干及人脸、六步音频修复完成1920×1088五秒163秒、2720×1536五秒261秒、
+1920×1088十秒245秒，显存峰值42.1 GiB。见[常驻](https://hansimov.github.io/vflash/zh/guide/profiles#h100-resident)。
+
 **0.14.0：真4MP原生高清。** 图像条件原生高清保持2048²像素上限，但最长边放宽到2720，
 五秒请求可达2720×1536（16:9）、1536×2720（9:16）或2368×1760（4:3）。五条RTX4090完整请求
 画面连贯；联合像素帧预算不变。见[画布限制](https://hansimov.github.io/vflash/zh/guide/complete-pipeline#extended-hybrid)。
@@ -38,7 +42,7 @@ Vflash提供两类入口：
 需要 Python 3.11 或更新版本。基础安装不会下载模型权重或 PyTorch。
 
 ```bash
-git clone --branch v0.14.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.15.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate

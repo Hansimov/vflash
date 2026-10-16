@@ -1,11 +1,11 @@
 {
   "schema_version": 2,
-  "version": "0.14.0",
+  "version": "0.15.0",
   "platform": "linux/amd64",
-  "implementation_revision": "42d49c54530b9c3fa43319d7057a622c8a80116f",
-  "wheel_sha256": "0a0b04e3c24e106cd124e8bba6d9f4a96c682241d159475540cdbe402ccd9505",
-  "build_recipe": "https://github.com/Hansimov/vflash/blob/42d49c54530b9c3fa43319d7057a622c8a80116f/docker/release-from-wheel.Dockerfile",
-  "previous_inventory": "https://github.com/Hansimov/vflash/blob/v0.13.0/docker/images.json",
+  "implementation_revision": "55bf537bf9b9836bfb3855e2f598c80f2ea1ae7c",
+  "wheel_sha256": "57f41ce38ec77ad801cade7ede88991a2be3042d34ff863bd1c3e09291271237",
+  "build_recipe": "https://github.com/Hansimov/vflash/blob/55bf537bf9b9836bfb3855e2f598c80f2ea1ae7c/docker/release-from-wheel.Dockerfile",
+  "previous_inventory": "https://github.com/Hansimov/vflash/blob/v0.14.0/docker/images.json",
   "runtime_dependencies": {
     "torch": "2.11.0+cu130",
     "torchvision": "0.26.0+cu130",
@@ -17,22 +17,22 @@
     "sol_source_revision": "d0c0a4685ab5dc2336d18b7213d85f13def92418"
   },
   "qualification": {
-    "package": "Clean public wheel from the tagged source, both unprivileged image imports reporting 0.14.0 and the 2720-pixel native-HD bound. Offline layers reuse the same immutable dependency images as 0.13.0, with no model payloads.",
-    "engine": "Five complete 120-frame I2VA requests on one RTX 4090 (48 GiB reported memory) with BF16 hybrid Veda 44/6: 2720x1536 (two scenes), 1536x2720, 2368x1760 and 2720x1152, coherent without tiling or repeated structure. The last three used the unmodified release contract; numerical paths are unchanged from 0.13.0.",
-    "limits": "Visual canvas qualification only, not sound quality or other GPUs. The 2048-squared area and joint pixel-frame budget are unchanged, so 4 MP canvases are five-second requests. Application capacity and lane declarations are separate."
+    "package": "Clean public wheel from the tagged source; both unprivileged image imports report 0.15.0, the 2048x2048x124 SM120 resident budget and the 2720-pixel native-HD bound. Offline layers reuse the same immutable dependency images as 0.14.0, with no model payloads.",
+    "engine": "Three complete I2VA requests on one RTX PRO 6000 Blackwell (96 GiB) with the resident FP8 trunk, Veda 44/6, two-step face and six-step audio repair: 1920x1088/5 s (163 s), 2720x1536/5 s (261 s) and 1920x1088/10 s (245 s), 42.1 GiB peak device memory, coherent start/middle/end frames and a native 4 MP crop without tiling. The GPU runs used the pre-release build of implementation commit a367654, which differs from this release only in its version string. Numerical paths are unchanged from 0.14.0.",
+    "limits": "Capacity and visual qualification on SM120 only, not sound quality. SM90 keeps its 1536x864 resident envelope; block ring remains the default. Application capacity and lane declarations are separate."
   },
   "images": {
     "native": {
-      "name": "hansimov/vflash:0.14.0",
-      "digest": "sha256:c67a490e88ed7d7645a88894f15f580a866fc51fbd78085b0c8f50ca7c737399",
+      "name": "hansimov/vflash:0.15.0",
+      "digest": "sha256:5daae13013bbeea9b76394089e1fd38b4983bdb42b301416aac4fafe9e412f5a",
       "target": "runtime",
       "interface": "Compiled conditioning bundles to audio/video latents through the native HTTP API.",
       "base_image": "hansimov/vflash@sha256:e7f0482bcd47564d2bba16e537644f81639e5f554bab7670945836f86c3f6e30",
       "recipe_target": "inherited from immutable base"
     },
     "pipeline": {
-      "name": "hansimov/vflash:0.14.0-pipeline",
-      "digest": "sha256:80c12d9781e2ccf52b01f014af54358b1b483b0421dba47bac7d3bd448bd4182",
+      "name": "hansimov/vflash:0.15.0-pipeline",
+      "digest": "sha256:5e68efff887e28ad3702514645d0fe6a3642408a76a1f11bf7e016579e6940d6",
       "target": "pipeline",
       "interface": "Complete MP4 generation using explicitly mounted prepared model assets; supported modes and limits follow the complete-pipeline guide.",
       "base_image": "hansimov/vflash@sha256:52d7413b9ac5d0a13e9639c72240f62fdb8ba94f9463ce4730ef239c6452c457",

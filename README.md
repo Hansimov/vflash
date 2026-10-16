@@ -4,6 +4,12 @@ Native **MiniMax H3 inference** with explicit GPU profiles. Vflash uses PyTorch 
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
+**0.15.0: resident 4 MP on 96 GiB Blackwell.** Resident I2VA on one SM120 GPU now follows
+the native-HD pixel-frame budget instead of a fixed 1536×864 canvas: an RTX PRO 6000 with the
+FP8 trunk, face and six-step audio repair completed 1920×1088/5 s in 163 s, 2720×1536/5 s in
+261 s and 1920×1088/10 s in 245 s at a 42.1 GiB peak. See
+[residency](https://hansimov.github.io/vflash/guide/profiles#h100-resident).
+
 **0.14.0: true 4 MP native HD.** Image-conditioned native HD keeps the 2048² pixel
 cap but accepts a 2720-pixel long edge, so five-second requests reach 2720×1536 (16:9),
 1536×2720 (9:16) or 2368×1760 (4:3). Five complete RTX 4090 requests across these shapes
@@ -48,7 +54,7 @@ face-restoration workflow. Existing model, precision and attention defaults rema
 Python 3.11 or newer is required. The base install does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.14.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.15.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
