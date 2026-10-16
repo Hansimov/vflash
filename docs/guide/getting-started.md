@@ -13,7 +13,7 @@ The engine does not choose another model, device or precision to make an oversiz
 Use Python 3.11 or newer. The base installation is lightweight and does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.12.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.13.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
