@@ -69,6 +69,45 @@ def test_resident_capacity_uses_real_keyframe_contract():
         validate_resident_request("block-ring", changed)
 
 
+def test_sm120_residency_is_budgeted_by_pixel_frames():
+    from dataclasses import replace
+    from pathlib import Path
+
+    from vflash.pipeline.contracts import VideoRequest
+
+    sm120 = "i2va-turbo4-v01-544-exact-sm120"
+    request = VideoRequest(
+        prompt="A clock moves.",
+        first_frame=Path("first.png"),
+        width=1536,
+        height=864,
+        duration_seconds=15,
+    )
+    validate_resident_request("resident", request, sm120)
+    for width, height, seconds in (
+        (1920, 1088, 5),
+        (2720, 1536, 5),
+        (2048, 2048, 5),
+        (1920, 1088, 10),
+    ):
+        validate_resident_request(
+            "resident",
+            replace(request, width=width, height=height, duration_seconds=seconds),
+            sm120,
+        )
+    for width, height, seconds in ((2048, 2048, 10), (1920, 1088, 15)):
+        changed = replace(request, width=width, height=height, duration_seconds=seconds)
+        with pytest.raises(ContractError, match="pixel-frames"):
+            validate_resident_request("resident", changed, sm120)
+    # SM90 keeps its measured canvas envelope.
+    with pytest.raises(ContractError, match="1536x864 pixels"):
+        validate_resident_request(
+            "resident",
+            replace(request, width=1920, height=1088, duration_seconds=5),
+            "i2va-turbo4-v01-544-exact-sm90",
+        )
+
+
 @pytest.mark.parametrize(
     "dense_backend", ["torch-flash", "sageattention2", "cute-flash", "frost-flash", "fa3-flash"]
 )

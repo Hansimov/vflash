@@ -89,16 +89,32 @@ def validate_residency(plan: Any, choice: str, attention: str, hybrid: Any) -> s
     return choice
 
 
-def validate_resident_request(choice: str, request: Any) -> None:
+# Resident memory follows the denoised token count. SM90 keeps its measured canvas
+# envelope; 96 GiB SM120 is budgeted by canvas pixels x model frames, which admits
+# both 1536x864 for 15 s and a 4 MP canvas for 5 s within native-HD limits.
+RESIDENT_SM120_MAX_PIXEL_FRAMES = 2048 * 2048 * 124
+
+
+def validate_resident_request(choice: str, request: Any, profile_id: str | None = None) -> None:
     if choice != "resident":
         return
+    pixels = request.width * request.height
+    if (profile_id or "").endswith("-sm120"):
+        within = (
+            pixels <= 2048 * 2048
+            and pixels * request.model_frames <= RESIDENT_SM120_MAX_PIXEL_FRAMES
+        )
+        envelope = "at most 2048x2048x124 pixel-frames (4 MP for 5 s, 1536x864 for 15 s)"
+    else:
+        within = pixels <= 1536 * 864
+        envelope = "at most 1536x864 pixels"
     if (
         request.mode != "i2va"
-        or request.width * request.height > 1536 * 864
+        or not within
         or request.model_frames > 362
         or request.first_frame is None
     ):
         raise ContractError(
-            "resident I2VA supports one first frame, at most 1536x864 pixels and 15 seconds; "
+            f"resident I2VA supports one first frame, {envelope} and 15 seconds; "
             "use block-ring for other requests"
         )
