@@ -15,6 +15,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Select tensor checks for changed code
+        id: tensor-scope
+        shell: python
+        run: |
+          import json, os, re, subprocess
+          event = json.load(open(os.environ["GITHUB_EVENT_PATH"]))
+          base = event.get("before") if os.environ["GITHUB_EVENT_NAME"] == "push" else None
+          paths = None
+          if isinstance(base, str) and re.fullmatch(r"[0-9a-f]{40}", base):
+              result = subprocess.run(["git", "diff", "--name-only", base, "HEAD"],
+                                      capture_output=True, text=True)
+              if result.returncode == 0:
+                  paths = result.stdout.splitlines()
+          documentation = lambda p: (p.startswith("docs/") or p in {
+              "README.md", "README.zh-CN.md", "docker/README.md", "docker/README.zh-CN.md",
+              "docker/images.json"})
+          required = paths is None or not all(documentation(p) for p in paths)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write("required=" + str(required).lower() + "\n")
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -31,10 +52,12 @@ jobs:
       - run: pre-commit run --all-files
       - run: pytest
       - name: Install CPU tensor runtime
+        if: steps.tensor-scope.outputs.required == 'true'
         run: |
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.11.0
           python -m pip install "safetensors>=0.8.0rc0,<0.9" "accelerate==1.13.0"
       - name: Run CPU tensor regressions
+        if: steps.tensor-scope.outputs.required == 'true'
         env:
           CUDA_VISIBLE_DEVICES: ""
         run: pytest tests/test_fp8_loaders.py tests/test_tiled_block.py tests/test_scene_conditioning.py tests/test_audio_headroom.py tests/test_face_encoder.py tests/test_h3_refinement.py tests/test_h3_audio_refinement.py tests/test_h3_audio_hidden_cache.py tests/test_h3_audio_context_cache.py tests/test_h3_audio_pipeline.py tests/test_h3_veda_attention.py tests/test_clip_reuse.py tests/test_rgb_delivery.py tests/test_selective_decode.py
