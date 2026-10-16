@@ -709,3 +709,37 @@ target or a general audio-quality improvement. Machine transcription retained th
 seven requested words in the speech pair; listening and fine lip synchronization
 remain separate checks. Original audio and complete comparison media remain in
 the private integration evidence (source snapshot `d08abd6e`).
+
+
+### Opt-in hidden context reuse (0.13.0) {#audio-hidden-context}
+
+Set `reuse_hidden_context=True` on `AudioRefinementRequest` to reuse first-evaluation
+BF16 non-audio hidden states. All six audio evaluations remain; later steps rebuild
+context K/V and inject current audio projections, while processing only audio
+queries and feed-forward rows. This is approximate: later audio no longer updates
+the cached video/text states. It never changes the completed video latents.
+
+The cache belongs to one serial refinement scope, with hooks and buffers released
+on success or failure. Two physical weight slots are indexed by their current
+logical layer. Maximum cache allocation is 40 GiB and at least 12 GiB of free device
+memory is reserved; insufficient headroom fails before allocating the full cache.
+The option defaults to false. There is no CLI/HTTP cache switch or automatic capacity
+expansion. A cache request does not qualify other shapes or GPUs.
+
+Two independent 512×512, five-second I2VA comparisons on one RTX 4090 used the
+native BF16 ring, four main evaluations, six audio evaluations, Veda 44/6 and no
+face pass. Each cache used about 5.27 GiB. Audio time fell from 34.06/33.96 to
+22.57/22.55 seconds. Complete generation changed from 86.50 to 68.75 seconds for
+speech and 79.73 to 68.18 seconds for ambience; the first speech control was cold,
+while ambience reversed the order. All 120 decoded video frames matched in each
+pair. Both cache soundtracks were accepted relative to full six-step controls;
+this is limited listening evidence, not universal quality or exact synchronization.
+The private prototype source is `a71bebc0`; the promoted cache function has the same
+AST. Request-owned integration and failure restoration also have CPU coverage.
+
+Both tested canvases were already below the spatial context budget. Cache use with
+actual spatial thinning, larger canvases, longer durations, or resident FP8 remains
+unqualified on GPU. Ordinary uncached six-step refinement is separate: additional
+RTX 4090 integration completed 1248×832/10 seconds and 1536×1344/5 seconds, preserving
+240/120 video frames; audio took 108.39/57.00 seconds respectively. These results
+neither expand public profile admission nor establish a 15% added-time target.

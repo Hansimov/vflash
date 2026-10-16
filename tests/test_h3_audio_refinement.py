@@ -161,6 +161,10 @@ def test_request_rejects_unmatched_schedule_and_unqualified_budget():
     tables = tuple([torch.zeros(7, 9, 6, 2) for _ in range(50)] + [torch.zeros(7, 3, 2, 2)])
     request = AudioRefinementRequest(schedule, tables)
     assert request.steps == 6 and request.context_pixels == 500000
+    assert request.reuse_hidden_context is False
+    for bad in (1, "true", None):
+        with pytest.raises(ValueError, match="explicit boolean"):
+            AudioRefinementRequest(schedule, tables, reuse_hidden_context=bad)
     for bad in [True, 250000, 0]:
         with pytest.raises(ValueError, match=r"0\.5MP"):
             AudioRefinementRequest(schedule, tables, context_pixels=bad)

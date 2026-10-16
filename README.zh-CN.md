@@ -4,6 +4,11 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
+**0.13.0：显式音频隐藏上下文复用。** 自有六步音频接口可复用首次非音频隐藏状态，
+后续每步保持实时音频并重建K/V。两组512²/5秒RTX4090对照画面逐帧保持、试听获认可，
+音频阶段约少34%。这是默认关闭的近似选项，较大缓存场景未资格，见
+[音频指南](docs/zh/guide/complete-pipeline.md#audio-hidden-context)。
+
 **0.12.0：SM89双槽分块六步音频。** 显式音频补采现可使用24 GiB RTX4090的原生
 双槽BF16模型、Veda 44/6与约0.5MP空间条件。两组五秒对照（包含应用人脸修复）均保持
 120帧解码画面完全一致。本次扩展执行能力，不声称达到15%附加耗时或普遍改善音质。

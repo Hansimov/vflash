@@ -7,7 +7,7 @@ The original model weights are shared for this serial, request-owned scope.
 """
 
 import math
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from copy import copy
 from dataclasses import dataclass
 
@@ -194,17 +194,23 @@ class AudioRefinementRequest:
 
     Compiled tables and schedule must describe the same sigma-0.5 six-step pass.
     A None spatial budget explicitly retains the full video context for control.
+    Hidden reuse freezes first-evaluation non-audio states, with fresh audio and
+    rebuilt context K/V on each step. This is an explicit approximation, not an
+    exact cache; the request owns all hooks and releases them on every exit.
     Weights belong to the caller and are never downloaded or modified on disk.
     """
 
     schedule: object
     tables: tuple
     context_pixels: int | None = 500_000
+    reuse_hidden_context: bool = False
 
     def __post_init__(self):
         from .h3_native_scheduler import H3NativeSchedule
         from .h3_refinement_schedule import refinement_schedule
 
+        if type(self.reuse_hidden_context) is not bool:
+            raise ValueError("hidden context reuse must be an explicit boolean")
         expected = refinement_schedule(steps=6, denoise=0.5)
         if (
             not isinstance(self.schedule, H3NativeSchedule)
@@ -230,6 +236,7 @@ def _refine_full_audio(engine, request, *, step, noise):
 
     import torch
 
+    from .h3_audio_hidden_cache import frozen_video_hidden
     from .h3_refinement import quality_pass
 
     state = engine.latent_state
@@ -244,8 +251,20 @@ def _refine_full_audio(engine, request, *, step, noise):
         with quality_pass(engine, request.schedule, request.tables, mode="audio"):
             sigma = request.schedule.audio_sigmas[1]
             state.audio_latents.copy_((1 - sigma) * original_audio + sigma * noise)
-            for _ in range(request.steps):
-                step(engine, capture_packed_input=False)
+            cache_scope = (
+                frozen_video_hidden(engine)
+                if request.reuse_hidden_context
+                else nullcontext(None)
+            )
+            with cache_scope as cache:
+                for _ in range(request.steps):
+                    step(engine, capture_packed_input=False)
+                if cache is not None and (
+                    cache["build_block_calls"] != 50
+                    or cache["reuse_block_calls"] != 50 * (request.steps - 1)
+                    or cache["rebuilt_projection_rows"] != 250 * cache["sequence_length"]
+                ):
+                    raise ValueError("audio cache did not execute six complete evaluations")
             if state.device.type == "cuda":
                 torch.cuda.synchronize(state.device)
             if (
@@ -264,7 +283,7 @@ def _refine_full_audio(engine, request, *, step, noise):
         "video_latents_identical": True,
         "turbo_residuals_disabled": True,
         "new_matched_modulation": True,
-        "video_cache": False,
+        "video_cache": dict(cache) if cache is not None else False,
         "upstream_equivalent": False,
     }
 

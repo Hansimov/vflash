@@ -1,5 +1,14 @@
 # 版本更新
 
+## 0.13.0
+
+新增六步音频的显式、自有请求隐藏上下文复用：
+`AudioRefinementRequest(..., reuse_hidden_context=True)`保持六次音频评估和视频latent，
+近似复用首次非音频隐藏状态，默认仍完整重算。双槽按逻辑层持有缓存；常驻接口具有
+CPU覆盖。GPU试听/速度证据限两组512²/5秒RTX4090，音频阶段约少34%。显存边界、
+异常恢复和未测范围见[完整流水线](../guide/complete-pipeline.md#audio-hidden-context)。
+
+
 ## 0.12.0
 
 新增原生双槽BF16 SM89权重环的显式六步音频，保持Veda 44/6与约0.5MP空间条件。

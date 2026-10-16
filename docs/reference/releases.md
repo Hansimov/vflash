@@ -1,5 +1,17 @@
 # Release notes
 
+## 0.13.0
+
+Adds explicit request-owned hidden-context reuse for six-step audio refinement.
+`AudioRefinementRequest(..., reuse_hidden_context=True)` preserves the six audio
+steps and video latents, while approximating later non-audio hidden states with
+the first evaluation. The default remains full recomputation. Logical-layer
+ownership supports the two-slot ring and resident implementation; GPU listening
+and speed evidence is limited to two 512²/5s RTX 4090 cases, with roughly 34% less
+audio time. Memory bounds, failure restoration and qualification limits are
+specified in the [complete pipeline guide](../guide/complete-pipeline.md#audio-hidden-context).
+
+
 ## 0.12.0
 
 Adds opt-in six-step audio refinement to the native two-slot BF16 SM89 weight ring
