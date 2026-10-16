@@ -697,7 +697,7 @@ and restores the original bindings on success or failure. Reduced spatial contex
 rebinds the shared attention owner on both slots, retaining original temporal and
 rotary positions. This does not make the full trunk resident on a 24 GiB GPU.
 
-Two five-second single-RTX-4090 private integration pairs completed with the BF16
+Two five-second single-RTX-4090 (48 GiB reported memory) private integration pairs completed with the BF16
 ring and Veda 44/6. The 1024² audio-only pair and a 512² pair with unchanged native
 two-step face refinement each kept all 120 decoded video frames exactly. The added
 audio passes took 55.12 and 33.98 seconds. Complete requests were 132.98/180.81 and
@@ -726,7 +726,7 @@ memory is reserved; insufficient headroom fails before allocating the full cache
 The option defaults to false. There is no CLI/HTTP cache switch or automatic capacity
 expansion. A cache request does not qualify other shapes or GPUs.
 
-Two independent 512×512, five-second I2VA comparisons on one RTX 4090 used the
+Two independent 512×512, five-second I2VA comparisons on one RTX 4090 with 48 GiB reported memory used the
 native BF16 ring, four main evaluations, six audio evaluations, Veda 44/6 and no
 face pass. Each cache used about 5.27 GiB. Audio time fell from 34.06/33.96 to
 22.57/22.55 seconds. Complete generation changed from 86.50 to 68.75 seconds for
@@ -743,3 +743,10 @@ unqualified on GPU. Ordinary uncached six-step refinement is separate: additiona
 RTX 4090 integration completed 1248×832/10 seconds and 1536×1344/5 seconds, preserving
 240/120 video frames; audio took 108.39/57.00 seconds respectively. These results
 neither expand public profile admission nor establish a 15% added-time target.
+
+
+**Memory evidence correction:** the local RTX 4090 devices used for these audio
+measurements report 49,140 MiB (approximately 48 GiB), not the standard 24 GiB.
+Earlier application metadata and the 0.12 overview incorrectly said 24 GiB.
+Timings, cache byte counts and media/listening results are unchanged. Measured
+peak allocation alone does not qualify the same complete workflow on 24 GiB.

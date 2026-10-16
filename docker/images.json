@@ -18,8 +18,8 @@
   },
   "qualification": {
     "package": "Clean public wheel/sdist, both unprivileged image imports and visible source, optional hidden-context request, complete-pipeline dependencies and CLI verified. Offline layers reuse immutable 0.10.0 dependency images, with no model payloads.",
-    "engine": "The promoted cache function is AST-identical to the GPU-evaluated prototype. Two 512-square five-second RTX4090 BF16 weight-ring cases received listening acceptance against full six-step controls and retained all 120 video frames. Audio time reduced by about 34%. Owned integration and failure restoration passed focused CPU checks.",
-    "limits": "Approximate, explicit opt-in, disabled by default. GPU cache qualification does not include larger, spatially thinned or longer requests, resident FP8 or other GPUs. Public images have CPU checks, not a new GPU image matrix. Profile capacity and application deployment are separate."
+    "engine": "The promoted cache function is AST-identical to the GPU-evaluated prototype. Two 512-square five-second RTX4090 (48 GiB reported memory) BF16 weight-ring cases received listening acceptance against full six-step controls and retained all 120 video frames. Audio time reduced by about 34%. Owned integration and failure restoration passed focused CPU checks.",
+    "limits": "Approximate, explicit opt-in, disabled by default. GPU cache qualification does not include larger, spatially thinned or longer requests, resident FP8 or other GPUs. Public images have CPU checks, not a new GPU image matrix. Profile capacity and application deployment are separate. The local devices report 49,140 MiB; standard 24 GiB capacity is not established by these runs."
   },
   "images": {
     "native": {

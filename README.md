@@ -12,7 +12,7 @@ explicit approximation, disabled by default; larger cached workloads remain
 unqualified. See the [audio guide](docs/guide/complete-pipeline.md#audio-hidden-context).
 
 **0.12.0: six-step audio on the SM89 weight ring.** The explicit audio pass now
-supports a native two-slot BF16 trunk on a 24 GiB RTX 4090 with Veda 44/6 and
+supports a native two-slot BF16 trunk on an RTX 4090 with 48 GiB reported memory with Veda 44/6 and
 approximately 0.5 MP spatial context. Two five-second pairs, including application
 face repair, kept all 120 decoded frames. This extends execution support; it does
 not establish a 15% overhead target or universal sound-quality improvement.
