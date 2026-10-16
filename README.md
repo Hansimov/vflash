@@ -4,7 +4,7 @@ Native **MiniMax H3 inference** with explicit GPU profiles. Vflash uses PyTorch 
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
-**0.13.0: opt-in audio hidden-context reuse.** The owned six-step audio interface
+**0.14.0: opt-in audio hidden-context reuse.** The owned six-step audio interface
 can freeze first-evaluation non-audio hidden states, with current audio and rebuilt
 K/V on every later step. Two 512²/5s comparisons on a 48 GiB RTX 4090 retained every video frame
 and received listening acceptance, with about 34% less audio time. This is an
@@ -42,7 +42,7 @@ face-restoration workflow. Existing model, precision and attention defaults rema
 Python 3.11 or newer is required. The base install does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.13.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.14.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate

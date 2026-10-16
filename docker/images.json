@@ -1,11 +1,11 @@
 {
   "schema_version": 2,
-  "version": "0.13.0",
+  "version": "0.14.0",
   "platform": "linux/amd64",
-  "implementation_revision": "89d7d73e0fc13de72b495eb2a663e76e71fdbc9f",
-  "wheel_sha256": "de79e888cc377f8cffb3031c8b481c130fcb53908959ad1729277467360cab4f",
-  "build_recipe": "https://github.com/Hansimov/vflash/blob/89d7d73e0fc13de72b495eb2a663e76e71fdbc9f/docker/release-from-wheel.Dockerfile",
-  "previous_inventory": "https://github.com/Hansimov/vflash/blob/v0.12.0/docker/images.json",
+  "implementation_revision": "42d49c54530b9c3fa43319d7057a622c8a80116f",
+  "wheel_sha256": "0a0b04e3c24e106cd124e8bba6d9f4a96c682241d159475540cdbe402ccd9505",
+  "build_recipe": "https://github.com/Hansimov/vflash/blob/42d49c54530b9c3fa43319d7057a622c8a80116f/docker/release-from-wheel.Dockerfile",
+  "previous_inventory": "https://github.com/Hansimov/vflash/blob/v0.13.0/docker/images.json",
   "runtime_dependencies": {
     "torch": "2.11.0+cu130",
     "torchvision": "0.26.0+cu130",
@@ -17,27 +17,27 @@
     "sol_source_revision": "d0c0a4685ab5dc2336d18b7213d85f13def92418"
   },
   "qualification": {
-    "package": "Clean public wheel/sdist, both unprivileged image imports and visible source, optional hidden-context request, complete-pipeline dependencies and CLI verified. Offline layers reuse immutable 0.10.0 dependency images, with no model payloads.",
-    "engine": "The promoted cache function is AST-identical to the GPU-evaluated prototype. Two 512-square five-second RTX4090 (48 GiB reported memory) BF16 weight-ring cases received listening acceptance against full six-step controls and retained all 120 video frames. Audio time reduced by about 34%. Owned integration and failure restoration passed focused CPU checks.",
-    "limits": "Approximate, explicit opt-in, disabled by default. GPU cache qualification does not include larger, spatially thinned or longer requests, resident FP8 or other GPUs. Public images have CPU checks, not a new GPU image matrix. Profile capacity and application deployment are separate. The local devices report 49,140 MiB; standard 24 GiB capacity is not established by these runs."
+    "package": "Clean public wheel from the tagged source, both unprivileged image imports reporting 0.14.0 and the 2720-pixel native-HD bound. Offline layers reuse the same immutable dependency images as 0.13.0, with no model payloads.",
+    "engine": "Five complete 120-frame I2VA requests on one RTX 4090 (48 GiB reported memory) with BF16 hybrid Veda 44/6: 2720x1536 (two scenes), 1536x2720, 2368x1760 and 2720x1152, coherent without tiling or repeated structure. The last three used the unmodified release contract; numerical paths are unchanged from 0.13.0.",
+    "limits": "Visual canvas qualification only, not sound quality or other GPUs. The 2048-squared area and joint pixel-frame budget are unchanged, so 4 MP canvases are five-second requests. Application capacity and lane declarations are separate."
   },
   "images": {
     "native": {
-      "name": "hansimov/vflash:0.13.0",
-      "digest": "sha256:cd32280502897098a4d1cc4556677889a1741a82d6f8a58e89ce4ba7e5fc02bd",
+      "name": "hansimov/vflash:0.14.0",
+      "digest": "sha256:c67a490e88ed7d7645a88894f15f580a866fc51fbd78085b0c8f50ca7c737399",
       "target": "runtime",
       "interface": "Compiled conditioning bundles to audio/video latents through the native HTTP API.",
       "base_image": "hansimov/vflash@sha256:e7f0482bcd47564d2bba16e537644f81639e5f554bab7670945836f86c3f6e30",
       "recipe_target": "inherited from immutable base"
     },
     "pipeline": {
-      "name": "hansimov/vflash:0.13.0-pipeline",
-      "digest": "sha256:097dffb4c62c10f01887767016e33f47e27f9fe7c46adda10fa27215b4cbd786",
+      "name": "hansimov/vflash:0.14.0-pipeline",
+      "digest": "sha256:80c12d9781e2ccf52b01f014af54358b1b483b0421dba47bac7d3bd448bd4182",
       "target": "pipeline",
       "interface": "Complete MP4 generation using explicitly mounted prepared model assets; supported modes and limits follow the complete-pipeline guide.",
       "base_image": "hansimov/vflash@sha256:52d7413b9ac5d0a13e9639c72240f62fdb8ba94f9463ce4730ef239c6452c457",
       "recipe_target": "inherited from immutable base"
     }
   },
-  "algorithm_qualified_revision": "89d7d73e0fc13de72b495eb2a663e76e71fdbc9f"
+  "algorithm_qualified_revision": "42d49c54530b9c3fa43319d7057a622c8a80116f"
 }
