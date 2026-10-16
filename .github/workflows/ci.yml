@@ -30,8 +30,8 @@ jobs:
       - name: Install CPU tensor runtime
         run: |
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.11.0
-          python -m pip install "safetensors>=0.8.0rc0,<0.9"
+          python -m pip install "safetensors>=0.8.0rc0,<0.9" "accelerate==1.13.0"
       - name: Run CPU tensor regressions
         env:
           CUDA_VISIBLE_DEVICES: ""
-        run: pytest tests/test_audio_headroom.py tests/test_face_encoder.py tests/test_h3_refinement.py tests/test_h3_audio_refinement.py tests/test_h3_audio_pipeline.py tests/test_h3_veda_attention.py tests/test_clip_reuse.py tests/test_rgb_delivery.py tests/test_selective_decode.py
+        run: pytest tests/test_fp8_loaders.py tests/test_tiled_block.py tests/test_scene_conditioning.py tests/test_audio_headroom.py tests/test_face_encoder.py tests/test_h3_refinement.py tests/test_h3_audio_refinement.py tests/test_h3_audio_pipeline.py tests/test_h3_veda_attention.py tests/test_clip_reuse.py tests/test_rgb_delivery.py tests/test_selective_decode.py

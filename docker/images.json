@@ -1,11 +1,11 @@
 {
   "schema_version": 2,
-  "version": "0.10.0",
+  "version": "0.11.0",
   "platform": "linux/amd64",
-  "implementation_revision": "24b0938d1fd80d91a735ea96b6adfe983b8788cc",
-  "wheel_sha256": "caf380e47a3945b6993bdd26ae9f72a0ced604699820221515301d44b52f2838",
-  "build_recipe": "https://github.com/Hansimov/vflash/blob/24b0938d1fd80d91a735ea96b6adfe983b8788cc/docker/release-from-wheel.Dockerfile",
-  "previous_inventory": "https://github.com/Hansimov/vflash/blob/v0.9.0/docker/images.json",
+  "implementation_revision": "ad102780c0c4a586542a88960107dcfd0549df5a",
+  "wheel_sha256": "4bc73a0a85d1077f616df32dbcabeada72a154baa46c1e75210986da74a3bdf8",
+  "build_recipe": "https://github.com/Hansimov/vflash/blob/ad102780c0c4a586542a88960107dcfd0549df5a/docker/release-from-wheel.Dockerfile",
+  "previous_inventory": "https://github.com/Hansimov/vflash/blob/v0.10.0/docker/images.json",
   "runtime_dependencies": {
     "torch": "2.11.0+cu130",
     "torchvision": "0.26.0+cu130",
@@ -17,27 +17,27 @@
     "sol_source_revision": "d0c0a4685ab5dc2336d18b7213d85f13def92418"
   },
   "qualification": {
-    "package": "Clean public wheel/sdist; 12 focused face-encoder/version CPU checks. Both unprivileged image imports, matching visible source and default pipeline CLI verified. Images reuse immutable 0.9.0 dependencies and install the selected wheel offline. No model weights are bundled.",
-    "engine": "Three application integration scenes on a 48 GiB RTX 4090 showed lower complete face-pass latency with whole-crop spatial encoding. The explicit public encoder profile reproduced all 120 final RGB frames of one qualified prototype case. Package-version and installation-documentation changes after the algorithm revision change no inference implementation. Original two-step repaint and explicit 44 sparse / 6 dense attention were retained.",
-    "limits": "Only explicit 512-square, 124-frame face encoding is newly supported. Removing spatial tiles changes context, normalization and some output details; this is not equivalence to the tiled encoder. Encoder-only peak allocation reached 16.19 GiB; full-pipeline capacity is separate. Standard 24 GiB RTX 4090, other devices, cuts, identity and wider timelines are not newly qualified. Public images have CPU/dependency/CLI checks, not a new GPU image matrix. Application restoration models and deployment remain separate. Defaults are unchanged."
+    "package": "Clean public wheel/sdist; 11 focused version and audio-pipeline checks at the release version, earlier audio/core/ownership checks retained. Both unprivileged image imports, visible source, audio/FP8 APIs and pipeline dependencies/CLI verified. Offline source/wheel layers reuse immutable 0.10.0 dependencies; no model weights included.",
+    "engine": "Two independent five-second high-resolution I2VA cases exercised the owned audio API and then the public FP8 factories on an RTX PRO 6000 Blackwell Server GPU, each preserving all 120 decoded frames and delivered audio PCM against its qualified integration control. Two smaller combined face/audio requests kept all previous face-repaired pixels and copied refined audio without sample changes. Original four-step main generation, six audio evaluations and 44/6 attention remained explicit.",
+    "limits": "Audio spatial subsampling is approximate. The accepted two-case quality comparison is against full-context six-step audio, not a universal superiority-to-original claim. Music and longer-audio listening remain open. Tests used private prepared assets and separately qualified larger-capacity admission; public resident limits, BF16 defaults and hardware qualification remain unchanged. Images have CPU/CLI checks, not a new full GPU image matrix. Source-scene conditioning remains experimental. Application restoration assets, pricing and production rollout remain separate."
   },
   "images": {
     "native": {
-      "name": "hansimov/vflash:0.10.0",
-      "digest": "sha256:f6706267bc316d1b5fbc33154b96288f1ef410abdb9a22a943931b7d5e56afaf",
+      "name": "hansimov/vflash:0.11.0",
+      "digest": "sha256:e7f0482bcd47564d2bba16e537644f81639e5f554bab7670945836f86c3f6e30",
       "target": "runtime",
       "interface": "Compiled conditioning bundles to audio/video latents through the native HTTP API.",
-      "base_image": "hansimov/vflash@sha256:e991056a4ea46a200274178d62ce7d44939dafc24fc3ec7221452041ecd924d7",
+      "base_image": "hansimov/vflash@sha256:f6706267bc316d1b5fbc33154b96288f1ef410abdb9a22a943931b7d5e56afaf",
       "recipe_target": "inherited from immutable base"
     },
     "pipeline": {
-      "name": "hansimov/vflash:0.10.0-pipeline",
-      "digest": "sha256:2ff319110348648778f51a1191a52d17a742228303a69c27112b5b42d36ee53e",
+      "name": "hansimov/vflash:0.11.0-pipeline",
+      "digest": "sha256:52d7413b9ac5d0a13e9639c72240f62fdb8ba94f9463ce4730ef239c6452c457",
       "target": "pipeline",
       "interface": "Complete MP4 generation using explicitly mounted prepared model assets; supported modes and limits follow the complete-pipeline guide.",
-      "base_image": "hansimov/vflash@sha256:0e6d71ea9c854ba86caf5815823f8c525c202181c33264e6ce6203a505a682f3",
+      "base_image": "hansimov/vflash@sha256:2ff319110348648778f51a1191a52d17a742228303a69c27112b5b42d36ee53e",
       "recipe_target": "inherited from immutable base"
     }
   },
-  "algorithm_qualified_revision": "0d16bc753b496176d9de133fffd2f2e4a3b96b26"
+  "algorithm_qualified_revision": "c04d8fd8092eba63d0c100bb85ce483ea56a9fb1"
 }

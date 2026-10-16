@@ -6,6 +6,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+if not all(importlib.util.find_spec(name) for name in ("torch", "safetensors")):
+    raise unittest.SkipTest("optional CPU tensor dependencies")
+
 import torch
 from safetensors.torch import save_file
 

@@ -4,10 +4,11 @@ from contextlib import nullcontext
 from types import SimpleNamespace as N
 
 import pytest
-import torch
 
 from vflash.native.h3_native_denoiser import H3NativeBlockInvocation, _H3BlockOperations
 from vflash.native.h3_tiled_block import tiled_forward
+
+torch = pytest.importorskip("torch")
 
 
 @pytest.mark.parametrize("whole_rows", [0, 32768])
