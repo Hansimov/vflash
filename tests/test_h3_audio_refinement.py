@@ -152,8 +152,23 @@ def test_small_context_stays_original_and_undeclared_layouts_fail():
     engine.latent_state.num_condition_video_rows += 1
     with pytest.raises(ValueError, match="same-canvas"):
         select_context(engine)
-    with pytest.raises(ValueError, match=r"0\.5MP"):
-        select_context(context_engine(), max_pixels=250_000)
+    with pytest.raises(ValueError, match=r"0\.25MP or 0\.5MP"):
+        select_context(context_engine(), max_pixels=300_000)
+
+
+def test_quarter_megapixel_context_keeps_every_time_step(monkeypatch):
+    import vflash.native.h3_audio_refinement as module
+
+    monkeypatch.setattr(module, "_attention_view", fake_attention)
+    engine = context_engine()
+    selection = select_context(engine, max_pixels=250_000)
+    # sqrt(250000 / (32*32*1024)) of each 32-row side, rounded down.
+    assert selection.source_grid == (2, 32, 32) and selection.grid == (2, 15, 15)
+    assert selection.condition_rows == 225
+    assert selection.audio_indices.numel() == 4 and selection.text_indices.numel() == 5
+    with reduced_audio_context(engine, max_pixels=250_000) as (view, report):
+        assert report["context_pixels"] == 480 * 480
+        assert torch.equal(view.rotary_cos, engine.rotary_cos[selection.packed_rows])
 
 
 def test_request_rejects_unmatched_schedule_and_unqualified_budget():
@@ -165,8 +180,11 @@ def test_request_rejects_unmatched_schedule_and_unqualified_budget():
     for bad in (1, "true", None):
         with pytest.raises(ValueError, match="explicit boolean"):
             AudioRefinementRequest(schedule, tables, reuse_hidden_context=bad)
-    for bad in [True, 250000, 0]:
-        with pytest.raises(ValueError, match=r"0\.5MP"):
+    assert (
+        AudioRefinementRequest(schedule, tables, context_pixels=250000).context_pixels == 250000
+    )
+    for bad in [True, 300000, 0]:
+        with pytest.raises(ValueError, match=r"0\.25MP or 0\.5MP"):
             AudioRefinementRequest(schedule, tables, context_pixels=bad)
     with pytest.raises(ValueError, match="matched six-step"):
         AudioRefinementRequest(refinement_schedule(steps=6, denoise=0.25), tables)

@@ -228,7 +228,9 @@ result = pipeline.generate(request, output_path, audio_refinement=refinement)
 
 It requires hybrid weights, one device, Veda 44/6, one same-canvas first image and generated audio, with
 either resident weights and `veda-triton` or the native two-slot BF16 `block-ring` and `veda-sm89`. Silent
-delivery, video-only output, other modes and simultaneous repaint are rejected. `context_pixels=None`
+delivery, video-only output, other modes and simultaneous repaint are rejected. The default
+`context_pixels=500_000` conditions the pass on a uniformly subsampled 0.5MP video context;
+`context_pixels=250_000` selects the 0.25MP budget (since 0.15.1) and `context_pixels=None`
 selects full-context six-step control. Progress reports 4 + 6 evaluations and `audio_refinement` records the
 added work; failure restores bindings, attention, video and original audio. There is no CLI or HTTP switch
 and no default activation.

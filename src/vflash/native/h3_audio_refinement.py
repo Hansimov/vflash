@@ -38,11 +38,17 @@ def _attention_blocks(engine):
     return blocks
 
 
+# Qualified spatial budgets for the audio pass's video context (0.25MP added in 0.15.1).
+CONTEXT_PIXEL_BUDGETS = (250_000, 500_000)
+
+
 def select_context(engine, *, max_pixels=500_000):
     import torch
 
-    if type(max_pixels) is not int or max_pixels != 500_000:
-        raise ValueError("audio context reduction supports the qualified 0.5MP budget")
+    if type(max_pixels) is not int or max_pixels not in CONTEXT_PIXEL_BUDGETS:
+        raise ValueError(
+            "audio context reduction supports the qualified 0.25MP or 0.5MP budget"
+        )
     state = engine.latent_state
     blocks = _attention_blocks(engine)
     if (
@@ -220,10 +226,11 @@ class AudioRefinementRequest:
         ):
             raise ValueError("audio refinement requires matched six-step sigma-0.5 tables")
         if self.context_pixels is not None and (
-            type(self.context_pixels) is not int or self.context_pixels != 500_000
+            type(self.context_pixels) is not int
+            or self.context_pixels not in CONTEXT_PIXEL_BUDGETS
         ):
             raise ValueError(
-                "audio refinement needs full context or the qualified 0.5MP budget"
+                "audio refinement needs full context or the qualified 0.25MP or 0.5MP budget"
             )
 
     @property

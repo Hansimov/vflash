@@ -192,7 +192,7 @@ result = pipeline.generate(request, output_path, audio_refinement=refinement)
 ```
 
 要求混合权重、单设备、Veda 44/6、一张同画布首帧和生成音频，并使用常驻权重加 `veda-triton`，或原生双槽 BF16 `block-ring`
-加 `veda-sm89`。静音交付、仅视频输出、其他模式以及同时重绘会被拒绝。`context_pixels=None` 选择全上下文六步对照。进度报告
+加 `veda-sm89`。静音交付、仅视频输出、其他模式以及同时重绘会被拒绝。默认 `context_pixels=500_000` 以均匀抽样到 0.5MP 的视频上下文作为条件；`context_pixels=250_000` 选择 0.25MP 预算（0.15.1 起），`context_pixels=None` 选择全上下文六步对照。进度报告
 4 + 6 次评估，`audio_refinement` 记录额外工作；失败时恢复绑定、注意力、视频和原音频。没有命令行或 HTTP 开关，也不默认启用。
 
 ### 隐藏上下文复用 {#audio-hidden-context}

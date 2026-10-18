@@ -1,5 +1,34 @@
 # Release notes
 
+## 0.15.1
+
+Adds a qualified 0.25MP spatial budget for the six-step audio pass's video context:
+`AudioRefinementRequest(..., context_pixels=250_000)` beside the default 500,000. The pass
+keeps the same uniform token subsample, original RoPE, every time step and frozen video
+latents; no other numerical path, schedule or default changes.
+
+With the release code (guard widened on 0.15.0), the audio stage of complete I2VA requests
+took, at 0.25MP versus 0.5MP:
+
+| GPU, execution | Request | 0.25MP | 0.5MP |
+| --- | --- | ---: | ---: |
+| RTX 4090 48 GB, BF16 block ring | eight 5 s canvases, 0.45–1.06 MP (median) | 34.1 s | 50.6 s |
+| | 2720×1536 / 5 s | 42.2 s | 65.4 s |
+| | 1920×1088 / 10 s | 56.0 s | 107.4 s |
+| | 1344×768 / 15 s | 75.2 s | 160.1 s |
+| | ≤1.4 MP dialogue / 5 s (three clips, median) | 33.6 s | 52.2 s |
+| RTX PRO 6000 96 GB, resident FP8 | 2720×1536 / 5 s | 11.9 s | 19.9 s |
+| | 1920×1088 / 10 s | 16.8 s | 32.4 s |
+| | 1344×768 / 15 s | 23.5 s | 49.2 s |
+| | 1 MP dialogue / 5 s (three clips, median) | 7.5 s | 14.4 s |
+
+Delivered frames were identical across budgets. Whisper large-v3-turbo transcribed three
+English and Mandarin dialogue clips on each GPU identically in both budgets and without
+improvement. The speech-band envelope of 0.25MP against 0.5MP had zero lag in all 20 clips,
+with correlation 0.97–1.00 in 19 and 0.77 for one mechanical 4 MP clip; in all but that clip it
+stayed closer to 0.5MP than 0.5MP stays to the unimproved track. Audiobox Aesthetics scores
+moved by at most ±0.3. This is speed and objective-metric qualification, not a listening claim.
+
 ## 0.15.0
 
 Resident I2VA on one 96 GiB SM120 GPU is admitted by the same joint
