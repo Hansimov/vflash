@@ -4,6 +4,9 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
+**0.15.1：六步音频更快。** 音频阶段新增经验证的0.25MP视频上下文，耗时减少33–53%（RTX 4090与RTX PRO 6000），
+画面逐帧一致，对白转写与语音时间不变。见[版本更新](https://hansimov.github.io/vflash/zh/reference/releases)。
+
 **0.15.0：96 GiB Blackwell常驻4MP。** 单张SM120常驻I2VA改用原生高清像素帧预算，不再固定1536×864：
 RTX PRO 6000以FP8主干及人脸、六步音频修复完成1920×1088五秒163秒、2720×1536五秒261秒、
 1920×1088十秒245秒，显存峰值42.1 GiB。见[常驻](https://hansimov.github.io/vflash/zh/guide/profiles#h100-resident)。
@@ -42,7 +45,7 @@ Vflash提供两类入口：
 需要 Python 3.11 或更新版本。基础安装不会下载模型权重或 PyTorch。
 
 ```bash
-git clone --branch v0.15.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.15.1 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate

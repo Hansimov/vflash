@@ -1,43 +1,43 @@
 {
-  "schema_version": 2,
-  "version": "0.15.0",
-  "platform": "linux/amd64",
-  "implementation_revision": "55bf537bf9b9836bfb3855e2f598c80f2ea1ae7c",
-  "wheel_sha256": "57f41ce38ec77ad801cade7ede88991a2be3042d34ff863bd1c3e09291271237",
-  "build_recipe": "https://github.com/Hansimov/vflash/blob/55bf537bf9b9836bfb3855e2f598c80f2ea1ae7c/docker/release-from-wheel.Dockerfile",
-  "previous_inventory": "https://github.com/Hansimov/vflash/blob/v0.14.0/docker/images.json",
-  "runtime_dependencies": {
-    "torch": "2.11.0+cu130",
-    "torchvision": "0.26.0+cu130",
-    "cuda": "13.0",
-    "transformers": "5.9.0",
-    "diffusers": "0.40.0",
-    "peft": "0.19.1",
-    "nvidia-cutlass-dsl": "4.5.0",
-    "sol_source_revision": "d0c0a4685ab5dc2336d18b7213d85f13def92418"
+ "schema_version": 2,
+ "version": "0.15.1",
+ "platform": "linux/amd64",
+ "implementation_revision": "227b49a36436102fc46885849de2e6ea172fb3ce",
+ "wheel_sha256": "7e695680b7f1e2070168407b7400fcb92c9f8544819ad125e7a556c63c940d32",
+ "build_recipe": "https://github.com/Hansimov/vflash/blob/227b49a36436102fc46885849de2e6ea172fb3ce/docker/release-from-wheel.Dockerfile",
+ "previous_inventory": "https://github.com/Hansimov/vflash/blob/v0.15.0/docker/images.json",
+ "runtime_dependencies": {
+  "torch": "2.11.0+cu130",
+  "torchvision": "0.26.0+cu130",
+  "cuda": "13.0",
+  "transformers": "5.9.0",
+  "diffusers": "0.40.0",
+  "peft": "0.19.1",
+  "nvidia-cutlass-dsl": "4.5.0",
+  "sol_source_revision": "d0c0a4685ab5dc2336d18b7213d85f13def92418"
+ },
+ "qualification": {
+  "package": "Clean public wheel from the tagged source; both unprivileged image imports report 0.15.1 and the qualified (250000, 500000) audio context budgets. Offline layers reuse the same immutable dependency images as 0.15.0, with no model payloads.",
+  "engine": "The 0.25MP audio context ran in complete I2VA requests on one RTX 4090 (BF16 block ring) and one RTX PRO 6000 (resident FP8) with the 0.15.0 code and the budget guard widened, which is the only change in this release: audio stage 33-53% shorter, identical frames, identical dialogue transcripts and zero speech-envelope lag across 20 clips. See the 0.15.1 release notes.",
+  "limits": "Capacity and visual qualification on SM120 only, not sound quality. SM90 keeps its 1536x864 resident envelope; block ring remains the default. Application capacity and lane declarations are separate."
+ },
+ "images": {
+  "native": {
+   "name": "hansimov/vflash:0.15.1",
+   "digest": "sha256:58f8f397b36cfcd6326841bbd24fc929ce62a08acdc2a6ef41d03623fe65366d",
+   "target": "runtime",
+   "interface": "Compiled conditioning bundles to audio/video latents through the native HTTP API.",
+   "base_image": "hansimov/vflash@sha256:e7f0482bcd47564d2bba16e537644f81639e5f554bab7670945836f86c3f6e30",
+   "recipe_target": "inherited from immutable base"
   },
-  "qualification": {
-    "package": "Clean public wheel from the tagged source; both unprivileged image imports report 0.15.0, the 2048x2048x124 SM120 resident budget and the 2720-pixel native-HD bound. Offline layers reuse the same immutable dependency images as 0.14.0, with no model payloads.",
-    "engine": "Three complete I2VA requests on one RTX PRO 6000 Blackwell (96 GiB) with the resident FP8 trunk, Veda 44/6, two-step face and six-step audio repair: 1920x1088/5 s (163 s), 2720x1536/5 s (261 s) and 1920x1088/10 s (245 s), 42.1 GiB peak device memory, coherent start/middle/end frames and a native 4 MP crop without tiling. The GPU runs used the pre-release build of implementation commit a367654, which differs from this release only in its version string. Numerical paths are unchanged from 0.14.0.",
-    "limits": "Capacity and visual qualification on SM120 only, not sound quality. SM90 keeps its 1536x864 resident envelope; block ring remains the default. Application capacity and lane declarations are separate."
-  },
-  "images": {
-    "native": {
-      "name": "hansimov/vflash:0.15.0",
-      "digest": "sha256:5daae13013bbeea9b76394089e1fd38b4983bdb42b301416aac4fafe9e412f5a",
-      "target": "runtime",
-      "interface": "Compiled conditioning bundles to audio/video latents through the native HTTP API.",
-      "base_image": "hansimov/vflash@sha256:e7f0482bcd47564d2bba16e537644f81639e5f554bab7670945836f86c3f6e30",
-      "recipe_target": "inherited from immutable base"
-    },
-    "pipeline": {
-      "name": "hansimov/vflash:0.15.0-pipeline",
-      "digest": "sha256:5e68efff887e28ad3702514645d0fe6a3642408a76a1f11bf7e016579e6940d6",
-      "target": "pipeline",
-      "interface": "Complete MP4 generation using explicitly mounted prepared model assets; supported modes and limits follow the complete-pipeline guide.",
-      "base_image": "hansimov/vflash@sha256:52d7413b9ac5d0a13e9639c72240f62fdb8ba94f9463ce4730ef239c6452c457",
-      "recipe_target": "inherited from immutable base"
-    }
-  },
-  "algorithm_qualified_revision": "42d49c54530b9c3fa43319d7057a622c8a80116f"
+  "pipeline": {
+   "name": "hansimov/vflash:0.15.1-pipeline",
+   "digest": "sha256:8f06a773b842bf10bf7a21b16f9f03e0defd47ff96fb5fa5202213352a35b0d6",
+   "target": "pipeline",
+   "interface": "Complete MP4 generation using explicitly mounted prepared model assets; supported modes and limits follow the complete-pipeline guide.",
+   "base_image": "hansimov/vflash@sha256:52d7413b9ac5d0a13e9639c72240f62fdb8ba94f9463ce4730ef239c6452c457",
+   "recipe_target": "inherited from immutable base"
+  }
+ },
+ "algorithm_qualified_revision": "42d49c54530b9c3fa43319d7057a622c8a80116f"
 }
