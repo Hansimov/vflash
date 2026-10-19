@@ -4,9 +4,9 @@ Native **MiniMax H3 inference** with explicit GPU profiles. Vflash uses PyTorch 
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
-**0.15.1: faster six-step audio.** A qualified 0.25MP video context for the audio pass cuts its
-time by 33–53% (RTX 4090 and RTX PRO 6000) with identical frames, dialogue transcripts and speech timing.
-See the [release notes](https://hansimov.github.io/vflash/reference/releases).
+**0.16.0: faster SM120 attention.** On RTX PRO 6000, `veda_dense_backend="sageattention2"` now runs
+INT8 Q·K / FP8 P·V in both dense and Veda sparse layers: denoising 6–14% shorter, with flicker and
+sharpness measured against the BF16 baseline. See the [release notes](https://hansimov.github.io/vflash/reference/releases).
 
 **0.15.0: resident 4 MP on 96 GiB Blackwell.** Resident I2VA on one SM120 GPU now follows
 the native-HD pixel-frame budget instead of a fixed 1536×864 canvas: an RTX PRO 6000 with the
@@ -58,7 +58,7 @@ face-restoration workflow. Existing model, precision and attention defaults rema
 Python 3.11 or newer is required. The base install does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.15.1 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.16.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate

@@ -1,11 +1,11 @@
 {
  "schema_version": 2,
- "version": "0.15.1",
+ "version": "0.16.0",
  "platform": "linux/amd64",
- "implementation_revision": "227b49a36436102fc46885849de2e6ea172fb3ce",
- "wheel_sha256": "7e695680b7f1e2070168407b7400fcb92c9f8544819ad125e7a556c63c940d32",
- "build_recipe": "https://github.com/Hansimov/vflash/blob/227b49a36436102fc46885849de2e6ea172fb3ce/docker/release-from-wheel.Dockerfile",
- "previous_inventory": "https://github.com/Hansimov/vflash/blob/v0.15.0/docker/images.json",
+ "implementation_revision": "f3735d2adc4fe54ee51aa891e473d303b86177b3",
+ "wheel_sha256": "2cd411d09b9e20b0556c5b3921a70fd1eebcaf4a3ee8fd4a6866907329c0b280",
+ "build_recipe": "https://github.com/Hansimov/vflash/blob/f3735d2adc4fe54ee51aa891e473d303b86177b3/docker/release-from-wheel.Dockerfile",
+ "previous_inventory": "https://github.com/Hansimov/vflash/blob/v0.15.1/docker/images.json",
  "runtime_dependencies": {
   "torch": "2.11.0+cu130",
   "torchvision": "0.26.0+cu130",
@@ -17,22 +17,22 @@
   "sol_source_revision": "d0c0a4685ab5dc2336d18b7213d85f13def92418"
  },
  "qualification": {
-  "package": "Clean public wheel from the tagged source; both unprivileged image imports report 0.15.1 and the qualified (250000, 500000) audio context budgets. Offline layers reuse the same immutable dependency images as 0.15.0, with no model payloads.",
-  "engine": "The 0.25MP audio context ran in complete I2VA requests on one RTX 4090 (BF16 block ring) and one RTX PRO 6000 (resident FP8) with the 0.15.0 code and the budget guard widened, which is the only change in this release: audio stage 33-53% shorter, identical frames, identical dialogue transcripts and zero speech-envelope lag across 20 clips. See the 0.15.1 release notes.",
-  "limits": "Capacity and visual qualification on SM120 only, not sound quality. SM90 keeps its 1536x864 resident envelope; block ring remains the default. Application capacity and lane declarations are separate."
+  "package": "Clean public wheel from the tagged source; both unprivileged image imports report 0.16.0 and load the FP8 sparse P·V module. Offline layers reuse the same immutable dependency images as 0.15.1, with no model payloads or SageAttention extension.",
+  "engine": "The sageattention2 policy (SageAttention 2.2.0 SM120 dense edges plus FP8 sparse P·V) ran complete I2VA requests on one RTX PRO 6000 Server (resident FP8): denoising 6-14% shorter than FROST BF16 with FP16 sparse P·V, and no-reference flicker 0.97-1.02 and sharpness 0.96-1.01 of that baseline on four same-seed pairs. See the 0.16.0 release notes.",
+  "limits": "SageAttention remains an explicit, separately installed SM120 extension; defaults are unchanged. Not a universal visual or sound-quality claim. Application capacity and lane declarations are separate."
  },
  "images": {
   "native": {
-   "name": "hansimov/vflash:0.15.1",
-   "digest": "sha256:58f8f397b36cfcd6326841bbd24fc929ce62a08acdc2a6ef41d03623fe65366d",
+   "name": "hansimov/vflash:0.16.0",
+   "digest": "sha256:49001b956e4a17ace3ceb209800fee0d38d0a7e2fc5fdb38100b04397ebd3885",
    "target": "runtime",
    "interface": "Compiled conditioning bundles to audio/video latents through the native HTTP API.",
    "base_image": "hansimov/vflash@sha256:e7f0482bcd47564d2bba16e537644f81639e5f554bab7670945836f86c3f6e30",
    "recipe_target": "inherited from immutable base"
   },
   "pipeline": {
-   "name": "hansimov/vflash:0.15.1-pipeline",
-   "digest": "sha256:8f06a773b842bf10bf7a21b16f9f03e0defd47ff96fb5fa5202213352a35b0d6",
+   "name": "hansimov/vflash:0.16.0-pipeline",
+   "digest": "sha256:89e03c96119588da6218b821e232335adeb456e5548b8fdbbc2d9566cc06ef78",
    "target": "pipeline",
    "interface": "Complete MP4 generation using explicitly mounted prepared model assets; supported modes and limits follow the complete-pipeline guide.",
    "base_image": "hansimov/vflash@sha256:52d7413b9ac5d0a13e9639c72240f62fdb8ba94f9463ce4730ef239c6452c457",
