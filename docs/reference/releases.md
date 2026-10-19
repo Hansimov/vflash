@@ -1,5 +1,29 @@
 # Release notes
 
+## 0.16.0
+
+`veda_dense_backend="sageattention2"` on SM120 becomes one INT8 Q·K / FP8 P·V policy: besides
+the dense edge layers (SageAttention 2.2.0 CUDA), Veda's sparse layers now multiply P·V in FP8.
+Their walk, masks, tile selection and INT8 Q·K are unchanged; V is quantized per head and
+channel to e4m3 and accumulates in FP32. A startup self-test bounds the sparse kernel against
+Veda's own (relative error < 5%) and there is no silent fallback. Receipts add
+`sparse_precision`. Every other backend, default and profile is unchanged.
+
+Same RTX PRO 6000 Server, resident FP8 weights, Veda 44/6, same seeds, FROST BF16 dense with
+FP16 sparse P·V as baseline:
+
+| Request | Denoise, baseline | Denoise, 0.16 policy | Complete request |
+| --- | ---: | ---: | ---: |
+| 2720×1536 / 5 s | 211.1 s | 182.3 s | 276.2 → 237.8 s |
+| 1344×768 / 15 s | 110.6 s | 96.8 s | 149.7 → 135.3 s |
+| 1 MP dialogue / 5 s | 28.4 s | 26.2 s | 43.1 → 40.4 s |
+| 0.5 MP dialogue / 5 s, 0.25MP audio pass | 22.1 s | 20.7 s | 31.1 → 29.3 s |
+
+The baseline arm ran first and its first request includes some warm-up outside denoising.
+Precision changes the sampling trajectory. Without reference, frame-to-frame change of the
+fine-detail luma band stayed at 0.97–1.02 of the baseline and Laplacian sharpness at
+0.96–1.01 across these four pairs. That is a bounded comparison, not an equivalence claim.
+
 ## 0.15.1
 
 Adds a qualified 0.25MP spatial budget for the six-step audio pass's video context:

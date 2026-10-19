@@ -65,6 +65,7 @@ semantic equivalence and universal quality gains remain unestablished.
 ## Explicit SM120 dense-block acceleration
 
 **Quality review reopened (2026-10-10).** Temporal instability has been reported in high-resolution Sage output. Consecutive-frame review of a matched 2048-square pair shows detail fluctuations in both Flash/Veda and Sage/Veda, with larger variation in one Sage region; the cause is not isolated. Earlier five-frame sampling and successful playback do not qualify temporal quality. Treat this option as experimental, not a quality-qualified production recommendation. Flash dense blocks remain the default; removing Sage is not a proven flicker fix.
+A 0.16.0 recheck on RTX PRO 6000 Server measured four same-seed pairs (2720×1536/5 s, 1344×768/15 s, two dialogues) without reference: frame-to-frame change of the fine-detail luma band was 0.97–1.02 of the FROST baseline and Laplacian sharpness 0.96–1.01. This bounds flicker against the baseline on these cases; it is not a universal quality claim.
 
 On a tested single RTX PRO 6000 or RTX 5090, keep `attention_backend="veda-triton"`
 and select `veda_dense_backend="sageattention2"` in `H3Pipeline`. The complete
@@ -82,6 +83,14 @@ FP32+FP16 accumulation, key smoothing and no value smoothing. The other forty Ve
 layers, keep budgets, four-step schedule, conditioning and decoder stay unchanged.
 Receipts identify both effective backends, dense precision and actual call counts.
 This option is intentionally approximate; it is not an equivalence guarantee.
+
+Since 0.16.0 the option is one precision policy: Veda's sparse layers also switch their
+P·V product to FP8 (V quantized per head and channel to e4m3, FP32 accumulation), keeping
+their walk, masks, tile selection and INT8 Q·K. A startup self-test compares the sparse
+kernel with Veda's own; receipts add `sparse_precision`. On a resident FP8 RTX PRO 6000
+Server with three-layer dense edges, the denoising stage took 182.3 versus 211.1 s at
+2720×1536/5 s, 96.8 versus 110.6 s at 1344×768/15 s and 26.2 versus 28.4 s for 1 MP
+dialogue/5 s (FROST BF16 dense with FP16 sparse P·V as baseline).
 
 Same-PRO-6000-Server I2VA comparisons with BF16 hybrid weights and block-ring loading
 measured 1536×864/15 s at 257.718 s Flash versus 223.718 s Sage (13.19% shorter), and

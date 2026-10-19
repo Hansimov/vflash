@@ -130,11 +130,20 @@ class VedaVideoAttention:
         resolved = backends.resolve(device)
         if resolved.backend is None or resolved.backend.name != "triton-int8":
             raise RuntimeError("Veda triton-int8 self-test failed; dense fallback is disabled")
+        sparse_backend = resolved.backend
+        self.sparse_precision = "INT8 QK / FP16 PV"
+        if dense_backend == "sageattention2":
+            # One precision policy: the sparse layers also take SageAttention2's FP8 P·V.
+            from vflash.native.h3_veda_fp8pv import FP8PVBackend, self_test
+
+            self_test(device)
+            sparse_backend = FP8PVBackend(resolved.backend)
+            self.sparse_precision = "INT8 QK / FP8 PV"
         bundle = load_bundle(str(predictor))
         if (bundle.num_layers, bundle.num_heads, bundle.head_dim) != (50, 56, 128):
             raise ValueError("Veda predictor shape does not match H3")
         self.engine = VedaEngine(
-            bundle, Budget(ratio=0.1), Budget(ratio=1.0), resolved.backend, device
+            bundle, Budget(ratio=0.1), Budget(ratio=1.0), sparse_backend, device
         )
         self.layout = self.choice = None
         self.sparse_calls = self.dense_calls = 0
@@ -175,6 +184,7 @@ class VedaVideoAttention:
             "attention_backend": getattr(self, "backend", "veda-sm89"),
             "exact": False,
             "effective_backends": ["triton-int8", self.dense_backend],
+            "sparse_precision": getattr(self, "sparse_precision", "INT8 QK / FP16 PV"),
             "dense_backend": self.dense_backend,
             "dense_precision": "INT8 QK / FP8 PV"
             if self.dense_backend == "sageattention2"

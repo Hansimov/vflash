@@ -1,6 +1,7 @@
 """Explicit optional dense blocks within Veda's mixed attention policy.
 
-SageAttention changes precision and outputs; it is never a silent Flash fallback.
+SageAttention changes precision and outputs; it is never a silent Flash fallback. Selecting it
+is the whole INT8 Q·K / FP8 P·V policy: Veda's sparse layers then also use FP8 P·V.
 CuTe/FA3 (SM90) and FROST (SM120) retain BF16 full-context dense attention.
 Only the selected dense blocks change (ten by default, six when explicitly selected).
 Sparse/protected Veda connections stay intact.
