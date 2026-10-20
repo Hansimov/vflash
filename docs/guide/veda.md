@@ -62,6 +62,28 @@ Changed expressions/reflections are visible in the attention comparison. Audio
 semantic equivalence and universal quality gains remain unestablished.
 
 
+
+## Explicit 42/8 partition
+
+Version 0.17 adds `--veda-dense-edge-layers 4`: layers 0–3 and 46–49 use the selected
+dense backend; the remaining 42 use Veda. Options 3 (44/6) and 5 (40/10) retain
+their behavior, and the default stays 5. The four-layer setting also preserves
+its partition during the optional audio context pass.
+
+On SM120, selecting `sageattention2` retains INT8 QK / FP8 PV for both dense and
+sparse attention at every supported partition. Selecting `frost-flash` uses
+BF16 dense attention and INT8 QK / FP16 PV sparse attention. These independent
+settings support matched layer-count and precision comparisons. Evaluate native
+subject detail, object structure and temporal continuity against the original
+brief, alongside complete-clip time. The earlier four specification pairs cover
+two independent scenes; their sharpness/flicker statistics describe those samples.
+
+The 42/8 Sage policy completed five-second clips at 1344×768, 544×960 and
+2720×1536 on RTX PRO 6000. Four-step receipts recorded 168 sparse and 32 dense
+calls; the portrait case also retained eight dense layers in its six-step audio
+context pass. This execution coverage supports the explicit option; paired
+outputs determine scene-specific quality and complete-clip performance.
+
 ## Explicit SM120 dense-block acceleration
 
 **Quality review reopened (2026-10-10).** Temporal instability has been reported in high-resolution Sage output. Consecutive-frame review of a matched 2048-square pair shows detail fluctuations in both Flash/Veda and Sage/Veda, with larger variation in one Sage region; the cause is not isolated. Earlier five-frame sampling and successful playback do not qualify temporal quality. Treat this option as experimental, not a quality-qualified production recommendation. Flash dense blocks remain the default; removing Sage is not a proven flicker fix.

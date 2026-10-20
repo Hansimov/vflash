@@ -411,7 +411,7 @@ class H3Pipeline:
                 or (self.weight_residency, self.attention_backend)
                 not in {("resident", "veda-triton"), ("block-ring", "veda-sm89")}
                 or self._plan.parallel_strategy != "single"
-                or self.veda_dense_edge_layers != 3
+                or self.veda_dense_edge_layers not in (3, 4)
             ):
                 raise ContractError(
                     "audio refinement requires an unprofiled hybrid I2VA pipeline with Veda"

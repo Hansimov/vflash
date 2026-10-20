@@ -1,8 +1,8 @@
 """Explicit approximate Veda attention for original v0.1 on one supported GPU.
 
 The external MIT Veda core owns the predictor and INT8 sparse kernel. By default the first
-and last five layers use the selected dense backend; an explicit three-layer
-edge option trades more approximate work for speed. Other
+and last five layers use the selected dense backend; explicit three- or four-layer
+edge options trades more approximate work for speed. Other
 layers keep condition/audio/text connections dense but use approximate INT8
 attention. No silent fallback.
 """
@@ -20,8 +20,8 @@ DENSE_LAYERS = frozenset((*range(5), *range(45, 50)))
 
 def dense_layers_for_edges(edge_layers: int, *, attention_backend: str) -> frozenset[int]:
     """Resolve an explicit approximate partition without changing other sessions."""
-    if type(edge_layers) is not int or edge_layers not in (3, 5):
-        raise ContractError("Veda dense edge layers must be 3 or 5")
+    if type(edge_layers) is not int or edge_layers not in (3, 4, 5):
+        raise ContractError("Veda dense edge layers must be 3, 4 or 5")
     if edge_layers != 5 and attention_backend not in {"veda-sm89", "veda-triton"}:
         raise ContractError("a custom dense edge partition requires Veda attention")
     return frozenset((*range(edge_layers), *range(50 - edge_layers, 50)))

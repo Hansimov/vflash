@@ -16,7 +16,7 @@ from vflash.native.h3_refinement_schedule import refinement_schedule
 torch = pytest.importorskip("torch")
 
 
-def context_engine(height=32, width=32):
+def context_engine(height=32, width=32, edges=3):
     engine = engine_fixture()
     spatial, frames, text_rows, audio_rows = height * width, 2, 5, 4
     state = H3NativeLatentState(
@@ -45,7 +45,7 @@ def context_engine(height=32, width=32):
     engine.input_packer = N(prepare_invocation=lambda **kwargs: N(**kwargs))
     attention = engine.denoiser.blocks[0]._veda_attention
     attention.layout = N(target=N(grid=(frames, height, width)))
-    attention.dense_layers = frozenset([0, 1, 2, 47, 48, 49])
+    attention.dense_layers = frozenset((*range(edges), *range(50 - edges, 50)))
     return engine
 
 
@@ -56,11 +56,12 @@ def fake_attention(original, selection):
     return result
 
 
-def test_context_keeps_every_time_step_audio_text_and_original_rope(monkeypatch):
+@pytest.mark.parametrize("edges", [3, 4])
+def test_context_keeps_every_time_step_audio_text_and_original_rope(monkeypatch, edges):
     import vflash.native.h3_audio_refinement as module
 
     monkeypatch.setattr(module, "_attention_view", fake_attention)
-    engine = context_engine()
+    engine = context_engine(edges=edges)
     selection = select_context(engine)
     assert selection.source_grid == (2, 32, 32) and selection.grid == (2, 22, 22)
     assert selection.condition_rows == 484
@@ -69,6 +70,8 @@ def test_context_keeps_every_time_step_audio_text_and_original_rope(monkeypatch)
     original_audio = engine.latent_state.audio_latents.clone()
     attention = engine.denoiser.blocks[0]._veda_attention
     with reduced_audio_context(engine) as (view, report):
+        assert report["dense_layers"] == sorted(attention.dense_layers)
+        assert len(view.denoiser.blocks[0]._veda_attention.dense_layers) == 2 * edges
         assert report["context_pixels"] == 704 * 704
         assert view.denoiser is engine.denoiser and view.input_packer is engine.input_packer
         assert view.refined_text is engine.refined_text

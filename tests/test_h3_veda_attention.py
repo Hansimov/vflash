@@ -54,7 +54,7 @@ def test_predictor_required_and_unrelated_backends_reject_it(tmp_path):
     validate_predictor("torch-flash", None)
 
 
-@pytest.mark.parametrize("edge_layers", [3, 5])
+@pytest.mark.parametrize("edge_layers", [3, 4, 5])
 def test_attention_routes_every_logical_layer_and_rejects_missing_work(
     edge_layers, monkeypatch
 ):
@@ -91,9 +91,9 @@ def test_attention_routes_every_logical_layer_and_rejects_missing_work(
         op(10, dense, q.float(), q, q)
 
 
-@pytest.mark.parametrize("value", [True, False, 0, 2, 4, 6, 7, None, "3"])
+@pytest.mark.parametrize("value", [True, False, 0, 2, 6, 7, None, "3"])
 def test_invalid_dense_partition_fails_before_loading(value):
-    with pytest.raises(ContractError, match="3 or 5"):
+    with pytest.raises(ContractError, match="3, 4 or 5"):
         dense_layers_for_edges(value, attention_backend="veda-triton")
 
 

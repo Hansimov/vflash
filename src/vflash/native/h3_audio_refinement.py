@@ -63,8 +63,11 @@ def select_context(engine, *, max_pixels=500_000):
         getattr(b, "_veda_attention", None) is not attention for b in blocks
     ):
         raise ValueError("context reduction requires one owned Veda layout")
-    if attention.dense_layers != frozenset((0, 1, 2, 47, 48, 49)):
-        raise ValueError("context reduction keeps the accepted 44/6 attention policy")
+    if attention.dense_layers not in {
+        frozenset((0, 1, 2, 47, 48, 49)),
+        frozenset((0, 1, 2, 3, 46, 47, 48, 49)),
+    }:
+        raise ValueError("context reduction requires a declared 44/6 or 42/8 partition")
     grid = tuple(attention.layout.target.grid)
     if len(grid) != 3 or any(type(v) is not int or v <= 0 for v in grid):
         raise ValueError("invalid source video grid")

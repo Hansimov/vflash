@@ -723,11 +723,11 @@ class H3NativeConditioningRuntime:
                 or len(self.devices) != 1
                 or (self.weight_residency, self.attention_backend)
                 not in {("resident", "veda-triton"), ("block-ring", "veda-sm89")}
-                or self.veda_dense_edge_layers != 3
+                or self.veda_dense_edge_layers not in (3, 4)
                 or self.overlay.schedule.nfe != 4
             ):
                 raise H3NativeConditioningRuntimeError(
-                    "audio refinement requires unprofiled four-step AV with Veda 44/6"
+                    "audio refinement requires unprofiled four-step AV with Veda 44/6 or 42/8"
                 )
         if video_repaint is not None:
             from vflash.native.h3_refinement import VideoRepaintRequest
