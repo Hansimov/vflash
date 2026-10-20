@@ -4,6 +4,10 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
+**0.17.0：Veda层数与精度分别选择。** `veda_dense_edge_layers=4`对应42稀疏/8密集，
+可选音频上下文阶段保持该分工；SM120沿用所选Sage FP8或FROST精度策略。默认保持40/10，
+同输入执行结果见[版本更新](https://hansimov.github.io/vflash/zh/reference/releases)。
+
 **0.16.0：SM120注意力更快。** 在RTX PRO 6000上，`veda_dense_backend="sageattention2"`现在让密集层与Veda稀疏层
 都使用INT8 Q·K / FP8 P·V，去噪缩短6–14%，并以BF16基线对照测量闪烁与清晰度。见[版本更新](https://hansimov.github.io/vflash/zh/reference/releases)。
 
@@ -45,7 +49,7 @@ Vflash提供两类入口：
 需要 Python 3.11 或更新版本。基础安装不会下载模型权重或 PyTorch。
 
 ```bash
-git clone --branch v0.16.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.17.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate

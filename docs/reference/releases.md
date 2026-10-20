@@ -1,5 +1,35 @@
 # Release notes
 
+
+## 0.17.0
+
+`veda_dense_edge_layers=4` selects dense layers 0–3 and 46–49, with Veda on the
+remaining 42. Both CLI entries and complete pipelines accept 3, 4 or 5; default 5
+keeps the existing 40/10 behavior. The optional audio context pass preserves the
+explicit 44/6 or 42/8 partition. On SM120, Sage uses INT8 QK / FP8 PV in dense and
+sparse layers, while FROST uses BF16 dense and INT8 QK / FP16 PV sparse attention.
+
+Same physical RTX PRO 6000, resident FP8 weights, four evaluations, matched image,
+prompt and seed per row; complete engine seconds, with model loading and network
+delivery recorded separately:
+
+| Five-second I2VA input | Sage 44/6 | Sage 42/8 | FROST 44/6 | FROST 42/8 |
+| --- | ---: | ---: | ---: | ---: |
+| 1344×768 | 46.2 | 47.0 | 47.5 | 47.0 |
+| 544×960, six-step audio pass | 31.3 | 31.5 | 31.4 | 31.2 |
+| 2720×1536 | 222.9 | 225.2 | 244.9 | 257.5 |
+
+These are three input scenes and one timed request per configuration. Native crops
+show changes in expression, motion phase and local detail; scene-specific quality
+is judged against the reference and action brief. Additional scene coverage remains
+a distinct comparison. The earlier 0.16.0 four specification pairs covered two scene
+families; their flicker/sharpness statistics describe that cohort.
+
+The 0.16.1 explicit resident-memory threshold is included. Published native and
+pipeline images report 0.17.0 under their unprivileged user; image digests and
+immutable dependency parents are in `docker/images.json`. SageAttention is installed
+separately when that option is selected.
+
 ## 0.16.1
 
 `VFLASH_SM120_RESIDENT_GIB` lowers the SM120 card size admitted to resident weights (default 90,
