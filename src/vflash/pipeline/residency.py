@@ -56,6 +56,21 @@ def restore_cpu_master(module: Any, master: CPUModuleMaster) -> None:
         child._buffers[name] = tensor
 
 
+def resident_min_gib(compute_capability: str) -> int:
+    """Smallest card admitted to resident weights: 75 GiB on SM90, 90 GiB on SM120.
+
+    VFLASH_SM120_RESIDENT_GIB lowers the SM120 gate (24-90) for a deployment that serves only
+    shapes whose measured peak fits a smaller card, e.g. 30 for a 32 GiB RTX 5090 limited to
+    1 MP / 5 s requests by its scheduler; a larger shape then fails with CUDA OOM.
+    """
+    if compute_capability != "12.0":
+        return 75
+    value = os.environ.get("VFLASH_SM120_RESIDENT_GIB", "90")
+    if not value.isdigit() or not 24 <= int(value) <= 90:
+        raise ContractError("VFLASH_SM120_RESIDENT_GIB must be an integer from 24 to 90")
+    return int(value)
+
+
 def validate_residency(plan: Any, choice: str, attention: str, hybrid: Any) -> str:
     if choice == "block-ring":
         return choice
@@ -63,7 +78,7 @@ def validate_residency(plan: Any, choice: str, attention: str, hybrid: Any) -> s
         raise ContractError("pipeline weight_residency must be block-ring or resident")
     if (
         plan.target.compute_capability not in {"9.0", "12.0"}
-        or plan.gpu_memory_gib < (90 if plan.target.compute_capability == "12.0" else 75)
+        or plan.gpu_memory_gib < resident_min_gib(plan.target.compute_capability)
         or plan.parallel_strategy != "single"
         or attention != "veda-triton"
         or hybrid is None

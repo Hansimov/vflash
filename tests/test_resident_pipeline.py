@@ -3,7 +3,11 @@ from types import SimpleNamespace as N
 import pytest
 
 from vflash.contracts import ContractError
-from vflash.pipeline.residency import validate_residency, validate_resident_request
+from vflash.pipeline.residency import (
+    resident_min_gib,
+    validate_residency,
+    validate_resident_request,
+)
 
 
 def plan(cap="9.0", memory=79, strategy="single"):
@@ -159,3 +163,22 @@ def test_explicit_residency_reaches_native_owner_before_any_cuda_api(
     pipeline.initialization_stages = {}
     pipeline._load_stages(plan())
     assert calls == [("resident", dense_backend, dense_edges)]
+
+
+def test_sm120_gate_can_only_be_lowered_for_small_card_deployments(monkeypatch):
+    def accept(memory):
+        candidate = plan(cap="12.0", memory=memory)
+        return validate_residency(candidate, "resident", "veda-triton", object()) == "resident"
+
+    monkeypatch.setenv("PYTORCH_ALLOC_CONF", "expandable_segments:True")
+    monkeypatch.delenv("VFLASH_SM120_RESIDENT_GIB", raising=False)
+    assert resident_min_gib("12.0") == 90 and resident_min_gib("9.0") == 75
+    with pytest.raises(ContractError):
+        accept(32)
+    # An RTX 5090 deployment serving only shapes whose peak fits 32 GiB.
+    monkeypatch.setenv("VFLASH_SM120_RESIDENT_GIB", "30")
+    assert accept(32) and resident_min_gib("9.0") == 75
+    for bad in ("12", "91", "x"):
+        monkeypatch.setenv("VFLASH_SM120_RESIDENT_GIB", bad)
+        with pytest.raises(ContractError):
+            resident_min_gib("12.0")

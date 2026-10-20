@@ -47,6 +47,7 @@ from vflash.native.h3_tensor_file import (
     load_safetensor_tensors,
     save_safetensors_atomic,
 )
+from vflash.pipeline.residency import resident_min_gib
 
 
 class H3NativeConditioningRuntimeError(RuntimeError):
@@ -294,7 +295,7 @@ class H3NativeConditioningRuntime:
             and (
                 capability not in {(9, 0), (12, 0)}
                 or torch.cuda.get_device_properties(resolved_device).total_memory
-                < (90 if capability == (12, 0) else 75) * 2**30
+                < resident_min_gib(f"{capability[0]}.{capability[1]}") * 2**30
             )
         ):
             raise H3NativeConditioningRuntimeError(

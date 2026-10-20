@@ -1,5 +1,13 @@
 # Release notes
 
+## 0.16.1
+
+`VFLASH_SM120_RESIDENT_GIB` lowers the SM120 card size admitted to resident weights (default 90,
+accepted 24–90). A deployment that serves only shapes whose measured peak fits a smaller card,
+such as a 32 GiB RTX 5090 limited to 1 MP / 5 s requests by its scheduler, sets 30; a larger
+shape then fails with CUDA OOM rather than silently falling back. SM90 stays at 75 GiB and
+nothing else changes.
+
 ## 0.16.0
 
 `veda_dense_backend="sageattention2"` on SM120 becomes one INT8 Q·K / FP8 P·V policy: besides
