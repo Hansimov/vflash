@@ -13,7 +13,7 @@ Vflash 不会隐式下载或编译任何内容：你选择与显卡匹配的配�
 基础安装是不含 PyTorch 的轻量 CLI；按所用接口安装对应 extra。
 
 ```bash
-git clone --branch v0.17.1 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.17.2 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv && source .venv/bin/activate
 python -m pip install -e '.[pipeline]'     # 完整 MP4 流水线（已包含 GPU 依赖）

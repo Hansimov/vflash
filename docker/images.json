@@ -1,11 +1,11 @@
 {
   "schema_version": 2,
-  "version": "0.17.1",
+  "version": "0.17.2",
   "platform": "linux/amd64",
-  "implementation_revision": "b826a2c48855f85706f879a9e79680b0712e38a4",
-  "wheel_sha256": "87085fe364f9c28afc6c4b832da4b3225848195adfbf278c6401e6499af10e2f",
-  "build_recipe": "https://github.com/Hansimov/vflash/blob/b826a2c48855f85706f879a9e79680b0712e38a4/docker/release-from-wheel.Dockerfile",
-  "previous_inventory": "https://github.com/Hansimov/vflash/blob/v0.17.0/docker/images.json",
+  "implementation_revision": "0f7da254bf657468b416f981ae248abf578d1709",
+  "wheel_sha256": "9ef40c6df80185eed9fbd894aa8aeaf6ac1c72d3bf245b53d0ee2f554e524736",
+  "build_recipe": "https://github.com/Hansimov/vflash/blob/0f7da254bf657468b416f981ae248abf578d1709/docker/release-from-wheel.Dockerfile",
+  "previous_inventory": "https://github.com/Hansimov/vflash/blob/7275f9938d27bf5ee6a8a98a2c9e40a307902e1b/docker/images.json",
   "runtime_dependencies": {
     "torch": "2.11.0+cu130",
     "torchvision": "0.26.0+cu130",
@@ -17,25 +17,25 @@
     "sol_source_revision": "d0c0a4685ab5dc2336d18b7213d85f13def92418"
   },
   "qualification": {
-    "package": "Public 0.17.1 wheel; both immutable images import it as UID 10001. Focused CPU admission/residency checks cover the four SM120 hybrid reference modes and their joint limits.",
+    "package": "Public 0.17.2 wheel; both immutable images import it as UID 10001. Focused CPU checks cover pipe inactivity/total deadlines, child cleanup and actual FFmpeg media equivalence. Existing model and hardware qualification records retain their original scope.",
     "engine": "On one RTX PRO 6000 with resident FP8 weights, 44/6 and 42/8 completed three matched five-second I2VA inputs under both Sage INT8 QK / FP8 PV and FROST BF16 dense / FP16 sparse PV. The portrait case also completed six-step audio refinement with the selected partition. See 0.17.0 release notes for complete-engine times and scope.",
     "quality_scope": "Native detail and temporal crops support per-scene observations; visual quality and action adherence are evaluated against the input brief and reference. The default remains 40/10. Hardware capacity and application rollout retain their separate qualification."
   },
   "images": {
     "native": {
-      "name": "hansimov/vflash:0.17.1",
-      "digest": "sha256:83d12d0bce19fbd9a5e1cfe628f24a947ee36cd59dbded1d551078eb8dfdb532",
+      "name": "hansimov/vflash:0.17.2",
+      "digest": "sha256:a5770b500ed971ccd4cd6ae5492480849319bcc88da8a5e890e3d7e7ef13dba3",
       "target": "runtime",
       "interface": "Compiled conditioning bundles to audio/video latents through the native HTTP API.",
-      "base_image": "hansimov/vflash@sha256:2c0f08dc0fb973af7f895600cc277597d787079bfba783ee1e9d35da6c418745",
+      "base_image": "hansimov/vflash@sha256:83d12d0bce19fbd9a5e1cfe628f24a947ee36cd59dbded1d551078eb8dfdb532",
       "recipe_target": "inherited from immutable base"
     },
     "pipeline": {
-      "name": "hansimov/vflash:0.17.1-pipeline",
-      "digest": "sha256:3d0dce84cea830be7464a44a6e759914c5b6164f82bc8314bbee9901fbeaa044",
+      "name": "hansimov/vflash:0.17.2-pipeline",
+      "digest": "sha256:508140ad2851393ed01bd9c3e8c83e6f972818f98f524de008654ba2d663186d",
       "target": "pipeline",
       "interface": "Complete MP4 generation using explicitly mounted prepared model assets; supported modes and limits follow the complete-pipeline guide.",
-      "base_image": "hansimov/vflash@sha256:7292a5009cf18834006468ab79caa0936ebda97c7c2893bcfb96acdf4976f981",
+      "base_image": "hansimov/vflash@sha256:3d0dce84cea830be7464a44a6e759914c5b6164f82bc8314bbee9901fbeaa044",
       "recipe_target": "inherited from immutable base"
     }
   },

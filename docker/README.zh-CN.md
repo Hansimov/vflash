@@ -4,7 +4,7 @@
 
 使用 [pipeline 镜像](https://hansimov.github.io/vflash/zh/guide/docker#pipeline)，可以在 SM89 上用纯文字或提示词与一至三张参考图生成完整 MP4，也支持双 SM86 的参考图生成。下文介绍独立的原生 HTTP 服务。
 
-0.17.1 已发布 `hansimov/vflash:0.17.1` 和 `hansimov/vflash:0.17.1-pipeline`。
+0.17.2 已发布 `hansimov/vflash:0.17.2` 和 `hansimov/vflash:0.17.2-pipeline`。
 不可变摘要见[镜像清单](images.json)；源码构建、显式 Veda 依赖、40/10 或 44/6 配置及实际包版本核验见[完整指南](https://hansimov.github.io/vflash/zh/guide/docker)。
 
 服务接收预编译条件包，返回视频和音频潜变量（latents，即解码前的张量）。它使用一张 GPU 或一组协作双卡，并在多个串行请求之间复用已加载的模型。
@@ -19,7 +19,7 @@
 cp docker/.env.example docker/.env
 ```
 
-编辑`docker/.env`，填写资源绝对路径并选择显卡。`VFLASH_IMAGE=hansimov/vflash:0.17.1`选择已发布原生镜像。
+编辑`docker/.env`，填写资源绝对路径并选择显卡。`VFLASH_IMAGE=hansimov/vflash:0.17.2`选择已发布原生镜像。
 `VFLASH_ATTENTION_BACKEND=auto`仅在单SM89官方Base16选择Sol，`torch-flash`显式保留dense。配置可选：
 
 | 显卡 | `VFLASH_PROFILE_ID` |
