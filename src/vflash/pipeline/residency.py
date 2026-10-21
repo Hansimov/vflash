@@ -110,7 +110,9 @@ def validate_residency(plan: Any, choice: str, attention: str, hybrid: Any) -> s
 RESIDENT_SM120_MAX_PIXEL_FRAMES = 2048 * 2048 * 124
 
 
-def validate_resident_request(choice: str, request: Any, profile_id: str | None = None) -> None:
+def validate_resident_request(
+    choice: str, request: Any, profile_id: str | None = None, *, hybrid: bool = False
+) -> None:
     if choice != "resident":
         return
     pixels = request.width * request.height
@@ -123,13 +125,17 @@ def validate_resident_request(choice: str, request: Any, profile_id: str | None 
     else:
         within = pixels <= 1536 * 864
         envelope = "at most 1536x864 pixels"
-    if (
-        request.mode != "i2va"
-        or not within
-        or request.model_frames > 362
-        or request.first_frame is None
-    ):
+    keyframe_modes = hybrid and (profile_id or "").endswith("-sm120")
+    supported = (
+        request.mode in {"i2va", "l2va", "fl2va", "ref2va"}
+        if keyframe_modes
+        else (request.mode == "i2va" and request.first_frame is not None)
+    )
+    if keyframe_modes and request.mode == "ref2va" and len(request.ordered_references) > 1:
+        within = within and pixels <= 960 * 544 and request.duration_seconds == 5
+    if not supported or not within or request.model_frames > 362:
+        modes = "hybrid keyframe/Ref modes" if keyframe_modes else "I2VA with one first frame"
         raise ContractError(
-            f"resident I2VA supports one first frame, {envelope} and 15 seconds; "
+            f"resident {modes} supports {envelope} and 15 seconds; "
             "use block-ring for other requests"
         )

@@ -43,7 +43,7 @@ def validate_request(
         raise ContractError("the request mode differs from the prepared pipeline profile")
     from vflash.pipeline.residency import validate_resident_request
 
-    validate_resident_request(weight_residency, request, profile_id)
+    validate_resident_request(weight_residency, request, profile_id, hybrid=hybrid)
     if request.width * request.height > 1024**2 and (
         not hybrid
         or parallel_strategy != "single"

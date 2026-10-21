@@ -90,3 +90,49 @@ def test_native_hd_long_edge_and_area_stay_bounded():
         VideoRequest("Motion", first_frame=frame, width=2752, height=1504)
     with pytest.raises(ContractError, match="canvas pixels"):
         VideoRequest("Motion", first_frame=frame, width=2720, height=1568)
+
+
+@pytest.mark.parametrize("mode", ["i2va", "l2va", "fl2va", "ref2va"])
+def test_sm120_resident_hybrid_accepts_its_declared_reference_modes(mode):
+    frame = Path("/unused/frame.png")
+    inputs = {
+        "i2va": {"first_frame": frame},
+        "l2va": {"last_frame": frame},
+        "fl2va": {"first_frame": frame, "last_frame": frame},
+        "ref2va": {"references": (frame,)},
+    }[mode]
+    request = VideoRequest("Motion", width=1024, height=1024, **inputs)
+    options = dict(
+        profile_id="i2va-turbo4-v01-544-exact-sm120",
+        hybrid=True,
+        attention_backend="veda-triton",
+        weight_residency="resident",
+    )
+    validate_request(request, **options)
+    if mode != "i2va":
+        with pytest.raises(ContractError):
+            validate_request(request, **{**options, "hybrid": False})
+        with pytest.raises(ContractError):
+            validate_request(
+                request, **{**options, "profile_id": "i2va-turbo4-v01-544-exact-sm90"}
+            )
+
+
+def test_sm120_resident_hybrid_keeps_the_multi_reference_budget():
+    refs = tuple(Path(f"/unused/ref-{i}.png") for i in range(2))
+    options = dict(
+        profile_id="i2va-turbo4-v01-544-exact-sm120",
+        hybrid=True,
+        attention_backend="veda-triton",
+        weight_residency="resident",
+    )
+    validate_request(VideoRequest("Motion", references=refs, width=960, height=544), **options)
+    with pytest.raises(ContractError):
+        validate_request(
+            VideoRequest("Motion", references=refs, width=1024, height=1024), **options
+        )
+    with pytest.raises(ContractError):
+        validate_request(
+            VideoRequest("Motion", references=refs, width=960, height=544, duration_seconds=10),
+            **options,
+        )

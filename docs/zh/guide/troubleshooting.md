@@ -20,7 +20,7 @@ Vflash 不会为了"能跑"而缩小画布、改变时长或改走其他路径�
 | 超过 1,048,576 像素 / 原生高清 | 未使用混合图像条件路径却超过 1MP | 使用[混合模型](./complete-pipeline#extended-hybrid)并提供首帧或参考图。 |
 | 最长边 2720 / 像素帧预算 | `宽×高×模型帧数 > 2048²×124`，或最长边超过 2720 | 缩短时长（4MP 为五秒请求）或降低画布。 |
 | 6–15 秒需要图像条件 | T2VA 或非混合配置请求了长时长 | 使用混合 I2VA/FL2VA/Ref2VA。 |
-| resident I2VA supports… | `weight_residency="resident"` 超出常驻范围（SM90：1536×864；SM120：像素帧预算；仅单首帧 I2VA） | 该请求改用 `block-ring`。 |
+| resident I2VA supports… | `weight_residency="resident"` 超出常驻范围（SM90：1536×864；SM120：像素帧预算；SM90采用单首帧；SM120混合流水线同时接受像素帧预算内的L2VA、FL2VA和图像Ref） | 该请求改用 `block-ring`。 |
 | 模式与已准备配置不符 | 例如向关键帧配置发送参考图 | 为该模式准备对应配置。 |
 
 ## 启动与资源 {#startup}
