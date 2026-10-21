@@ -327,7 +327,13 @@ def test_veda_service_readiness_reports_partition_and_rejects_wrong_dense_gpu(
         }
     )
     assert parsed.veda_dense_backend == "frost-flash" and parsed.veda_dense_edge_layers == 3
-    for value in ("2", "4", "6", "invalid"):
+    assert (
+        ServerSettings.from_env(
+            {"VFLASH_ATTENTION_BACKEND": "veda-triton", "VFLASH_VEDA_DENSE_EDGE_LAYERS": "4"}
+        ).veda_dense_edge_layers
+        == 4
+    )
+    for value in ("2", "6", "invalid"):
         with pytest.raises((ValueError, RuntimeError, ContractError)):
             ServerSettings.from_env(
                 {
