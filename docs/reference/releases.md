@@ -6,8 +6,11 @@
 Align resident SM120 hybrid request admission with I2VA, L2VA, FL2VA and image Ref modes.
 The existing pixel-frame ceiling and multi-reference 960×544/5-second limit remain in effect;
 SM90 retains its existing I2VA scope. This fixes rejection before inference and leaves model
-weights, attention and denoising unchanged. CPU contract checks pass; GPU execution evidence
-for the added resident modes is being collected separately from the existing I2VA qualification.
+weights, attention and denoising unchanged. CPU contract checks pass. Resident RTX PRO 6000
+SM120 runs now complete FL2VA at 1440×1440/10 seconds, L2VA at 1344×768/15 seconds,
+and image Ref with two and nine references at 960×544/5 seconds. I2VA also completes
+at 2048×2048/5 seconds. These runs establish execution and output delivery for the listed
+inputs; visual quality remains scene-dependent and is assessed against each original brief.
 
 ## 0.17.0
 
