@@ -24,6 +24,13 @@ python -m pip install -e '.[pipeline]'     # complete MP4 pipeline (includes GPU
 Use `.[gpu]` for the native denoiser only and `.[server]` for the native HTTP service. The
 [Docker images](./docker) pin the same environment (PyTorch 2.11 / CUDA 13.0) if you prefer containers.
 
+The [GitHub v0.17.2 release](https://github.com/Hansimov/vflash/releases/tag/v0.17.2) also provides
+a wheel and source archive from the same tag. Install the complete pipeline from the wheel:
+
+```bash
+python -m pip install "vflash[pipeline] @ https://github.com/Hansimov/vflash/releases/download/v0.17.2/vflash-0.17.2-py3-none-any.whl"
+```
+
 ## 2. Check your GPU {#check-your-gpu}
 
 ```bash
@@ -36,8 +43,8 @@ Pick the profile for your hardware and let `plan` check the match without loadin
 | GPU | Typical profile | Command |
 | --- | --- | --- |
 | RTX 4090 48 GB | `i2va-turbo4-v01-544-exact-sm89` (keyframes, hybrid, native HD) | `vflash plan i2va-turbo4-v01-544-exact-sm89 --gpu 0` |
-| RTX PRO 6000 96 GB | `i2va-turbo4-v01-544-exact-sm120` (hybrid I2VA, preview) | `vflash plan i2va-turbo4-v01-544-exact-sm120 --gpu 0` |
-| H100 80 GB | `i2va-turbo4-v01-544-exact-sm90` (hybrid I2VA, preview) | `vflash plan i2va-turbo4-v01-544-exact-sm90 --gpu 0` |
+| RTX PRO 6000 96 GB | `i2va-turbo4-v01-544-exact-sm120` (hybrid image modes; see hardware limits) | `vflash plan i2va-turbo4-v01-544-exact-sm120 --gpu 0` |
+| H100 SXM 80 GB | `i2va-turbo4-v01-544-exact-sm90` (hybrid I2VA) | `vflash plan i2va-turbo4-v01-544-exact-sm90 --gpu 0` |
 | Two RTX 3080 20 GB | `ref2va-turbo4-exact-sm86` | `vflash plan ref2va-turbo4-exact-sm86 --gpu 0 --peer-gpu 1 --strategy sequence-head` |
 
 Text-only (`t2va-turbo4-exact-sm89`), reference-image (`ref2va-turbo4-exact-sm89`) and Base16

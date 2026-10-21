@@ -35,9 +35,10 @@ HTTP 服务只加载一个配置（4090 上默认 Turbo4），更换配置需用
 | 两张 RTX 3080 20 GB（SM86） | Ref4 原生（`sequence-head` 或 `tensor`）与完整流水线（`sequence-head`）；T2VA 与 Base16 关键帧使用 `sequence-head` | PCIe 3.0 x16、无 peer access，不需要 NVLink。 |
 | 单张 RTX 3080 20 GB | Ref4 原生 latent | 已检查容量及串行/重叠加载的可重复性。 |
 | H100 SXM 80 GB（SM90） | 原始 v0.1 混合 I2VA + `veda-triton`；≥75 GiB 可[主干常驻](#h100-resident) | 有完整成片证据；H100 PCIe 仍为预览。 |
-| RTX PRO 6000 Blackwell 96 GB（SM120） | 混合 I2VA + `veda-triton`；≥90 GiB（Server）可[主干常驻](#sm120-resident) | Workstation 为已实测的 I2VA 选项，未单独测量常驻。 |
-| H100 NVL、RTX 5090 32 GB | [有界块环 I2VA](#small-blackwell) | 几何与时长须在各自实测范围内。 |
-| SM103、MIG 分区、新设备 FL2VA | 仅预览 | 未完成整卡资格。 |
+| RTX PRO 6000 Blackwell 96 GB（SM120） | 混合 I2VA、L2VA、FL2VA 和图像 Ref + `veda-triton`；≥90 GiB 可[主干常驻](#sm120-resident) | Server 与 Workstation 均有完整产物证据，各模式范围见下文。 |
+| H100 NVL | [有界块环 I2VA](#small-blackwell) | 画布与时长采用下表实测范围。 |
+| RTX 5090 32 GB（SM120） | 块环，或小规格部署[显式开启常驻](#small-blackwell) | 常驻部署自行限定已测请求范围，例如 1MP / 5 秒。 |
+| SM103、MIG 分区 | 预览 | 整卡资格作为独立步骤完成。 |
 
 SM90/SM120 上的原始 v0.1 混合路径请准备至少 128 GB 主机内存并留余量；仅凭显存不能判断是否兼容。
 
@@ -59,8 +60,21 @@ SM90/SM120 上的原始 v0.1 混合路径请准备至少 128 GB 主机内存并�
 ### H100 与 Blackwell 主干常驻 {#h100-resident}
 
 `H3Pipeline(..., weight_residency="resident")` 可在至少 75 GiB 显存的单张 SM90，或至少 90 GiB 的单张 SM120 上常驻主干。需要原始 v0.1
-`HybridModel`、`attention_backend="veda-triton"`，并在**启动 Python 进程前**设置 `PYTORCH_ALLOC_CONF=expandable_segments:True`。实测范围为
-单首帧 I2VA、最长 15 秒：SM90 画布最多 1536×864 像素；96 GiB SM120 遵循原生高清预算 `宽×高×模型帧数 ≤ 2048²×124`（如 2720×1536 五秒、1920×1088 十秒，FP8 主干实测峰值 42.1 GiB）。其他模式和更大请求使用块环，块环仍是默认与回滚方案。
+`HybridModel`、`attention_backend="veda-triton"`，并在**启动 Python 进程前**设置 `PYTORCH_ALLOC_CONF=expandable_segments:True`。
+SM90 范围为单首帧 I2VA、最长 15 秒、画布最多 1536×864。0.17.1 起，96 GiB SM120
+也支持 L2VA、FL2VA 和图像 Ref 常驻。图像条件请求遵循原生高清联合预算
+`宽×高×模型帧数 ≤ 2048²×124`，同时采用[完整流水线](./complete-pipeline#extended-hybrid)的各模式限制。
+多参考图范围为最多 960×544、五秒。已完成的 SM120 产物包括：
+
+| 模式 | 实测请求 |
+| --- | --- |
+| I2VA | 2048×2048 / 5 秒 |
+| L2VA | 1344×768 / 15 秒 |
+| FL2VA | 1440×1440 / 10 秒 |
+| Ref2VA | 两张或九张图片，960×544 / 5 秒 |
+
+这些记录确认对应输入的执行与交付；创作品质结合原始要求和参考图判断。块环保持默认内存策略。
+下表保留早期同输入 I2VA 常驻对照；当前注意力方案的测量见[0.17 发布记录](../reference/releases#_0-17-0)。
 
 | 同实例 A/B/A2 | H100 SXM 块环/常驻/块环 | RTX PRO 6000 Server 块环/常驻/块环 |
 | --- | --- | --- |
@@ -79,7 +93,17 @@ SM90/SM120 上的原始 v0.1 混合路径请准备至少 128 GB 主机内存并�
 | H100 NVL | 1920×1088/10 秒 288.1，1536×864/15 秒 263.9，2048²/5 秒 321.6，1440²/10 秒 289.9 | 初始化 46.6 秒；其他模式未资格 |
 | RTX 5090 32 GB / 600 W | 2048²/5 秒 451.0（峰值 27.0 GiB），1440²/10 秒 392.4，1536×864/15 秒 364.9 | 块环 + expandable segments；500 W 卡 2048²/5 秒失败 |
 
-这些是完整解码并多时间点目视检查的容量结果，不是质量保证或路由默认值。
+上表记录对应块环案例的容量、完整解码和多时间点目视结果。
+32 GiB RTX 5090 的小规格常驻部署可在启动前设置 `VFLASH_SM120_RESIDENT_GIB=30`（0.16.1 起支持）。
+默认门槛保持 90 GiB；应用层按实测限制请求，例如 1MP / 5 秒。更大规格沿各自块环测量范围使用。
+详见[0.16.1 发布记录](../reference/releases#_0-16-1)。
+
+### 注意力选择
+
+`veda_dense_edge_layers=3`、`4`、`5` 分别选择 44/6、42/8、40/10 的 Veda/密集层分配。
+公开默认值为 **40/10**。SM120 的 `veda_dense_backend="sageattention2"` 在密集和稀疏注意力中均使用
+INT8 QK / FP8 PV；`"frost-flash"` 使用 BF16 密集注意力和 INT8 QK / FP16 PV 稀疏注意力。
+FP8 模型权重属于独立选项。[0.17 对照](../reference/releases#_0-17-0)记录这些显式配置的完整引擎耗时与具体场景品质证据。
 
 ### 容器中的设备发现
 

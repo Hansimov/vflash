@@ -40,9 +40,10 @@ L2VA is a request contract, not a separate weight profile. The HTTP service load
 | Two RTX 3080 20 GB (SM86) | Ref4 native (`sequence-head` or `tensor`) and complete (`sequence-head`); T2VA and Base16 keyframes with `sequence-head` | PCIe 3.0 x16 without peer access; no NVLink required. |
 | One RTX 3080 20 GB | Ref4 native latents | Capacity and serial/overlapped repeatability checked. |
 | H100 SXM 80 GB (SM90) | Original-v0.1 hybrid I2VA with `veda-triton`; [resident trunk](#h100-resident) at ≥75 GiB | Complete-video evidence; H100 PCIe remains a preview. |
-| RTX PRO 6000 Blackwell 96 GB (SM120) | Hybrid I2VA with `veda-triton`; [resident trunk](#sm120-resident) at ≥90 GiB (Server) | Workstation is a measured I2VA option without separate residency measurement. |
-| H100 NVL, RTX 5090 32 GB | [Bounded block-ring I2VA](#small-blackwell) | Keep geometry within individually measured cases. |
-| SM103, MIG partitions, new-device FL2VA | Preview only | No complete-device qualification. |
+| RTX PRO 6000 Blackwell 96 GB (SM120) | Hybrid I2VA, L2VA, FL2VA and image Ref with `veda-triton`; [resident trunk](#sm120-resident) at ≥90 GiB | Server and Workstation complete-output evidence; apply the mode limits below. |
+| H100 NVL | [Bounded block-ring I2VA](#small-blackwell) | Keep geometry within the measured cases below. |
+| RTX 5090 32 GB (SM120) | Block ring, or [explicit resident admission](#small-blackwell) for a bounded small-shape deployment | Resident deployments set their own tested request ceiling, such as 1 MP / 5 s. |
+| SM103, MIG partitions | Preview | Complete-device qualification remains a separate step. |
 
 For the original-v0.1 hybrid on SM90/SM120, provision at least 128 GB of host RAM with headroom; device
 memory alone does not determine compatibility.
@@ -68,11 +69,24 @@ while both denoise ([dual-GPU setup](./getting-started#native-latents), [measure
 
 `H3Pipeline(..., weight_residency="resident")` keeps the trunk on one SM90 GPU with at least 75 GiB VRAM or
 one SM120 GPU with at least 90 GiB. It requires the original-v0.1 `HybridModel`, `attention_backend="veda-triton"`
-and `PYTORCH_ALLOC_CONF=expandable_segments:True` set **before the Python process starts**. Residency covers
-I2VA with one first frame for up to 15 seconds. On SM90 the canvas is at most 1536×864 pixels; on 96 GiB SM120 it
-follows the native-HD budget `width × height × model_frames ≤ 2048² × 124` (for example 2720×1536 for 5 s or
-1920×1088 for 10 s, at a measured 42.1 GiB peak with the FP8 trunk). Other modes and larger requests use the block
-ring, which remains the default and the rollback.
+and `PYTORCH_ALLOC_CONF=expandable_segments:True` set **before the Python process starts**.
+SM90 covers one-first-frame I2VA up to 15 seconds and 1536×864 pixels. Since 0.17.1, 96 GiB SM120
+also admits L2VA, FL2VA and image Ref. Image-conditioned requests follow the native-HD joint budget
+`width × height × model_frames ≤ 2048² × 124`, with the mode-specific limits in the
+[complete pipeline](./complete-pipeline#extended-hybrid). Multiple reference images use at most
+960×544 for five seconds. Complete SM120 outputs include:
+
+| Mode | Measured request |
+| --- | --- |
+| I2VA | 2048×2048 / 5 s |
+| L2VA | 1344×768 / 15 s |
+| FL2VA | 1440×1440 / 10 s |
+| Ref2VA | Two or nine images, 960×544 / 5 s |
+
+These rows establish execution and delivery for those inputs; assess creative quality against the original
+brief and references. Block ring remains the default memory strategy. The following earlier matched
+I2VA comparison measures residency itself; current attention comparisons are in the
+[0.17 release notes](../reference/releases#_0-17-0).
 
 | Same-instance A/B/A2 | H100 SXM ring / resident / ring | RTX PRO 6000 Server ring / resident / ring |
 | --- | --- | --- |
@@ -93,7 +107,19 @@ batch time.
 | H100 NVL | 1920×1088/10 s 288.1, 1536×864/15 s 263.9, 2048²/5 s 321.6, 1440²/10 s 289.9 | Initialization 46.6 s; other modes unqualified |
 | RTX 5090 32 GB / 600 W | 2048²/5 s 451.0 (27.0 GiB peak), 1440²/10 s 392.4, 1536×864/15 s 364.9 | Block ring with expandable segments; a 500 W card failed 2048²/5 s |
 
-These are capacity results with complete decoding and multi-time visual review, not quality or routing defaults.
+The table records block-ring capacity and multi-time visual review for those exact cases.
+For a bounded resident deployment on a 32 GiB RTX 5090, 0.16.1+ accepts
+`VFLASH_SM120_RESIDENT_GIB=30` before process startup. The default threshold remains 90 GiB;
+applications must apply their own measured geometry ceiling, for example 1 MP / 5 s. Larger shapes
+retain their separately measured block-ring scope. See [release 0.16.1](../reference/releases#_0-16-1).
+
+### Attention choices
+
+`veda_dense_edge_layers=3`, `4` or `5` selects 44/6, 42/8 or 40/10 Veda/dense layers.
+The public default is **40/10**. On SM120, `veda_dense_backend="sageattention2"` uses INT8 QK / FP8 PV
+in both dense and sparse attention; `"frost-flash"` uses BF16 dense attention and INT8 QK / FP16 PV
+for sparse attention. FP8 model weights are a separate choice. The [0.17 comparison](../reference/releases#_0-17-0)
+records complete-engine timing and scene-specific quality evidence for these explicit settings.
 
 ### Container device discovery
 

@@ -25,8 +25,8 @@ const text = computed(() => zh.value ? {
   copy: '复制', copied: '已复制', copyFailed: '请手动选择命令复制',
   gpu: [
     { execution: '单卡 · 常驻或块环', profiles: '全部配置；混合 v0.1 最长 15 秒、原生 4MP', note: '参考平台。BF16 混合 Veda 44/6 实测 2720×1536 五秒约 660 秒；928×512 五秒含六步音频修复约 112 秒。' },
-    { execution: '单卡 · FP8 常驻主干', profiles: '混合 I2VA（预览）', note: '0.15 起按像素帧预算常驻：含人脸与六步音频修复，1920×1088 五秒 163 秒、2720×1536 五秒 261 秒，显存峰值 42 GiB。' },
-    { execution: '单卡 · 常驻或块环', profiles: '混合 I2VA（预览）', note: '常驻主干需至少 75 GiB；1536×864 十五秒常驻实测 227 秒。更大画布使用块环。' },
+    { execution: '单卡 · FP8 常驻主干', profiles: '常驻 I2VA / L2VA / FL2VA / Ref2VA', note: '0.17 支持四种图像模式，最多九张参考图。FP8 常驻、Sage 44/6 实测 2720×1536 五秒 222.9 秒；各模式的画布与时长见硬件指南。' },
+    { execution: '单卡 · 常驻或块环', profiles: 'SXM 混合 I2VA', note: '常驻主干需至少 75 GiB；1536×864 十五秒常驻实测 227 秒。更大画布使用块环。' },
     { execution: '双卡协作 · 块流式', profiles: 'Ref4 / T2VA / Base16', note: '两张 3080 共同处理一个请求（sequence-head）。每个 worker 预留至少 64 GiB 可用系统内存。' },
   ],
   boundary: '能生成什么',
@@ -56,8 +56,8 @@ const text = computed(() => zh.value ? {
   copy: 'Copy', copied: 'Copied', copyFailed: 'Select the command to copy it',
   gpu: [
     { execution: 'One GPU · resident or block ring', profiles: 'Every profile; hybrid v0.1 up to 15 s and native 4 MP', note: 'The reference platform. BF16 hybrid Veda 44/6 measured about 660 s for 2720×1536 at five seconds and about 112 s for 928×512 with six-step audio refinement.' },
-    { execution: 'One GPU · FP8 resident trunk', profiles: 'Hybrid I2VA (preview)', note: 'Since 0.15 residency follows the pixel-frame budget: with face and six-step audio repair, 1920×1088/5 s took 163 s and 2720×1536/5 s 261 s at a 42 GiB peak.' },
-    { execution: 'One GPU · resident or block ring', profiles: 'Hybrid I2VA (preview)', note: 'A resident trunk needs at least 75 GiB; 1536×864 for fifteen seconds measured 227 s resident. Larger canvases use the block ring.' },
+    { execution: 'One GPU · FP8 resident trunk', profiles: 'Resident I2VA / L2VA / FL2VA / Ref2VA', note: '0.17 supports four image modes and up to nine references. Resident FP8 with Sage 44/6 measured 222.9 s at 2720×1536 for five seconds; see hardware guidance for each mode’s canvas and duration.' },
+    { execution: 'One GPU · resident or block ring', profiles: 'SXM hybrid I2VA', note: 'A resident trunk needs at least 75 GiB; 1536×864 for fifteen seconds measured 227 s resident. Larger canvases use the block ring.' },
     { execution: 'Two GPUs · streamed', profiles: 'Ref4 / T2VA / Base16', note: 'Two 3080s cooperate on one request with sequence-head. Allow at least 64 GiB of available host RAM per worker.' },
   ],
   boundary: 'What you can generate',
@@ -124,7 +124,7 @@ onBeforeUnmount(() => clearTimeout(copyTimer))
           <a class="vf-button" :href="link('/guide/getting-started')">{{ text.start }} <span aria-hidden="true">→</span></a>
           <a class="vf-text-link" :href="link('/guide/profiles')">{{ text.support }} <span aria-hidden="true">↗</span></a>
         </div>
-        <p class="vf-meta"><span>SM86 / SM89 / SM90 / SM120</span><span>T2VA · I2VA · FL2VA · Ref2VA</span><span>Apache 2.0</span></p>
+        <p class="vf-meta"><span>SM86 / SM89 / SM90 / SM120</span><span>T2VA · I2VA · L2VA · FL2VA · Ref2VA</span><span>Apache 2.0</span></p>
       </div>
 
       <div class="vf-gpu-card">

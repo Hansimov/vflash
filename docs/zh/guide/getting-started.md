@@ -22,6 +22,13 @@ python -m pip install -e '.[pipeline]'     # 完整 MP4 流水线（已包含 GP
 只用原生去噪器时安装 `.[gpu]`，原生 HTTP 服务安装 `.[server]`。偏好容器时，[Docker 镜像](./docker)
 固定了相同环境（PyTorch 2.11 / CUDA 13.0）。
 
+也可直接安装[GitHub v0.17.2 发行包](https://github.com/Hansimov/vflash/releases/tag/v0.17.2)；
+wheel 与源码包对应同一 tag。完整流水线安装示例：
+
+```bash
+python -m pip install "vflash[pipeline] @ https://github.com/Hansimov/vflash/releases/download/v0.17.2/vflash-0.17.2-py3-none-any.whl"
+```
+
 ## 2. 检查显卡 {#check-your-gpu}
 
 ```bash
@@ -34,8 +41,8 @@ vflash profiles    # 本版本提供的配置
 | 显卡 | 常用配置 | 命令 |
 | --- | --- | --- |
 | RTX 4090 48 GB | `i2va-turbo4-v01-544-exact-sm89`（关键帧、混合模型、原生高清） | `vflash plan i2va-turbo4-v01-544-exact-sm89 --gpu 0` |
-| RTX PRO 6000 96 GB | `i2va-turbo4-v01-544-exact-sm120`（混合 I2VA，预览） | `vflash plan i2va-turbo4-v01-544-exact-sm120 --gpu 0` |
-| H100 80 GB | `i2va-turbo4-v01-544-exact-sm90`（混合 I2VA，预览） | `vflash plan i2va-turbo4-v01-544-exact-sm90 --gpu 0` |
+| RTX PRO 6000 96 GB | `i2va-turbo4-v01-544-exact-sm120`（混合图像模式，详见硬件范围） | `vflash plan i2va-turbo4-v01-544-exact-sm120 --gpu 0` |
+| H100 SXM 80 GB | `i2va-turbo4-v01-544-exact-sm90`（混合 I2VA） | `vflash plan i2va-turbo4-v01-544-exact-sm90 --gpu 0` |
 | 两张 RTX 3080 20 GB | `ref2va-turbo4-exact-sm86` | `vflash plan ref2va-turbo4-exact-sm86 --gpu 0 --peer-gpu 1 --strategy sequence-head` |
 
 4090 上还提供纯文本（`t2va-turbo4-exact-sm89`）、参考图（`ref2va-turbo4-exact-sm89`）和 Base16
