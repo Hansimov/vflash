@@ -132,6 +132,10 @@ with H3Pipeline(prepared, device=devices[0], trust_local_code=True) as pipeline:
 
 在只读容器中，请为 Triton 提供可写且可执行的缓存目录；`noexec` 临时文件系统不能作为该缓存。
 
+管道媒体交付采用120秒停滞时限与600秒编码总时限；RGB输入块写入完成或编码文件增长会刷新停滞计时。
+到期后回收自有编码进程并清理临时媒体。直接调用`encode_mp4`时可设置`stall_timeout_seconds`和
+`timeout_seconds`，文件输入采用总时限。
+
 ## 交付选项 {#delivery-options}
 
 | 选项 | 作用 |

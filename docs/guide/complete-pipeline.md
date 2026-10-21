@@ -153,6 +153,11 @@ from the verified local snapshot; review the [licenses](../reference/license) fi
 In a read-only container give Triton a writable, executable cache directory; a `noexec` temporary
 filesystem cannot serve as that cache.
 
+Piped media delivery has a 120-second inactivity deadline and a 600-second total encoding deadline.
+Completed RGB input writes and encoded-file growth refresh the inactivity clock. On expiry, the owned
+encoder is reaped and temporary media is removed. Direct `encode_mp4` callers can set
+`stall_timeout_seconds` and `timeout_seconds`; file input uses the total deadline.
+
 ## Delivery options {#delivery-options}
 
 | Option | Effect |

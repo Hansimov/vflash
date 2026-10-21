@@ -372,7 +372,14 @@ def test_pipe_preserves_exact_media_and_borrowed_tensors(tmp_path, audio_profile
     assert sorted(p.name for p in tmp_path.iterdir()) == ["file.mp4", "pipe.mp4"]
 
 
-def test_pipe_deadline_reaps_stalled_child_without_publishing(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    "limits",
+    [
+        {"timeout_seconds": 0.5},
+        {"timeout_seconds": 10, "stall_timeout_seconds": 0.5},
+    ],
+)
+def test_pipe_deadline_reaps_stalled_child_without_publishing(tmp_path, monkeypatch, limits):
     import os
     import time
 
@@ -390,10 +397,10 @@ def test_pipe_deadline_reaps_stalled_child_without_publishing(tmp_path, monkeypa
     )
     video, audio = _media()
     start = time.monotonic()
-    with pytest.raises(MediaError, match=r"did not complete|ffmpeg failed"):
-        encode_mp4(
-            video, audio, tmp_path / "output.mp4", video_input="pipe", timeout_seconds=0.5
-        )
+    with pytest.raises(
+        MediaError, match=r"did not complete|ffmpeg failed|no encoding progress"
+    ):
+        encode_mp4(video, audio, tmp_path / "output.mp4", video_input="pipe", **limits)
     assert time.monotonic() - start < 4 and not (tmp_path / "output.mp4").exists()
     assert not list(tmp_path.glob(".vflash-media-*"))
     with pytest.raises(ProcessLookupError):

@@ -1,6 +1,14 @@
 # Release notes
 
 
+## 0.17.2
+
+Piped MP4 delivery now ends an encoder that makes no progress for 120 seconds, while retaining
+the 600-second total deadline. Completed RGB writes and encoded-file growth refresh the inactivity
+clock. Both deadlines reap the owned process and clean temporary files; publication follows the
+existing successful-media checks. Codec settings and input tensors retain their existing behavior.
+CPU checks cover blocked children, actual FFmpeg output and file/pipe media equivalence.
+
 ## 0.17.1
 
 Align resident SM120 hybrid request admission with I2VA, L2VA, FL2VA and image Ref modes.

@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import time
 import wave
 from pathlib import Path
 from typing import Any
@@ -90,6 +91,7 @@ def encode_mp4(
     preset: str = "medium",
     crf: int = 18,
     timeout_seconds: float = 600,
+    stall_timeout_seconds: float = 120,
     audio_delivery_profile: str = "unchanged",
     video_input: str = "file",
     video_threads: int | None = None,
@@ -102,7 +104,8 @@ def encode_mp4(
     None preserves FFmpeg auto selection; thread changes can alter H.264 bytes.
     RGB floats are quantized eight frames at a time. Explicit ``video_input="pipe"``
     feeds FFmpeg directly; the default retains the raw RGB file. The pipe deadline
-    covers feeding and encoding. Temporary files are removed on success or failure.
+    covers feeding and encoding; a separate pipe inactivity deadline observes completed
+    input writes and encoded-file growth. Temporary files are removed on success or failure.
     A completed and probed MP4 is published with an atomic, no-clobber link.
     """
     import torch
@@ -155,6 +158,13 @@ def encode_mp4(
         or timeout_seconds <= 0
     ):
         raise MediaError("the encoding deadline must be positive and finite")
+    if (
+        isinstance(stall_timeout_seconds, bool)
+        or not isinstance(stall_timeout_seconds, int | float)
+        or not math.isfinite(stall_timeout_seconds)
+        or stall_timeout_seconds <= 0
+    ):
+        raise MediaError("the encoding inactivity deadline must be positive and finite")
     if has_audio and abs(samples / audio_sample_rate - frames / fps) > 1 / audio_sample_rate:
         raise MediaError("audio and video must share the same delivery duration")
     ffmpeg, ffprobe = media_executables()
@@ -290,18 +300,50 @@ def encode_mp4(
                     )
                 except OSError as exc:
                     raise MediaError("ffmpeg could not start") from exc
+                last_progress = time.monotonic()
                 timer = threading.Timer(timeout_seconds, process.kill)
                 timer.daemon = True
                 timer.start()
+                stop_watch = threading.Event()
+                stalled = False
+
+                def watch_progress():
+                    nonlocal last_progress, stalled
+                    previous_size = 0
+                    interval = min(1.0, stall_timeout_seconds / 4)
+                    while not stop_watch.wait(interval):
+                        now = time.monotonic()
+                        try:
+                            size = encoded_path.stat().st_size
+                        except OSError:
+                            size = 0
+                        if size > previous_size:
+                            last_progress, previous_size = now, size
+                        if stop_watch.is_set():
+                            return
+                        if now - last_progress >= stall_timeout_seconds:
+                            stalled = True
+                            process.kill()
+                            return
+
+                watcher = threading.Thread(target=watch_progress, daemon=True)
+                watcher.start()
                 try:
                     assert process.stdin is not None
                     for block in rgb_blocks():
                         process.stdin.write(memoryview(block).cast("B"))
+                        last_progress = time.monotonic()
                     process.stdin.close()
                     code = process.wait(timeout=timeout_seconds)
                 except (OSError, subprocess.TimeoutExpired) as exc:
-                    raise MediaError("ffmpeg did not complete the video") from exc
+                    message = (
+                        "ffmpeg made no encoding progress"
+                        if stalled
+                        else "ffmpeg did not complete the video"
+                    )
+                    raise MediaError(message) from exc
                 finally:
+                    stop_watch.set()
                     timer.cancel()
                     if process.poll() is None:
                         process.kill()
@@ -311,6 +353,9 @@ def encode_mp4(
                             process.stdin.close()
                     except OSError:
                         pass
+                    watcher.join(timeout=1)
+                if stalled:
+                    raise MediaError("ffmpeg made no encoding progress")
                 if code or not encoded_path.is_file():
                     stderr.seek(max(0, stderr.tell() - 2000))
                     raise MediaError("ffmpeg failed: " + stderr.read(2000))
