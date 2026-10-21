@@ -15,7 +15,7 @@ Linux, Python 3.11+, an NVIDIA driver for CUDA 13.0, and `ffmpeg`/`ffprobe` on `
 install is a light CLI without PyTorch; add the extra for the interface you use.
 
 ```bash
-git clone --branch v0.17.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.17.1 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv && source .venv/bin/activate
 python -m pip install -e '.[pipeline]'     # complete MP4 pipeline (includes GPU dependencies)

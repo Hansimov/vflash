@@ -1,6 +1,14 @@
 # Release notes
 
 
+## 0.17.1
+
+Align resident SM120 hybrid request admission with I2VA, L2VA, FL2VA and image Ref modes.
+The existing pixel-frame ceiling and multi-reference 960×544/5-second limit remain in effect;
+SM90 retains its existing I2VA scope. This fixes rejection before inference and leaves model
+weights, attention and denoising unchanged. CPU contract checks pass; GPU execution evidence
+for the added resident modes is being collected separately from the existing I2VA qualification.
+
 ## 0.17.0
 
 `veda_dense_edge_layers=4` selects dense layers 0–3 and 46–49, with Veda on the
