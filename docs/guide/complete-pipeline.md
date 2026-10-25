@@ -252,6 +252,22 @@ selects full-context six-step control. Progress reports 4 + 6 evaluations and `a
 added work; failure restores bindings, attention, video and original audio. There is no CLI or HTTP switch
 and no default activation.
 
+### Encoded-source soundtrack restoration (development candidate)
+
+Advanced native sessions can take `encoded_audio_source=EncodedAudioSource(video_rows, audio_rows)`
+with an explicit `AudioRefinementRequest`. Both tensors are finite, normalized model-coordinate rows:
+video excludes the conditioning keyframe prefix, while stereo audio uses channel-major packing.
+The session owns a copy and skips the ordinary video trajectory. Keep the original encoded picture
+stream for final muxing; VAE decoding is needed only for the new audio.
+
+The default six-step recipe also accepts encoded source media. A separate restoration candidate uses
+`evaluations=20, denoise=0.95`, with matching tables compiled using
+`compile_refinement_tables(..., steps=20, denoise=0.95, mode="audio")`. This recipe belongs to encoded
+source restoration and retains full recomputation when both cache options are false. Its higher
+re-noising strength can change the sound itself; compare the result against the original sound brief.
+This API preserves video latents and provides audio candidates. Select the recipe through listening
+for naturalness, sound-content fidelity and artifacts; measure these separately from picture preservation.
+
 ### Hidden-context reuse {#audio-hidden-context}
 
 `reuse_hidden_context=True` reuses first-evaluation BF16 non-audio hidden states; all six audio evaluations

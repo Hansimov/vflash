@@ -194,9 +194,9 @@ def test_request_rejects_unmatched_schedule_and_unqualified_budget():
     for bad in [True, 300000, 0]:
         with pytest.raises(ValueError, match=r"0\.25MP or 0\.5MP"):
             AudioRefinementRequest(schedule, tables, context_pixels=bad)
-    with pytest.raises(ValueError, match="matched six-step"):
+    with pytest.raises(ValueError, match="matched audio schedule"):
         AudioRefinementRequest(refinement_schedule(steps=6, denoise=0.25), tables)
-    with pytest.raises(ValueError, match="matched six-step"):
+    with pytest.raises(ValueError, match="matched audio schedule"):
         AudioRefinementRequest(schedule, tables[:-1])
 
 
@@ -226,3 +226,101 @@ def test_full_context_reports_each_added_evaluation_and_restores_video():
     assert "context_reduction" not in result and result["extra_audio_nfe"] == 6
     assert engine.latent_state is state and state.evaluation_index == 4
     assert torch.equal(video, state.video_latents)
+
+
+def test_encoded_audio_repair_seeds_targets_keeps_keyframe_and_owns_storage():
+    from vflash.native.h3_audio_refinement import (
+        EncodedAudioSource,
+        install_encoded_audio_source,
+    )
+
+    engine = context_engine()
+    state = engine.latent_state
+    state.evaluation_index = 0
+    prefix = state.video_latents[:, : state.num_condition_video_rows].clone()
+    video = torch.full_like(state.video_latents[:, state.num_condition_video_rows :], 0.25)
+    audio = torch.full_like(state.audio_latents, 0.125)
+    record = install_encoded_audio_source(engine, EncodedAudioSource(video, audio))
+    assert engine.complete and record["video_nfe"] == 0
+    assert torch.equal(state.video_latents[:, : state.num_condition_video_rows], prefix)
+    assert torch.equal(state.video_latents[:, state.num_condition_video_rows :], video)
+    assert torch.equal(state.audio_latents, audio)
+    video.zero_()
+    audio.zero_()
+    assert state.audio_latents.eq(0.125).all()
+    assert state.video_latents[:, state.num_condition_video_rows :].eq(0.25).all()
+
+
+@pytest.mark.parametrize("fault", ["video_shape", "audio_shape", "nan", "started"])
+def test_invalid_encoded_source_leaves_owned_request_unchanged(fault):
+    from vflash.native.h3_audio_refinement import (
+        EncodedAudioSource,
+        install_encoded_audio_source,
+    )
+
+    engine = context_engine()
+    state = engine.latent_state
+    state.evaluation_index = 1 if fault == "started" else 0
+    original_video, original_audio = state.video_latents.clone(), state.audio_latents.clone()
+    video = torch.ones_like(state.video_latents[:, state.num_condition_video_rows :])
+    audio = torch.ones_like(state.audio_latents)
+    if fault == "video_shape":
+        video = video[:, :-1]
+    if fault == "audio_shape":
+        audio = audio[:, :-1]
+    if fault == "nan":
+        audio[0, 0, 0] = float("nan")
+    with pytest.raises(ValueError):
+        install_encoded_audio_source(engine, EncodedAudioSource(video, audio))
+    assert torch.equal(state.video_latents, original_video)
+    assert torch.equal(state.audio_latents, original_audio)
+    assert state.evaluation_index == (1 if fault == "started" else 0)
+
+
+def test_twenty_step_restoration_keeps_picture_and_uses_declared_schedule():
+    engine = context_engine(16, 24)
+    state = engine.latent_state
+    picture = state.video_latents.clone()
+    original_audio = state.audio_latents.clone()
+    schedule = refinement_schedule(steps=20, denoise=0.95)
+    tables = tuple([torch.zeros(21, 9, 6, 2) for _ in range(50)] + [torch.zeros(21, 3, 2, 2)])
+    request = AudioRefinementRequest(
+        schedule, tables, context_pixels=None, evaluations=20, denoise=0.95
+    )
+    evaluated = []
+
+    def step(view, **kwargs):
+        evaluated.append(view.latent_state.evaluation_index)
+        view.latent_state.step(
+            video_velocity=torch.zeros_like(view.latent_state.video_latents),
+            audio_velocity=torch.ones_like(view.latent_state.audio_latents),
+        )
+
+    _, report = refine_audio(engine, request, step=step, noise=torch.zeros_like(original_audio))
+    assert evaluated == list(range(1, 21))
+    assert report["extra_audio_nfe"] == 20
+    assert torch.equal(state.video_latents, picture)
+    assert not torch.equal(state.audio_latents, original_audio)
+    with pytest.raises(ValueError, match="matched audio schedule"):
+        AudioRefinementRequest(schedule, tables)
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {"context_pixels": 250000},
+        {"reuse_hidden_context": True},
+        {"reuse_kv_context": True},
+    ],
+)
+def test_twenty_step_restoration_requires_qualified_full_context(options):
+    schedule = refinement_schedule(steps=20, denoise=0.95)
+    tables = tuple([torch.zeros(21, 9, 6, 2) for _ in range(50)] + [torch.zeros(21, 3, 2, 2)])
+    with pytest.raises(ValueError, match="full uncached context"):
+        AudioRefinementRequest(
+            schedule,
+            tables,
+            **{"context_pixels": None, **options},
+            evaluations=20,
+            denoise=0.95,
+        )

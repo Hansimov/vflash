@@ -708,6 +708,7 @@ class H3NativeConditioningRuntime:
         generate_audio: bool = True,
         video_repaint: Any | None = None,
         audio_refinement: Any | None = None,
+        encoded_audio_source: Any | None = None,
         video_ready_callback: Callable[[Any], None] | None = None,
     ) -> H3NativeConditioningRuntimeResult:
         """Run one live request and export target-only VAE-ready latents."""
@@ -726,9 +727,21 @@ class H3NativeConditioningRuntime:
             raise H3NativeConditioningRuntimeError(
                 "video readiness requires audio refinement and a callable consumer"
             )
+        if encoded_audio_source is not None and audio_refinement is None:
+            raise H3NativeConditioningRuntimeError(
+                "encoded audio repair requires explicit audio refinement"
+            )
         if audio_refinement is not None:
             from vflash.native.h3_audio_refinement import AudioRefinementRequest
 
+            if (
+                isinstance(audio_refinement, AudioRefinementRequest)
+                and audio_refinement.steps == 20
+                and encoded_audio_source is None
+            ):
+                raise H3NativeConditioningRuntimeError(
+                    "twenty-step restoration requires encoded source media"
+                )
             if (
                 not isinstance(audio_refinement, AudioRefinementRequest)
                 or not generate_audio
@@ -863,6 +876,13 @@ class H3NativeConditioningRuntime:
         repaint = None
         execution_nfe = self.overlay.schedule.nfe
         execution_schedule = self.overlay.schedule.to_mapping()
+        source_record = None
+        if encoded_audio_source is not None:
+            from vflash.native.h3_audio_refinement import install_encoded_audio_source
+
+            source_record = install_encoded_audio_source(engine, encoded_audio_source)
+            execution_nfe = 0
+            execution_schedule = {**execution_schedule, **source_record, "nfe": 0}
         if video_repaint is not None:
             from vflash.native.h3_refinement import VideoRepaint
 
@@ -991,6 +1011,8 @@ class H3NativeConditioningRuntime:
                     noise=audio_noise,
                     progress_callback=audio_progress,
                 )
+            if source_record is not None:
+                audio_record["encoded_source"] = source_record
             del baseline_audio
         del audio_noise
         if not bool(
@@ -1020,7 +1042,13 @@ class H3NativeConditioningRuntime:
             else None
         )
         if self._veda_attention is not None:
-            self._veda_attention.validate_calls(execution_nfe)
+            if source_record is not None:
+                if self._veda_attention.sparse_calls or self._veda_attention.dense_calls:
+                    raise H3NativeConditioningRuntimeError(
+                        "encoded audio repair executed a video trajectory"
+                    )
+            else:
+                self._veda_attention.validate_calls(execution_nfe)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         save_safetensors_atomic(
             output_path,
@@ -1035,6 +1063,14 @@ class H3NativeConditioningRuntime:
                 "frames": str(bundle.profile.frames),
                 "height": str(bundle.profile.height),
                 "schedule_nfe": str(execution_nfe),
+                **(
+                    {
+                        "encoded_audio_source": "true",
+                        "audio_refinement_nfe": str(audio_record["extra_audio_nfe"]),
+                    }
+                    if source_record is not None
+                    else {}
+                ),
                 "width": str(bundle.profile.width),
                 "parallel_strategy": self.parallel_strategy,
             },

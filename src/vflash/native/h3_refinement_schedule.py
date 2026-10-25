@@ -15,8 +15,8 @@ from pathlib import Path
 def refinement_schedule(*, steps, denoise, video_shift=12.0, audio_shift=3.0):
     from vflash.native.h3_native_scheduler import H3NativeSchedule
 
-    if type(steps) is not int or not 2 <= steps <= 8:
-        raise ValueError("refinement requires 2..8 explicit evaluations")
+    if type(steps) is not int or not 2 <= steps <= 32:
+        raise ValueError("refinement requires 2..32 explicit evaluations")
     if (
         type(denoise) not in (int, float)
         or not math.isfinite(denoise)

@@ -210,6 +210,18 @@ result = pipeline.generate(request, output_path, audio_refinement=refinement)
 加 `veda-sm89`。静音交付、仅视频输出、其他模式以及同时重绘会被拒绝。默认 `context_pixels=500_000` 以均匀抽样到 0.5MP 的视频上下文作为条件；`context_pixels=250_000` 选择 0.25MP 预算（0.15.1 起），`context_pixels=None` 选择全上下文六步对照。进度报告
 4 + 6 次评估，`audio_refinement` 记录额外工作；失败时恢复绑定、注意力、视频和原音频。没有命令行或 HTTP 开关，也不默认启用。
 
+### 原片音轨重建（开发候选）
+
+高级原生会话可传入 `encoded_audio_source=EncodedAudioSource(video_rows, audio_rows)`，并显式指定
+`AudioRefinementRequest`。输入是有限值、已归一化的模型坐标：视频行排除首帧条件前缀，双声道音频按声道连续排列。
+会话复制输入并跳过原视频采样；最终封装复用原视频码流，仅解码新音频。
+
+默认六步方案支持这类原片条件。另一个重建候选采用 `evaluations=20, denoise=0.95`，需要
+`compile_refinement_tables(..., steps=20, denoise=0.95, mode="audio")` 编译的匹配参数表。
+该方案仅用于原片重建，两个缓存选项保持 false 时逐步完整重算。较强重采样可能改变声音内容，
+按原声音要求试听选择。接口保持画面潜变量并输出音频候选，按自然度、声音内容和电音分别评价，
+与画面保持的技术检查分别记录。
+
 ### 隐藏上下文复用 {#audio-hidden-context}
 
 `reuse_hidden_context=True` 复用首次评估的 BF16 非音频隐藏状态；六次音频评估都保留，后续步骤重建 K/V，只处理音频行。

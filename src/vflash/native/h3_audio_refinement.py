@@ -25,6 +25,55 @@ class ContextSelection:
     protected_rows: int
 
 
+@dataclass(frozen=True)
+class EncodedAudioSource:
+    """Clean VAE-encoded target rows for repairing an existing soundtrack.
+
+    Video excludes the conditioning keyframe prefix; audio is channel-major.
+    Both tensors use normalized H3 model coordinates. The caller retains the
+    original picture stream for final muxing, avoiding a video VAE round trip.
+    """
+
+    video_rows: object
+    audio_rows: object
+
+
+def install_encoded_audio_source(engine, source):
+    """Seed a new owned request from encoded media, with zero video evaluations."""
+    import torch
+
+    if not isinstance(source, EncodedAudioSource):
+        raise ValueError("audio repair requires explicit encoded source latents")
+    state = engine.latent_state
+    target = state.video_latents[:, state.num_condition_video_rows :]
+    if state.evaluation_index != 0 or state.num_condition_audio_rows:
+        raise ValueError("audio repair requires a fresh unconditioned audio request")
+    for value, expected in (
+        (source.video_rows, target),
+        (source.audio_rows, state.audio_latents),
+    ):
+        if (
+            not isinstance(value, torch.Tensor)
+            or not value.is_floating_point()
+            or value.shape != expected.shape
+            or not bool(value.isfinite().all())
+        ):
+            raise ValueError("encoded source geometry or finite latent values differ")
+    video = source.video_rows.to(device=state.device, dtype=target.dtype)
+    audio = source.audio_rows.to(device=state.device, dtype=state.audio_latents.dtype)
+    if not bool(video.isfinite().all() and audio.isfinite().all()):
+        raise ValueError("encoded source overflows native model coordinates")
+    target.copy_(video)
+    state.audio_latents.copy_(audio)
+    state.evaluation_index = state.schedule.nfe
+    return {
+        "kind": "encoded-av-audio-repair",
+        "video_nfe": 0,
+        "encoded_video_rows": target.shape[1],
+        "encoded_audio_rows": audio.shape[1],
+    }
+
+
 def _attention_blocks(engine):
     """One attention owner shared by all resident blocks or both ring slots."""
     denoiser = engine.denoiser
@@ -199,9 +248,11 @@ def reduced_audio_context(engine, *, max_pixels=500_000):
 
 @dataclass(frozen=True)
 class AudioRefinementRequest:
-    """Six audio evaluations with original video pixels and time positions kept.
+    """Explicit audio refinement with original video pixels and time positions kept.
 
-    Compiled tables and schedule must describe the same sigma-0.5 six-step pass.
+    The default is six steps at denoise 0.5 (shifted audio sigma 0.75).
+    Encoded-source restoration also supports twenty steps at denoise 0.95.
+    Each recipe requires its own matching compiled modulation tables.
     A None spatial budget explicitly retains the full video context for control.
     Hidden reuse freezes first-evaluation non-audio states, with fresh audio and
     rebuilt context K/V on each step. This is an explicit approximation, not an
@@ -214,6 +265,8 @@ class AudioRefinementRequest:
     context_pixels: int | None = 500_000
     reuse_hidden_context: bool = False
     reuse_kv_context: bool = False
+    evaluations: int = 6
+    denoise: float = 0.5
 
     def __post_init__(self):
         from .h3_native_scheduler import H3NativeSchedule
@@ -227,14 +280,34 @@ class AudioRefinementRequest:
             raise ValueError(
                 "audio context caches require explicit boolean choices with at most one enabled"
             )
-        expected = refinement_schedule(steps=6, denoise=0.5)
+        if (
+            type(self.evaluations) is not int
+            or type(self.denoise) not in (int, float)
+            or (self.evaluations, self.denoise)
+            not in {
+                (6, 0.5),
+                (20, 0.95),
+            }
+        ):
+            raise ValueError(
+                "audio requires six-step refinement or twenty-step encoded-source restoration"
+            )
+        if self.evaluations == 20 and (
+            self.context_pixels is not None
+            or self.reuse_hidden_context
+            or self.reuse_kv_context
+        ):
+            raise ValueError("twenty-step restoration requires full uncached context")
+        expected = refinement_schedule(steps=self.evaluations, denoise=self.denoise)
         if (
             not isinstance(self.schedule, H3NativeSchedule)
             or self.schedule.to_mapping() != expected.to_mapping()
             or len(self.tables) != 51
             or any(table.shape[0] != expected.nfe for table in self.tables)
         ):
-            raise ValueError("audio refinement requires matched six-step sigma-0.5 tables")
+            raise ValueError(
+                "audio refinement requires matched audio schedule and modulation tables"
+            )
         if self.context_pixels is not None and (
             type(self.context_pixels) is not int
             or self.context_pixels not in CONTEXT_PIXEL_BUDGETS
@@ -245,7 +318,7 @@ class AudioRefinementRequest:
 
     @property
     def steps(self):
-        return 6
+        return self.evaluations
 
 
 def _refine_full_audio(engine, request, *, step, noise):
@@ -283,9 +356,13 @@ def _refine_full_audio(engine, request, *, step, noise):
                     cache["build_block_calls"] != 50
                     or cache["reuse_block_calls"] != 50 * (request.steps - 1)
                     or cache["rebuilt_projection_rows"]
-                    != (0 if request.reuse_kv_context else 250 * cache["sequence_length"])
+                    != (
+                        0
+                        if request.reuse_kv_context
+                        else 50 * (request.steps - 1) * cache["sequence_length"]
+                    )
                 ):
-                    raise ValueError("audio cache did not execute six complete evaluations")
+                    raise ValueError("audio cache did not execute every declared evaluation")
             if state.device.type == "cuda":
                 torch.cuda.synchronize(state.device)
             if (
