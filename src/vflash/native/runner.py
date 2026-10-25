@@ -235,6 +235,7 @@ class NativeEngineSession:
         profile_denoise: bool = False,
         generate_audio: bool = True,
         audio_refinement: Any | None = None,
+        video_ready_callback: Callable[[Any], None] | None = None,
     ) -> dict[str, Any]:
         if self.closed:
             raise ContractError("the native engine session is closed")
@@ -250,6 +251,12 @@ class NativeEngineSession:
             options["generate_audio"] = False
         if audio_refinement is not None:
             options["audio_refinement"] = audio_refinement
+        if video_ready_callback is not None:
+            if not callable(video_ready_callback) or audio_refinement is None:
+                raise ContractError(
+                    "video readiness requires an audio refinement request and callable"
+                )
+            options["video_ready_callback"] = video_ready_callback
         result = self.runtime.generate_latents(bundle, output_latents, **options)
         self.request_count += 1
         return {

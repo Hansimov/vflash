@@ -213,13 +213,20 @@ class AudioRefinementRequest:
     tables: tuple
     context_pixels: int | None = 500_000
     reuse_hidden_context: bool = False
+    reuse_kv_context: bool = False
 
     def __post_init__(self):
         from .h3_native_scheduler import H3NativeSchedule
         from .h3_refinement_schedule import refinement_schedule
 
-        if type(self.reuse_hidden_context) is not bool:
-            raise ValueError("hidden context reuse must be an explicit boolean")
+        if (
+            type(self.reuse_hidden_context) is not bool
+            or type(self.reuse_kv_context) is not bool
+            or (self.reuse_hidden_context and self.reuse_kv_context)
+        ):
+            raise ValueError(
+                "audio context caches require explicit boolean choices with at most one enabled"
+            )
         expected = refinement_schedule(steps=6, denoise=0.5)
         if (
             not isinstance(self.schedule, H3NativeSchedule)
@@ -247,6 +254,7 @@ def _refine_full_audio(engine, request, *, step, noise):
     import torch
 
     from .h3_audio_hidden_cache import frozen_video_hidden
+    from .h3_audio_kv_cache import frozen_video_kv
     from .h3_refinement import quality_pass
 
     state = engine.latent_state
@@ -264,6 +272,8 @@ def _refine_full_audio(engine, request, *, step, noise):
             cache_scope = (
                 frozen_video_hidden(engine)
                 if request.reuse_hidden_context
+                else frozen_video_kv(engine)
+                if request.reuse_kv_context
                 else nullcontext(None)
             )
             with cache_scope as cache:
@@ -272,7 +282,8 @@ def _refine_full_audio(engine, request, *, step, noise):
                 if cache is not None and (
                     cache["build_block_calls"] != 50
                     or cache["reuse_block_calls"] != 50 * (request.steps - 1)
-                    or cache["rebuilt_projection_rows"] != 250 * cache["sequence_length"]
+                    or cache["rebuilt_projection_rows"]
+                    != (0 if request.reuse_kv_context else 250 * cache["sequence_length"])
                 ):
                     raise ValueError("audio cache did not execute six complete evaluations")
             if state.device.type == "cuda":

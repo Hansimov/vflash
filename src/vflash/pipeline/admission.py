@@ -32,10 +32,25 @@ def validate_request(
         )
     if weight_residency not in {"block-ring", "resident"}:
         raise ContractError("unknown weight residency")
-    if request.reference_video is not None and (
-        profile_id != "ref2va-turbo4-exact-sm89" or parallel_strategy != "single"
-    ):
-        raise ContractError("video references require the single-SM89 Ref4 pipeline")
+    if request.reference_video is not None:
+        native_ref = profile_id == "ref2va-turbo4-exact-sm89"
+        hybrid_ref = (
+            hybrid
+            and profile_id
+            in {"i2va-turbo4-v01-544-exact-sm89", "i2va-turbo4-v01-544-exact-sm120"}
+            and attention_backend in {"veda-sm89", "veda-triton"}
+        )
+        if parallel_strategy != "single" or not (native_ref or hybrid_ref):
+            raise ContractError(
+                "video references require a single supported Ref4 or hybrid pipeline"
+            )
+        if request.reference_video_profile != "full" and not hybrid_ref:
+            raise ContractError(
+                "spatial video-reference compression requires a hybrid pipeline"
+            )
+        maximum_pixels = 1024**2 if hybrid_ref else 928 * 512
+        if request.width * request.height > maximum_pixels or request.duration_seconds != 5:
+            raise ContractError("video-reference output exceeds its five-second profile canvas")
     modes = supported_request_modes(profile_id)
     if hybrid:
         modes = (*modes, "ref2va")

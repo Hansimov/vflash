@@ -70,6 +70,7 @@ class H3Pipeline:
         media_video_input: str = "file",
         media_video_threads: int | None = None,
         conditioning_transport: str = "file",
+        audio_decode_overlap: bool = False,
         text_encoder_loader: Callable[[Path], Any] | None = None,
         native_denoiser_loader: Callable[..., Any] | None = None,
     ) -> None:
@@ -114,6 +115,9 @@ class H3Pipeline:
                 "memory conditioning requires a same-process single-device pipeline"
             )
         self.conditioning_transport = conditioning_transport
+        if type(audio_decode_overlap) is not bool:
+            raise ContractError("audio_decode_overlap must be boolean")
+        self.audio_decode_overlap = audio_decode_overlap
         if media_video_input not in {"file", "pipe"}:
             raise ContractError("media_video_input must be file or pipe")
         try:
@@ -629,11 +633,33 @@ class H3Pipeline:
                 native_options["generate_audio"] = False
             if audio_refinement is not None:
                 native_options["audio_refinement"] = audio_refinement
-            native = self._core.generate(
-                bundle if in_memory else bundle.directory,
-                directory / "latents.safetensors",
-                **native_options,
+            predecoded_video = None
+            overlap_enabled = (
+                getattr(self, "audio_decode_overlap", False)
+                and audio_refinement is not None
+                and request.duration_seconds == 5
+                and request.width * request.height <= 1024**2
             )
+            with ExitStack() as decode_scope:
+                overlap = None
+                if overlap_enabled:
+                    from vflash.media.overlap import AudioVideoOverlap
+
+                    overlap = decode_scope.enter_context(
+                        AudioVideoOverlap(
+                            self._media, width=request.width, height=request.height
+                        )
+                    )
+                    native_options["video_ready_callback"] = overlap.submit
+                native = self._core.generate(
+                    bundle if in_memory else bundle.directory,
+                    directory / "latents.safetensors",
+                    **native_options,
+                )
+                if overlap is not None:
+                    predecoded_video = overlap.finish()
+            if overlap is not None:
+                stages["audio_video_overlap"] = dict(overlap.record)
             stages["denoising"] = {
                 key: value
                 for key, value in native["generation"].items()
@@ -656,6 +682,8 @@ class H3Pipeline:
                 if request.audio_delivery_profile != "unchanged"
                 else {}
             )
+            if predecoded_video is not None:
+                media_options["predecoded_video"] = predecoded_video
             if not request.generate_audio:
                 media_options["generate_audio"] = False
             if self.media_video_threads is not None:

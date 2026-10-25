@@ -7,7 +7,12 @@ from dataclasses import asdict
 from pathlib import Path
 from traceback import clear_frames
 
+from vflash.adapters.video_references import DecodedVideoReference
 from vflash.hardware_profiles import V01_PROFILES
+from vflash.native.h3_conditioning_bundle import (
+    H3_VIDEO_REFERENCE_POLICY,
+    H3_VIDEO_REFERENCE_SPATIAL_HALF_POLICY,
+)
 from vflash.native.h3_hybrid import _digest, hybrid_reference_source
 
 
@@ -50,7 +55,12 @@ class HybridReferenceGraph:
         if any(getattr(self.pipe, name, None) is None for name in self.pipe.component_names):
             raise ValueError("hybrid Ref graph has missing components")
         self.setup = install_match_reference_setup_block(self.pipe)
+        from vflash.adapters.reference_cache import install_reference_latent_cache
+
+        self.reference_cache = install_reference_latent_cache(self.pipe)
+        self.last_capture_diagnostics = {}
         self.pipe.set_progress_bar_config(disable=True)
+        self.reference_revision = variant["reference_checkpoint_revision"]
         self.source = hybrid_reference_source(
             conditioning_source(profile_id=owner.prepared.profile_id),
             reference_revision=variant["reference_checkpoint_revision"],
@@ -58,7 +68,10 @@ class HybridReferenceGraph:
         )
 
     def capture(self, request, references, directory: Path):
-        from diffusers.modular_pipelines.minimax_h3 import MiniMaxH3ImageReference
+        from diffusers.modular_pipelines.minimax_h3 import (
+            MiniMaxH3ImageReference,
+            MiniMaxH3VideoReference,
+        )
 
         from vflash.adapters.conditioning_capture import (
             H3ConditioningCaptureComplete,
@@ -66,15 +79,37 @@ class HybridReferenceGraph:
         )
         from vflash.native.h3_conditioning_bundle import H3ConditioningProfile
 
+        is_video = request.reference_video is not None
+        expected = 1 if is_video else len(request.ordered_references)
         if (
             request.mode != "ref2va"
-            or request.reference_video is not None
-            or len(references) != len(request.ordered_references)
+            or len(references) != expected
             or not 1 <= len(references) <= 9
+            or any(isinstance(ref, DecodedVideoReference) != is_video for ref in references)
             or not self.owner._cuda_active
         ):
-            raise ValueError("resume the shared conditioner and supply ordered Ref images")
+            raise ValueError("resume the shared conditioner with ordered images or one video")
+        source = self.source
+        video_policy = (
+            H3_VIDEO_REFERENCE_SPATIAL_HALF_POLICY
+            if request.reference_video_profile == "spatial-half"
+            else H3_VIDEO_REFERENCE_POLICY
+        )
+        if is_video:
+            from vflash.pipeline.assets import conditioning_source
+
+            source = hybrid_reference_source(
+                conditioning_source(profile_id=self.owner.prepared.profile_id),
+                reference_revision=self.reference_revision,
+                runtime_versions=self.owner.versions,
+                reference_policy=video_policy,
+            )
         capture = H3ConditioningCaptureSession(directory)
+        binding = self.reference_cache.bind(
+            references[0] if is_video else None,
+            spatial_divisor=2 if video_policy == H3_VIDEO_REFERENCE_SPATIAL_HALF_POLICY else 1,
+        )
+        binding.__enter__()
         try:
             capture.install(self.owner.transformer)
             try:
@@ -85,7 +120,12 @@ class HybridReferenceGraph:
                     num_frames=request.model_frames,
                     num_inference_steps=5,
                     generator=self.owner._torch.Generator().manual_seed(request.seed),
-                    references=[MiniMaxH3ImageReference(image=r.image) for r in references],
+                    references=[
+                        MiniMaxH3VideoReference(frames=r.require_frames(), fps=24, audio=None)
+                        if is_video
+                        else MiniMaxH3ImageReference(image=r.image)
+                        for r in references
+                    ],
                     output=["videos", "audio", "sampling_rate"],
                 )
             except H3ConditioningCaptureComplete as complete:
@@ -123,7 +163,9 @@ class HybridReferenceGraph:
                         sha256=r.sha256,
                     )
                     for i, r in enumerate(references, 1)
-                ],
+                ]
+                if not is_video
+                else [],
                 delivery_profiles=[
                     dict(
                         temporal_profile=f"native-24fps-{request.duration_seconds}s",
@@ -132,21 +174,38 @@ class HybridReferenceGraph:
                     )
                 ],
             )
-            identity = _digest(
-                dict(request=metadata, profile=asdict(profile), source=self.source)
-            )
+            if is_video:
+                reference = dict(references[0].metadata)
+                if video_policy == H3_VIDEO_REFERENCE_SPATIAL_HALF_POLICY:
+                    reference["latent_spatial_divisor"] = 2
+                    reference["condition_video_rows"] = (
+                        reference["vae_latent_frames"]
+                        * max(1, reference["width"] // 64)
+                        * max(1, reference["height"] // 64)
+                    )
+                if (video_prefix, audio_prefix) != (reference["condition_video_rows"], 0):
+                    raise ValueError("captured video prefix differs from the decoded reference")
+                metadata.pop("reference_image_policy")
+                metadata.update(reference_video_policy=video_policy, references=[reference])
+            identity = _digest(dict(request=metadata, profile=asdict(profile), source=source))
             return capture.finish_in_memory(
                 bundle_id="h3-conditioning-" + identity[:32],
                 profile=profile,
                 request=metadata,
-                source=self.source,
+                source=source,
                 video_sigmas=self.pipe.scheduler.sigmas,
                 audio_sigmas=self.pipe.audio_scheduler.sigmas,
                 update_rule="training_euler",
+                schema_version=2 if is_video else 1,
             )
         finally:
+            self.last_capture_diagnostics = {
+                "reference_latents": dict(self.reference_cache.diagnostics)
+            }
+            binding.__exit__(None, None, None)
             capture.discard()
 
     def close(self):
         """Drop borrowed references before the owning conditioner releases its weights."""
+        self.reference_cache.clear()
         self.pipe = self.owner = self.setup = None

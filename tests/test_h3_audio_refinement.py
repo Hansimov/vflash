@@ -180,6 +180,11 @@ def test_request_rejects_unmatched_schedule_and_unqualified_budget():
     request = AudioRefinementRequest(schedule, tables)
     assert request.steps == 6 and request.context_pixels == 500000
     assert request.reuse_hidden_context is False
+    assert request.reuse_kv_context is False
+    with pytest.raises(ValueError, match="at most one"):
+        AudioRefinementRequest(
+            schedule, tables, reuse_hidden_context=True, reuse_kv_context=True
+        )
     for bad in (1, "true", None):
         with pytest.raises(ValueError, match="explicit boolean"):
             AudioRefinementRequest(schedule, tables, reuse_hidden_context=bad)

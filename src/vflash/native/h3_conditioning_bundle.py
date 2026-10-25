@@ -29,6 +29,7 @@ H3_FIRST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION = 3
 H3_FL2VA_CONDITIONING_BUNDLE_SCHEMA_VERSION = 4
 H3_LAST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION = 5
 H3_VIDEO_REFERENCE_POLICY = "official-video-cfr24-v1"
+H3_VIDEO_REFERENCE_SPATIAL_HALF_POLICY = "official-video-cfr24-spatial-half-v1"
 H3_FIRST_FRAME_POLICY = "official-fl2va-first-frame-stretch-v1"
 H3_FL2VA_KEYFRAME_POLICY = "official-fl2va-first-last-frame-v1"
 H3_LAST_FRAME_POLICY = "official-fl2va-last-frame-stretch-v1"
@@ -297,7 +298,9 @@ def _validate_source(value: Any) -> dict[str, str]:
     return {name: str(value[name]) for name in sorted(required)}
 
 
-def _validate_video_reference(value: Any) -> dict[str, Any]:
+def _validate_video_reference(
+    value: Any, *, policy: str = H3_VIDEO_REFERENCE_POLICY
+) -> dict[str, Any]:
     required = {
         "kind",
         "index",
@@ -317,6 +320,10 @@ def _validate_video_reference(value: Any) -> dict[str, Any]:
         "audio_conditioning",
         "decoded_rgb_sha256",
     }
+    if policy == H3_VIDEO_REFERENCE_SPATIAL_HALF_POLICY:
+        required.add("latent_spatial_divisor")
+    elif policy != H3_VIDEO_REFERENCE_POLICY:
+        raise H3ConditioningBundleError("unknown video reference policy")
     if not isinstance(value, dict) or set(value) != required:
         raise H3ConditioningBundleError("video reference fields do not match schema v2")
     integer_fields = required - {
@@ -357,6 +364,10 @@ def _validate_video_reference(value: Any) -> dict[str, Any]:
     canvas = (max(32, round(width * scale / 32) * 32), max(32, round(height * scale / 32) * 32))
     chunks = (value["frames"] - 5) // 17
     latent_frames = chunks * 5 + 2
+    divisor = value.get("latent_spatial_divisor", 1)
+    if divisor != (2 if policy == H3_VIDEO_REFERENCE_SPATIAL_HALF_POLICY else 1):
+        raise H3ConditioningBundleError("video reference compression differs from its policy")
+    latent_width, latent_height = (max(2, side // (32 * divisor) * 2) for side in canvas)
     if (
         (value["width"], value["height"]) != canvas
         or max(canvas) > 1376
@@ -365,7 +376,7 @@ def _validate_video_reference(value: Any) -> dict[str, Any]:
         or value["vae_input_frames"] != chunks * 17 + 5
         or value["vae_latent_frames"] != latent_frames
         or value["condition_video_rows"]
-        != latent_frames * (canvas[0] // 32) * (canvas[1] // 32)
+        != latent_frames * (latent_width // 2) * (latent_height // 2)
     ):
         raise H3ConditioningBundleError(
             "video reference geometry differs from the official policy"
@@ -420,7 +431,7 @@ def _validate_request(value: Any, *, task: str, schema_version: int = 1) -> dict
         not in (
             {"diffusers", "match"}
             if schema_version == 1
-            else {H3_VIDEO_REFERENCE_POLICY}
+            else {H3_VIDEO_REFERENCE_POLICY, H3_VIDEO_REFERENCE_SPATIAL_HALF_POLICY}
             if schema_version == 2
             else {H3_FIRST_FRAME_POLICY}
             if schema_version == 3
@@ -551,7 +562,7 @@ def _validate_request(value: Any, *, task: str, schema_version: int = 1) -> dict
         return {
             **value,
             "delivery_profiles": validated_deliveries,
-            "references": [_validate_video_reference(references[0])],
+            "references": [_validate_video_reference(references[0], policy=value[policy_key])],
         }
     if not isinstance(references, list) or (
         len(references) != 0 if task == "t2va" else not 1 <= len(references) <= 9
@@ -697,7 +708,7 @@ def _validate_video_profile(profile: H3ConditioningProfile, request: Mapping[str
         profile.nfe != 4
         or profile.frames != 124
         or (profile.video_flow_shift, profile.audio_flow_shift) != (12, 3)
-        or profile.width * profile.height > 928 * 512
+        or profile.width * profile.height > 1024**2
         or profile.num_condition_audio_rows != 0
         or profile.num_condition_video_rows != reference["condition_video_rows"]
         or request["delivery_profiles"]

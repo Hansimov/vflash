@@ -4,6 +4,8 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
+**0.18.0：视频参考与音画执行优化。** 单4090／PRO6000混合路径支持短视频参考，完整VAE结果可复用；空间压缩显式选择。六步音频新增K/V缓存与画面解码重叠，实测范围见[版本更新](https://hansimov.github.io/vflash/zh/reference/releases)。
+
 **0.17.0：Veda层数与精度分别选择。** `veda_dense_edge_layers=4`对应42稀疏/8密集，
 可选音频上下文阶段保持该分工；SM120沿用所选Sage FP8或FROST精度策略。默认保持40/10，
 同输入执行结果见[版本更新](https://hansimov.github.io/vflash/zh/reference/releases)。

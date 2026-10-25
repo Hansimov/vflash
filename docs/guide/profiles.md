@@ -48,6 +48,17 @@ L2VA is a request contract, not a separate weight profile. The HTTP service load
 For the original-v0.1 hybrid on SM90/SM120, provision at least 128 GB of host RAM with headroom; device
 memory alone does not determine compatibility.
 
+
+### Reference video and audio execution (0.18)
+
+Single RTX 4090 **48 GiB** (BF16 block ring, Veda 44/6 Torch) and RTX PRO 6000 Blackwell Server
+**96 GiB** (resident FP8, Veda 44/6 Sage) completed full and spatial-half reference-video requests at
+512², 832×480 and 1344×768, all five seconds. Identity, gesture, camera and animation-style scenes
+were inspected at multiple times; spatial-half is an explicit quality/speed tradeoff. Full context is
+the default. Source clips use the [bounded reference contract](./complete-pipeline#reference-video).
+Audio/video decode overlap was exercised on five I2VA scenes per device, including 1344×768.
+These capacity rows apply to the measured memory and execution configurations.
+
 ## Memory and residency {#memory}
 
 | Strategy | Where weights live | Use when |

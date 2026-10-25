@@ -611,6 +611,7 @@ class H3NativeConditioningRuntime:
                 source=hybrid_reference_source(
                     self.artifact.source,
                     reference_revision=self.overlay.provenance["reference_checkpoint_revision"],
+                    reference_policy=bundle.request.get("reference_video_policy", "match"),
                 ),
                 schedule=self.overlay.schedule,
             )
@@ -620,11 +621,17 @@ class H3NativeConditioningRuntime:
             )
         if bundle.schema_version == 2 and (
             len(self.devices) != 1
-            or self.compute_capability != (8, 9)
+            or self.compute_capability
+            not in ({(8, 9), (12, 0)} if hybrid_reference else {(8, 9)})
+            or self.parallel_strategy != "single"
+            or (
+                not hybrid_reference
+                and bundle.profile.width * bundle.profile.height > 928 * 512
+            )
             or self.overlay.schedule.to_mapping() != bundle.schedule.to_mapping()
         ):
             raise H3NativeConditioningRuntimeError(
-                "video references require one SM89 GPU and their qualified Ref4 schedule"
+                "video references require one supported GPU and a matched reference schedule"
             )
         if bundle.schema_version in {3, 4, 5}:
             keyframe_topology = (
@@ -701,6 +708,7 @@ class H3NativeConditioningRuntime:
         generate_audio: bool = True,
         video_repaint: Any | None = None,
         audio_refinement: Any | None = None,
+        video_ready_callback: Callable[[Any], None] | None = None,
     ) -> H3NativeConditioningRuntimeResult:
         """Run one live request and export target-only VAE-ready latents."""
 
@@ -712,6 +720,12 @@ class H3NativeConditioningRuntime:
         prepare_started = time.monotonic()
         if type(generate_audio) is not bool or (not generate_audio and len(self.devices) != 1):
             raise H3NativeConditioningRuntimeError("video-only generation requires one device")
+        if video_ready_callback is not None and (
+            not callable(video_ready_callback) or audio_refinement is None
+        ):
+            raise H3NativeConditioningRuntimeError(
+                "video readiness requires audio refinement and a callable consumer"
+            )
         if audio_refinement is not None:
             from vflash.native.h3_audio_refinement import AudioRefinementRequest
 
@@ -723,6 +737,13 @@ class H3NativeConditioningRuntime:
                 or len(self.devices) != 1
                 or (self.weight_residency, self.attention_backend)
                 not in {("resident", "veda-triton"), ("block-ring", "veda-sm89")}
+                or (
+                    audio_refinement.reuse_kv_context
+                    and (
+                        self.weight_residency != "resident"
+                        or self.compute_capability != (12, 0)
+                    )
+                )
                 or self.veda_dense_edge_layers not in (3, 4)
                 or self.overlay.schedule.nfe != 4
             ):
@@ -941,13 +962,26 @@ class H3NativeConditioningRuntime:
                     self.denoiser.abort_denoise_profile()
             raise
         denoise_seconds = time.monotonic() - denoise_started
+        if video_ready_callback is not None:
+            completed_video = unpatchify_h3_video_rows(
+                engine.latent_state.video_latents.detach().to("cpu")[
+                    :, bundle.profile.num_condition_video_rows :
+                ],
+                num_latent_frames=h3_video_latent_frame_count(bundle.profile.frames),
+                latent_height=bundle.profile.height // 16,
+                latent_width=bundle.profile.width // 16,
+            )
+            video_ready_callback(completed_video)
+            del completed_video
         audio_record = None
         if audio_refinement is not None:
             from vflash.native.h3_audio_refinement import refine_audio
 
             def audio_progress(completed, total):
                 if progress_callback is not None:
-                    torch.cuda.synchronize(device)
+                    # Audio completion concerns its execution stream. An independent
+                    # final-video decoder may still be active on another stream.
+                    torch.cuda.current_stream(device).synchronize()
                     progress_callback(execution_nfe + completed, progress_nfe)
 
             with torch.inference_mode():

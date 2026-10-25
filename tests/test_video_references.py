@@ -122,7 +122,7 @@ def test_source_audio_is_discarded_and_owned_copy_avoids_reopening_input(tmp_pat
 
 
 @pytest.mark.parametrize(
-    "seconds,size", [("1", "128x72"), ("6", "128x72"), ("2", "960x512"), ("2", "256x64")]
+    "seconds,size", [("1", "128x72"), ("6", "128x72"), ("2", "1536x864"), ("2", "256x64")]
 )
 def test_actual_media_outside_duration_source_or_normalized_budget_fails(
     tmp_path, seconds, size
@@ -200,3 +200,39 @@ def test_decode_error_and_interrupt_clean_temporary_files(tmp_path, monkeypatch)
 def test_video_request_rejects_ambiguous_modality_and_labels(values):
     with pytest.raises(ContractError):
         VideoRequest(**{"prompt": "A scene", **values})
+
+
+def test_spatial_compression_has_distinct_validated_geometry(tmp_path):
+    from vflash.native.h3_conditioning_bundle import (
+        H3_VIDEO_REFERENCE_SPATIAL_HALF_POLICY,
+        H3ConditioningBundleError,
+    )
+
+    source = make_clip(tmp_path / "reference.mp4")
+    with read_video_reference(source) as decoded:
+        full = dict(decoded.metadata)
+    compressed = {
+        **full,
+        "latent_spatial_divisor": 2,
+        "condition_video_rows": full["vae_latent_frames"]
+        * (full["width"] // 64)
+        * (full["height"] // 64),
+    }
+    assert (
+        _validate_video_reference(compressed, policy=H3_VIDEO_REFERENCE_SPATIAL_HALF_POLICY)
+        == compressed
+    )
+    with pytest.raises(H3ConditioningBundleError):
+        _validate_video_reference(compressed)
+    with pytest.raises(H3ConditioningBundleError):
+        _validate_video_reference(full, policy=H3_VIDEO_REFERENCE_SPATIAL_HALF_POLICY)
+    compressed["vae_latent_frames"] -= 1
+    with pytest.raises(H3ConditioningBundleError):
+        _validate_video_reference(compressed, policy=H3_VIDEO_REFERENCE_SPATIAL_HALF_POLICY)
+
+
+def test_source_720p_is_bounded_and_keeps_official_normalization(tmp_path):
+    source = make_clip(tmp_path / "source.mp4", size="1280x720")
+    with read_video_reference(source) as decoded:
+        assert decoded.require_frames().shape == (48, 720, 1280, 3)
+        assert (decoded.metadata["width"], decoded.metadata["height"]) == (1344, 768)

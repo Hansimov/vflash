@@ -213,7 +213,7 @@ def read_video_reference(path: Path) -> DecodedVideoReference:
             timeout=60,
         )
         # Bound the actual output as well as the declared clock. Maximum RGB
-        # is 120 * 475136 * 3 bytes; no normalized 768p frame copies live here.
+        # is 120 * 1032192 * 3 bytes; no normalized 768p frame copies live here.
         if raw.stat().st_size != frame_count * width * height * 3:
             raise ContractError("decoded video frames differ from the complete source clock")
         pixels = np.fromfile(raw, dtype=np.uint8).reshape(frame_count, height, width, 3)

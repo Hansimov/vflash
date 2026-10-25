@@ -15,7 +15,7 @@ Transformers 代码，视频与音频由官方 H3 VAE 解码。不需要 LightX2
 | I2VA | 一张首帧锚点 | `<Picture 1>` | Base16 或 LightX v0.1 关键帧配置 |
 | L2VA | 一张尾帧锚点 | `<Picture 1>` | 同一组关键帧配置 |
 | FL2VA | 首尾两张锚点 | 按时间顺序 `<Picture 1>`、`<Picture 2>` | 同一组关键帧配置 |
-| 参考视频 | 一段 2–5 秒视频 | `<Video 1>` | 单张 RTX 4090 48 GB 上的 Ref4 |
+| 参考视频 | 一段 2–5 秒视频 | `<Video 1>` | 单 SM89 Ref4；单 SM89／SM120 Veda 混合模型 |
 
 参考图是视觉参考，不是时间轴位置。关键帧配置可用同一个已准备的流水线串行处理 I2VA、L2VA 和 FL2VA，无需重启；
 `result.request_mode` 记录实际输入类型，`profile_id` 记录已准备的配置身份。其他配置会在执行前拒绝模式切换。
@@ -23,7 +23,7 @@ Transformers 代码，视频与音频由官方 H3 VAE 解码。不需要 LightX2
 
 **画布。** 宽高须为 32 的倍数，宽高比在 1:4 到 4:1 之间。普通请求最多 1,048,576 像素。图像条件原生高清最多
 2048² 像素、最长边不超过 2720，例如 2720×1536（16:9）、1536×2720（9:16）、2368×1760（4:3）或 2048²。
-参考视频请求保留独立的 475,136 像素输出上限。
+参考视频输出为五秒：Veda 混合模型上限为 1,048,576 像素，原 Ref4 保持 475,136 像素。
 
 **时长。** Turbo T2VA 与 Ref4 为五秒。Base16 关键帧配置接受 5–10 秒整数时长；[扩展混合模型](#extended-hybrid)
 接受 5–15 秒。交付为 24 fps，例如 5 秒对应 124 个模型帧/120 个交付帧，15 秒对应 362/360。
@@ -157,10 +157,21 @@ vflash generate --prepared-assets prepared-assets.json --prompt-file video-promp
   --reference-video reference.mp4 --gpu 0 --seed 1234 --output variation.mp4 --trust-local-code
 ```
 
-Python 中使用 `VideoRequest(prompt=..., reference_video=Path("reference.mp4"))`，并以 **`<Video 1>`** 指代该视频。同一个 Ref4
-会话可交替处理图片与视频请求而无需切换权重。输入为一段完整的 2–5 秒 MP4、MOV 或 WebM，最多 20 MiB、475,136 源像素，
-只含一路方形像素视频流、帧率不超过 240 fps，源音频会被丢弃。官方 setup 会把画布归一化到最长边 1376、1376×768 像素和
-33,024 个时序参考行，因此极端比例可能被拒绝。输出为五秒；这是在参考引导下生成新视频，不是逐帧编辑。见[条件契约](../reference/runtime-assets#video-conditioning)。
+Python 中使用 `VideoRequest(prompt=..., reference_video=Path("reference.mp4"))`，以 **`<Video 1>`**
+指代视频。Veda 混合模型在单 SM89／SM120 上复用共享官方 Ref 图；同一实例交替处理图像和视频。
+输入为一段完整的 2–5 秒 MP4、MOV 或 WebM，最多 20 MiB、1344×768 源像素，一路方形像素视频流，
+帧率上限 240 fps。源音频丢弃。官方编码规范化为 24 fps，保持固定时间对齐和前缀预算；
+120 帧输入按官方网格取前 107 帧并编码为 32 个时间位置。输出是参考引导的五秒新视频。
+
+每个条件编码器拥有最多 128 MiB 的 CPU 参考 latent 缓存，相同解码身份和几何重复使用时复用官方 VAE
+结果；文本与随机噪声每次重新计算。缓存随 pipeline 关闭释放，调用者负责素材授权和隔离。
+默认 `reference_video_profile="full"` 保留完整空间信息；显式 `"spatial-half"` 在编码后平均池化空间网格，
+保留全部已编码时间位置。该近似选项只用于 Veda 混合路径，可能改变人脸、细节与构图。
+身份一致性优先使用 full。具体张量协议见[条件契约](../reference/runtime-assets#video-conditioning)。
+
+参考 latent 复用和压缩方案受 MIT 许可的
+[RefMod](https://github.com/Luisacaotica/ComfyUI-MiniMaxH3Mod/tree/517e8c419a8584fbf69fceb487bc39d83e6a6ec8) 启发。
+本实现复用官方编码结果并提供显式空间池化；RefMod 的逐素材 MSE 拟合和音色参考属于另外的方案。
 
 ## 混合模型与扩展请求 {#extended-hybrid}
 
@@ -203,6 +214,18 @@ result = pipeline.generate(request, output_path, audio_refinement=refinement)
 
 `reuse_hidden_context=True` 复用首次评估的 BF16 非音频隐藏状态；六次音频评估都保留，后续步骤重建 K/V，只处理音频行。
 这是显式近似，绝不改变视频 latent，默认关闭。缓存只属于一次补采（最多 40 GiB，并至少保留 12 GiB 空闲显存），成功或失败都会释放。
+
+### K/V 复用与音画重叠 {#audio-kv-overlap}
+
+在常驻 SM120 上，`reuse_kv_context=True` 可复用首次评估的旋转后 BF16 非音频 K/V，后五步重新计算
+音频行。它与 `reuse_hidden_context` 二选一，属于显式近似；六步求解与视频 latent 保持，缓存拥有相同的
+40 GiB 上限及 12 GiB 余量。SM89 的已测方案采用隐藏状态缓存。
+
+`H3Pipeline(..., audio_decode_overlap=True)` 让最终视频 VAE 解码与六步音频在独立 CUDA stream 上重叠，
+适用五秒、至多 1MP 的请求；显存余量充足时才提交，余量不足自动串行。pipeline 拥有线程与 future，
+成功或异常都会汇合并释放，`stages.audio_video_overlap` 记录实际启用情况。音频补采依赖已完成的视频，
+主视频去噪先执行；重叠发生在最终画面解码阶段。主去噪保留联合音频，以保持原动作和口型条件。
+完整耗时、设备精度和逐帧检查范围见 [0.18 版本记录](../reference/releases#_0-18-0)。
 
 ## 人脸重绘构件 {#explicit-native-face-repaint}
 

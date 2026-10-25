@@ -174,9 +174,10 @@ def test_video_native_reader_rejects_unqualified_device_or_schedule_before_loadi
         source={"oracle_profile": "ref2va-adapter-bf16-torch-sdpa-sm89"}
     )
     runtime.devices, runtime.compute_capability = [None] * count, capability
+    runtime.parallel_strategy = "single"
     runtime.overlay = SimpleNamespace(schedule=SimpleNamespace(to_mapping=lambda: schedule))
     bundle = SimpleNamespace(
-        profile=SimpleNamespace(task="ref2va"),
+        profile=SimpleNamespace(task="ref2va", width=928, height=512),
         schema_version=2,
         schedule=SimpleNamespace(to_mapping=lambda: {}),
     )
@@ -184,5 +185,26 @@ def test_video_native_reader_rejects_unqualified_device_or_schedule_before_loadi
         "vflash.native.h3_native_conditioning_runtime.load_h3_conditioning_bundle",
         lambda _: bundle,
     )
-    with pytest.raises(H3NativeConditioningRuntimeError, match="one SM89"):
+    with pytest.raises(H3NativeConditioningRuntimeError, match="one supported GPU"):
         runtime._load_request_tensors(tmp_path)
+
+
+def test_hybrid_video_bundle_carries_one_megapixel_output_and_spatial_policy():
+    from vflash.native.h3_conditioning_bundle import H3_VIDEO_REFERENCE_SPATIAL_HALF_POLICY
+
+    request = video_request()
+    reference = request["references"][0]
+    request["reference_video_policy"] = H3_VIDEO_REFERENCE_SPATIAL_HALF_POLICY
+    reference["latent_spatial_divisor"] = 2
+    count = (
+        reference["vae_latent_frames"]
+        * (reference["width"] // 64)
+        * (reference["height"] // 64)
+    )
+    reference["condition_video_rows"] = count
+    validated = _validate_request(request, task="ref2va", schema_version=2)
+    profile = H3ConditioningProfile("ref2va", 1344, 768, 124, 4, 12, 3, count, count, 0)
+    _validate_video_profile(profile, validated)
+    larger = H3ConditioningProfile("ref2va", 1376, 768, 124, 4, 12, 3, count, count, 0)
+    with pytest.raises(H3ConditioningBundleError):
+        _validate_video_profile(larger, validated)

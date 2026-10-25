@@ -181,9 +181,22 @@ def _digest(value):
     ).hexdigest()
 
 
-def hybrid_reference_source(base_source, *, reference_revision, runtime_versions=None):
+def hybrid_reference_source(
+    base_source, *, reference_revision, runtime_versions=None, reference_policy="match"
+):
     if not base_source["oracle_profile"].startswith(("i2va-adapter-", "fl2va-adapter-")):
         raise ValueError("hybrid Ref requires an adapter-bound FL source")
+    from vflash.native.h3_conditioning_bundle import (
+        H3_VIDEO_REFERENCE_POLICY,
+        H3_VIDEO_REFERENCE_SPATIAL_HALF_POLICY,
+    )
+
+    if reference_policy not in {
+        "match",
+        H3_VIDEO_REFERENCE_POLICY,
+        H3_VIDEO_REFERENCE_SPATIAL_HALF_POLICY,
+    }:
+        raise ValueError("unknown hybrid reference policy")
     recipe = dict(
         base_transformer=base_source["transformer_sha256"],
         reference_revision=reference_revision,
@@ -203,7 +216,7 @@ def hybrid_reference_source(base_source, *, reference_revision, runtime_versions
         "oracle_config_sha256": _digest(
             dict(
                 workflow="ref2va",
-                policy="match",
+                policy=reference_policy,
                 nfe=4,
                 video_shift=12,
                 audio_shift=3,
@@ -219,16 +232,18 @@ def hybrid_reference_source(base_source, *, reference_revision, runtime_versions
 def validate_hybrid_reference_bundle(bundle, *, source, schedule):
     if (
         bundle.profile.task != "ref2va"
-        or bundle.schema_version != 1
+        or bundle.schema_version not in {1, 2}
         or bundle.profile.nfe != 4
         or bundle.profile.video_flow_shift != 12
         or bundle.profile.audio_flow_shift != 3
         or bundle.profile.num_condition_video_rows <= 0
         or bundle.profile.num_condition_audio_rows != 0
-        or not 1 <= len(bundle.request.get("references", ())) <= 9
+        or not 1
+        <= len(bundle.request.get("references", ()))
+        <= (1 if bundle.schema_version == 2 else 9)
         or bundle.schedule.to_mapping() != schedule.to_mapping()
     ):
-        raise ValueError("hybrid Ref image/clock/prefix contract differs")
+        raise ValueError("hybrid Ref modality/clock/prefix contract differs")
     # Runtime dependency versions remain evidence, not a model identity alias.
     keys = set(source) - {"oracle_runtime_sha256"}
     if any(bundle.source.get(key) != source[key] for key in keys):

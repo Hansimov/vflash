@@ -14,12 +14,12 @@ def reference_video_geometry(width: int, height: int, frames: int) -> dict[str, 
     if (
         any(type(value) is not int for value in (width, height, frames))
         or min(width, height) <= 0
-        or width * height > 928 * 512
+        or width * height > 1344 * 768
         or not 0.25 <= width / height <= 4
         or not 48 <= frames <= 120
     ):
         raise ContractError(
-            "a video reference requires 48-120 CFR frames, at most 928x512 source pixels, "
+            "a video reference requires 48-120 CFR frames, at most 1344x768 source pixels, "
             "and an aspect ratio between 1:4 and 4:1"
         )
     ratio = width / height

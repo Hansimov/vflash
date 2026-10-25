@@ -21,7 +21,7 @@ MAX_CANVAS_PIXELS = 1024**2
 NATIVE_HD_MAX_PIXELS = 2048**2
 # Native HD keeps the 2048**2 area with a 2720-pixel long edge (16:9 reaches 2720x1536).
 NATIVE_HD_MAX_LONG_EDGE = 2720
-VIDEO_REFERENCE_CANVAS_PIXELS = 928 * 512
+VIDEO_REFERENCE_CANVAS_PIXELS = 1024**2
 
 
 @dataclass(frozen=True)
@@ -120,6 +120,7 @@ class VideoRequest:
     seed: int = 0
     references: tuple[Path, ...] = field(default=(), kw_only=True)
     reference_video: Path | None = field(default=None, kw_only=True)
+    reference_video_profile: str = field(default="full", kw_only=True)
     first_frame: Path | None = field(default=None, kw_only=True)
     last_frame: Path | None = field(default=None, kw_only=True)
     duration_seconds: int = field(default=5, kw_only=True)
@@ -146,6 +147,14 @@ class VideoRequest:
             raise ContractError("references must be an ordered tuple of local pathlib.Paths")
         if self.reference is not None and self.references:
             raise ContractError("provide reference or references, not both")
+        if (
+            not isinstance(self.reference_video_profile, str)
+            or self.reference_video_profile not in {"full", "spatial-half"}
+            or (self.reference_video is None and self.reference_video_profile != "full")
+        ):
+            raise ContractError(
+                "video reference profile requires full or explicit spatial-half video"
+            )
         if self.reference_video is not None:
             if not isinstance(self.reference_video, Path):
                 raise ContractError("reference_video must be a local pathlib.Path")

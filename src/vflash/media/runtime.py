@@ -40,6 +40,24 @@ class MediaResult:
     media: dict[str, Any]
 
 
+class DecodedVideo:
+    """One CPU pixel result, consumable once by its original decoder."""
+
+    def __init__(self, owner, pixels, *, width, height, seconds):
+        self.owner, self.pixels = owner, pixels
+        self.width, self.height, self.seconds = width, height, seconds
+
+    def consume(self, owner, *, width, height):
+        if (
+            self.owner is not owner
+            or self.pixels is None
+            or (width, height) != (self.width, self.height)
+        ):
+            raise MediaError("predecoded video must belong to this decoder and canvas")
+        pixels, self.pixels = self.pixels, None
+        return pixels
+
+
 class OfficialMediaDecoder:
     """Keep validated CPU masters and upload VAE weights only for decoding.
 
@@ -146,6 +164,25 @@ class OfficialMediaDecoder:
         self._torch.cuda.empty_cache()
         return time.monotonic() - started
 
+    def decode_video(self, latents, *, height, width):
+        """Decode the final video only, independently of its audio trajectory."""
+        self._require_open()
+        if not self._cuda_active or latents.ndim != 5:
+            raise MediaError("video decoding requires an active decoder and VAE-ready latents")
+        started = time.monotonic()
+        video = decode_official_h3_video_latents(
+            self.video,
+            latents,
+            device=self.device,
+            torch_module=self._torch,
+        )
+        if video.shape[-2] < height or video.shape[-1] < width:
+            raise MediaError("decoded video is smaller than the requested canvas")
+        video = video[..., :height, :width].contiguous().cpu()
+        return DecodedVideo(
+            self, video, width=width, height=height, seconds=time.monotonic() - started
+        )
+
     def _decode_cpu(
         self,
         latent_path: Path,
@@ -154,6 +191,7 @@ class OfficialMediaDecoder:
         width: int,
         silent_samples: int | None = None,
         decode_audio: bool = True,
+        predecoded_video: DecodedVideo | None = None,
     ) -> tuple[Any, ...]:
         torch = self._torch
         started = time.monotonic()
@@ -168,17 +206,15 @@ class OfficialMediaDecoder:
             decode_audio and silent_samples is None and tensors["audio_latents"].ndim != 3
         ):
             raise MediaError("native output is not VAE-ready")
-        started = time.monotonic()
-        video = decode_official_h3_video_latents(
-            self.video,
-            tensors["video_latents"],
-            device=self.device,
-            torch_module=torch,
+        decoded = (
+            self.decode_video(tensors["video_latents"], height=height, width=width)
+            if predecoded_video is None
+            else predecoded_video
         )
-        if video.shape[-2] < height or video.shape[-1] < width:
-            raise MediaError("decoded video is smaller than the requested canvas")
-        video = video[..., :height, :width].contiguous().cpu()
-        video_seconds = time.monotonic() - started
+        if not isinstance(decoded, DecodedVideo):
+            raise MediaError("predecoded video must be an owned decoder result")
+        video = decoded.consume(self, height=height, width=width)
+        video_seconds = decoded.seconds if predecoded_video is None else 0.0
         started = time.monotonic()
         if not decode_audio:
             audio = None
@@ -222,6 +258,7 @@ class OfficialMediaDecoder:
         keyframe_delivery_profile: str = DECODED_KEYFRAME_DELIVERY_PROFILE,
         first_frame: Any | None = None,
         last_frame: Any | None = None,
+        predecoded_video: DecodedVideo | None = None,
     ) -> MediaResult:
         self._require_open()
         if not self._cuda_active:
@@ -262,6 +299,8 @@ class OfficialMediaDecoder:
             )
             if not generate_audio:
                 decode_options["decode_audio"] = False
+            if predecoded_video is not None:
+                decode_options["predecoded_video"] = predecoded_video
             video, audio, stages = self._decode_cpu(
                 latent_path, height=height, width=width, **decode_options
             )

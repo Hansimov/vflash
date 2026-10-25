@@ -4,6 +4,8 @@ Native **MiniMax H3 inference** with explicit GPU profiles. Vflash uses PyTorch 
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
+**0.18.0: reference video and audio execution.** Single-4090/PRO6000 hybrid pipelines accept short video references with owned VAE reuse and explicit spatial compression. Six-step audio adds K/V reuse and video-decode overlap; see [measured scope](https://hansimov.github.io/vflash/reference/releases).
+
 **0.17.2: choose the Veda layer partition independently of precision.** Set
 `veda_dense_edge_layers=4` for 42 sparse / 8 dense layers, including the optional
 audio context pass. SM120 keeps the selected Sage FP8 or FROST precision policy.
@@ -63,7 +65,7 @@ face-restoration workflow. Existing model, precision and attention defaults rema
 Python 3.11 or newer is required. The base install does not download model weights or PyTorch.
 
 ```bash
-git clone --branch v0.17.2 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.18.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate

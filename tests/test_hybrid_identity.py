@@ -8,7 +8,7 @@ from vflash.native.h3_hybrid import (
 )
 
 
-def source():
+def source(**options):
     return hybrid_reference_source(
         dict(
             model_repository="official",
@@ -19,6 +19,7 @@ def source():
             transformer_sha256="a" * 64,
         ),
         reference_revision="ref-r",
+        **options,
     )
 
 
@@ -100,3 +101,22 @@ def test_reference_count_rejects_outside_one_to_nine(count):
     b.request["references"] = list(range(count))
     with pytest.raises(ValueError):
         validate_hybrid_reference_bundle(b, source=source(), schedule=b.schedule)
+
+
+def test_video_reference_identity_and_modality_are_distinct():
+    from vflash.native.h3_conditioning_bundle import H3_VIDEO_REFERENCE_POLICY
+
+    image = source()
+    video = source(reference_policy=H3_VIDEO_REFERENCE_POLICY)
+    assert video["transformer_sha256"] == image["transformer_sha256"]
+    assert video["oracle_config_sha256"] != image["oracle_config_sha256"]
+    b = bundle()
+    b.schema_version = 2
+    b.request = {"references": [1], "reference_video_policy": H3_VIDEO_REFERENCE_POLICY}
+    b.source = video
+    validate_hybrid_reference_bundle(b, source=video, schedule=b.schedule)
+    with pytest.raises(ValueError):
+        validate_hybrid_reference_bundle(b, source=image, schedule=b.schedule)
+    b.request["references"] = [1, 2]
+    with pytest.raises(ValueError):
+        validate_hybrid_reference_bundle(b, source=video, schedule=b.schedule)

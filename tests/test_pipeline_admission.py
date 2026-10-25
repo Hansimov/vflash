@@ -136,3 +136,29 @@ def test_sm120_resident_hybrid_keeps_the_multi_reference_budget():
             VideoRequest("Motion", references=refs, width=960, height=544, duration_seconds=10),
             **options,
         )
+
+
+@pytest.mark.parametrize("arch,residency", [("sm89", "block-ring"), ("sm120", "resident")])
+def test_hybrid_video_reference_admission_keeps_qualified_bounds(arch, residency):
+    options = dict(
+        profile_id=f"i2va-turbo4-v01-544-exact-{arch}",
+        hybrid=True,
+        attention_backend="veda-triton",
+        weight_residency=residency,
+    )
+    args = dict(prompt="A scene following <Video 1>", reference_video=Path("reference.mp4"))
+    validate_request(VideoRequest(**args, width=1024, height=1024), **options)
+    for changes in ({"width": 1344, "height": 800}, {"duration_seconds": 10}):
+        with pytest.raises(ContractError):
+            validate_request(VideoRequest(**args, **changes), **options)
+    for changes in ({"hybrid": False}, {"parallel_strategy": "sequence-head"}):
+        with pytest.raises(ContractError):
+            validate_request(VideoRequest(**args), **{**options, **changes})
+
+
+def test_legacy_ref4_keeps_its_sm89_canvas_budget():
+    request = VideoRequest(
+        "A scene", reference_video=Path("reference.mp4"), width=1024, height=1024
+    )
+    with pytest.raises(ContractError, match="profile canvas"):
+        validate_request(request, profile_id="ref2va-turbo4-exact-sm89")

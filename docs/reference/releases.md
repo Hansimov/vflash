@@ -1,6 +1,31 @@
 # Release notes
 
 
+## 0.18.0
+
+Adds hybrid reference video on single SM89/SM120, an owned 128 MiB CPU VAE cache, explicit spatial-half
+reference context, resident-SM120 audio K/V reuse, and owned video-decode/audio-refinement overlap.
+[The complete guide](../guide/complete-pipeline#reference-video) defines input and lifetime contracts.
+Engine audio refinement stays explicit; applications select their defaults and supply matching tables.
+
+Measured complete MP4 calls, five seconds, excluding model loading and service transport:
+
+| Workload | RTX 4090 48 GiB, BF16 ring, 44/6 Torch | RTX PRO 6000 Server 96 GiB, FP8 resident, 44/6 Sage |
+| --- | --- | --- |
+| 512² transient, serial → selected overlap | 65.41 → 60.69 s (hidden reuse in both) | 20.12 → 14.03 s (full audio context → K/V + overlap) |
+| 1344×768 music, serial → selected overlap | 148.08 → 142.63 s | 49.91 → 42.55 s |
+| 512² identity reference, full cold → spatial-half cached | 125.02 → 61.32 s | 47.10 → 20.84 s |
+| 1344×768 camera reference, full cold → spatial-half cached | 356.63 → 178.04 s | 134.74 → 63.25 s |
+
+The reference rows combine VAE-cache reuse and spatial compression; they do not isolate either gain.
+A separate full-context 4090 pair reduces reference VAE work from 22.62 s to 0.0034 s with identical
+120 decoded video frames. Ten matched audio-overlap pairs also preserve all 120 video frames;
+nine preserve decoded PCM exactly, while the first 4090 speech pair differs by 0.001864 PCM RMS.
+Speech transcripts agree. These are matched-scene observations, with independent visual/audio evidence;
+spatial compression changes facial detail and composition, so full reference remains the default.
+Final application-worker calls on the same PRO 6000 also completed three refined I2VA requests and one
+full video reference using the owned public implementations. CPU checks cover cleanup, admission and isolation.
+
 ## 0.17.2
 
 Piped MP4 delivery now ends an encoder that makes no progress for 120 seconds, while retaining

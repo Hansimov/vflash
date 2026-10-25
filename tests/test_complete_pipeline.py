@@ -460,7 +460,7 @@ def test_request_limits_are_cpu_contracts(tmp_path, changes):
         VideoRequest(**values)
 
 
-def test_one_megapixel_canvas_is_allowed_except_for_video_references(tmp_path):
+def test_one_megapixel_canvas_is_allowed_for_all_modalities(tmp_path):
     for references in (
         {},
         {"reference": tmp_path / "reference.png"},
@@ -473,13 +473,13 @@ def test_one_megapixel_canvas_is_allowed_except_for_video_references(tmp_path):
     ):
         request = VideoRequest("An example scene.", width=1024, height=1024, **references)
         assert request.width * request.height == 1_048_576
-    with pytest.raises(ContractError, match="475,136"):
-        VideoRequest(
-            "<Video 1> continues.",
-            width=1344,
-            height=768,
-            reference_video=tmp_path / "reference.mp4",
-        )
+    request = VideoRequest(
+        "An example scene.",
+        width=1024,
+        height=1024,
+        reference_video=tmp_path / "reference.mp4",
+    )
+    assert request.width * request.height == 1_048_576
 
 
 def test_request_duration_is_discrete_and_defaults_to_five_seconds():
@@ -842,7 +842,7 @@ def test_stage_close_failure_does_not_skip_other_owners():
         ("ref2va-turbo4-exact-sm89", "tensor"),
     ],
 )
-def test_video_requires_single_sm89_ref4_before_decoding(
+def test_video_rejects_unqualified_profiles_before_decoding(
     tmp_path, monkeypatch, profile, strategy
 ):
     pipeline, events = _pipeline()
@@ -852,7 +852,7 @@ def test_video_requires_single_sm89_ref4_before_decoding(
     monkeypatch.setattr(
         "vflash.pipeline.runtime.read_video_reference", lambda _: pytest.fail("decode")
     )
-    with pytest.raises(ContractError, match="single-SM89 Ref4"):
+    with pytest.raises(ContractError, match="single supported Ref4 or hybrid"):
         pipeline.generate(
             VideoRequest("<Video 1>", reference_video=Path("ref.mp4")), tmp_path / "out.mp4"
         )

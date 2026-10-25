@@ -17,7 +17,7 @@ This page describes the current release. Per-version changes and their exact evi
 | I2VA | one first-frame anchor | `<Picture 1>` | Base16 or LightX v0.1 keyframe profiles |
 | L2VA | one last-frame anchor | `<Picture 1>` | the same keyframe profiles |
 | FL2VA | first and last anchors | `<Picture 1>`, `<Picture 2>` in time order | the same keyframe profiles |
-| Reference video | one 2–5 s clip | `<Video 1>` | Ref4 on one RTX 4090 48 GB |
+| Reference video | one 2–5 s clip | `<Video 1>` | Single-SM89 Ref4; single-SM89/SM120 Veda hybrid |
 
 Reference images are visual references, not timeline positions. The keyframe profiles serve I2VA,
 L2VA and FL2VA serially from one prepared pipeline without a restart; `result.request_mode` records
@@ -27,7 +27,7 @@ execution. The prompt is used verbatim; describe each image's subject and role.
 **Canvas.** Width and height are multiples of 32 with an aspect ratio between 1:4 and 4:1. Ordinary
 requests allow up to 1,048,576 pixels. Image-conditioned native HD allows up to 2048² pixels with a
 long edge of at most 2720, for example 2720×1536 (16:9), 1536×2720 (9:16), 2368×1760 (4:3) or 2048².
-A reference-video request keeps its own 475,136-pixel output limit.
+Reference-video output is five seconds: up to 1,048,576 pixels on the Veda hybrid, or 475,136 on Ref4.
 
 **Duration.** Turbo T2VA and Ref4 are five seconds. Base16 keyframe profiles accept integer durations
 of 5–10 seconds. The [extended hybrid](#extended-hybrid) accepts 5–15 seconds. Delivery is 24 fps:
@@ -182,12 +182,24 @@ vflash generate --prepared-assets prepared-assets.json --prompt-file video-promp
 ```
 
 In Python use `VideoRequest(prompt=..., reference_video=Path("reference.mp4"))` and refer to the clip as
-**`<Video 1>`**. One Ref4 session alternates image and video requests without swapping weights. The input is
-one complete 2–5 s MP4, MOV or WebM, at most 20 MiB and 475,136 source pixels, with one square-pixel video
-stream at no more than 240 fps. Source audio is discarded. The official setup normalizes the canvas to a
-1376-pixel long edge, 1376×768 pixels and 33,024 temporal reference rows, so extreme ratios may be rejected.
-Output is five seconds; this guides a new video and is not frame-accurate editing. See the
-[conditioning contract](../reference/runtime-assets#video-conditioning).
+**`<Video 1>`**. The Veda hybrid shares its official Ref graph on a single SM89 or SM120; one pipeline
+alternates image and video requests. Supply one complete 2–5 s MP4, MOV or WebM, at most 20 MiB and
+1344×768 source pixels, with one square-pixel video stream at up to 240 fps. Source audio is discarded.
+Official encoding normalizes to 24 fps with the fixed temporal alignment and prefix budget: a 120-frame
+input uses its first 107 frames on the official grid, producing 32 encoded temporal positions.
+The output is a new five-second video guided by that reference.
+
+Each conditioner owns a CPU reference-latent cache capped at 128 MiB. Repeated decoded identities and
+geometry reuse the official VAE result; text and noise are recomputed. Closing the pipeline clears the
+cache; callers own media authorization and isolation. Default `reference_video_profile="full"` retains
+full spatial context. Explicit `"spatial-half"` average-pools the encoded spatial grid while retaining
+all encoded temporal positions. This approximate Veda-hybrid option can change faces, detail and framing;
+prefer full for identity-sensitive work. See the [conditioning contract](../reference/runtime-assets#video-conditioning).
+
+Reference-latent reuse and compression were informed by MIT-licensed
+[RefMod](https://github.com/Luisacaotica/ComfyUI-MiniMaxH3Mod/tree/517e8c419a8584fbf69fceb487bc39d83e6a6ec8).
+This implementation reuses official latents and offers explicit spatial pooling; RefMod's per-asset MSE
+fitting and voice-reference work are separate methods.
 
 ## Hybrid model and extended requests {#extended-hybrid}
 
@@ -246,6 +258,21 @@ and no default activation.
 remain, later steps rebuild K/V and process only audio rows. This is an explicit approximation, never changes
 video latents and defaults to false. The cache is scoped to one refinement (at most 40 GiB, with at least
 12 GiB of device memory kept free) and released on success or failure.
+
+### K/V reuse and audio/video overlap {#audio-kv-overlap}
+
+On resident SM120, `reuse_kv_context=True` reuses first-evaluation post-RoPE BF16 non-audio K/V while
+recomputing audio rows for the remaining five evaluations. Select either this or `reuse_hidden_context`.
+This explicit approximation retains the six-step solver and video latents, with the same 40 GiB cache
+limit and 12 GiB headroom. The measured SM89 path uses hidden-context reuse.
+
+`H3Pipeline(..., audio_decode_overlap=True)` overlaps final video VAE decoding with six-step audio on
+a separate CUDA stream for five-second requests up to 1 MP. It submits only with sufficient memory
+headroom and otherwise runs serially. The pipeline owns and joins the thread/future on success and
+failure; `stages.audio_video_overlap` reports actual execution. Audio refinement depends on the
+completed video, so main video denoising runs first; the overlap is with final picture decoding.
+Keep joint audio during main denoising to retain the original motion and mouth conditioning.
+Complete-call timings, precision and decoded-media scope are in the [0.18 release record](../reference/releases#_0-18-0).
 
 ## Face repaint building blocks {#explicit-native-face-repaint}
 
