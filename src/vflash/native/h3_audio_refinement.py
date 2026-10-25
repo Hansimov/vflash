@@ -251,7 +251,7 @@ class AudioRefinementRequest:
     """Explicit audio refinement with original video pixels and time positions kept.
 
     The default is six steps at denoise 0.5 (shifted audio sigma 0.75).
-    Encoded-source restoration also supports twenty steps at denoise 0.95.
+    Longer candidates use twelve steps at denoise 0.9 or twenty at 0.95.
     Each recipe requires its own matching compiled modulation tables.
     A None spatial budget explicitly retains the full video context for control.
     Hidden reuse freezes first-evaluation non-audio states, with fresh audio and
@@ -267,6 +267,7 @@ class AudioRefinementRequest:
     reuse_kv_context: bool = False
     evaluations: int = 6
     denoise: float = 0.5
+    dense_attention: bool = False
 
     def __post_init__(self):
         from .h3_native_scheduler import H3NativeSchedule
@@ -286,18 +287,15 @@ class AudioRefinementRequest:
             or (self.evaluations, self.denoise)
             not in {
                 (6, 0.5),
+                (12, 0.9),
                 (20, 0.95),
             }
         ):
-            raise ValueError(
-                "audio requires six-step refinement or twenty-step encoded-source restoration"
-            )
-        if self.evaluations == 20 and (
-            self.context_pixels is not None
-            or self.reuse_hidden_context
-            or self.reuse_kv_context
+            raise ValueError("audio requires a matched six, twelve or twenty-step recipe")
+        if type(self.dense_attention) is not bool or (
+            self.dense_attention and self.evaluations != 20
         ):
-            raise ValueError("twenty-step restoration requires full uncached context")
+            raise ValueError("dense audio context is an explicit twenty-step audio option")
         expected = refinement_schedule(steps=self.evaluations, denoise=self.denoise)
         if (
             not isinstance(self.schedule, H3NativeSchedule)
@@ -321,6 +319,28 @@ class AudioRefinementRequest:
         return self.evaluations
 
 
+@contextmanager
+def dense_audio_attention(engine, enabled):
+    """Temporarily run every audio-pass context block through its dense backend."""
+    if not enabled:
+        yield None
+        return
+    owners = []
+    for block in _attention_blocks(engine):
+        attention = getattr(block, "_veda_attention", None)
+        if attention is None:
+            raise ValueError("dense audio context requires the owned Veda attention adapter")
+        if all(attention is not row[0] for row in owners):
+            owners.append((attention, attention.dense_layers))
+    try:
+        for attention, _ in owners:
+            attention.dense_layers = frozenset(range(50))
+        yield {"dense_layers": list(range(50))}
+    finally:
+        for attention, layers in owners:
+            attention.dense_layers = layers
+
+
 def _refine_full_audio(engine, request, *, step, noise):
     import time
 
@@ -339,7 +359,10 @@ def _refine_full_audio(engine, request, *, step, noise):
         raise ValueError("audio refinement noise differs")
     started = time.monotonic()
     try:
-        with quality_pass(engine, request.schedule, request.tables, mode="audio"):
+        with (
+            dense_audio_attention(engine, request.dense_attention),
+            quality_pass(engine, request.schedule, request.tables, mode="audio"),
+        ):
             sigma = request.schedule.audio_sigmas[1]
             state.audio_latents.copy_((1 - sigma) * original_audio + sigma * noise)
             cache_scope = (
@@ -383,6 +406,7 @@ def _refine_full_audio(engine, request, *, step, noise):
         "new_matched_modulation": True,
         "video_cache": dict(cache) if cache is not None else False,
         "upstream_equivalent": False,
+        "dense_attention": request.dense_attention,
     }
 
 

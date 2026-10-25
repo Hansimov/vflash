@@ -9,7 +9,7 @@ torch = pytest.importorskip("torch")
 F = torch.nn.functional
 
 
-def core_fixture(whole_rows):
+def core_fixture(whole_rows, evaluations=6):
     from contextlib import nullcontext
 
     from vflash.native.h3_native_denoiser import H3NativeBlockInvocation, _H3BlockOperations
@@ -41,7 +41,7 @@ def core_fixture(whole_rows):
 
     blocks = []
     for _ in range(3):
-        table = random(6, 2, 6, 8)
+        table = random(evaluations, 2, 6, 8)
         table[:, 0] = table[:1, 0]
         weights = N(
             adaln_table=table,
@@ -113,13 +113,14 @@ def test_hidden_cache_budget_and_owner_failure_restore_existing_methods():
     assert block._qkv_linear is original and "_attention" not in block.__dict__
 
 
-def test_ring_slots_cache_logical_layers_and_match_resident_hidden_reuse():
-    engine, hidden, invocation = core_fixture(0)
+@pytest.mark.parametrize("evaluations", [6, 20])
+def test_ring_slots_cache_logical_layers_and_match_resident_hidden_reuse(evaluations):
+    engine, hidden, invocation = core_fixture(0, evaluations)
     weights = tuple(block.weights for block in engine.denoiser.blocks)
 
     def run(blocks, ring=False):
         result = []
-        for evaluation in range(6):
+        for evaluation in range(evaluations):
             states = hidden.clone()
             states[:, engine.audio_indices] += evaluation * 0.125
             for index in range(len(weights)):
@@ -143,7 +144,7 @@ def test_ring_slots_cache_logical_layers_and_match_resident_hidden_reuse():
         torch.testing.assert_close(a, b, rtol=0, atol=0)
     assert ring["execution_layout"] == "two-slot-ring" and ring["total_blocks"] == 3
     assert ring["cached_bytes"] == resident["cached_bytes"]
-    assert ring["build_block_calls"] == 3 and ring["reuse_block_calls"] == 15
+    assert ring["build_block_calls"] == 3 and ring["reuse_block_calls"] == 3 * (evaluations - 1)
     assert all(
         not set(b.__dict__) & {"forward_prevalidated", "_attention", "_qkv_linear"}
         for b in slots

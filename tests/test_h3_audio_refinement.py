@@ -277,15 +277,18 @@ def test_invalid_encoded_source_leaves_owned_request_unchanged(fault):
     assert state.evaluation_index == (1 if fault == "started" else 0)
 
 
-def test_twenty_step_restoration_keeps_picture_and_uses_declared_schedule():
+@pytest.mark.parametrize("steps,denoise", [(12, 0.9), (20, 0.95)])
+def test_longer_audio_pass_keeps_picture_and_uses_declared_schedule(steps, denoise):
     engine = context_engine(16, 24)
     state = engine.latent_state
     picture = state.video_latents.clone()
     original_audio = state.audio_latents.clone()
-    schedule = refinement_schedule(steps=20, denoise=0.95)
-    tables = tuple([torch.zeros(21, 9, 6, 2) for _ in range(50)] + [torch.zeros(21, 3, 2, 2)])
+    schedule = refinement_schedule(steps=steps, denoise=denoise)
+    tables = tuple(
+        [torch.zeros(steps + 1, 9, 6, 2) for _ in range(50)] + [torch.zeros(steps + 1, 3, 2, 2)]
+    )
     request = AudioRefinementRequest(
-        schedule, tables, context_pixels=None, evaluations=20, denoise=0.95
+        schedule, tables, context_pixels=None, evaluations=steps, denoise=denoise
     )
     evaluated = []
 
@@ -297,30 +300,47 @@ def test_twenty_step_restoration_keeps_picture_and_uses_declared_schedule():
         )
 
     _, report = refine_audio(engine, request, step=step, noise=torch.zeros_like(original_audio))
-    assert evaluated == list(range(1, 21))
-    assert report["extra_audio_nfe"] == 20
+    assert evaluated == list(range(1, steps + 1))
+    assert report["extra_audio_nfe"] == steps
     assert torch.equal(state.video_latents, picture)
     assert not torch.equal(state.audio_latents, original_audio)
     with pytest.raises(ValueError, match="matched audio schedule"):
         AudioRefinementRequest(schedule, tables)
 
 
+@pytest.mark.parametrize("fail", [False, True])
+def test_dense_audio_context_restores_original_layers_on_success_and_failure(fail):
+    from vflash.native.h3_audio_refinement import dense_audio_attention
+
+    engine = context_engine()
+    attention = engine.denoiser.blocks[0]._veda_attention
+    previous = attention.dense_layers
+
+    def execute():
+        with dense_audio_attention(engine, True) as report:
+            assert attention.dense_layers == frozenset(range(50))
+            assert report["dense_layers"] == list(range(50))
+            if fail:
+                raise RuntimeError("injected dense pass failure")
+
+    if fail:
+        with pytest.raises(RuntimeError, match="injected"):
+            execute()
+    else:
+        execute()
+    assert attention.dense_layers is previous
+
+
 @pytest.mark.parametrize(
     "options",
-    [
-        {"context_pixels": 250000},
-        {"reuse_hidden_context": True},
-        {"reuse_kv_context": True},
-    ],
+    [{"context_pixels": 250000}, {"reuse_hidden_context": True}, {"reuse_kv_context": True}],
 )
-def test_twenty_step_restoration_requires_qualified_full_context(options):
+def test_twenty_step_refinement_retains_explicit_context_choices(options):
     schedule = refinement_schedule(steps=20, denoise=0.95)
     tables = tuple([torch.zeros(21, 9, 6, 2) for _ in range(50)] + [torch.zeros(21, 3, 2, 2)])
-    with pytest.raises(ValueError, match="full uncached context"):
-        AudioRefinementRequest(
-            schedule,
-            tables,
-            **{"context_pixels": None, **options},
-            evaluations=20,
-            denoise=0.95,
-        )
+    request = AudioRefinementRequest(
+        schedule, tables, **{"context_pixels": None, **options}, evaluations=20, denoise=0.95
+    )
+    assert request.steps == 20
+    for key, value in options.items():
+        assert getattr(request, key) == value

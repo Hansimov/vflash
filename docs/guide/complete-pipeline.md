@@ -260,13 +260,23 @@ video excludes the conditioning keyframe prefix, while stereo audio uses channel
 The session owns a copy and skips the ordinary video trajectory. Keep the original encoded picture
 stream for final muxing; VAE decoding is needed only for the new audio.
 
-The default six-step recipe also accepts encoded source media. A separate restoration candidate uses
-`evaluations=20, denoise=0.95`, with matching tables compiled using
-`compile_refinement_tables(..., steps=20, denoise=0.95, mode="audio")`. This recipe belongs to encoded
-source restoration and retains full recomputation when both cache options are false. Its higher
-re-noising strength can change the sound itself; compare the result against the original sound brief.
-This API preserves video latents and provides audio candidates. Select the recipe through listening
-for naturalness, sound-content fidelity and artifacts; measure these separately from picture preservation.
+The default six-step recipe also accepts encoded source media. Source ownership, waveform encoding,
+versioning and final original-picture muxing belong to the calling application.
+
+### Longer audio passes (development candidates)
+
+`AudioRefinementRequest` also accepts `evaluations=12, denoise=0.9` and
+`evaluations=20, denoise=0.95`. Each uses tables compiled with the same steps and denoise value:
+`compile_refinement_tables(..., steps=20, denoise=0.95, mode="audio")`, for example.
+The candidate runs after ordinary four-step I2VA generation or an explicit encoded source. The configured
+spatial context budget, hidden/K/V cache and audio/video decode overlap remain independent choices.
+Higher re-noising can change the sound itself: compare naturalness, content fidelity and transients
+against the sound brief and measure the complete generated MP4 call.
+
+`dense_attention=True` is an additional twenty-step diagnostic: every audio-pass context block uses
+its dense attention backend, with the original policy restored on success or failure. It preserves
+the four-step video policy. Cached context still freezes non-audio states after the first evaluation.
+These explicit candidates keep the ordinary request default unchanged.
 
 ### Hidden-context reuse {#audio-hidden-context}
 

@@ -216,11 +216,18 @@ result = pipeline.generate(request, output_path, audio_refinement=refinement)
 `AudioRefinementRequest`。输入是有限值、已归一化的模型坐标：视频行排除首帧条件前缀，双声道音频按声道连续排列。
 会话复制输入并跳过原视频采样；最终封装复用原视频码流，仅解码新音频。
 
-默认六步方案支持这类原片条件。另一个重建候选采用 `evaluations=20, denoise=0.95`，需要
-`compile_refinement_tables(..., steps=20, denoise=0.95, mode="audio")` 编译的匹配参数表。
-该方案仅用于原片重建，两个缓存选项保持 false 时逐步完整重算。较强重采样可能改变声音内容，
-按原声音要求试听选择。接口保持画面潜变量并输出音频候选，按自然度、声音内容和电音分别评价，
-与画面保持的技术检查分别记录。
+默认六步方案支持这类原片条件；应用负责源文件所有权、波形编码、版本记录和原画面封装。
+
+### 更长音频采样（开发候选）
+
+`AudioRefinementRequest` 支持 `evaluations=12, denoise=0.9` 与 `evaluations=20, denoise=0.95`。
+每种方案需要同一步数和强度编译的参数表，例如
+`compile_refinement_tables(..., steps=20, denoise=0.95, mode="audio")`。
+可在普通四步I2VA生成后执行，也可使用显式原片条件。空间条件预算、隐藏状态／K/V缓存及音画解码重叠
+分别配置；按声音自然度、内容对应、瞬态表现和完整MP4交付耗时选择方案。
+
+`dense_attention=True` 为二十步的另一项诊断：音频阶段全部上下文层使用密集注意力，成功或失败后恢复原策略。
+主视频仍采用原四步策略；启用缓存时，非音频隐藏状态仍在首轮之后固定。普通请求默认值保持原配置。
 
 ### 隐藏上下文复用 {#audio-hidden-context}
 

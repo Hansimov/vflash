@@ -735,14 +735,6 @@ class H3NativeConditioningRuntime:
             from vflash.native.h3_audio_refinement import AudioRefinementRequest
 
             if (
-                isinstance(audio_refinement, AudioRefinementRequest)
-                and audio_refinement.steps == 20
-                and encoded_audio_source is None
-            ):
-                raise H3NativeConditioningRuntimeError(
-                    "twenty-step restoration requires encoded source media"
-                )
-            if (
                 not isinstance(audio_refinement, AudioRefinementRequest)
                 or not generate_audio
                 or video_repaint is not None
