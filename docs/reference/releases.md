@@ -1,6 +1,43 @@
 # Release notes
 
 
+## 0.19.0
+
+Adds matched twelve-step (`denoise=0.9`) and twenty-step (`denoise=0.95`) audio passes,
+encoded-source audio conditioning and compact prepared audio modulation storage.
+The engine keeps audio refinement opt-in; applications choose their deployed recipe.
+Video generation remains four steps, with joint audio conditioning. Completed video latents stay fixed
+through the additional audio pass. Hidden/K/V reuse and video-decoder overlap are explicit choices.
+
+Complete MP4 calls, five-second I2VA with the same input within each row, measured on one GPU:
+
+| Device / workload | Six-step cache + overlap | Twelve-step cache + overlap | Twenty-step cache + overlap | Twenty-step full context computation + overlap |
+| --- | ---: | ---: | ---: | ---: |
+| RTX 4090 **48 GiB**, BF16 two-slot ring, 960×544 percussion | 86.34 s | 102.71 s | 128.66 s | 176.00 s |
+| RTX 4090 48 GiB, BF16 ring, 1024² percussion | 143.45 s | 155.19 s | 179.28 s | — |
+| RTX PRO 6000 Blackwell **Server**, resident FP8, 512² claps | 12.81 s | 12.88 s | 13.33 s | 34.18 s |
+| RTX PRO 6000 Blackwell Server, resident FP8, 1344×768 guitar | — | 44.09 s | 43.25 s | 66.31 s |
+
+These are complete pipeline calls, excluding model initialization, network transfer and application
+queue/first-frame preparation. Local uses hidden reuse and Torch dense attention; remote uses K/V
+reuse and SageAttention2. Both use Veda 44/6 and a 0.25MP audio context, Torch 2.11/CUDA 13.
+First-call initialization and kernel warmup are separate from the warm rows above.
+The 44/6 partition remains an explicit application choice; the engine's existing default stays 40/10.
+
+Without caching/overlap, 960×544 ten-second local generation measured 178.84 / 228.36 / 295.43 s
+for six/twelve/twenty steps. On remote 2048² five-second generation, full serial six/twenty measured
+243.79 / 270.55 s. The existing per-device cache/headroom gates continue to apply.
+
+Twelve/twenty-step recipes change both evaluation count and re-noising strength. Human feedback on
+source-conditioned speech favored twenty steps for naturalness; residual crowd transients remain a
+quality limitation. Cached and fully recomputed audio preserve the picture but can differ in sound.
+The measured set includes speech, percussion, laughter/claps, acoustic music and ambience. These
+measurements qualify execution and latency; sound acceptance remains tied to each brief and listening.
+
+Compact tables deduplicate identical complete rows and retain every original BF16 bit. Twenty-step
+storage decreases from 611.00 MB to 400.92 MB; all 51 full reconstructed tables are bit-identical.
+Legacy tables, original files and the ordinary inference layout remain supported.
+
 ## 0.18.0
 
 Adds hybrid reference video on single SM89/SM120, an owned 128 MiB CPU VAE cache, explicit spatial-half

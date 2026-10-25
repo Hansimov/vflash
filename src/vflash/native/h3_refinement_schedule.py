@@ -87,6 +87,11 @@ def load_tables(directory, *, mode):
     expected = [f"block-{i:03d}.safetensors" for i in range(50)] + ["final.safetensors"]
     if [r["file"] for r in manifest["files"]] != expected:
         raise ValueError("refinement table inventory differs")
+    storage = manifest.get("storage", "full")
+    if storage not in {"full", "audio-table-dedup-v1"} or (
+        storage != "full" and mode != "audio"
+    ):
+        raise ValueError("refinement table storage differs")
     tables = []
     for index, record in enumerate(manifest["files"]):
         path = directory / record["file"]
@@ -94,6 +99,10 @@ def load_tables(directory, *, mode):
             raise ValueError("refinement table file differs")
         values = load_file(str(path), device="cpu")
         shape = (schedule.nfe, 9, 6, 5376) if index < 50 else (schedule.nfe, 3, 2, 5376)
+        if storage == "audio-table-dedup-v1":
+            from .h3_audio_modulation_storage import unpack_table
+
+            values = {"adaln.table": unpack_table(values, schedule, final=index == 50)}
         table = values.get("adaln.table")
         if (
             set(values) != {"adaln.table"}

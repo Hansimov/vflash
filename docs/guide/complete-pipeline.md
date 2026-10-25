@@ -231,7 +231,7 @@ are documented separately.
 
 ## Optional audio refinement {#optional-audio-only-six-step-refinement-source-main}
 
-`AudioRefinementRequest` adds six original-model audio evaluations after a four-step hybrid I2VA generation.
+`AudioRefinementRequest` adds an explicit original-model audio pass after a four-step hybrid I2VA generation.
 It freezes the completed video, keeps every temporal position and uniformly samples spatial context up to
 500,000 pixels with the original rotary coordinates. Video pixels, duration and delivery clock are unchanged.
 
@@ -252,7 +252,7 @@ selects full-context six-step control. Progress reports 4 + 6 evaluations and `a
 added work; failure restores bindings, attention, video and original audio. There is no CLI or HTTP switch
 and no default activation.
 
-### Encoded-source soundtrack restoration (development candidate)
+### Encoded-source soundtrack restoration
 
 Advanced native sessions can take `encoded_audio_source=EncodedAudioSource(video_rows, audio_rows)`
 with an explicit `AudioRefinementRequest`. Both tensors are finite, normalized model-coordinate rows:
@@ -263,12 +263,12 @@ stream for final muxing; VAE decoding is needed only for the new audio.
 The default six-step recipe also accepts encoded source media. Source ownership, waveform encoding,
 versioning and final original-picture muxing belong to the calling application.
 
-### Longer audio passes (development candidates)
+### Longer audio passes (0.19)
 
 `AudioRefinementRequest` also accepts `evaluations=12, denoise=0.9` and
 `evaluations=20, denoise=0.95`. Each uses tables compiled with the same steps and denoise value:
 `compile_refinement_tables(..., steps=20, denoise=0.95, mode="audio")`, for example.
-The candidate runs after ordinary four-step I2VA generation or an explicit encoded source. The configured
+The pass runs after ordinary four-step I2VA generation or an explicit encoded source. The configured
 spatial context budget, hidden/K/V cache and audio/video decode overlap remain independent choices.
 Higher re-noising can change the sound itself: compare naturalness, content fidelity and transients
 against the sound brief and measure the complete generated MP4 call.
@@ -278,9 +278,18 @@ its dense attention backend, with the original policy restored on success or fai
 the four-step video policy. Cached context still freezes non-audio states after the first evaluation.
 These explicit candidates keep the ordinary request default unchanged.
 
+### Compact prepared tables (0.19)
+
+`compact_audio_tables(source, output)` in `vflash.compiler.refinement_compact` writes a new
+`audio-table-dedup-v1` directory. It deduplicates identical complete rows, retaining **every BF16
+bit of the original table**, including unused rows. `load_tables` reconstructs the full contiguous
+layout and supports legacy tables. Source files stay intact; inference memory and computation stay
+unchanged. A twenty-step set decreases from 611.00 MB to 400.92 MB. Full-table bit comparisons
+cover all 51 actual files; six/twelve/twenty-step fixtures also cover signed zeros and exponent bits.
+
 ### Hidden-context reuse {#audio-hidden-context}
 
-`reuse_hidden_context=True` reuses first-evaluation BF16 non-audio hidden states; all six audio evaluations
+`reuse_hidden_context=True` reuses first-evaluation BF16 non-audio hidden states; all selected audio evaluations
 remain, later steps rebuild K/V and process only audio rows. This is an explicit approximation, never changes
 video latents and defaults to false. The cache is scoped to one refinement (at most 40 GiB, with at least
 12 GiB of device memory kept free) and released on success or failure.
@@ -288,11 +297,11 @@ video latents and defaults to false. The cache is scoped to one refinement (at m
 ### K/V reuse and audio/video overlap {#audio-kv-overlap}
 
 On resident SM120, `reuse_kv_context=True` reuses first-evaluation post-RoPE BF16 non-audio K/V while
-recomputing audio rows for the remaining five evaluations. Select either this or `reuse_hidden_context`.
-This explicit approximation retains the six-step solver and video latents, with the same 40 GiB cache
+recomputing audio rows for the remaining evaluations. Select either this or `reuse_hidden_context`.
+This explicit approximation retains the selected solver and video latents, with the same 40 GiB cache
 limit and 12 GiB headroom. The measured SM89 path uses hidden-context reuse.
 
-`H3Pipeline(..., audio_decode_overlap=True)` overlaps final video VAE decoding with six-step audio on
+`H3Pipeline(..., audio_decode_overlap=True)` overlaps final video VAE decoding with the selected audio pass on
 a separate CUDA stream for five-second requests up to 1 MP. It submits only with sufficient memory
 headroom and otherwise runs serially. The pipeline owns and joins the thread/future on success and
 failure; `stages.audio_video_overlap` reports actual execution. Audio refinement depends on the
