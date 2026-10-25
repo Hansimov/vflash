@@ -95,7 +95,7 @@ def test_cuda_identity_mismatch_is_not_admitted(monkeypatch):
 def test_shared_hybrid_reference_constructor_accepts_remote_original_v01(
     monkeypatch, arch, tmp_path
 ):
-    from vflash.adapters import hybrid_reference, modular_config, references
+    from vflash.adapters import hybrid_reference, modular_config, reference_cache, references
 
     names = (
         "text_encoder",
@@ -124,6 +124,8 @@ def test_shared_hybrid_reference_constructor_accepts_remote_original_v01(
     )
     monkeypatch.setattr(modular_config, "local_modular_config", lambda *a, **kw: {})
     monkeypatch.setattr(references, "install_match_reference_setup_block", lambda pipe: None)
+    cache = object()
+    monkeypatch.setattr(reference_cache, "install_reference_latent_cache", lambda pipe: cache)
     owner = SimpleNamespace(
         prepared=SimpleNamespace(
             profile_id="i2va-turbo4-v01-544-exact-" + arch,
@@ -136,6 +138,7 @@ def test_shared_hybrid_reference_constructor_accepts_remote_original_v01(
     graph = hybrid_reference.HybridReferenceGraph(
         owner, {"reference_checkpoint_revision": "42ed227ee7df40d41602854ae760620d6eb651fe"}
     )
+    assert graph.reference_cache is cache
     assert graph.pipe.transformer_ref is owner.transformer
     assert all(getattr(graph.pipe, name) is getattr(owner.pipe, name) for name in names)
     owner.prepared.profile_id = "i2va-base16-bf16-sm89"

@@ -60,4 +60,4 @@ jobs:
         if: steps.tensor-scope.outputs.required == 'true'
         env:
           CUDA_VISIBLE_DEVICES: ""
-        run: pytest tests/test_fp8_loaders.py tests/test_tiled_block.py tests/test_scene_conditioning.py tests/test_audio_headroom.py tests/test_face_encoder.py tests/test_h3_refinement.py tests/test_h3_audio_refinement.py tests/test_h3_audio_hidden_cache.py tests/test_h3_audio_context_cache.py tests/test_h3_audio_pipeline.py tests/test_h3_veda_attention.py tests/test_clip_reuse.py tests/test_media_pipeline.py tests/test_rgb_delivery.py tests/test_selective_decode.py
+        run: pytest tests/test_fp8_loaders.py tests/test_tiled_block.py tests/test_scene_conditioning.py tests/test_audio_headroom.py tests/test_face_encoder.py tests/test_h3_refinement.py tests/test_h3_audio_refinement.py tests/test_h3_audio_kv_cache.py tests/test_audio_video_overlap.py tests/test_reference_cache.py tests/test_h3_audio_hidden_cache.py tests/test_h3_audio_context_cache.py tests/test_h3_audio_pipeline.py tests/test_h3_veda_attention.py tests/test_clip_reuse.py tests/test_media_pipeline.py tests/test_rgb_delivery.py tests/test_selective_decode.py
