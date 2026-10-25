@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "version": "0.17.2",
+  "version": "0.18.0",
   "platform": "linux/amd64",
   "implementation_revision": "0f7da254bf657468b416f981ae248abf578d1709",
   "wheel_sha256": "9ef40c6df80185eed9fbd894aa8aeaf6ac1c72d3bf245b53d0ee2f554e524736",
@@ -23,22 +23,24 @@
   },
   "images": {
     "native": {
-      "name": "hansimov/vflash:0.17.2",
-      "digest": "sha256:a5770b500ed971ccd4cd6ae5492480849319bcc88da8a5e890e3d7e7ef13dba3",
+      "name": "hansimov/vflash:0.18.0",
+      "digest": "sha256:2576b159c2271951102eb3ebcc7e94bae7d47f7bf141035cee5ed80dcbfffab4",
       "target": "runtime",
       "interface": "Compiled conditioning bundles to audio/video latents through the native HTTP API.",
-      "base_image": "hansimov/vflash@sha256:83d12d0bce19fbd9a5e1cfe628f24a947ee36cd59dbded1d551078eb8dfdb532",
+      "base_image": "hansimov/vflash@sha256:a5770b500ed971ccd4cd6ae5492480849319bcc88da8a5e890e3d7e7ef13dba3",
       "recipe_target": "inherited from immutable base"
     },
     "pipeline": {
-      "name": "hansimov/vflash:0.17.2-pipeline",
-      "digest": "sha256:508140ad2851393ed01bd9c3e8c83e6f972818f98f524de008654ba2d663186d",
+      "name": "hansimov/vflash:0.18.0-pipeline",
+      "digest": "sha256:e56afb5877eb86f6669030cb7522629f89215958803e9fe90d69041aaf563a43",
       "target": "pipeline",
       "interface": "Complete MP4 generation using explicitly mounted prepared model assets; supported modes and limits follow the complete-pipeline guide.",
-      "base_image": "hansimov/vflash@sha256:3d0dce84cea830be7464a44a6e759914c5b6164f82bc8314bbee9901fbeaa044",
+      "base_image": "hansimov/vflash@sha256:508140ad2851393ed01bd9c3e8c83e6f972818f98f524de008654ba2d663186d",
       "recipe_target": "inherited from immutable base"
     }
   },
   "algorithm_qualified_revision": "42d49c54530b9c3fa43319d7057a622c8a80116f",
-  "option_qualified_revision": "b1daf3cda0f0e479dc99ed23e77356b6cdae8f45"
+  "option_qualified_revision": "b1daf3cda0f0e479dc99ed23e77356b6cdae8f45",
+  "source_revision": "89a252960fd98b6f595018396ad48d32aef76b6c",
+  "reference_audio_qualified_revision": "89a252960fd98b6f595018396ad48d32aef76b6c"
 }
