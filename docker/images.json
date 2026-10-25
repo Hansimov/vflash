@@ -1,27 +1,27 @@
 {
   "schema_version": 2,
-  "version": "0.18.0",
+  "version": "0.19.0",
   "platform": "linux/amd64",
-  "implementation_revision": "89a252960fd98b6f595018396ad48d32aef76b6c",
-  "wheel_sha256": "2ea3ee0eb449a0f19bfab0e42224fa0f45a9c56e2407b903896aed996f7a7494",
+  "implementation_revision": "4e5a444bd8e17d727deb1afe8b7ae5aa279d0976",
+  "wheel_sha256": "cea7f4989bebf14538011b138f82f75fac54fcdafbb551ef6552c9ef30e62760",
   "build_recipe": "https://github.com/Hansimov/vflash/blob/0f7da254bf657468b416f981ae248abf578d1709/docker/release-from-wheel.Dockerfile",
   "previous_inventory": {
-    "version": "0.17.2",
+    "version": "0.18.0",
     "images": {
       "native": {
-        "name": "hansimov/vflash:0.17.2",
-        "digest": "sha256:a5770b500ed971ccd4cd6ae5492480849319bcc88da8a5e890e3d7e7ef13dba3",
+        "name": "hansimov/vflash:0.19.0",
+        "digest": "sha256:03c4bf850c8de21999301645a8a12941e2d6a753ca96e18c60ef4f31931d0e29",
         "target": "runtime",
         "interface": "Compiled conditioning bundles to audio/video latents through the native HTTP API.",
-        "base_image": "hansimov/vflash@sha256:83d12d0bce19fbd9a5e1cfe628f24a947ee36cd59dbded1d551078eb8dfdb532",
+        "base_image": "hansimov/vflash@sha256:2576b159c2271951102eb3ebcc7e94bae7d47f7bf141035cee5ed80dcbfffab4",
         "recipe_target": "inherited from immutable base"
       },
       "pipeline": {
-        "name": "hansimov/vflash:0.17.2-pipeline",
-        "digest": "sha256:508140ad2851393ed01bd9c3e8c83e6f972818f98f524de008654ba2d663186d",
+        "name": "hansimov/vflash:0.19.0-pipeline",
+        "digest": "sha256:364fe49603b9e8be151614cc8f6099e025a59b81a96ac8e3f37edd19919b011f",
         "target": "pipeline",
         "interface": "Complete MP4 generation using explicitly mounted prepared model assets; supported modes and limits follow the complete-pipeline guide.",
-        "base_image": "hansimov/vflash@sha256:3d0dce84cea830be7464a44a6e759914c5b6164f82bc8314bbee9901fbeaa044",
+        "base_image": "hansimov/vflash@sha256:e56afb5877eb86f6669030cb7522629f89215958803e9fe90d69041aaf563a43",
         "recipe_target": "inherited from immutable base"
       }
     }
@@ -37,26 +37,27 @@
     "sol_source_revision": "d0c0a4685ab5dc2336d18b7213d85f13def92418"
   },
   "qualification": {
-    "package": "Public 0.17.2 wheel; both immutable images import it as UID 10001. Focused CPU checks cover pipe inactivity/total deadlines, child cleanup and actual FFmpeg media equivalence. Existing model and hardware qualification records retain their original scope.",
+    "package": "Public 0.19.0 wheel; immutable native and pipeline images import the exact package. Source CI and both bilingual Pages passed. Full-table BF16 deduplication retains every value in all 51 reconstructed tables.",
     "engine": "On one RTX PRO 6000 with resident FP8 weights, 44/6 and 42/8 completed three matched five-second I2VA inputs under both Sage INT8 QK / FP8 PV and FROST BF16 dense / FP16 sparse PV. The portrait case also completed six-step audio refinement with the selected partition. See 0.17.0 release notes for complete-engine times and scope.",
     "quality_scope": "Native detail and temporal crops support per-scene observations; visual quality and action adherence are evaluated against the input brief and reference. The default remains 40/10. Hardware capacity and application rollout retain their separate qualification.",
-    "reference_audio": "Single SM89 48 GiB BF16 ring and SM120 Server 96 GiB resident FP8; five-second full/pooled reference video through 1344x768, owned audio cache and decode overlap. Scope and matched decoded-media evidence: reference/releases#_0-18-0."
+    "reference_audio": "Single SM89 48 GiB BF16 ring and SM120 Server 96 GiB resident FP8; five-second full/pooled reference video through 1344x768, owned audio cache and decode overlap. Scope and matched decoded-media evidence: reference/releases#_0-18-0.",
+    "audio_quality": "Matched 6/12/20-step audio on single RTX 4090 48 GiB BF16 ring and rented RTX PRO 6000 Blackwell Server resident FP8. Complete-call latency, approximate cache choices and listening limits: reference/releases#_0-19-0."
   },
   "images": {
     "native": {
-      "name": "hansimov/vflash:0.18.0",
-      "digest": "sha256:2576b159c2271951102eb3ebcc7e94bae7d47f7bf141035cee5ed80dcbfffab4",
+      "name": "hansimov/vflash:0.19.0",
+      "digest": "sha256:03c4bf850c8de21999301645a8a12941e2d6a753ca96e18c60ef4f31931d0e29",
       "target": "runtime",
       "interface": "Compiled conditioning bundles to audio/video latents through the native HTTP API.",
-      "base_image": "hansimov/vflash@sha256:a5770b500ed971ccd4cd6ae5492480849319bcc88da8a5e890e3d7e7ef13dba3",
+      "base_image": "hansimov/vflash@sha256:2576b159c2271951102eb3ebcc7e94bae7d47f7bf141035cee5ed80dcbfffab4",
       "recipe_target": "inherited from immutable base"
     },
     "pipeline": {
-      "name": "hansimov/vflash:0.18.0-pipeline",
-      "digest": "sha256:e56afb5877eb86f6669030cb7522629f89215958803e9fe90d69041aaf563a43",
+      "name": "hansimov/vflash:0.19.0-pipeline",
+      "digest": "sha256:364fe49603b9e8be151614cc8f6099e025a59b81a96ac8e3f37edd19919b011f",
       "target": "pipeline",
       "interface": "Complete MP4 generation using explicitly mounted prepared model assets; supported modes and limits follow the complete-pipeline guide.",
-      "base_image": "hansimov/vflash@sha256:508140ad2851393ed01bd9c3e8c83e6f972818f98f524de008654ba2d663186d",
+      "base_image": "hansimov/vflash@sha256:e56afb5877eb86f6669030cb7522629f89215958803e9fe90d69041aaf563a43",
       "recipe_target": "inherited from immutable base"
     }
   },
