@@ -254,7 +254,7 @@ result = pipeline.generate(request, output_path, audio_refinement=refinement)
 主视频去噪先执行；重叠发生在最终画面解码阶段。主去噪保留联合音频，以保持原动作和口型条件。
 完整耗时、设备精度和逐帧检查范围见 [0.18 版本记录](../reference/releases#_0-18-0)。
 
-### BF16双槽权重复用（开发版） {#audio-ring-weight-cache}
+### BF16双槽权重复用（0.20） {#audio-ring-weight-cache}
 
 `AudioRefinementRequest(..., weight_cache_bytes=20 * 1024**3)`在音频阶段将部分BF16权重保留在显存中，默认值为零。
 权重数值、原计算槽地址、注意力及采样策略保持；后续步骤通过显存内复制读取已缓存权重，减少PCIe传输。

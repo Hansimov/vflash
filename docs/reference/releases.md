@@ -1,5 +1,36 @@
 # Release notes
 
+## 0.20.0
+
+Adds an opt-in `weight_cache_bytes` budget to `AudioRefinementRequest`. The BF16
+two-slot ring keeps selected weights on device during audio refinement, preserves
+the original compute-slot addresses, and restores its bindings on every exit.
+The default is zero; resident trunks retain their existing behavior. The scope
+reserves 20 GiB for context and overlapping decode work.
+
+One RTX 4090 **48 GiB**, BF16, Veda 44/6 with Torch dense attention, twelve audio
+steps, 0.25MP audio context, hidden-state reuse and video-decoder overlap:
+
+| Five-second I2VA | Warm complete call | With 20 GiB budget | Saved |
+| --- | ---: | ---: | ---: |
+| 960×544 percussion | 102.644 s | 93.252 s | 9.392 s |
+| 960×544 laughter | 103.964 s | 94.095 s | 9.870 s |
+| 1024² percussion | 158.456 s | 149.528 s | 8.928 s |
+| 960×544 speech | 81.360 s | 70.296 s | 11.063 s |
+
+These complete MP4 calls include cache setup and exclude model initialization,
+application queueing and transport. The first cold call is reported separately
+at 110.150 s. The retained prefix is 27/50 blocks, 21.01 GB; recurring H2D traffic
+falls from 466.96 GB to 214.80 GB, plus one 21.01 GB preparation copy. Peak device
+allocation for the cached cases is 33.07–35.70 GiB. Torch 2.11/CUDA 13.
+
+All 120 decoded video frames and all stereo PCM samples match each row's control.
+Four further complete calls qualified the owned native implementation; its two
+cached outputs also match the prototype's full decoded media. This establishes
+weight-placement equivalence within the selected audio recipe. Sound acceptance
+and the earlier recipe's transient limitations retain their existing scope.
+Other durations, GPU capacities and memory layouts require their own qualification.
+
 
 ## 0.19.0
 

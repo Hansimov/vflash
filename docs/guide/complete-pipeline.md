@@ -309,7 +309,7 @@ completed video, so main video denoising runs first; the overlap is with final p
 Keep joint audio during main denoising to retain the original motion and mouth conditioning.
 Complete-call timings, precision and decoded-media scope are in the [0.18 release record](../reference/releases#_0-18-0).
 
-### BF16 ring weight reuse (development) {#audio-ring-weight-cache}
+### BF16 ring weight reuse (0.20) {#audio-ring-weight-cache}
 
 `AudioRefinementRequest(..., weight_cache_bytes=20 * 1024**3)` retains a prefix of the
 BF16 ring's weights on device for the audio pass. The default is zero. It preserves
