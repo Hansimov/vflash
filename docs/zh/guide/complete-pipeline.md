@@ -173,6 +173,28 @@ Python 中使用 `VideoRequest(prompt=..., reference_video=Path("reference.mp4")
 [RefMod](https://github.com/Luisacaotica/ComfyUI-MiniMaxH3Mod/tree/517e8c419a8584fbf69fceb487bc39d83e6a6ec8) 启发。
 本实现复用官方编码结果并提供显式空间池化；RefMod 的逐素材 MSE 拟合和音色参考属于另外的方案。
 
+### 外观图与动作视频组合（开发中）
+
+开发版混合路径将一份完整参考视频与一至三张有序图像组合：
+
+```python
+request = VideoRequest(
+    prompt="<Picture 1> 提供外观；<Video 1> 提供动作和摄影机时序。",
+    references=(Path("appearance.png"),),
+    reference_video=Path("motion.mp4"),
+    width=960, height=544, duration_seconds=5,
+)
+```
+
+图像职责使用`<Picture 1>`至`<Picture 3>`，视频使用`<Video 1>`。图像沿目标面积、仅缩小的match策略，
+视频沿官方尺寸规范；执行路径为单SM89／SM120 Veda混合模型的完整空间参考，输出保持五秒、最多1,048,576像素。
+图像顺序、身份与目标画布参与参考缓存身份，同一导引搭配新外观时重新编码组合条件。
+
+首条执行证据覆盖48 GiB SM89、一张外观图与五秒导引：960×544完整调用280.7秒，编码60.2秒、去噪201.3秒；
+会话初始化另计90.9秒。成片保持人物外观与完整交接动作。同一简单动作的简洁／细化I2VA提示也完成交接，
+调用76.1／70.5秒，编码和冷暖状态分别记录。按具体控制需求选择动作参考；更广场景、三图容量与目标硬件性能继续实测。
+已发行0.20包沿图像／视频分别输入的原合同。
+
 ## 混合模型与扩展请求 {#extended-hybrid}
 
 `HybridModel(Path(".../transformer_ref"))` 保留 LightX v0.1 四次评估主干，只把第 25–49 块的 AdaLN 投影替换为固定版本的官方 Ref

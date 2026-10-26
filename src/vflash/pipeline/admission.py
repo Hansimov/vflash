@@ -49,6 +49,8 @@ def validate_request(
                 "spatial video-reference compression requires a hybrid pipeline"
             )
         maximum_pixels = 1024**2 if hybrid_ref else 928 * 512
+        if request.ordered_references and not hybrid_ref:
+            raise ContractError("mixed image/video references require a hybrid pipeline")
         if request.width * request.height > maximum_pixels or request.duration_seconds != 5:
             raise ContractError("video-reference output exceeds its five-second profile canvas")
     modes = supported_request_modes(profile_id)

@@ -103,7 +103,8 @@ def test_reference_count_rejects_outside_one_to_nine(count):
         validate_hybrid_reference_bundle(b, source=source(), schedule=b.schedule)
 
 
-def test_video_reference_identity_and_modality_are_distinct():
+@pytest.mark.parametrize("schema", [2, 6])
+def test_video_reference_identity_and_modality_are_distinct(schema):
     from vflash.native.h3_conditioning_bundle import H3_VIDEO_REFERENCE_POLICY
 
     image = source()
@@ -111,7 +112,7 @@ def test_video_reference_identity_and_modality_are_distinct():
     assert video["transformer_sha256"] == image["transformer_sha256"]
     assert video["oracle_config_sha256"] != image["oracle_config_sha256"]
     b = bundle()
-    b.schema_version = 2
+    b.schema_version = schema
     b.request = {"references": [1], "reference_video_policy": H3_VIDEO_REFERENCE_POLICY}
     b.source = video
     validate_hybrid_reference_bundle(b, source=video, schedule=b.schedule)

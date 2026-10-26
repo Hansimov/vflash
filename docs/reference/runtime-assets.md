@@ -79,4 +79,11 @@ The adapter must record the source file and decoded RGB hashes, source dimension
 
 Since 0.18, schema 2 also serves the Veda hybrid on single SM89/SM120, with five-second output up to 1,048,576 pixels. Full reference uses the official video policy; explicit spatial-half carries a distinct policy identity and `latent_spatial_divisor=2`. The reader recomputes prefix rows from this metadata while retaining every encoded temporal position. See [reference video](../guide/complete-pipeline#reference-video) for current input bounds and cache lifetimes.
 
+Development schema 6 adds one to three ordered image identities and aligned dimensions in `reference_images`,
+with `reference_image_policy="match"`, alongside the single full video in `references`.
+The native hybrid validates the combined prefix as video rows plus each image's `width * height / 1024` rows.
+Image geometry includes the nearest-32 rounding allowance of match sizing and is bounded by the target canvas.
+Schema 1–5 readers and source identities retain their existing contracts. Complete generation qualification is
+recorded separately in the [combined-input guide](../guide/complete-pipeline#reference-video).
+
 `H3ConditioningCaptureSession.finish(..., schema_version=2)` seals this metadata and the same 14 captured tensors. Loading checks source identity, the exact Ref4 schedule, tensor widths, modality indices and temporal prefixes. A schema change does not convert an existing image capture into video conditioning. The 0.3.2 `H3Pipeline` accepts a local `VideoRequest(reference_video=Path(...))` and creates this capture through the official video setup; see [input limits and examples](../guide/complete-pipeline#reference-video). The installed public pipeline completed an image/video/image sequence, checking 14 conditioning tensors, final FP32 audio/video latents, every delivered RGB frame and cancellation cleanup. The [release notes](./releases#earlier) distinguish that implementation evidence from content quality and audio reproducibility.

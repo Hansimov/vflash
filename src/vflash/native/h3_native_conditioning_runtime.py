@@ -619,8 +619,9 @@ class H3NativeConditioningRuntime:
             raise H3NativeConditioningRuntimeError(
                 "the conditioning task differs from the loaded Base or Ref model"
             )
-        if bundle.schema_version == 2 and (
-            len(self.devices) != 1
+        if bundle.schema_version in {2, 6} and (
+            (bundle.schema_version == 6 and not hybrid_reference)
+            or len(self.devices) != 1
             or self.compute_capability
             not in ({(8, 9), (12, 0)} if hybrid_reference else {(8, 9)})
             or self.parallel_strategy != "single"

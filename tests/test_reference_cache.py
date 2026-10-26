@@ -56,3 +56,23 @@ def test_spatial_pool_retains_each_time_and_full_cache_entry():
     assert pooled.shape == (1, 24, 7, 24, 42)
     assert torch.equal(pooled[0, 0, :, 0, 0], torch.arange(7, dtype=torch.float32))
     assert full.shape == (1, 24, 7, 48, 86)
+
+
+def test_mixed_cache_tracks_ordered_appearance_and_canvas():
+    torch = pytest.importorskip("torch")
+    cache = ReferenceLatentCache()
+    video = reference("same-motion")
+    context = ("mixed-match-v1", 960, 544, "person-a", "person-b")
+    value = torch.ones(1, 24, 1, 4, 4)
+    with cache.bind(video, context_key=context):
+        cache.put([value, value * 2])
+    for changed in [
+        (),
+        ("mixed-match-v1", 512, 512, "person-a", "person-b"),
+        ("mixed-match-v1", 960, 544, "person-b", "person-a"),
+        ("mixed-match-v1", 960, 544, "person-c", "person-b"),
+    ]:
+        with cache.bind(video, context_key=changed):
+            assert cache.get() is None
+    with cache.bind(video, context_key=context):
+        assert torch.equal(cache.get()[1], value * 2)

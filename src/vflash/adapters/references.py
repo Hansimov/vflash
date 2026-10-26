@@ -105,6 +105,34 @@ def install_match_reference_setup_block(pipe: Any) -> Any:
     from vflash.adapters.video_geometry import reference_video_geometry
     from vflash.native.h3_conditioning_bundle import H3_VIDEO_REFERENCE_POLICY
 
+    def matched_images(entries, *, width, height, multiple):
+        normalized = []
+        sizes = []
+        for entry in entries:
+            if entry.kind != "image" or not isinstance(entry.image, Image.Image):
+                raise ValueError("match sizing requires decoded image references")
+            source_width, source_height = entry.image.size
+            target_height, target_width = resolve_match_reference_image_size(
+                source_width,
+                source_height,
+                target_width=width,
+                target_height=height,
+                dimension_multiple=multiple,
+            )
+            image = entry.image
+            if image.size != (target_width, target_height):
+                image = image.resize((target_width, target_height), Image.Resampling.LANCZOS)
+            normalized.append(MiniMaxH3ImageReference(image=image))
+            sizes.append(
+                {
+                    "source_height": source_height,
+                    "source_width": source_width,
+                    "height": target_height,
+                    "width": target_width,
+                }
+            )
+        return normalized, sizes
+
     class MatchReferenceSetupStep(MiniMaxH3Ref2VASetupStep):
         resize_mode = "match"
         last_metadata: dict[str, Any] | None = None
@@ -114,23 +142,38 @@ def install_match_reference_setup_block(pipe: Any) -> Any:
             block_state = self.get_block_state(state)
             entries = block_state.references
             if entries and any(entry.kind == "video" for entry in entries):
+                videos = [entry for entry in entries if entry.kind == "video"]
+                images = [entry for entry in entries if entry.kind == "image"]
                 if (
-                    len(entries) != 1
-                    or not isinstance(entries[0], MiniMaxH3VideoReference)
-                    or entries[0].has_audio
-                    or entries[0].fps != 24
+                    len(videos) != 1
+                    or len(images) > 3
+                    or len(images) + len(videos) != len(entries)
+                    or not isinstance(videos[0], MiniMaxH3VideoReference)
+                    or entries[-1] is not videos[0]
+                    or videos[0].has_audio
+                    or videos[0].fps != 24
                 ):
-                    raise ValueError("video setup requires one visual-only CFR24 video")
-                frames = entries[0].frames
+                    raise ValueError(
+                        "reference setup requires ordered images then one CFR24 video"
+                    )
+                frames = videos[0].frames
                 expected = reference_video_geometry(
                     frames.shape[2], frames.shape[1], frames.shape[0]
                 )
+                # Keep the established image policy. The upstream mixed setup
+                # otherwise upscales image short edges independently of this canvas.
+                if images:
+                    state.set("references", videos)
                 # In particular, do not downscale to the generated canvas or
                 # pre-normalize before the official non-idempotent rounding.
-                result = super().__call__(components, state)
+                try:
+                    result = super().__call__(components, state)
+                finally:
+                    state.set("references", entries)
                 # get_block_state projects inputs only; intermediate outputs
                 # are published to the returned PipelineState by the block.
-                normalized = result[1].get("normalized_references")[0]
+                normalized_entries = result[1].get("normalized_references")
+                normalized = normalized_entries[-1]
                 if (
                     normalized.frames.shape
                     != (frames.shape[0], expected["height"], expected["width"], 3)
@@ -138,6 +181,17 @@ def install_match_reference_setup_block(pipe: Any) -> Any:
                 ):
                     raise ValueError("the official video setup geometry changed")
                 self.last_metadata = {"policy": H3_VIDEO_REFERENCE_POLICY, **expected}
+                if images:
+                    normalized_images, sizes = matched_images(
+                        images,
+                        width=block_state.width,
+                        height=block_state.height,
+                        multiple=int(components.canvas_multiple),
+                    )
+                    result[1].set("normalized_references", [*normalized_images, normalized])
+                    self.last_metadata["resolved_images"] = [
+                        {"width": value["width"], "height": value["height"]} for value in sizes
+                    ]
                 return result
             if block_state.height is None or block_state.width is None:
                 raise ValueError("match reference sizing requires an explicit target canvas")
@@ -181,36 +235,12 @@ def install_match_reference_setup_block(pipe: Any) -> Any:
                 )
             block_state.num_frames = aligned_num_frames
 
-            normalized = []
-            resolved_sizes: list[dict[str, int]] = []
-            for entry in block_state.references:
-                if entry.kind != "image" or not isinstance(entry.image, Image.Image):
-                    raise ValueError(
-                        "native Diffusers match sizing accepts decoded image references only"
-                    )
-                source_width, source_height = entry.image.size
-                target_height, target_width = resolve_match_reference_image_size(
-                    source_width,
-                    source_height,
-                    target_width=block_state.width,
-                    target_height=block_state.height,
-                    dimension_multiple=multiple,
-                )
-                image = entry.image
-                if image.size != (target_width, target_height):
-                    image = image.resize(
-                        (target_width, target_height),
-                        Image.Resampling.LANCZOS,
-                    )
-                normalized.append(MiniMaxH3ImageReference(image=image))
-                resolved_sizes.append(
-                    {
-                        "source_height": source_height,
-                        "source_width": source_width,
-                        "height": target_height,
-                        "width": target_width,
-                    }
-                )
+            normalized, resolved_sizes = matched_images(
+                block_state.references,
+                width=block_state.width,
+                height=block_state.height,
+                multiple=multiple,
+            )
             block_state.normalized_references = normalized
             self.last_metadata = {
                 "policy": "match",

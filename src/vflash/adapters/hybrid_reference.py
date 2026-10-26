@@ -80,15 +80,20 @@ class HybridReferenceGraph:
         from vflash.native.h3_conditioning_bundle import H3ConditioningProfile
 
         is_video = request.reference_video is not None
-        expected = 1 if is_video else len(request.ordered_references)
+        image_count = len(request.ordered_references)
+        mixed = is_video and image_count > 0
+        expected = image_count + int(is_video)
         if (
             request.mode != "ref2va"
             or len(references) != expected
             or not 1 <= len(references) <= 9
-            or any(isinstance(ref, DecodedVideoReference) != is_video for ref in references)
+            or any(isinstance(ref, DecodedVideoReference) for ref in references[:image_count])
+            or (is_video and not isinstance(references[-1], DecodedVideoReference))
             or not self.owner._cuda_active
         ):
-            raise ValueError("resume the shared conditioner with ordered images or one video")
+            raise ValueError(
+                "resume the shared conditioner with ordered images then optional video"
+            )
         source = self.source
         video_policy = (
             H3_VIDEO_REFERENCE_SPATIAL_HALF_POLICY
@@ -106,8 +111,16 @@ class HybridReferenceGraph:
             )
         capture = H3ConditioningCaptureSession(directory)
         binding = self.reference_cache.bind(
-            references[0] if is_video else None,
+            references[-1] if is_video else None,
             spatial_divisor=2 if video_policy == H3_VIDEO_REFERENCE_SPATIAL_HALF_POLICY else 1,
+            context_key=(
+                "mixed-match-v1",
+                request.width,
+                request.height,
+                *(ref.sha256 for ref in references[:image_count]),
+            )
+            if mixed
+            else (),
         )
         binding.__enter__()
         try:
@@ -122,7 +135,7 @@ class HybridReferenceGraph:
                     generator=self.owner._torch.Generator().manual_seed(request.seed),
                     references=[
                         MiniMaxH3VideoReference(frames=r.require_frames(), fps=24, audio=None)
-                        if is_video
+                        if isinstance(r, DecodedVideoReference)
                         else MiniMaxH3ImageReference(image=r.image)
                         for r in references
                     ],
@@ -175,7 +188,7 @@ class HybridReferenceGraph:
                 ],
             )
             if is_video:
-                reference = dict(references[0].metadata)
+                reference = dict(references[-1].metadata)
                 if video_policy == H3_VIDEO_REFERENCE_SPATIAL_HALF_POLICY:
                     reference["latent_spatial_divisor"] = 2
                     reference["condition_video_rows"] = (
@@ -183,10 +196,33 @@ class HybridReferenceGraph:
                         * max(1, reference["width"] // 64)
                         * max(1, reference["height"] // 64)
                     )
-                if (video_prefix, audio_prefix) != (reference["condition_video_rows"], 0):
+                sizes = (self.setup.last_metadata or {}).get("resolved_images", [])
+                image_rows = sum(v["width"] * v["height"] // 1024 for v in sizes)
+                if mixed and len(sizes) != image_count:
+                    raise ValueError("mixed reference image geometry is missing")
+                if (video_prefix, audio_prefix) != (
+                    reference["condition_video_rows"] + image_rows,
+                    0,
+                ):
                     raise ValueError("captured video prefix differs from the decoded reference")
                 metadata.pop("reference_image_policy")
                 metadata.update(reference_video_policy=video_policy, references=[reference])
+                if mixed:
+                    metadata.update(
+                        reference_image_policy="match",
+                        reference_images=[
+                            dict(
+                                picture_index=i,
+                                role="reference",
+                                size_bytes=r.size_bytes,
+                                sha256=r.sha256,
+                                **size,
+                            )
+                            for i, (r, size) in enumerate(
+                                zip(references[:image_count], sizes, strict=True), 1
+                            )
+                        ],
+                    )
             identity = _digest(dict(request=metadata, profile=asdict(profile), source=source))
             return capture.finish_in_memory(
                 bundle_id="h3-conditioning-" + identity[:32],
@@ -196,7 +232,7 @@ class HybridReferenceGraph:
                 video_sigmas=self.pipe.scheduler.sigmas,
                 audio_sigmas=self.pipe.audio_scheduler.sigmas,
                 update_rule="training_euler",
-                schema_version=2 if is_video else 1,
+                schema_version=6 if mixed else 2 if is_video else 1,
             )
         finally:
             self.last_capture_diagnostics = {

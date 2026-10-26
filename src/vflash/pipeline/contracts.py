@@ -96,7 +96,8 @@ class VideoRequest:
     this boundary. Images are ordered and labeled ``<Picture 1>`` through
     ``<Picture 3>``. ``reference`` preserves the original single-image API;
     use ``references`` for an ordered tuple instead. ``reference_video`` accepts
-    one visual-only local clip labeled ``<Video 1>``, without images. No references
+    one visual-only local clip labeled ``<Video 1>``. Hybrid requests can combine it
+    with up to three ordered appearance images under the full video policy. No references
     means T2VA and requires a T2VA pipeline. ``first_frame`` is a separate
     I2VA input and ``last_frame`` alone is an L2VA input; neither is interpreted
     as a Ref2VA content reference. Supplying both is a true FL2VA request with
@@ -158,8 +159,12 @@ class VideoRequest:
         if self.reference_video is not None:
             if not isinstance(self.reference_video, Path):
                 raise ContractError("reference_video must be a local pathlib.Path")
-            if self.ordered_references:
-                raise ContractError("provide one reference video or image references, not both")
+            if len(self.ordered_references) > 3 or (
+                self.ordered_references and self.reference_video_profile != "full"
+            ):
+                raise ContractError(
+                    "mixed references support up to three images and full video"
+                )
         if self.first_frame is not None:
             if not isinstance(self.first_frame, Path):
                 raise ContractError("first_frame must be a local pathlib.Path")

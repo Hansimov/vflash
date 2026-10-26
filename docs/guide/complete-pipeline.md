@@ -201,6 +201,33 @@ Reference-latent reuse and compression were informed by MIT-licensed
 This implementation reuses official latents and offers explicit spatial pooling; RefMod's per-asset MSE
 fitting and voice-reference work are separate methods.
 
+### Combined appearance images and motion video (development)
+
+The development hybrid path combines one full video with one to three ordered images:
+
+```python
+request = VideoRequest(
+    prompt="<Picture 1> supplies appearance; <Video 1> supplies action and camera timing.",
+    references=(Path("appearance.png"),),
+    reference_video=Path("motion.mp4"),
+    width=960, height=544, duration_seconds=5,
+)
+```
+
+Use `<Picture 1>` through `<Picture 3>` for image roles and `<Video 1>` for the video.
+Images retain target-area, downscale-only match sizing; the video retains its official geometry.
+This path uses full spatial reference on a single SM89/SM120 Veda hybrid. The five-second output and
+1,048,576-pixel canvas bounds remain. Image ordering, identities and target canvas participate in
+reference-cache identity, so reusing a guide with a new appearance recomputes the combined condition.
+
+Initial execution evidence covers one appearance image plus a five-second guide on a 48 GiB SM89:
+960×544 output completed in 280.7 seconds, with 60.2 seconds encoding and 201.3 seconds denoising;
+session initialization was another 90.9 seconds. The complete handoff kept the appearance and action
+sequence. Plain and detailed image-to-video prompts also achieved this simple action in 76.1/70.5 seconds
+with different conditioning and cold/warm state. Choose motion references for a concrete control need;
+broader scene coverage, three-image capacity and target-hardware performance remain development work.
+Published 0.20 packages retain their separate image/video request modes.
+
 ## Hybrid model and extended requests {#extended-hybrid}
 
 `HybridModel(Path(".../transformer_ref"))` keeps the LightX v0.1 four-evaluation backbone and replaces block

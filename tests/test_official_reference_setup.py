@@ -78,6 +78,23 @@ def test_official_video_resize_once_and_image_policy_restored_after_each_request
         block(components, request)
         assert block.last_metadata["policy"] == "match"
         request.get("normalized_references")[0].image.close()
+        # Mixed requests keep image match sizing and the original video geometry.
+        # Alternate image identity with the same video on the reused setup block.
+        for color in ("red", "blue"):
+            with Image.new("RGB", (232, 128), color) as appearance:
+                mixed = [MiniMaxH3ImageReference(image=appearance), source]
+                request = PipelineState(
+                    values={"references": mixed, "height": 352, "width": 640, "num_frames": 124}
+                )
+                block(components, request)
+                normalized = request.get("normalized_references")
+                assert [entry.kind for entry in normalized] == ["image", "video"]
+                assert normalized[0].image.size == (224, 128)
+                assert normalized[0].image.getpixel((0, 0)) == appearance.getpixel((0, 0))
+                assert np.array_equal(normalized[1].frames, original)
+                assert request.get("references") == mixed
+                assert block.last_metadata["resolved_images"] == [{"width": 224, "height": 128}]
+                normalized[0].image.close()
         # Fifteen delivered seconds require 362 internal VAE frames.
         # Nine distinct ordered images retain identity and still use no CUDA.
         references = [

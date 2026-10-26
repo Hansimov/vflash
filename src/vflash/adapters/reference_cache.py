@@ -26,11 +26,15 @@ class ReferenceLatentCache:
         self._bound = False
 
     @contextmanager
-    def bind(self, reference, *, spatial_divisor=1):
+    def bind(self, reference, *, spatial_divisor=1, context_key=()):
         if self._bound:
             raise ValueError("reference cache requires serial request ownership")
         if type(spatial_divisor) is not int or spatial_divisor not in {1, 2}:
             raise ValueError("reference spatial divisor must be one or two")
+        if not isinstance(context_key, tuple) or any(
+            type(value) not in (str, int) for value in context_key
+        ):
+            raise ValueError("reference context identity requires strings and integers")
         self.spatial_divisor = spatial_divisor
         self._bound = True
         self.key = (
@@ -45,6 +49,8 @@ class ReferenceLatentCache:
                 reference.metadata["vae_input_frames"],
             )
         )
+        if self.key is not None and context_key:
+            self.key += (context_key,)
         self.diagnostics = {
             "enabled": self.key is not None and self.maximum_bytes > 0,
             "hit": False,

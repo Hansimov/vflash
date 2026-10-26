@@ -28,6 +28,7 @@ H3_VIDEO_CONDITIONING_BUNDLE_SCHEMA_VERSION = 2
 H3_FIRST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION = 3
 H3_FL2VA_CONDITIONING_BUNDLE_SCHEMA_VERSION = 4
 H3_LAST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION = 5
+H3_MIXED_REFERENCE_CONDITIONING_BUNDLE_SCHEMA_VERSION = 6
 H3_VIDEO_REFERENCE_POLICY = "official-video-cfr24-v1"
 H3_VIDEO_REFERENCE_SPATIAL_HALF_POLICY = "official-video-cfr24-spatial-half-v1"
 H3_FIRST_FRAME_POLICY = "official-fl2va-first-frame-stretch-v1"
@@ -384,8 +385,35 @@ def _validate_video_reference(
     return dict(value)
 
 
+def _validate_image_references(references):
+    validated = []
+    seen = set()
+    for index, row in enumerate(references, start=1):
+        if not isinstance(row, dict) or set(row) != {
+            "picture_index",
+            "role",
+            "size_bytes",
+            "sha256",
+        }:
+            raise H3ConditioningBundleError("H3 conditioning reference fields are invalid")
+        digest = row.get("sha256")
+        if (
+            row.get("picture_index") != index
+            or row.get("role") != "reference"
+            or type(row.get("size_bytes")) is not int
+            or row["size_bytes"] <= 0
+            or not isinstance(digest, str)
+            or _SHA256.fullmatch(digest) is None
+            or digest in seen
+        ):
+            raise H3ConditioningBundleError("H3 conditioning reference identity is invalid")
+        seen.add(digest)
+        validated.append(dict(row))
+    return validated
+
+
 def _validate_request(value: Any, *, task: str, schema_version: int = 1) -> dict[str, Any]:
-    if type(schema_version) is not int or schema_version not in {1, 2, 3, 4, 5}:
+    if type(schema_version) is not int or schema_version not in {1, 2, 3, 4, 5, 6}:
         raise H3ConditioningBundleError("unsupported conditioning request schema")
     policy_key = {
         1: "reference_image_policy",
@@ -393,6 +421,7 @@ def _validate_request(value: Any, *, task: str, schema_version: int = 1) -> dict
         3: "first_frame_policy",
         4: "keyframe_policy",
         5: "last_frame_policy",
+        6: "reference_video_policy",
     }[schema_version]
     required = {
         "source_case_id",
@@ -411,6 +440,8 @@ def _validate_request(value: Any, *, task: str, schema_version: int = 1) -> dict
         if schema_version == 5
         else {"references"}
     )
+    if schema_version == 6:
+        required.update({"reference_image_policy", "reference_images"})
     if not isinstance(value, dict) or set(value) != required:
         raise H3ConditioningBundleError("H3 conditioning request fields do not match schema v1")
     prompt = value.get("prompt")
@@ -432,7 +463,7 @@ def _validate_request(value: Any, *, task: str, schema_version: int = 1) -> dict
             {"diffusers", "match"}
             if schema_version == 1
             else {H3_VIDEO_REFERENCE_POLICY, H3_VIDEO_REFERENCE_SPATIAL_HALF_POLICY}
-            if schema_version == 2
+            if schema_version in {2, 6}
             else {H3_FIRST_FRAME_POLICY}
             if schema_version == 3
             else {H3_FL2VA_KEYFRAME_POLICY}
@@ -554,6 +585,47 @@ def _validate_request(value: Any, *, task: str, schema_version: int = 1) -> dict
             "schema v1 accepts T2VA or Ref2VA image conditioning only"
         )
     references = value.get("references")
+    if schema_version == 6:
+        images = value.get("reference_images")
+        if (
+            task != "ref2va"
+            or not isinstance(references, list)
+            or len(references) != 1
+            or not isinstance(images, list)
+            or not 1 <= len(images) <= 3
+            or value[policy_key] != H3_VIDEO_REFERENCE_POLICY
+            or value.get("reference_image_policy") != "match"
+        ):
+            raise H3ConditioningBundleError("mixed conditioning requires images and full video")
+        identities = []
+        for row in images:
+            if not isinstance(row, dict) or set(row) != {
+                "picture_index",
+                "role",
+                "size_bytes",
+                "sha256",
+                "width",
+                "height",
+            }:
+                raise H3ConditioningBundleError("mixed image fields are invalid")
+            if (
+                any(
+                    type(row[k]) is not int or row[k] < 32 or row[k] % 32
+                    for k in ("width", "height")
+                )
+                # Match rounds each scaled side to the nearest 32 pixels.
+                # Its aligned rectangle can slightly exceed the target area.
+                or (row["width"] - 16) * (row["height"] - 16) > 1024**2
+            ):
+                raise H3ConditioningBundleError("mixed image geometry exceeds its budget")
+            identities.append({k: v for k, v in row.items() if k not in {"width", "height"}})
+        _validate_image_references(identities)
+        return {
+            **value,
+            "delivery_profiles": validated_deliveries,
+            "references": [_validate_video_reference(references[0], policy=value[policy_key])],
+            "reference_images": [dict(row) for row in images],
+        }
     if schema_version == 2:
         if task != "ref2va" or not isinstance(references, list) or len(references) != 1:
             raise H3ConditioningBundleError(
@@ -570,30 +642,7 @@ def _validate_request(value: Any, *, task: str, schema_version: int = 1) -> dict
         raise H3ConditioningBundleError(
             "H3 T2VA conditioning requires no references; Ref2VA requires one to nine"
         )
-    validated_references = []
-    seen = set()
-    for index, row in enumerate(references, start=1):
-        if not isinstance(row, dict) or set(row) != {
-            "picture_index",
-            "role",
-            "size_bytes",
-            "sha256",
-        }:
-            raise H3ConditioningBundleError("H3 conditioning reference fields are invalid")
-        digest = row.get("sha256")
-        if (
-            row.get("picture_index") != index
-            or row.get("role") != "reference"
-            or not isinstance(row.get("size_bytes"), int)
-            or isinstance(row.get("size_bytes"), bool)
-            or row["size_bytes"] <= 0
-            or not isinstance(digest, str)
-            or _SHA256.fullmatch(digest) is None
-            or digest in seen
-        ):
-            raise H3ConditioningBundleError("H3 conditioning reference identity is invalid")
-        seen.add(digest)
-        validated_references.append(dict(row))
+    validated_references = _validate_image_references(references)
     return {
         **{
             name: value[name]
@@ -704,13 +753,21 @@ def _tensor_mapping_header(tensors: Mapping[str, Any]) -> dict[str, dict[str, An
 
 def _validate_video_profile(profile: H3ConditioningProfile, request: Mapping[str, Any]) -> None:
     reference = request["references"][0]
+    image_rows = sum(
+        row["width"] * row["height"] // 1024 for row in request.get("reference_images", [])
+    )
+    if any(
+        (row["width"] - 16) * (row["height"] - 16) > profile.width * profile.height
+        for row in request.get("reference_images", [])
+    ):
+        raise H3ConditioningBundleError("mixed image geometry exceeds the target match area")
     if (
         profile.nfe != 4
         or profile.frames != 124
         or (profile.video_flow_shift, profile.audio_flow_shift) != (12, 3)
         or profile.width * profile.height > 1024**2
         or profile.num_condition_audio_rows != 0
-        or profile.num_condition_video_rows != reference["condition_video_rows"]
+        or profile.num_condition_video_rows != reference["condition_video_rows"] + image_rows
         or request["delivery_profiles"]
         != [{"temporal_profile": "native-24fps-5s", "frames": 120, "fps": 24.0}]
     ):
@@ -925,7 +982,10 @@ def _validate_conditioning_metadata(
     request_value = _validate_request(
         dict(request), task=profile_value.task, schema_version=schema_version
     )
-    if schema_version == H3_VIDEO_CONDITIONING_BUNDLE_SCHEMA_VERSION:
+    if schema_version in {
+        H3_VIDEO_CONDITIONING_BUNDLE_SCHEMA_VERSION,
+        H3_MIXED_REFERENCE_CONDITIONING_BUNDLE_SCHEMA_VERSION,
+    }:
         _validate_video_profile(profile_value, request_value)
     elif schema_version == H3_FIRST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION:
         _validate_first_frame_profile(profile_value, request_value)
@@ -947,6 +1007,7 @@ def _validate_in_memory_tensors(
     _validate_tensor_header_contract(header, profile=profile)
     if schema_version in {
         H3_VIDEO_CONDITIONING_BUNDLE_SCHEMA_VERSION,
+        H3_MIXED_REFERENCE_CONDITIONING_BUNDLE_SCHEMA_VERSION,
         H3_FIRST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION,
         H3_FL2VA_CONDITIONING_BUNDLE_SCHEMA_VERSION,
         H3_LAST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION,
@@ -1129,7 +1190,7 @@ def load_h3_conditioning_bundle(directory: Path) -> H3ConditioningBundle:
         not isinstance(value, dict)
         or set(value) != expected
         or type(value.get("schema_version")) is not int
-        or value.get("schema_version") not in {1, 2, 3, 4, 5}
+        or value.get("schema_version") not in {1, 2, 3, 4, 5, 6}
         or not isinstance(value.get("bundle_id"), str)
         or _BUNDLE_ID.fullmatch(value["bundle_id"]) is None
         or not isinstance(value.get("created_at"), str)
@@ -1142,7 +1203,7 @@ def load_h3_conditioning_bundle(directory: Path) -> H3ConditioningBundle:
     request = _validate_request(
         value.get("request"), task=profile.task, schema_version=schema_version
     )
-    if schema_version == 2:
+    if schema_version in {2, 6}:
         _validate_video_profile(profile, request)
     elif schema_version == 3:
         _validate_first_frame_profile(profile, request)
@@ -1183,6 +1244,7 @@ def load_h3_conditioning_bundle(directory: Path) -> H3ConditioningBundle:
     H3NativeSchedule.from_json(resolved / _FILES["scheduler"], expected_nfe=profile.nfe)
     if schema_version in {
         H3_VIDEO_CONDITIONING_BUNDLE_SCHEMA_VERSION,
+        H3_MIXED_REFERENCE_CONDITIONING_BUNDLE_SCHEMA_VERSION,
         H3_FIRST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION,
         H3_FL2VA_CONDITIONING_BUNDLE_SCHEMA_VERSION,
         H3_LAST_FRAME_CONDITIONING_BUNDLE_SCHEMA_VERSION,

@@ -232,7 +232,7 @@ def hybrid_reference_source(
 def validate_hybrid_reference_bundle(bundle, *, source, schedule):
     if (
         bundle.profile.task != "ref2va"
-        or bundle.schema_version not in {1, 2}
+        or bundle.schema_version not in {1, 2, 6}
         or bundle.profile.nfe != 4
         or bundle.profile.video_flow_shift != 12
         or bundle.profile.audio_flow_shift != 3
@@ -240,7 +240,7 @@ def validate_hybrid_reference_bundle(bundle, *, source, schedule):
         or bundle.profile.num_condition_audio_rows != 0
         or not 1
         <= len(bundle.request.get("references", ()))
-        <= (1 if bundle.schema_version == 2 else 9)
+        <= (1 if bundle.schema_version in {2, 6} else 9)
         or bundle.schedule.to_mapping() != schedule.to_mapping()
     ):
         raise ValueError("hybrid Ref modality/clock/prefix contract differs")

@@ -189,8 +189,15 @@ def test_decode_error_and_interrupt_clean_temporary_files(tmp_path, monkeypatch)
     "values",
     [
         {"reference_video": "video.mp4"},
-        {"reference_video": Path("video.mp4"), "reference": Path("image.png")},
-        {"reference_video": Path("video.mp4"), "references": (Path("image.png"),)},
+        {
+            "reference_video": Path("video.mp4"),
+            "references": tuple(Path(f"{i}.png") for i in range(4)),
+        },
+        {
+            "reference_video": Path("video.mp4"),
+            "references": (Path("image.png"),),
+            "reference_video_profile": "spatial-half",
+        },
         {"reference_video": Path("video.mp4"), "prompt": "<Picture 1> moves"},
         {"reference_video": Path("video.mp4"), "prompt": "<Video 2> moves"},
         {"reference_video": Path("video.mp4"), "prompt": "<Video1> moves"},
@@ -200,6 +207,98 @@ def test_decode_error_and_interrupt_clean_temporary_files(tmp_path, monkeypatch)
 def test_video_request_rejects_ambiguous_modality_and_labels(values):
     with pytest.raises(ContractError):
         VideoRequest(**{"prompt": "A scene", **values})
+
+
+def test_mixed_reference_labels_and_hybrid_admission():
+    from vflash.pipeline.admission import validate_request
+
+    request = VideoRequest(
+        prompt="<Picture 1> appearance, <Video 1> motion",
+        references=(Path("look.png"),),
+        reference_video=Path("motion.mp4"),
+    )
+    assert request.mode == "ref2va" and request.ordered_references == (Path("look.png"),)
+    validate_request(
+        request,
+        profile_id="i2va-turbo4-v01-544-exact-sm89",
+        hybrid=True,
+        attention_backend="veda-sm89",
+    )
+    with pytest.raises(ContractError, match="mixed"):
+        validate_request(request, profile_id="ref2va-turbo4-exact-sm89")
+
+
+def test_mixed_manifest_owns_image_geometry_and_combined_prefix(tmp_path):
+    from dataclasses import replace
+
+    from vflash.native.h3_conditioning_bundle import (
+        H3_VIDEO_REFERENCE_POLICY,
+        H3ConditioningBundleError,
+        H3ConditioningProfile,
+        _validate_request,
+        _validate_video_profile,
+    )
+
+    with read_video_reference(make_clip(tmp_path / "guide.mp4")) as decoded:
+        video = dict(decoded.metadata)
+    image = dict(
+        picture_index=1,
+        role="reference",
+        size_bytes=128,
+        sha256="a" * 64,
+        width=960,
+        height=544,
+    )
+    prompt = "<Picture 1> appearance; <Video 1> timing"
+    value = dict(
+        source_case_id="mixed",
+        prompt=prompt,
+        prompt_sha256=hashlib.sha256(prompt.encode()).hexdigest(),
+        seed=1,
+        reference_video_policy=H3_VIDEO_REFERENCE_POLICY,
+        reference_image_policy="match",
+        references=[video],
+        reference_images=[image],
+        delivery_profiles=[dict(temporal_profile="native-24fps-5s", frames=120, fps=24.0)],
+    )
+    request = _validate_request(value, task="ref2va", schema_version=6)
+    rows = video["condition_video_rows"] + 510
+    profile = H3ConditioningProfile(
+        task="ref2va",
+        width=960,
+        height=544,
+        frames=124,
+        nfe=4,
+        video_flow_shift=12,
+        audio_flow_shift=3,
+        reference_token_budget=rows,
+        num_condition_video_rows=rows,
+        num_condition_audio_rows=0,
+    )
+    _validate_video_profile(profile, request)
+    wide = {**image, "width": 1376, "height": 768}
+    aligned = _validate_request(
+        {**value, "reference_images": [wide]}, task="ref2va", schema_version=6
+    )
+    _validate_video_profile(
+        replace(
+            profile,
+            width=1024,
+            height=1024,
+            num_condition_video_rows=video["condition_video_rows"] + 1032,
+        ),
+        aligned,
+    )
+    with pytest.raises(H3ConditioningBundleError, match="target match area"):
+        _validate_video_profile(profile, aligned)
+    with pytest.raises(H3ConditioningBundleError):
+        _validate_video_profile(replace(profile, num_condition_video_rows=rows - 510), request)
+    with pytest.raises(H3ConditioningBundleError):
+        _validate_request(
+            {**value, "reference_images": [{**image, "width": 961}]},
+            task="ref2va",
+            schema_version=6,
+        )
 
 
 def test_spatial_compression_has_distinct_validated_geometry(tmp_path):
