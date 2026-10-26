@@ -257,6 +257,9 @@ class AudioRefinementRequest:
     Hidden reuse freezes first-evaluation non-audio states, with fresh audio and
     rebuilt context K/V on each step. This is an explicit approximation, not an
     exact cache; the request owns all hooks and releases them on every exit.
+    weight_cache_bytes optionally retains a prefix of BF16 ring weights on device
+    for this pass while keeping slot addresses and arithmetic unchanged. The
+    default zero preserves ordinary residency; the scope reserves 20 GiB for work.
     Weights belong to the caller and are never downloaded or modified on disk.
     """
 
@@ -268,10 +271,14 @@ class AudioRefinementRequest:
     evaluations: int = 6
     denoise: float = 0.5
     dense_attention: bool = False
+    weight_cache_bytes: int = 0
 
     def __post_init__(self):
         from .h3_native_scheduler import H3NativeSchedule
         from .h3_refinement_schedule import refinement_schedule
+
+        if type(self.weight_cache_bytes) is not int or self.weight_cache_bytes < 0:
+            raise ValueError("audio weight cache requires a nonnegative integer byte budget")
 
         if (
             type(self.reuse_hidden_context) is not bool
@@ -349,6 +356,7 @@ def _refine_full_audio(engine, request, *, step, noise):
     from .h3_audio_hidden_cache import frozen_video_hidden
     from .h3_audio_kv_cache import frozen_video_kv
     from .h3_refinement import quality_pass
+    from .h3_ring_weight_cache import cached_ring_weights
 
     state = engine.latent_state
     if not engine.complete or state.num_condition_audio_rows or not state.audio_latents.numel():
@@ -362,6 +370,7 @@ def _refine_full_audio(engine, request, *, step, noise):
         with (
             dense_audio_attention(engine, request.dense_attention),
             quality_pass(engine, request.schedule, request.tables, mode="audio"),
+            cached_ring_weights(engine, request.weight_cache_bytes) as weight_cache,
         ):
             sigma = request.schedule.audio_sigmas[1]
             state.audio_latents.copy_((1 - sigma) * original_audio + sigma * noise)
@@ -407,6 +416,7 @@ def _refine_full_audio(engine, request, *, step, noise):
         "video_cache": dict(cache) if cache is not None else False,
         "upstream_equivalent": False,
         "dense_attention": request.dense_attention,
+        "weight_cache": dict(weight_cache) if weight_cache is not None else False,
     }
 
 

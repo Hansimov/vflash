@@ -14,9 +14,15 @@ torch = pytest.importorskip("torch")
 
 
 @pytest.mark.parametrize("fail", [False, True])
-def test_ring_audio_rebinds_all_copy_pairs_without_turbo_and_restores_owner(monkeypatch, fail):
+@pytest.mark.parametrize("weight_cache_bytes", [0, 1024**2])
+def test_ring_audio_rebinds_all_copy_pairs_without_turbo_and_restores_owner(
+    monkeypatch, fail, weight_cache_bytes
+):
     monkeypatch.setattr(audio, "_attention_view", fake_attention)
     monkeypatch.setattr(torch.cuda, "synchronize", lambda device: None)
+    monkeypatch.setattr(torch.cuda, "mem_get_info", lambda device: (32 * 1024**3, 48 * 1024**3))
+    monkeypatch.setattr(torch.cuda, "memory_reserved", lambda device: 0)
+    monkeypatch.setattr(torch.cuda, "memory_allocated", lambda device: 0)
     monkeypatch.setattr(torch.Tensor, "pin_memory", lambda self: self)
     engine = context_engine()
     attention = engine.denoiser.blocks[0]._veda_attention
@@ -46,7 +52,9 @@ def test_ring_audio_rebinds_all_copy_pairs_without_turbo_and_restores_owner(monk
     tables = tuple(
         [torch.full((7, 9, 6, 2), float(i)) for i in range(50)] + [torch.zeros(7, 3, 2, 2)]
     )
-    request = audio.AudioRefinementRequest(refinement_schedule(steps=6, denoise=0.5), tables)
+    request = audio.AudioRefinementRequest(
+        refinement_schedule(steps=6, denoise=0.5), tables, weight_cache_bytes=weight_cache_bytes
+    )
     evaluations = []
 
     def step(view, **kwargs):
@@ -81,6 +89,11 @@ def test_ring_audio_rebinds_all_copy_pairs_without_turbo_and_restores_owner(monk
             engine, request, noise=torch.zeros_like(original_audio), step=step
         )
         assert evaluations == [1, 2, 3, 4, 5, 6] and record["video_latents_identical"]
+        if weight_cache_bytes:
+            assert record["weight_cache"]["cached_blocks"] == 50
+            assert record["weight_cache"]["applied"]
+        else:
+            assert record["weight_cache"] is False
         assert not torch.equal(state.audio_latents, original_audio)
     assert engine.latent_state is state and state.evaluation_index == 4
     assert torch.equal(state.video_latents, video)

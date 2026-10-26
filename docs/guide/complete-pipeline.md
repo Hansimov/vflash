@@ -309,6 +309,22 @@ completed video, so main video denoising runs first; the overlap is with final p
 Keep joint audio during main denoising to retain the original motion and mouth conditioning.
 Complete-call timings, precision and decoded-media scope are in the [0.18 release record](../reference/releases#_0-18-0).
 
+### BF16 ring weight reuse (development) {#audio-ring-weight-cache}
+
+`AudioRefinementRequest(..., weight_cache_bytes=20 * 1024**3)` retains a prefix of the
+BF16 ring's weights on device for the audio pass. The default is zero. It preserves
+weight values, original compute slots and attention/solver choices; later steps
+read cached weights through device-to-device copies instead of PCIe. The scope
+restores original bindings on success and failure and reserves 20 GiB for context
+and overlapping VAE work. Resident trunks already retain their weights and skip it.
+The diagnostic `weight_cache` records the actual retained blocks, bytes and setup time.
+
+Initial RTX 4090 48 GiB qualification covers twelve-step, five-second I2VA with
+hidden-context reuse and decode overlap, at 960×544 and 1024². Four complete matched
+pairs saved 8.93–11.06 seconds (5.6%–13.6%); all delivered decoded video frames and
+stereo PCM samples matched their controls. This measures weight-placement equivalence
+within the existing audio recipe. Other durations and memory layouts need their own capacity evidence.
+
 ## Face repaint building blocks {#explicit-native-face-repaint}
 
 These are opt-in engine APIs. Detection, tracking, crop/keyframe alignment, restoration models, source-audio
