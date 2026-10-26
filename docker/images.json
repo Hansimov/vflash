@@ -1,27 +1,27 @@
 {
   "schema_version": 2,
-  "version": "0.20.0",
+  "version": "0.21.0",
   "platform": "linux/amd64",
-  "implementation_revision": "7e331278a0eb5c7287245ec73049797189422406",
-  "wheel_sha256": "c09b424d7d8d0a8f0689844bb0f09be1c7e054e11e6882c7dcb3b288af809fe1",
+  "implementation_revision": "485e17fe4fcc719f1c9d521335dfa3633d095031",
+  "wheel_sha256": "d01841dc5cbc5078ef9806b1f8e0fcdf29fb45154ed4b278ba4f0b433e054df1",
   "build_recipe": "https://github.com/Hansimov/vflash/blob/0f7da254bf657468b416f981ae248abf578d1709/docker/release-from-wheel.Dockerfile",
   "previous_inventory": {
-    "version": "0.19.0",
+    "version": "0.20.0",
     "images": {
       "native": {
-        "name": "hansimov/vflash:0.19.0",
-        "digest": "sha256:03c4bf850c8de21999301645a8a12941e2d6a753ca96e18c60ef4f31931d0e29",
+        "name": "hansimov/vflash:0.20.0",
+        "digest": "sha256:99054b7c0ed3af6d5f9382199fb6e2bbe76acdf1cad714993ccf52ab61d66d6c",
         "target": "runtime",
         "interface": "Compiled conditioning bundles to audio/video latents through the native HTTP API.",
-        "base_image": "hansimov/vflash@sha256:2576b159c2271951102eb3ebcc7e94bae7d47f7bf141035cee5ed80dcbfffab4",
+        "base_image": "hansimov/vflash@sha256:03c4bf850c8de21999301645a8a12941e2d6a753ca96e18c60ef4f31931d0e29",
         "recipe_target": "inherited from immutable base"
       },
       "pipeline": {
-        "name": "hansimov/vflash:0.19.0-pipeline",
-        "digest": "sha256:364fe49603b9e8be151614cc8f6099e025a59b81a96ac8e3f37edd19919b011f",
+        "name": "hansimov/vflash:0.20.0-pipeline",
+        "digest": "sha256:4366840902dc712062be9a632e2a3a3f3d4e5fe71b089024f51d43c882883c3d",
         "target": "pipeline",
         "interface": "Complete MP4 generation using explicitly mounted prepared model assets; supported modes and limits follow the complete-pipeline guide.",
-        "base_image": "hansimov/vflash@sha256:e56afb5877eb86f6669030cb7522629f89215958803e9fe90d69041aaf563a43",
+        "base_image": "hansimov/vflash@sha256:364fe49603b9e8be151614cc8f6099e025a59b81a96ac8e3f37edd19919b011f",
         "recipe_target": "inherited from immutable base"
       }
     }
@@ -37,33 +37,35 @@
     "sol_source_revision": "d0c0a4685ab5dc2336d18b7213d85f13def92418"
   },
   "qualification": {
-    "package": "Public 0.20.0 wheel; immutable native and pipeline images import the exact package. Source CI and bilingual Pages passed.",
+    "package": "Public 0.21.0 wheel; immutable native and pipeline images import the exact package. Source CI and bilingual Pages passed.",
     "engine": "On one RTX PRO 6000 with resident FP8 weights, 44/6 and 42/8 completed three matched five-second I2VA inputs under both Sage INT8 QK / FP8 PV and FROST BF16 dense / FP16 sparse PV. The portrait case also completed six-step audio refinement with the selected partition. See 0.17.0 release notes for complete-engine times and scope.",
     "quality_scope": "Native detail and temporal crops support per-scene observations; visual quality and action adherence are evaluated against the input brief and reference. The default remains 40/10. Hardware capacity and application rollout retain their separate qualification.",
     "reference_audio": "Single SM89 48 GiB BF16 ring and SM120 Server 96 GiB resident FP8; five-second full/pooled reference video through 1344x768, owned audio cache and decode overlap. Scope and matched decoded-media evidence: reference/releases#_0-18-0.",
     "audio_quality": "Matched 6/12/20-step audio on single RTX 4090 48 GiB BF16 ring and rented RTX PRO 6000 Blackwell Server resident FP8. Complete-call latency, approximate cache choices and listening limits: reference/releases#_0-19-0.",
-    "audio_weight_cache": "Single RTX 4090 48 GiB, BF16 ring, twelve-step five-second I2VA with hidden reuse and decode overlap. Four matched complete pairs save 8.93\u201311.06 seconds with identical decoded video and PCM; the owned native implementation completed four additional calls. See reference/releases#_0-20-0."
+    "audio_weight_cache": "Single RTX 4090 48 GiB, BF16 ring, twelve-step five-second I2VA with hidden reuse and decode overlap. Four matched complete pairs save 8.93\u201311.06 seconds with identical decoded video and PCM; the owned native implementation completed four additional calls. See reference/releases#_0-20-0.",
+    "mixed_reference": "One appearance image plus a five-second CPU motion guide, 960x544, Veda 44/6, native joint audio. SM89 48 GiB BF16 ring and SM120 resident FP8; full/spatial-half reference preserve all encoded temporal positions. Single-scene quality observations and distinct cold-host timing scopes: reference/releases#_0-21-0."
   },
   "images": {
     "native": {
-      "name": "hansimov/vflash:0.20.0",
-      "digest": "sha256:99054b7c0ed3af6d5f9382199fb6e2bbe76acdf1cad714993ccf52ab61d66d6c",
+      "name": "hansimov/vflash:0.21.0",
+      "digest": "sha256:4bc0e768b88c6c04f17c79a1125640eba7efcfa3d5d6ed87351ab05a003c0f73",
       "target": "runtime",
       "interface": "Compiled conditioning bundles to audio/video latents through the native HTTP API.",
-      "base_image": "hansimov/vflash@sha256:03c4bf850c8de21999301645a8a12941e2d6a753ca96e18c60ef4f31931d0e29",
+      "base_image": "hansimov/vflash@sha256:99054b7c0ed3af6d5f9382199fb6e2bbe76acdf1cad714993ccf52ab61d66d6c",
       "recipe_target": "inherited from immutable base"
     },
     "pipeline": {
-      "name": "hansimov/vflash:0.20.0-pipeline",
-      "digest": "sha256:4366840902dc712062be9a632e2a3a3f3d4e5fe71b089024f51d43c882883c3d",
+      "name": "hansimov/vflash:0.21.0-pipeline",
+      "digest": "sha256:ea197bdca4dba21d39916034ac07f39c87d2734e1e287ef603fb4ef1ba6a3378",
       "target": "pipeline",
       "interface": "Complete MP4 generation using explicitly mounted prepared model assets; supported modes and limits follow the complete-pipeline guide.",
-      "base_image": "hansimov/vflash@sha256:364fe49603b9e8be151614cc8f6099e025a59b81a96ac8e3f37edd19919b011f",
+      "base_image": "hansimov/vflash@sha256:4366840902dc712062be9a632e2a3a3f3d4e5fe71b089024f51d43c882883c3d",
       "recipe_target": "inherited from immutable base"
     }
   },
   "algorithm_qualified_revision": "42d49c54530b9c3fa43319d7057a622c8a80116f",
   "option_qualified_revision": "b1daf3cda0f0e479dc99ed23e77356b6cdae8f45",
   "reference_audio_qualified_revision": "89a252960fd98b6f595018396ad48d32aef76b6c",
-  "audio_weight_cache_qualified_revision": "dfcf5ba70fd650de29ac1e720f456a52884027b9"
+  "audio_weight_cache_qualified_revision": "dfcf5ba70fd650de29ac1e720f456a52884027b9",
+  "mixed_reference_qualified_revision": "1fdf7fa0a3702813af466fe7e4f46710824824d6"
 }

@@ -173,9 +173,9 @@ Python 中使用 `VideoRequest(prompt=..., reference_video=Path("reference.mp4")
 [RefMod](https://github.com/Luisacaotica/ComfyUI-MiniMaxH3Mod/tree/517e8c419a8584fbf69fceb487bc39d83e6a6ec8) 启发。
 本实现复用官方编码结果并提供显式空间池化；RefMod 的逐素材 MSE 拟合和音色参考属于另外的方案。
 
-### 外观图与动作视频组合（开发中）
+### 外观图与动作视频组合（0.21）
 
-开发版混合路径将一份参考视频与一至三张有序图像组合：
+0.21混合路径将一份参考视频与一至三张有序图像组合：
 
 ```python
 request = VideoRequest(
@@ -197,7 +197,7 @@ request = VideoRequest(
 此前所有外观图latent及视频时间位置完整保留。相同初始场景的条件行数从32,766降至8,574，
 SM89调用168.9秒（编码59.1、去噪90.1），仍完成交接。SM120完整／压缩分别在两个缓存宿主完成于110.3／79.4秒，
 包含不同的冷编码成本；去噪为74.0／31.8秒。这里记录单场景的近似控制结果，更广的动作和身份覆盖继续实测。
-已发行0.20包沿图像／视频分别输入的原合同。
+0.21增加组合输入；此前版本保留图像／视频分别输入的合同。
 
 ## 混合模型与扩展请求 {#extended-hybrid}
 

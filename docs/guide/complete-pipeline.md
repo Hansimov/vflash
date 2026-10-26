@@ -201,9 +201,9 @@ Reference-latent reuse and compression were informed by MIT-licensed
 This implementation reuses official latents and offers explicit spatial pooling; RefMod's per-asset MSE
 fitting and voice-reference work are separate methods.
 
-### Combined appearance images and motion video (development)
+### Combined appearance images and motion video (0.21)
 
-The development hybrid path combines one video with one to three ordered images:
+The 0.21 hybrid path combines one video with one to three ordered images:
 
 ```python
 request = VideoRequest(
@@ -232,7 +232,7 @@ In the same initial scene, this reduced the condition prefix from 32,766 to 8,57
 was 168.9 seconds (59.1 encoding, 90.1 denoising), with the handoff still completed. SM120 full/pooled
 calls on two cached hosts took 110.3/79.4 seconds, including different cold encoding costs; denoising
 was 74.0/31.8 seconds. These are scene-specific approximate-control results, with wider motion and
-identity coverage still being measured. Published 0.20 packages retain their separate image/video request modes.
+identity coverage still being measured. Version 0.21 adds combined inputs; earlier releases retain separate image/video request modes.
 
 ## Hybrid model and extended requests {#extended-hybrid}
 
