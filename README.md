@@ -4,7 +4,7 @@ Native **MiniMax H3 inference** with explicit GPU profiles. Vflash uses PyTorch 
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
-**0.20.0: faster BF16 audio passes.** An optional scoped weight cache reduces repeated PCIe transfers while preserving the existing arithmetic. Four matched RTX 4090 48 GiB cases saved 8.93–11.06 seconds per complete call with identical decoded video and audio. See [hardware timings and qualification scope](https://hansimov.github.io/vflash/reference/releases).
+**0.21.0: combine appearance images and motion video.** The hybrid pipeline accepts ordered image references alongside one video. Explicit video-only spatial pooling preserves the appearance latents and lowers motion-context cost. Initial complete clips ran on RTX 4090 48 GiB and RTX PRO 6000 Blackwell Server; see [hardware timings and measured scope](https://hansimov.github.io/vflash/reference/releases).
 
 **0.17.2: choose the Veda layer partition independently of precision.** Set
 `veda_dense_edge_layers=4` for 42 sparse / 8 dense layers, including the optional

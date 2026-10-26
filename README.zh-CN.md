@@ -4,7 +4,7 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
-**0.20.0：加速BF16音频阶段。** 显式作用域权重缓存减少重复PCIe传输，保持原有数值计算。四组RTX 4090 48 GiB完整调用节省8.93–11.06秒，解码画面与音频一致；硬件耗时及资格范围见[版本更新](https://hansimov.github.io/vflash/zh/reference/releases)。
+**0.21.0：组合外观图与动作视频。** 混合流水线接受有序图像与一份参考视频，显式视频空间池化保留外观图latent、降低动作条件成本。首批完整成片已在RTX 4090 48 GiB与RTX PRO 6000 Blackwell Server执行；硬件耗时及实测范围见[版本更新](https://hansimov.github.io/vflash/zh/reference/releases)。
 
 **0.17.0：Veda层数与精度分别选择。** `veda_dense_edge_layers=4`对应42稀疏/8密集，
 可选音频上下文阶段保持该分工；SM120沿用所选Sage FP8或FROST精度策略。默认保持40/10，

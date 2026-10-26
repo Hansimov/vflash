@@ -1,5 +1,38 @@
 # Release notes
 
+## 0.21.0
+
+The single-SM89/SM120 Veda hybrid accepts one video with one to three ordered appearance images.
+Images precede the video in the official graph; prompts retain independent `<Picture N>` and `<Video 1>` labels.
+Images use target-area match sizing, while the video retains its official CFR24 geometry.
+Conditioning schema 6 binds both modalities and checks their combined prefix. Existing schemas 1–5 keep their contracts.
+The reference cache includes ordered image identities and target canvas, preserving ownership when a motion guide
+is reused with a different appearance.
+
+Full spatial video remains the default. Explicit `reference_video_profile="spatial-half"` pools only the final
+video latent grid, preserving every preceding image latent and all encoded video temporal positions.
+The full cache entry stays available for later full-reference requests. Output remains five seconds and up to
+1,048,576 canvas pixels. See [combined inputs](../guide/complete-pipeline#reference-video).
+
+Initial evidence: one appearance image and a five-second CPU-rendered two-person prop handoff,
+960×544/120 delivered frames, four denoising steps, Veda 44/6, native joint audio and web-v1 delivery:
+
+| GPU and execution | Full reference call | Video spatial-half call | Pooled encoding / denoising / media |
+| --- | ---: | ---: | ---: |
+| RTX 4090 48 GiB, BF16 ring, Torch dense | 280.706 s | 168.883 s | 59.060 / 90.092 / 18.383 s |
+| RTX PRO 6000 Blackwell Server, resident FP8, SageAttention2 | 110.342 s | 79.395 s | 35.187 / 31.809 / 11.410 s |
+
+Complete calls exclude session initialization and application transport. The two SM120 runs used different
+cached hosts and cold encoding states; initialization was 33.843/19.981 seconds. SM89 full initialization was
+90.879 seconds and pooled initialization 94.774 seconds. The condition prefix fell from 32,766 to 8,574 rows.
+SM89 full-reference denoising allocation peaked at 14.99 GB; whole-window NVML samples peaked at 17,159 MiB.
+Torch 2.11/CUDA 13 with the pinned official conditioner.
+
+Sampled full frames and contact sequences retained appearance and completed the handoff. This is one-scene
+evidence for an approximate motion-control option; wider actions, styles and three-image workloads retain
+their separate qualification. Plain/detailed I2VA prompts also performed this simple action, so motion
+references should serve a specific control need. Existing audio-refinement defaults and qualified scopes remain.
+
 ## 0.20.0
 
 Adds an opt-in `weight_cache_bytes` budget to `AudioRefinementRequest`. The BF16
