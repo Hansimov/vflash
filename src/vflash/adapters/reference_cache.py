@@ -119,7 +119,7 @@ def install_reference_latent_cache(pipe):
                 self.set_block_state(state, block)
             if cache.key is not None and cache.spatial_divisor == 2:
                 full = state.get("condition_latents")
-                pooled = spatial_half_latents(full)
+                pooled = spatial_half_video_latents(full)
                 block = self.get_block_state(state)
                 block.condition_latents = pooled
                 block.audio_condition_latents = []
@@ -129,6 +129,8 @@ def install_reference_latent_cache(pipe):
                     "source_shapes": [list(v.shape) for v in full],
                     "encoded_shapes": [list(v.shape) for v in pooled],
                     "all_temporal_positions_retained": True,
+                    "pooled_reference_index": len(full) - 1,
+                    "appearance_images_preserved": len(full) - 1,
                 }
             cache.diagnostics["reference_vae_seconds"] = time.monotonic() - started
             return components, state
@@ -146,6 +148,13 @@ def install_reference_latent_cache(pipe):
     if replace(pipe._blocks) != 1:
         raise ValueError("pinned reference encoder block layout changed")
     return cache
+
+
+def spatial_half_video_latents(values):
+    """Pool the final video reference while preserving preceding appearance images."""
+    if not values:
+        raise ValueError("video pooling requires an ordered visual reference group")
+    return [*values[:-1], *spatial_half_latents(values[-1:])]
 
 
 def spatial_half_latents(values):

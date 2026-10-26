@@ -593,10 +593,11 @@ def _validate_request(value: Any, *, task: str, schema_version: int = 1) -> dict
             or len(references) != 1
             or not isinstance(images, list)
             or not 1 <= len(images) <= 3
-            or value[policy_key] != H3_VIDEO_REFERENCE_POLICY
+            or value[policy_key]
+            not in {H3_VIDEO_REFERENCE_POLICY, H3_VIDEO_REFERENCE_SPATIAL_HALF_POLICY}
             or value.get("reference_image_policy") != "match"
         ):
-            raise H3ConditioningBundleError("mixed conditioning requires images and full video")
+            raise H3ConditioningBundleError("mixed conditioning requires images and one video")
         identities = []
         for row in images:
             if not isinstance(row, dict) or set(row) != {

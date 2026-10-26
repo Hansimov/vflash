@@ -76,3 +76,21 @@ def test_mixed_cache_tracks_ordered_appearance_and_canvas():
             assert cache.get() is None
     with cache.bind(video, context_key=context):
         assert torch.equal(cache.get()[1], value * 2)
+
+
+def test_mixed_pool_keeps_appearance_pixels_and_video_time():
+    torch = pytest.importorskip("torch")
+    from vflash.adapters.reference_cache import spatial_half_video_latents
+
+    image = torch.arange(24 * 1 * 34 * 60).reshape(1, 24, 1, 34, 60).float()
+    time = torch.arange(32, dtype=torch.float32)[None, None, :, None, None]
+    video = time.expand(1, 24, 32, 48, 84).contiguous()
+    cache = ReferenceLatentCache()
+    with cache.bind(reference("motion"), context_key=("appearance",), spatial_divisor=2):
+        cache.put([image, video])
+        source = cache.get()
+        pooled = spatial_half_video_latents(source)
+        assert pooled[0] is source[0] and torch.equal(pooled[0], image)
+        assert pooled[1].shape == (1, 24, 32, 24, 42)
+        assert torch.equal(pooled[1][0, 0, :, 0, 0], torch.arange(32).float())
+        assert torch.equal(cache.get()[1], video)

@@ -159,12 +159,8 @@ class VideoRequest:
         if self.reference_video is not None:
             if not isinstance(self.reference_video, Path):
                 raise ContractError("reference_video must be a local pathlib.Path")
-            if len(self.ordered_references) > 3 or (
-                self.ordered_references and self.reference_video_profile != "full"
-            ):
-                raise ContractError(
-                    "mixed references support up to three images and full video"
-                )
+            if len(self.ordered_references) > 3:
+                raise ContractError("mixed references support up to three images and one video")
         if self.first_frame is not None:
             if not isinstance(self.first_frame, Path):
                 raise ContractError("first_frame must be a local pathlib.Path")

@@ -80,9 +80,11 @@ The adapter must record the source file and decoded RGB hashes, source dimension
 Since 0.18, schema 2 also serves the Veda hybrid on single SM89/SM120, with five-second output up to 1,048,576 pixels. Full reference uses the official video policy; explicit spatial-half carries a distinct policy identity and `latent_spatial_divisor=2`. The reader recomputes prefix rows from this metadata while retaining every encoded temporal position. See [reference video](../guide/complete-pipeline#reference-video) for current input bounds and cache lifetimes.
 
 Development schema 6 adds one to three ordered image identities and aligned dimensions in `reference_images`,
-with `reference_image_policy="match"`, alongside the single full video in `references`.
+with `reference_image_policy="match"`, alongside the single video in `references`.
 The native hybrid validates the combined prefix as video rows plus each image's `width * height / 1024` rows.
 Image geometry includes the nearest-32 rounding allowance of match sizing and is bounded by the target canvas.
+The video policy may be full or explicit spatial-half; pooling affects only the final video latent,
+so the preceding image geometry and latent values retain their match contract.
 Schema 1–5 readers and source identities retain their existing contracts. Complete generation qualification is
 recorded separately in the [combined-input guide](../guide/complete-pipeline#reference-video).
 

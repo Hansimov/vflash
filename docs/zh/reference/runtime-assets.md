@@ -76,9 +76,10 @@ adapter 必须记录源文件及解码 RGB 的摘要、源尺寸、归一化帧�
 自0.18起，schema 2还用于单SM89／SM120的Veda混合模型，输出为五秒、最多1,048,576像素。完整参考使用官方video策略，显式空间半采样使用独立策略身份及`latent_spatial_divisor=2`，读取器根据该元数据重新验证前缀行数；全部已编码时间位置保持。完整输入范围与缓存生命周期见[参考视频](../guide/complete-pipeline#reference-video)。
 
 开发版schema 6在`reference_images`中记录一至三张有序图像的身份与对齐尺寸，并设置
-`reference_image_policy="match"`；`references`继续保存单份完整视频。原生混合路径校验组合前缀，
+`reference_image_policy="match"`；`references`继续保存单份视频。原生混合路径校验组合前缀，
 其行数为视频行数加各图像的`width * height / 1024`。图像几何考虑match策略最近32像素取整的余量，
-并受目标画布面积约束。schema 1–5及原来源身份保持既有合同，完整生成资格单列于
+并受目标画布面积约束。视频策略可以为完整参考或显式空间半采样，池化仅作用于最后一份视频latent；
+前面的图像几何与数值保持match合同。schema 1–5及原来源身份保持既有合同，完整生成资格单列于
 [组合输入指南](../guide/complete-pipeline#reference-video)。
 
 `H3ConditioningCaptureSession.finish(..., schema_version=2)` 将这些元数据与真实捕获的 14 个张量绑定。读取时检查来源、精确 Ref4 调度、张量宽度、模态索引和时序前缀；修改 schema 不能把图片捕获转换成视频条件。0.3.2 的 `H3Pipeline` 接受本地 `VideoRequest(reference_video=Path(...))`，通过官方视频 setup 完成捕获，见[输入限制与示例](../guide/complete-pipeline#reference-video)。实际安装的公开流水线已完成图片、视频、图片的连续请求，并核验 14 个条件张量、最终 FP32 音视频 latent、全部交付 RGB 帧及取消清理。[发布说明](./releases#earlier)区分实现验证、内容质量与音频重复性。

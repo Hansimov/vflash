@@ -203,7 +203,7 @@ fitting and voice-reference work are separate methods.
 
 ### Combined appearance images and motion video (development)
 
-The development hybrid path combines one full video with one to three ordered images:
+The development hybrid path combines one video with one to three ordered images:
 
 ```python
 request = VideoRequest(
@@ -216,7 +216,7 @@ request = VideoRequest(
 
 Use `<Picture 1>` through `<Picture 3>` for image roles and `<Video 1>` for the video.
 Images retain target-area, downscale-only match sizing; the video retains its official geometry.
-This path uses full spatial reference on a single SM89/SM120 Veda hybrid. The five-second output and
+This path defaults to full spatial reference on a single SM89/SM120 Veda hybrid. The five-second output and
 1,048,576-pixel canvas bounds remain. Image ordering, identities and target canvas participate in
 reference-cache identity, so reusing a guide with a new appearance recomputes the combined condition.
 
@@ -226,7 +226,13 @@ session initialization was another 90.9 seconds. The complete handoff kept the a
 sequence. Plain and detailed image-to-video prompts also achieved this simple action in 76.1/70.5 seconds
 with different conditioning and cold/warm state. Choose motion references for a concrete control need;
 broader scene coverage, three-image capacity and target-hardware performance remain development work.
-Published 0.20 packages retain their separate image/video request modes.
+For rough motion guides, explicit `reference_video_profile="spatial-half"` pools just the final video
+latent grid. All preceding appearance-image latents and video temporal positions are preserved.
+In the same initial scene, this reduced the condition prefix from 32,766 to 8,574 rows. SM89 call time
+was 168.9 seconds (59.1 encoding, 90.1 denoising), with the handoff still completed. SM120 full/pooled
+calls on two cached hosts took 110.3/79.4 seconds, including different cold encoding costs; denoising
+was 74.0/31.8 seconds. These are scene-specific approximate-control results, with wider motion and
+identity coverage still being measured. Published 0.20 packages retain their separate image/video request modes.
 
 ## Hybrid model and extended requests {#extended-hybrid}
 

@@ -196,7 +196,7 @@ def test_decode_error_and_interrupt_clean_temporary_files(tmp_path, monkeypatch)
         {
             "reference_video": Path("video.mp4"),
             "references": (Path("image.png"),),
-            "reference_video_profile": "spatial-half",
+            "reference_video_profile": "spatial-quarter",
         },
         {"reference_video": Path("video.mp4"), "prompt": "<Picture 1> moves"},
         {"reference_video": Path("video.mp4"), "prompt": "<Video 2> moves"},
@@ -209,13 +209,15 @@ def test_video_request_rejects_ambiguous_modality_and_labels(values):
         VideoRequest(**{"prompt": "A scene", **values})
 
 
-def test_mixed_reference_labels_and_hybrid_admission():
+@pytest.mark.parametrize("video_profile", ["full", "spatial-half"])
+def test_mixed_reference_labels_and_hybrid_admission(video_profile):
     from vflash.pipeline.admission import validate_request
 
     request = VideoRequest(
         prompt="<Picture 1> appearance, <Video 1> motion",
         references=(Path("look.png"),),
         reference_video=Path("motion.mp4"),
+        reference_video_profile=video_profile,
     )
     assert request.mode == "ref2va" and request.ordered_references == (Path("look.png"),)
     validate_request(
@@ -224,7 +226,7 @@ def test_mixed_reference_labels_and_hybrid_admission():
         hybrid=True,
         attention_backend="veda-sm89",
     )
-    with pytest.raises(ContractError, match="mixed"):
+    with pytest.raises(ContractError):
         validate_request(request, profile_id="ref2va-turbo4-exact-sm89")
 
 
@@ -233,6 +235,7 @@ def test_mixed_manifest_owns_image_geometry_and_combined_prefix(tmp_path):
 
     from vflash.native.h3_conditioning_bundle import (
         H3_VIDEO_REFERENCE_POLICY,
+        H3_VIDEO_REFERENCE_SPATIAL_HALF_POLICY,
         H3ConditioningBundleError,
         H3ConditioningProfile,
         _validate_request,
@@ -276,6 +279,26 @@ def test_mixed_manifest_owns_image_geometry_and_combined_prefix(tmp_path):
         num_condition_audio_rows=0,
     )
     _validate_video_profile(profile, request)
+    half_video = {
+        **video,
+        "latent_spatial_divisor": 2,
+        "condition_video_rows": video["vae_latent_frames"]
+        * max(1, video["width"] // 64)
+        * max(1, video["height"] // 64),
+    }
+    half = _validate_request(
+        {
+            **value,
+            "reference_video_policy": H3_VIDEO_REFERENCE_SPATIAL_HALF_POLICY,
+            "references": [half_video],
+        },
+        task="ref2va",
+        schema_version=6,
+    )
+    _validate_video_profile(
+        replace(profile, num_condition_video_rows=half_video["condition_video_rows"] + 510),
+        half,
+    )
     wide = {**image, "width": 1376, "height": 768}
     aligned = _validate_request(
         {**value, "reference_images": [wide]}, task="ref2va", schema_version=6
