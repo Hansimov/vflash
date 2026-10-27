@@ -495,25 +495,31 @@ can enforce the caller's deadline. The native-prefix interfaces are experimental
 checkout APIs; the published 0.21.0 wheel does not yet contain them.
 
 
-To refine sound while preserving that continuation, construct a second `NativeAVPrefix`
-from the same source window with `preserve_video=False` and clean-timestep tables compiled
-from the **original FL checkpoint only** (omit reference blocks). Set it as
-`AudioRefinementRequest.native_audio_prefix`. Main hybrid generation and FL refinement
-need different modulation tables even though they protect the same audio. The complete
-pipeline checks source/context frame counts and audio equality before loading; an unmatched
-refinement is rejected. For retained outputs, pass `EncodedAudioSource` and the history-aware
-refinement to the native session, avoiding another main generation or video decode.
+To refine sound while preserving that continuation, compile the refinement and its
+history tables together with `compile_refinement_tables(..., include_native_history=True)`.
+Passing `reference_directory=None` explicitly selects original FL for all50 blocks; an
+explicit reference checkpoint retains the existing FL0–24/Ref25–49 recipe. The `source`
+field records that choice. Audio mode alone does not select pure FL.
+Load the companion tables with `load_refinement_history_tables(directory)` from
+`vflash.native.h3_refinement_schedule`, then construct an audio-only `NativeAVPrefix`
+from the same source window and set `AudioRefinementRequest.native_audio_prefix`.
+Do not mix pure-FL clean history tables with hybrid refinement tables. The loader checks
+the companion asset's declared source, inventory, geometry and finite BF16 values.
+The complete pipeline checks the main/history source window and audio equality before
+loading. For retained outputs, pass `EncodedAudioSource` and this refinement to the native
+session, avoiding another main generation or video decode.
 
 Every refinement evaluation reads and restores the clean audio prefix at timestep1.0.
 The entire video remains frozen; only later audio is refined. Modulation storage expands
 before the optional weight cache is built, and the cache is released before restoring
 original tables. This path uses serial ring execution and disables video-decode overlap.
 Failures restore the original audio, video, schedule and owned modulation resources.
-Two retained nine/ten-second SM89 target executions with twelve audio evaluations preserved
-all65 context ticks and every video latent. Joined ten/eighteen-second deliveries also kept
-their original encoded picture streams. These are execution and media-identity checks;
-native speech, timbre and seam quality remain listening evaluations. Six/twenty-step
-history variants and cached history execution currently have CPU ownership tests only.
+Initial retained nine/ten-second SM89 executions preserved all65 context ticks, every
+video latent and the encoded picture streams in joined ten/eighteen-second deliveries.
+A subsequent asset audit found hybrid refinement tables paired with pure-FL history tables
+in that trial. It is retained as a failed recipe, not a correctly matched audio qualification.
+Matching bundle compilation prevents that source-selection mistake. Six/twenty-step history
+variants and cached history execution currently have CPU ownership tests only.
 
 
 FL2VA additionally accepts the desired final image while preserving the same target history.

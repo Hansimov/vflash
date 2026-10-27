@@ -395,17 +395,21 @@ Python 调用方可向 `H3Pipeline.generate` 传入 `latent_output=Path("clip.sa
 已发布的0.21.0 wheel尚未包含这些接口。
 
 
-续接后精修声音时，沿相同源区间再构建一个 `preserve_video=False` 的 `NativeAVPrefix`，
-其干净时间调制表必须仅从**原始FL检查点**编译，不传参考层。将它传给
-`AudioRefinementRequest.native_audio_prefix`。混合主生成与FL精修使用不同的调制表，
-但保护相同的原生音频；完整流水线在加载前检查源／上下文帧数及声音相等，拒绝不匹配的精修。
-已保留的输出可经原生session传入 `EncodedAudioSource` 与此精修请求，无须重跑主生成或画面解码。
+续接后精修声音时，用 `compile_refinement_tables(..., include_native_history=True)` 同时编译
+精修表和对应历史表。显式 `reference_directory=None` 选择全部50层原始FL；传入参考检查点则保留
+现有FL前25层／Ref后25层配方，`source`记录该选择。`mode="audio"`本身不代表纯FL。
+通过 `vflash.native.h3_refinement_schedule.load_refinement_history_tables(directory)` 读取配套表，
+沿同一源区间构建 `preserve_video=False` 的 `NativeAVPrefix`，传给 `AudioRefinementRequest.native_audio_prefix`。
+禁止把纯FL历史表与混合精修表搭配；加载器核对伴随资产声明的来源、清单、形状与有限BF16数值。
+完整流水线在加载前检查主生成与历史的源区间及声音相等。已保留的输出可经原生session传入
+`EncodedAudioSource` 和精修请求，无须重跑主生成或画面解码。
 
 每次精修都在timestep1.0读取并恢复原生声音前缀，整段视频冻结，只更新随后音频。
 先扩展调制存储，再构建可选权重缓存；退出时先释放缓存，再恢复原表。本路径串行执行，关闭画面解码重叠。
-异常恢复原音频、视频、采样计划及调制资源。两个实际SM89的九／十秒保留目标各执行十二步，
-65个历史音频tick和全部视频潜变量逐位相同；拼接后的十／十八秒交付也保留了原压缩画面码流。
-这些证据覆盖执行与媒体身份，原生音色、对白及接缝仍需试听。六／二十步历史精修及缓存组合目前只有CPU所有权检查。
+异常恢复原音频、视频、采样计划及调制资源。最初两个SM89九／十秒目标实测保留了65个历史tick、
+全部视频潜变量和十／十八秒交付的原画面码流，但随后资产核对发现该试验将混合精修表与纯FL历史表
+错误搭配；保留为失败配方，不能作为匹配音频执行的资格证明。配套编译明确防止该来源选择错误。
+六／二十步历史精修及缓存组合目前只有CPU所有权检查。
 
 
 FL2VA可同时给定目标末帧与已有目标历史。两个条件关键帧均位于目标行之前，历史保留按完整条件行数偏移，

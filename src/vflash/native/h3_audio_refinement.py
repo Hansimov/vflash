@@ -262,7 +262,7 @@ class AudioRefinementRequest:
     default zero preserves ordinary residency; the scope reserves 20 GiB for work.
     Weights belong to the caller and are never downloaded or modified on disk.
     native_audio_prefix optionally preserves already generated context on every
-    evaluation. Its clean tables must match the refinement's original FL weights,
+    evaluation. Its clean tables must match the refinement's actual checkpoint mixture,
     and preserve_video must be False: this pass freezes the entire video already.
     """
 

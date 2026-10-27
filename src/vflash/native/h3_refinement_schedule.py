@@ -113,3 +113,40 @@ def load_tables(directory, *, mode):
             raise ValueError("refinement table tensor differs")
         tables.append(table)
     return manifest, schedule, tables
+
+
+def load_refinement_history_tables(directory):
+    """Load the clean-history tables compiled with this exact refinement recipe."""
+    from pathlib import Path
+
+    import torch
+    from safetensors.torch import load_file
+
+    directory = Path(directory)
+    manifest = json.loads((directory / "refinement.json").read_text())
+    record = manifest.get("native_history") or {}
+    if (
+        manifest.get("schema") != 1
+        or manifest.get("method") != "hybrid-low-noise-official-modulation-v1"
+        or record.get("file") != "native-history.safetensors"
+        or not manifest.get("source")
+        or record.get("source") != manifest["source"]
+    ):
+        raise ValueError("refinement has no matching native history asset")
+    path = directory / record["file"]
+    if path.is_symlink() or path.stat().st_size != record.get("size"):
+        raise ValueError("refinement history file differs")
+    values = load_file(str(path), device="cpu")
+    names = [f"block-{i:03}" for i in range(50)] + ["final"]
+    if set(values) != set(names):
+        raise ValueError("refinement history inventory differs")
+    tables = tuple(values[name] for name in names)
+    for i, table in enumerate(tables):
+        expected = (1, 1, 2, 5376) if i == 50 else (1, 3, 6, 5376)
+        if (
+            tuple(table.shape) != expected
+            or table.dtype != torch.bfloat16
+            or not bool(table.isfinite().all())
+        ):
+            raise ValueError("refinement history tensor differs")
+    return tables

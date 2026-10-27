@@ -39,8 +39,20 @@ def time_embeddings(load, rows):
 
 
 def compile_refinement_tables(
-    base_directory, reference_directory, output, *, steps, denoise, mode
+    base_directory,
+    reference_directory,
+    output,
+    *,
+    steps,
+    denoise,
+    mode,
+    include_native_history=False,
 ):
+    """Compile one explicit weight recipe, optionally with its matching clean history.
+
+    reference_directory=None selects original FL for every block. An explicit
+    reference directory retains the established hybrid blocks25-49 recipe.
+    """
     import torch
     from safetensors.torch import save_file
 
@@ -51,8 +63,14 @@ def compile_refinement_tables(
     if mode not in ("face", "audio"):
         raise ValueError("unknown refinement modality")
     schedule = refinement_schedule(steps=steps, denoise=denoise)
-    base, reference = IndexedCheckpoint(base_directory), IndexedCheckpoint(reference_directory)
-    validate_hybrid_reference(reference)
+    if type(include_native_history) is not bool:
+        raise ValueError("native history compilation requires an explicit boolean")
+    base = IndexedCheckpoint(base_directory)
+    reference = (
+        IndexedCheckpoint(reference_directory) if reference_directory is not None else None
+    )
+    if reference is not None:
+        validate_hybrid_reference(reference)
     output.mkdir(parents=True, exist_ok=False)
     started = time.monotonic()
     rows = timestep_rows(schedule)
@@ -61,7 +79,7 @@ def compile_refinement_tables(
     with torch.inference_mode():
         timing = time_embeddings(base.load, rows)
         for index in range(50):
-            checkpoint = base if index < 25 else reference
+            checkpoint = base if reference is None or index < 25 else reference
             prefix = f"transformer_blocks.{index}.adaln_proj.linear."
             weights = checkpoint.load_many((prefix + "weight", prefix + "bias"))
             table = adaln_table(
@@ -100,10 +118,33 @@ def compile_refinement_tables(
         "start_evaluation": 1,
         "schedule": schedule.to_mapping(),
         "files": records,
-        "source": "original-FL-time-and-head; FL-blocks-0-24; Ref-blocks-25-49",
+        "source": (
+            "original-FL-time-head-and-all-50-blocks"
+            if reference is None
+            else "original-FL-time-and-head; FL-blocks-0-24; Ref-blocks-25-49"
+        ),
         "turbo_residuals": "retained" if mode == "face" else "disabled-during-refinement",
         "compile_seconds": time.monotonic() - started,
         "preparation_device": "cpu",
     }
+    if include_native_history:
+        from .continuation import compile_native_history_tables
+
+        tables = compile_native_history_tables(
+            base_directory,
+            reference_checkpoint=reference_directory,
+            reference_blocks=tuple(range(25, 50)) if reference is not None else (),
+        )
+        path = output / "native-history.safetensors"
+        save_file(
+            {**{f"block-{i:03}": t for i, t in enumerate(tables[:-1])}, "final": tables[-1]},
+            str(path),
+        )
+        manifest["native_history"] = {
+            "file": path.name,
+            "size": path.stat().st_size,
+            "source": manifest["source"],
+        }
+    manifest["compile_seconds"] = time.monotonic() - started
     (output / "refinement.json").write_text(json.dumps(manifest, indent=2))
     return manifest
