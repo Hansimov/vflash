@@ -198,3 +198,33 @@ def test_audio_only_history_keeps_sound_while_all_target_video_is_generated():
     assert torch.equal(joined[:, :, :235], source["audio_latents"])
     with pytest.raises(ValueError, match="independently cut pictures"):
         prefix.join(source, generated, generated_frames=124)
+
+
+def test_explicit_delivery_can_discard_an_unavailable_model_padding_tick():
+    from vflash.native.h3_latent_layout import h3_video_latent_frame_count
+
+    _, old, _ = fixture()
+    source = {
+        "video_latents": torch.randn(1, 24, h3_video_latent_frame_count(158), 2, 2),
+        "audio_latents": torch.randn(2, 32, 263),
+    }
+    prefix = NativeAVPrefix.from_latents(
+        source,
+        source_frames=158,
+        context_frames=39,
+        clean_timestep_tables=old.clean_timestep_tables,
+        preserve_video=False,
+    )
+    generated = {"audio_latents": torch.randn(2, 32, 263)}
+    generated["audio_latents"][:, :, :65] = prefix.audio
+    with pytest.raises(ValueError, match="clock is incomplete"):
+        prefix.join_audio(source, generated, generated_frames=158)
+    joined = prefix.join_audio(source, generated, generated_frames=158, delivery_frames=240)
+    assert joined.shape[-1] == 461  # 10s delivery needs400; retain the real decoder padding.
+    assert torch.equal(joined[:, :, :263], source["audio_latents"])
+    for invalid in [277, 278, True, 0]:
+        with pytest.raises(ValueError):
+            prefix.join_audio(source, generated, generated_frames=158, delivery_frames=invalid)
+    generated["audio_latents"] = generated["audio_latents"][:, :, :-2]
+    with pytest.raises(ValueError, match="clock is incomplete"):
+        prefix.join_audio(source, generated, generated_frames=158, delivery_frames=240)

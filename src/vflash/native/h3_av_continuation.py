@@ -92,12 +92,15 @@ class NativeAVPrefix:
                 raise ValueError("clean timestep modulation table differs")
         return cls(v, a, tables, source_frames, context_frames, preserve_video)
 
-    def join_audio(self, source, generated, *, generated_frames):
+    def join_audio(self, source, generated, *, generated_frames, delivery_frames=None):
         """Join native sound on its global clock, cropping at most one tail tick.
 
         This also supports a scene change: independently cut the new picture at
         context_frames and decode the joined native audio together. No video
-        continuity or subjective sound qualification is implied.
+        continuity or subjective sound qualification is implied. An explicit shorter
+        delivery_frames may discard an undersupplied model-padding tail; the returned
+        tensor retains available padding for decode. Trim decoded PCM to that delivery
+        clock. Missing sound within the requested delivery is always rejected.
         """
         import torch
 
@@ -110,6 +113,10 @@ class NativeAVPrefix:
         stop = (self.source_frames * 5 + 1) // 3
         frames = self.source_frames + generated_frames - self.context_frames
         ticks = (frames * 5 + 1) // 3
+        if delivery_frames is not None and (
+            type(delivery_frames) is not int or not 0 < delivery_frames <= frames
+        ):
+            raise ValueError("audio delivery must fit within the joined picture clock")
         sa, na = source["audio_latents"], generated["audio_latents"]
         count = self.audio.shape[-1]
         if (
@@ -125,7 +132,9 @@ class NativeAVPrefix:
                 "join requires original sound and exactly preserved native audio prefix"
             )
         audio = torch.cat((sa[:, :, :stop], na[:, :, count:]), 2)
-        if not 0 <= audio.shape[-1] - ticks <= 1:
+        difference = audio.shape[-1] - ticks
+        required_ticks = ticks if delivery_frames is None else (delivery_frames * 5 + 2) // 3
+        if not -1 <= difference <= 1 or audio.shape[-1] < required_ticks:
             raise ValueError("joined native AV clock is incomplete or differs")
         return audio[:, :, :ticks].contiguous()
 

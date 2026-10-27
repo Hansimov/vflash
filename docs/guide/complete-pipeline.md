@@ -477,3 +477,10 @@ joined audio tensor for a single decode. Cut the pictures independently on that 
 reports zero preserved video rows and `video_prefix_exact=None`. Two complete SM89 scene-cut
 trials preserved all 65 history ticks with a 39-frame preroll. They establish execution and
 clock correctness; music continuity, speech and synchronization require listening to the result.
+
+If the delivered sequence intentionally ends before its model-padding tail, pass that exact
+frame count as `join_audio(..., delivery_frames=N)`. Two independently rounded durations can
+leave the unused joined tail one audio tick short. This option verifies that all delivered
+sound exists and retains available native padding for decoding; trim the decoded waveform
+to the declared delivery clock. It never pads missing audio. Omitting the argument still
+requires the complete joined model clock, including its padding.
