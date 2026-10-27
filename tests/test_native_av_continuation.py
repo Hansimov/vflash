@@ -171,3 +171,30 @@ def test_join_rejects_changed_source_prefix_and_missing_audio():
     generated["audio_latents"] = generated["audio_latents"][:, :, :-2]
     with pytest.raises(ValueError, match="clock is incomplete"):
         prefix.join(source, generated, generated_frames=124)
+
+
+def test_audio_only_history_keeps_sound_while_all_target_video_is_generated():
+    from dataclasses import replace
+
+    source, prefix, engine = fixture()
+    prefix = replace(prefix, preserve_video=False)
+    state = engine.latent_state
+    before = state.video_latents.clone()
+    scope = NativeAVPreservation(engine, prefix)
+    assert scope.rows == 0
+    with scope.preserve_targets():
+        for _ in range(4):
+            scope.advance()
+            assert torch.equal(
+                state.audio_latents.reshape(2, -1, 32)[:, : scope.ticks], scope.audio
+            )
+    assert torch.equal(state.video_latents[:, :16], before[:, :16])
+    assert not torch.equal(state.video_latents[:, 16 : 16 + 192], before[:, 16 : 16 + 192])
+    assert scope.record()["video_prefix_exact"] is None
+    generated = {"audio_latents": torch.randn(2, 32, 207)}
+    generated["audio_latents"][:, :, :65] = prefix.audio
+    joined = prefix.join_audio(source, generated, generated_frames=124)
+    assert joined.shape == (2, 32, 377)
+    assert torch.equal(joined[:, :, :235], source["audio_latents"])
+    with pytest.raises(ValueError, match="independently cut pictures"):
+        prefix.join(source, generated, generated_frames=124)

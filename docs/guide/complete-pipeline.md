@@ -466,3 +466,14 @@ step, then restores exact clean AV context. Modulation and row plans belong to o
 and are restored on exit. A complete 960×544, five-second SM89 execution matched the tested
 scoped implementation's native video and audio exactly. This establishes integration parity;
 physical motion and subjective soundtrack quality remain output-specific evaluations.
+
+For an intentional scene cut, construct the prefix with `preserve_video=False`. The native
+audio context is still restored at each step, while every target picture row is generated
+under the new scene's keyframe. The current same-canvas and execution restrictions still apply.
+Discard the target's first `context_frames` pictures as preroll, and call
+`prefix.join_audio(source_latents, generated_latents, generated_frames=124)` to obtain the
+joined audio tensor for a single decode. Cut the pictures independently on that frame clock;
+`join` deliberately rejects this mode because it would claim video continuity. The record
+reports zero preserved video rows and `video_prefix_exact=None`. Two complete SM89 scene-cut
+trials preserved all 65 history ticks with a 39-frame preroll. They establish execution and
+clock correctness; music continuity, speech and synchronization require listening to the result.

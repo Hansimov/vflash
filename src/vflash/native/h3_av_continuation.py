@@ -16,15 +16,25 @@ class NativeAVPrefix:
     clean_timestep_tables: tuple
     source_frames: int
     context_frames: int
+    preserve_video: bool = True
 
     @classmethod
-    def from_latents(cls, latents, *, source_frames, context_frames, clean_timestep_tables):
+    def from_latents(
+        cls,
+        latents,
+        *,
+        source_frames,
+        context_frames,
+        clean_timestep_tables,
+        preserve_video=True,
+    ):
         import torch
 
         from .h3_latent_layout import h3_video_latent_frame_count
 
         if (
-            type(source_frames) is not int
+            type(preserve_video) is not bool
+            or type(source_frames) is not int
             or type(context_frames) is not int
             or not 0 < context_frames <= source_frames
             or source_frames % 17 != 5
@@ -80,19 +90,16 @@ class NativeAVPrefix:
                 or not table.isfinite().all()
             ):
                 raise ValueError("clean timestep modulation table differs")
-        return cls(v, a, tables, source_frames, context_frames)
+        return cls(v, a, tables, source_frames, context_frames, preserve_video)
 
-    def join(self, source, generated, *, generated_frames):
-        """Remove the preserved overlap and keep audio on the joined global clock.
+    def join_audio(self, source, generated, *, generated_frames):
+        """Join native sound on its global clock, cropping at most one tail tick.
 
-        Source cuts use the nearest 40Hz tick (at most 1/120s from a video
-        boundary). Rounding is recalculated from the complete sequence, so it
-        cannot accumulate across clips. An excess tail tick is cropped; missing
-        audio is rejected rather than synthesized or stretched.
+        This also supports a scene change: independently cut the new picture at
+        context_frames and decode the joined native audio together. No video
+        continuity or subjective sound qualification is implied.
         """
         import torch
-
-        from .h3_latent_layout import h3_video_latent_frame_count
 
         if (
             type(generated_frames) is not int
@@ -100,48 +107,64 @@ class NativeAVPrefix:
             or generated_frames <= self.context_frames
         ):
             raise ValueError("continuation must have a VAE-aligned nonempty suffix")
-        end = h3_video_latent_frame_count(self.source_frames)
-        count = self.video.shape[2]
-        new_count = h3_video_latent_frame_count(generated_frames)
         stop = (self.source_frames * 5 + 1) // 3
         frames = self.source_frames + generated_frames - self.context_frames
         ticks = (frames * 5 + 1) // 3
-        sv, sa = source["video_latents"], source["audio_latents"]
-        nv, na = generated["video_latents"], generated["audio_latents"]
+        sa, na = source["audio_latents"], generated["audio_latents"]
+        count = self.audio.shape[-1]
+        if (
+            sa.ndim != 3
+            or na.ndim != 3
+            or tuple(sa.shape[:2]) != (2, 32)
+            or tuple(na.shape[:2]) != (2, 32)
+            or sa.shape[-1] < stop
+            or not torch.equal(sa[:, :, stop - count : stop].float().cpu(), self.audio)
+            or not torch.equal(na[:, :, :count].float().cpu(), self.audio)
+        ):
+            raise ValueError(
+                "join requires original sound and exactly preserved native audio prefix"
+            )
+        audio = torch.cat((sa[:, :, :stop], na[:, :, count:]), 2)
+        if not 0 <= audio.shape[-1] - ticks <= 1:
+            raise ValueError("joined native AV clock is incomplete or differs")
+        return audio[:, :, :ticks].contiguous()
+
+    def join(self, source, generated, *, generated_frames):
+        """Remove preserved AV overlap and retain the complete sequence clock.
+
+        Source cuts use the nearest 40Hz tick, at most 1/120s from a frame boundary.
+        Missing audio is rejected, never synthesized or stretched.
+        """
+        import torch
+
+        from .h3_latent_layout import h3_video_latent_frame_count
+
+        if not self.preserve_video:
+            raise ValueError("audio-only history requires independently cut pictures")
+        audio = self.join_audio(source, generated, generated_frames=generated_frames)
+        end = h3_video_latent_frame_count(self.source_frames)
+        count = self.video.shape[2]
+        new_count = h3_video_latent_frame_count(generated_frames)
+        frames = self.source_frames + generated_frames - self.context_frames
+        sv, nv = source["video_latents"], generated["video_latents"]
         if (
             sv.ndim != 5
             or nv.ndim != 5
-            or sa.ndim != 3
-            or na.ndim != 3
             or tuple(sv.shape[:2]) != (1, 24)
             or tuple(nv.shape[:2]) != (1, 24)
-            or tuple(sa.shape[:2]) != (2, 32)
-            or tuple(na.shape[:2]) != (2, 32)
             or sv.shape[-2:] != nv.shape[-2:]
             or sv.shape[2] < end
             or nv.shape[2] != new_count
-            or sa.shape[-1] < stop
             or not torch.equal(sv[:, :, end - count : end].float().cpu(), self.video)
-            or not torch.equal(
-                sa[:, :, stop - self.audio.shape[-1] : stop].float().cpu(), self.audio
-            )
             or not torch.equal(nv[:, :, :count].float().cpu(), self.video)
-            or not torch.equal(na[:, :, : self.audio.shape[-1]].float().cpu(), self.audio)
         ):
             raise ValueError(
                 "join requires the original source and exactly preserved native AV prefix"
             )
         video = torch.cat((sv[:, :, :end], nv[:, :, count:]), 2)
-        audio = torch.cat((sa[:, :, :stop], na[:, :, self.audio.shape[-1] :]), 2)
-        if (
-            video.shape[2] != h3_video_latent_frame_count(frames)
-            or not 0 <= audio.shape[-1] - ticks <= 1
-        ):
+        if video.shape[2] != h3_video_latent_frame_count(frames):
             raise ValueError("joined native AV clock is incomplete or differs")
-        return {
-            "video_latents": video.contiguous(),
-            "audio_latents": audio[:, :, :ticks].contiguous(),
-        }
+        return {"video_latents": video.contiguous(), "audio_latents": audio}
 
 
 def _pack_video(video):
@@ -186,6 +209,10 @@ class NativeAVPreservation:
             .to(device=state.device, dtype=torch.float32)
         )
         self.ticks = self.audio.shape[1]
+        if type(request.preserve_video) is not bool:
+            raise ValueError("native history requires an explicit video preservation flag")
+        if not request.preserve_video:
+            self.video = self.video[:, :0]
         self.rows = self.video.shape[1]
         if (
             self.offset + self.rows >= state.video_latents.shape[1]
@@ -252,7 +279,8 @@ class NativeAVPreservation:
             "source_frames": self.request.source_frames,
             "audio_ticks": self.ticks,
             "preserved_video_rows": self.rows,
-            "video_prefix_exact": True,
+            "video_prefix_exact": True if self.request.preserve_video else None,
+            "preserve_video": self.request.preserve_video,
             "audio_prefix_exact": True,
             "evaluations": self.evaluations,
         }
