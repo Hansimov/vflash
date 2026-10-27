@@ -189,7 +189,7 @@ def _pack_video(video):
 class NativeAVPreservation:
     """One engine's target prefix, with no class or process-global method mutation."""
 
-    def __init__(self, engine, request):
+    def __init__(self, engine, request, *, audio_refinement=False):
         import torch
 
         from .h3_native_scheduler import H3NativeRowTimestepStep
@@ -198,18 +198,29 @@ class NativeAVPreservation:
             raise ValueError("native AV preservation requires an explicit prefix")
         state = engine.latent_state
         spatial = request.video.shape[-2] * request.video.shape[-1] // 4
+        if type(audio_refinement) is not bool:
+            raise ValueError("native history needs an explicit refinement scope")
+        trajectory_matches = (
+            state.evaluation_index == 1
+            and engine.schedule.nfe in (7, 13, 21)
+            and not request.preserve_video
+            and state.num_condition_video_rows == state.video_latents.shape[1]
+            if audio_refinement
+            else state.evaluation_index == 0
+            and engine.schedule.nfe == 4
+            and state.num_condition_video_rows == spatial
+        )
         if (
-            state.evaluation_index != 0
-            or engine.schedule.nfe != 4
+            not trajectory_matches
             or state.num_condition_audio_rows
-            or state.num_condition_video_rows != spatial
             or state.audio_latents.shape[1] % 2
             or engine._denoise_profile_records is not None
         ):
             raise ValueError(
-                "native AV preservation requires fresh four-step single-keyframe AV"
+                "native history requires fresh four-step AV or a frozen-video audio refinement"
             )
         self.engine, self.request, self.state = engine, request, state
+        self.expected_evaluations = engine.schedule.nfe - state.evaluation_index
         self.offset = state.num_condition_video_rows
         self.video = _pack_video(request.video).to(device=state.device, dtype=torch.float32)
         self.audio = (
@@ -224,9 +235,8 @@ class NativeAVPreservation:
             self.video = self.video[:, :0]
         self.rows = self.video.shape[1]
         if (
-            self.offset + self.rows >= state.video_latents.shape[1]
-            or self.ticks >= state.audio_latents.shape[1] // 2
-        ):
+            self.rows and self.offset + self.rows >= state.video_latents.shape[1]
+        ) or self.ticks >= state.audio_latents.shape[1] // 2:
             raise ValueError("native AV prefix must leave a nonempty generated suffix")
         noise = state.video_latents[:, self.offset : self.offset + self.rows].clone()
         self.kept = 0.999 * self.video + 0.001 * noise
@@ -267,17 +277,20 @@ class NativeAVPreservation:
             self.engine.row_timestep_plan = original
             self.active = False
 
-    def advance(self):
+    def advance(self, *, step=None):
         if not self.active:
             raise ValueError("native AV preservation scope is not active")
-        self.engine.step()
+        if step is None:
+            self.engine.step()
+        else:
+            step(self.engine, capture_packed_input=False)
         self._restore()
         self.evaluations += 1
 
     def record(self):
         import torch
 
-        if not self.state.complete or self.evaluations != self.engine.schedule.nfe:
+        if not self.state.complete or self.evaluations != self.expected_evaluations:
             raise ValueError("native AV context trajectory is incomplete")
         v = self.state.video_latents[:, self.offset : self.offset + self.rows]
         a = self.state.audio_latents.reshape(2, -1, 32)[:, : self.ticks]
@@ -309,7 +322,13 @@ class NativeAVPreservation:
 
         def expand(table, extra, modalities):
             result = torch.zeros(
-                (4, 4 * modalities, *table.shape[2:]), device=table.device, dtype=table.dtype
+                (
+                    engine.schedule.nfe,
+                    (max(len(row.timesteps) for row in self.plan)) * modalities,
+                    *table.shape[2:],
+                ),
+                device=table.device,
+                dtype=table.dtype,
             )
             for i, row in enumerate(engine.row_timestep_plan):
                 size = len(row.timesteps) * modalities

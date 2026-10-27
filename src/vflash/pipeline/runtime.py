@@ -410,6 +410,7 @@ class H3Pipeline:
             weight_residency=self.weight_residency,
         )
         if native_av_prefix is not None:
+            from vflash.native.h3_audio_refinement import AudioRefinementRequest
             from vflash.native.h3_av_continuation import NativeAVPrefix
 
             if (
@@ -417,7 +418,13 @@ class H3Pipeline:
                 or request.mode != "i2va"
                 or not request.generate_audio
                 or rgb
-                or audio_refinement is not None
+                or (
+                    audio_refinement is not None
+                    and (
+                        not isinstance(audio_refinement, AudioRefinementRequest)
+                        or not audio_refinement.matches_native_history(native_av_prefix)
+                    )
+                )
                 or profile_denoise
                 or self._plan.parallel_strategy != "single"
                 or (self.weight_residency, self.attention_backend)
@@ -425,13 +432,19 @@ class H3Pipeline:
                 or tuple(native_av_prefix.video.shape[-2:])
                 != (request.height // 16, request.width // 16)
             ):
-                raise ContractError("native AV prefix requires original-audio Veda ring I2VA")
+                raise ContractError(
+                    "native AV prefix requires matched native audio history and Veda ring I2VA"
+                )
         if audio_refinement is not None:
             from vflash.media.audio_delivery import SILENT_AUDIO_PROFILE
             from vflash.native.h3_audio_refinement import AudioRefinementRequest
 
             if (
                 not isinstance(audio_refinement, AudioRefinementRequest)
+                or (
+                    audio_refinement.native_audio_prefix is not None
+                    and native_av_prefix is None
+                )
                 or request.mode != "i2va"
                 or not request.generate_audio
                 or rgb
@@ -673,6 +686,7 @@ class H3Pipeline:
             overlap_enabled = (
                 getattr(self, "audio_decode_overlap", False)
                 and audio_refinement is not None
+                and audio_refinement.native_audio_prefix is None
                 and request.duration_seconds == 5
                 and request.width * request.height <= 1024**2
             )

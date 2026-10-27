@@ -757,6 +757,18 @@ class H3NativeConditioningRuntime:
                 raise H3NativeConditioningRuntimeError(
                     "audio refinement requires unprofiled four-step AV with Veda 44/6 or 42/8"
                 )
+        if (
+            audio_refinement is not None
+            and audio_refinement.native_audio_prefix is not None
+            and (
+                self.weight_residency != "block-ring"
+                or (encoded_audio_source is None and native_av_prefix is None)
+                or video_ready_callback is not None
+            )
+        ):
+            raise H3NativeConditioningRuntimeError(
+                "audio history requires retained AV and serial block-ring execution"
+            )
         if video_repaint is not None:
             from vflash.native.h3_refinement import VideoRepaintRequest
 
@@ -776,7 +788,10 @@ class H3NativeConditioningRuntime:
             if (
                 not isinstance(native_av_prefix, NativeAVPrefix)
                 or not generate_audio
-                or audio_refinement is not None
+                or (
+                    audio_refinement is not None
+                    and not audio_refinement.matches_native_history(native_av_prefix)
+                )
                 or encoded_audio_source is not None
                 or video_repaint is not None
                 or profile_denoise
@@ -788,7 +803,7 @@ class H3NativeConditioningRuntime:
                 != (bundle.profile.height // 16, bundle.profile.width // 16)
             ):
                 raise H3NativeConditioningRuntimeError(
-                    "native AV prefix requires original-audio single-device Veda ring I2VA"
+                    "native AV prefix needs matching audio history and Veda ring I2VA"
                 )
         if video_repaint is not None and (
             self.overlay.schedule.nfe != 4 or bundle.profile.task != "i2va"

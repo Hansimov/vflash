@@ -261,6 +261,9 @@ class AudioRefinementRequest:
     for this pass while keeping slot addresses and arithmetic unchanged. The
     default zero preserves ordinary residency; the scope reserves 20 GiB for work.
     Weights belong to the caller and are never downloaded or modified on disk.
+    native_audio_prefix optionally preserves already generated context on every
+    evaluation. Its clean tables must match the refinement's original FL weights,
+    and preserve_video must be False: this pass freezes the entire video already.
     """
 
     schedule: object
@@ -272,11 +275,18 @@ class AudioRefinementRequest:
     denoise: float = 0.5
     dense_attention: bool = False
     weight_cache_bytes: int = 0
+    native_audio_prefix: object | None = None
 
     def __post_init__(self):
+        from .h3_av_continuation import NativeAVPrefix
         from .h3_native_scheduler import H3NativeSchedule
         from .h3_refinement_schedule import refinement_schedule
 
+        if self.native_audio_prefix is not None and (
+            not isinstance(self.native_audio_prefix, NativeAVPrefix)
+            or self.native_audio_prefix.preserve_video
+        ):
+            raise ValueError("audio refinement history requires an audio-only native prefix")
         if type(self.weight_cache_bytes) is not int or self.weight_cache_bytes < 0:
             raise ValueError("audio weight cache requires a nonnegative integer byte budget")
 
@@ -321,6 +331,21 @@ class AudioRefinementRequest:
                 "audio refinement needs full context or the qualified 0.25MP or 0.5MP budget"
             )
 
+    def matches_native_history(self, prefix):
+        """The base pass and refinement must protect the same original audio."""
+        import torch
+
+        from .h3_av_continuation import NativeAVPrefix
+
+        history = self.native_audio_prefix
+        return (
+            isinstance(prefix, NativeAVPrefix)
+            and history is not None
+            and history.source_frames == prefix.source_frames
+            and history.context_frames == prefix.context_frames
+            and torch.equal(history.audio, prefix.audio)
+        )
+
     @property
     def steps(self):
         return self.evaluations
@@ -355,6 +380,7 @@ def _refine_full_audio(engine, request, *, step, noise):
 
     from .h3_audio_hidden_cache import frozen_video_hidden
     from .h3_audio_kv_cache import frozen_video_kv
+    from .h3_av_continuation import NativeAVPreservation
     from .h3_refinement import quality_pass
     from .h3_ring_weight_cache import cached_ring_weights
 
@@ -365,12 +391,18 @@ def _refine_full_audio(engine, request, *, step, noise):
     original_video = state.video_latents.clone()
     if noise.shape != original_audio.shape or not noise.isfinite().all():
         raise ValueError("audio refinement noise differs")
+    prefix = request.native_audio_prefix
+    if prefix is not None and not torch.equal(
+        original_audio.reshape(2, -1, 32)[:, : prefix.audio.shape[-1]].float().cpu(),
+        prefix.audio.permute(0, 2, 1).float().cpu(),
+    ):
+        raise ValueError("audio refinement history differs from the retained native source")
+    history_record = None
     started = time.monotonic()
     try:
         with (
             dense_audio_attention(engine, request.dense_attention),
             quality_pass(engine, request.schedule, request.tables, mode="audio"),
-            cached_ring_weights(engine, request.weight_cache_bytes) as weight_cache,
         ):
             sigma = request.schedule.audio_sigmas[1]
             state.audio_latents.copy_((1 - sigma) * original_audio + sigma * noise)
@@ -381,9 +413,25 @@ def _refine_full_audio(engine, request, *, step, noise):
                 if request.reuse_kv_context
                 else nullcontext(None)
             )
-            with cache_scope as cache:
+            history_scope = (
+                NativeAVPreservation(engine, prefix, audio_refinement=True).execution()
+                if prefix is not None
+                else nullcontext(None)
+            )
+            # Cache only after history expands the timestep tables; cached addresses
+            # must belong to this scope, and be released before its tables restore.
+            with (
+                history_scope as history,
+                cached_ring_weights(engine, request.weight_cache_bytes) as weight_cache,
+                cache_scope as cache,
+            ):
                 for _ in range(request.steps):
-                    step(engine, capture_packed_input=False)
+                    if history is None:
+                        step(engine, capture_packed_input=False)
+                    else:
+                        history.advance(step=step)
+                if history is not None:
+                    history_record = history.record()
                 if cache is not None and (
                     cache["build_block_calls"] != 50
                     or cache["reuse_block_calls"] != 50 * (request.steps - 1)
@@ -407,6 +455,7 @@ def _refine_full_audio(engine, request, *, step, noise):
         state.audio_latents.copy_(original_audio)
         raise
     return original_audio, {
+        **({"native_audio_prefix": history_record} if history_record is not None else {}),
         "extra_audio_nfe": request.steps,
         "sigma": sigma,
         "extra_seconds": time.monotonic() - started,

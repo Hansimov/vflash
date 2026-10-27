@@ -445,9 +445,9 @@ native `video_latents` / `audio_latents`, the selected `source_frames`, `context
 at timestep 1.0 and the final-layer tensor). These are explicit caller-owned assets; the engine
 does not download or infer a different checkpoint. Python only; CLI/HTTP admission is unchanged.
 
-The current execution scope is original-audio, four-step I2VA on the single SM89 Veda block
-ring, with one same-canvas keyframe. Audio refinement, repaint and profiling are rejected in
-this scope. Both source cuts and overlap lengths must be `17n+5` frames. The overlap must
+The current base execution scope is four-step I2VA on the single SM89 Veda block ring,
+with one same-canvas keyframe. Repaint and profiling are rejected; optional native audio
+refinement must explicitly preserve matching history as described below. Both source cuts and overlap lengths must be `17n+5` frames. The overlap must
 also be divisible by 3 (for example 39 or 90), so it has an exact 40Hz audio duration. Source
 cuts may use any aligned frame, including 107 and 124; their nearest audio tick differs by
 at most 1/120 second. The first image represents the
@@ -493,3 +493,24 @@ for `NativeAVPrefix.from_latents`. Reuse it for that model selection. It leaves 
 and global thread settings unchanged; an optional `progress(completed, total)` callback
 can enforce the caller's deadline. The native-prefix interfaces are experimental source
 checkout APIs; the published 0.21.0 wheel does not yet contain them.
+
+
+To refine sound while preserving that continuation, construct a second `NativeAVPrefix`
+from the same source window with `preserve_video=False` and clean-timestep tables compiled
+from the **original FL checkpoint only** (omit reference blocks). Set it as
+`AudioRefinementRequest.native_audio_prefix`. Main hybrid generation and FL refinement
+need different modulation tables even though they protect the same audio. The complete
+pipeline checks source/context frame counts and audio equality before loading; an unmatched
+refinement is rejected. For retained outputs, pass `EncodedAudioSource` and the history-aware
+refinement to the native session, avoiding another main generation or video decode.
+
+Every refinement evaluation reads and restores the clean audio prefix at timestep1.0.
+The entire video remains frozen; only later audio is refined. Modulation storage expands
+before the optional weight cache is built, and the cache is released before restoring
+original tables. This path uses serial ring execution and disables video-decode overlap.
+Failures restore the original audio, video, schedule and owned modulation resources.
+Two retained nine/ten-second SM89 target executions with twelve audio evaluations preserved
+all65 context ticks and every video latent. Joined ten/eighteen-second deliveries also kept
+their original encoded picture streams. These are execution and media-identity checks;
+native speech, timbre and seam quality remain listening evaluations. Six/twenty-step
+history variants and cached history execution currently have CPU ownership tests only.
