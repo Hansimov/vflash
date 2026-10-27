@@ -136,9 +136,12 @@ class NativeAVPrefix:
         required_ticks = ticks if delivery_frames is None else (delivery_frames * 5 + 2) // 3
         if not -1 <= difference <= 1 or audio.shape[-1] < required_ticks:
             raise ValueError("joined native AV clock is incomplete or differs")
-        return audio[:, :, :ticks].contiguous()
+        # A delivered final video frame may extend beyond the nearest audio tick.
+        # Keep the available real tick that covers it instead of validating then
+        # cropping that same tick away. No samples or latent ticks are fabricated.
+        return audio[:, :, : max(ticks, required_ticks)].contiguous()
 
-    def join(self, source, generated, *, generated_frames):
+    def join(self, source, generated, *, generated_frames, delivery_frames=None):
         """Remove preserved AV overlap and retain the complete sequence clock.
 
         Source cuts use the nearest 40Hz tick, at most 1/120s from a frame boundary.
@@ -150,7 +153,12 @@ class NativeAVPrefix:
 
         if not self.preserve_video:
             raise ValueError("audio-only history requires independently cut pictures")
-        audio = self.join_audio(source, generated, generated_frames=generated_frames)
+        audio = self.join_audio(
+            source,
+            generated,
+            generated_frames=generated_frames,
+            delivery_frames=delivery_frames,
+        )
         end = h3_video_latent_frame_count(self.source_frames)
         count = self.video.shape[2]
         new_count = h3_video_latent_frame_count(generated_frames)

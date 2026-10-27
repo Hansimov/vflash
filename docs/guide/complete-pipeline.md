@@ -533,3 +533,11 @@ target preserved all39 video frames and65 audio ticks, joining with its source i
 The endpoint guided the eventual pose and framing in that trial; repeated movement and a
 long mid-shot hold remained. End-state constraints do not certify natural motion or pacing.
 History-aware audio refinement currently retains its I2VA-only admission.
+
+
+The same `delivery_frames` override is available on `join`. If the last delivered video
+frame extends beyond the nearest40Hz tick, the join retains the available real tick
+covering that frame. For example, joining124+124−39 frames needs349 audio ticks for
+all209 video frames, although the nearest-clock count is348. This preserves real decoder
+padding instead of validating349 ticks and then cropping one away. Missing required
+audio is still rejected; the default nearest-clock join remains unchanged.

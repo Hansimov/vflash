@@ -242,3 +242,36 @@ def test_two_condition_keyframes_remain_untouched_by_target_history():
             assert torch.equal(state.video_latents[:, :32], conditions)
     assert scope.record()["video_prefix_exact"]
     assert scope.record()["audio_prefix_exact"]
+
+
+def test_explicit_delivery_retains_the_real_audio_tick_covering_its_last_video_frame():
+    _, old, _ = fixture()
+    source = {
+        "video_latents": torch.randn(1, 24, 37, 2, 2),
+        "audio_latents": torch.randn(2, 32, 207),
+    }
+    prefix = NativeAVPrefix.from_latents(
+        source,
+        source_frames=124,
+        context_frames=39,
+        clean_timestep_tables=old.clean_timestep_tables,
+    )
+    generated = {
+        "video_latents": torch.randn(1, 24, 37, 2, 2),
+        "audio_latents": torch.randn(2, 32, 207),
+    }
+    generated["video_latents"][:, :, :12] = prefix.video
+    generated["audio_latents"][:, :, :65] = prefix.audio
+    legacy = prefix.join(source, generated, generated_frames=124)
+    delivered = prefix.join(source, generated, generated_frames=124, delivery_frames=209)
+    assert legacy["audio_latents"].shape[-1] == 348
+    assert delivered["audio_latents"].shape[-1] == 349
+    assert torch.equal(
+        delivered["audio_latents"][:, :, -1], generated["audio_latents"][:, :, -1]
+    )
+    assert delivered["audio_latents"].shape[-1] / 40 >= 209 / 24
+    assert torch.equal(delivered["video_latents"], legacy["video_latents"])
+    # A genuinely absent delivery tick remains an error; never pad it.
+    generated["audio_latents"] = generated["audio_latents"][:, :, :-1]
+    with pytest.raises(ValueError, match="clock is incomplete"):
+        prefix.join(source, generated, generated_frames=124, delivery_frames=209)
