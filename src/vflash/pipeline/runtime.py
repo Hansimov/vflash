@@ -333,6 +333,7 @@ class H3Pipeline:
         profile_denoise: bool = False,
         conditioning_reuse_scope: ConditioningReuseScope | None = None,
         audio_refinement: Any | None = None,
+        latent_output: Path | None = None,
     ) -> VideoResult:
         """Return a complete MP4; failed or concurrent requests never publish a partial file."""
         return self._generate(
@@ -341,6 +342,7 @@ class H3Pipeline:
             progress=progress,
             profile_denoise=profile_denoise,
             conditioning_reuse_scope=conditioning_reuse_scope,
+            latent_output=latent_output,
             **({"audio_refinement": audio_refinement} if audio_refinement is not None else {}),
         )
 
@@ -381,6 +383,7 @@ class H3Pipeline:
         profile_denoise: bool = False,
         conditioning_reuse_scope: ConditioningReuseScope | None = None,
         audio_refinement: Any | None = None,
+        latent_output: Path | None = None,
     ) -> VideoResult:
         """Publish one complete artifact; failures never publish partial output."""
         started = time.monotonic()
@@ -388,6 +391,9 @@ class H3Pipeline:
             raise ContractError("the pipeline is closed")
         if not isinstance(request, VideoRequest) or not isinstance(output_path, Path):
             raise ContractError("generate requires a VideoRequest and pathlib.Path output")
+        from vflash.pipeline.latent_output import prepare_latent_output
+
+        latent_output = prepare_latent_output(latent_output, output_path)
         if conditioning_reuse_scope is not None and not isinstance(
             conditioning_reuse_scope, ConditioningReuseScope
         ):
@@ -475,6 +481,7 @@ class H3Pipeline:
                     conditioning_reuse_scope=conditioning_reuse_scope,
                     rgb=rgb,
                     required_frames=required_frames,
+                    latent_output=latent_output,
                     **(
                         {"audio_refinement": audio_refinement}
                         if audio_refinement is not None
@@ -533,6 +540,7 @@ class H3Pipeline:
         rgb: bool = False,
         required_frames: tuple[int, ...] | None = None,
         audio_refinement: Any | None = None,
+        latent_output: Path | None = None,
     ) -> VideoResult:
         def report(stage: str, completed: int, total: int) -> None:
             if progress is not None:
@@ -656,6 +664,10 @@ class H3Pipeline:
                     directory / "latents.safetensors",
                     **native_options,
                 )
+                if latent_output is not None:
+                    from vflash.pipeline.latent_output import retain_native_latents
+
+                    retain_native_latents(directory / "latents.safetensors", latent_output)
                 if overlap is not None:
                     predecoded_video = overlap.finish()
             if overlap is not None:
@@ -756,6 +768,7 @@ class H3Pipeline:
             stages,
             media.media,
             request_mode=request.mode,
+            latent_output=latent_output,
         )
 
     def _check_hybrid_unchanged(self) -> None:

@@ -427,3 +427,11 @@ are in the [release notes](../reference/releases) and [performance records](../r
 | Sibling reuse | Dual-SM86 A/B/A with matching streams |
 
 Evidence on one GPU class or canvas does not qualify others; serving systems keep their own qualification.
+
+### Retaining native audio/video latents
+
+Python callers may pass `latent_output=Path("clip.safetensors")` to `H3Pipeline.generate`.
+The destination must be distinct from the MP4 and must not exist. The complete native AV output
+is published atomically before media decoding; it remains available if decoding or encoding later
+fails. Successful `VideoResult` objects report the retained path. Omit the option for the existing
+temporary-file lifetime. Retention does not itself retry decoding or qualify a continuation method.

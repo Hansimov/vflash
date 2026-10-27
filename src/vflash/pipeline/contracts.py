@@ -279,3 +279,4 @@ class VideoResult:
     stages: dict[str, Any]
     media: dict[str, Any]
     request_mode: str | None = None
+    latent_output: Path | None = None

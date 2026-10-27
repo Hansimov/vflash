@@ -1227,3 +1227,28 @@ def test_invalid_rgb_contract_does_not_retire_or_activate_session(video_request,
     with pytest.raises(ContractError, match="video-only"):
         pipeline.generate_rgb(video_request, tmp_path / "pixels.npy")
     assert not events and not pipeline._closed and not (tmp_path / "pixels.npy").exists()
+
+
+@pytest.mark.parametrize("failure", [None, "media:resume", "media:generate"])
+def test_opt_in_native_output_survives_media_failure(video_request, tmp_path, failure):
+    pipeline, _events = _pipeline(fail=failure)
+    latent = tmp_path / "retained" / "native.safetensors"
+    output = tmp_path / "clip.mp4"
+    if failure:
+        with pytest.raises(RuntimeError, match=failure):
+            pipeline.generate(video_request, output, latent_output=latent)
+        assert not output.exists()
+    else:
+        result = pipeline.generate(video_request, output, latent_output=latent)
+        assert result.latent_output == latent.resolve()
+    assert latent.read_bytes() == b"owned latent test placeholder"
+    assert not list(tmp_path.glob(".vflash-request-*"))
+
+
+def test_retained_output_cannot_replace_existing_data(video_request, tmp_path):
+    pipeline, events = _pipeline()
+    path = tmp_path / "saved.safetensors"
+    path.write_bytes(b"keep existing source")
+    with pytest.raises(ContractError, match="unused"):
+        pipeline.generate(video_request, tmp_path / "clip.mp4", latent_output=path)
+    assert path.read_bytes() == b"keep existing source" and not events
