@@ -484,3 +484,12 @@ leave the unused joined tail one audio tick short. This option verifies that all
 sound exists and retains available native padding for decoding; trim the decoded waveform
 to the declared delivery clock. It never pads missing audio. Omitting the argument still
 requires the complete joined model clock, including its padding.
+
+Prepare those tables with `vflash.compiler.continuation.compile_native_history_tables`.
+Pass the local base transformer checkpoint; for a hybrid, also pass its local reference
+checkpoint and exact `reference_blocks` tuple, such as `tuple(range(25, 50))`. The helper
+reads only those tensors, computes all 51 clean-context tables on CPU and returns a tuple
+for `NativeAVPrefix.from_latents`. Reuse it for that model selection. It leaves weights
+and global thread settings unchanged; an optional `progress(completed, total)` callback
+can enforce the caller's deadline. The native-prefix interfaces are experimental source
+checkout APIs; the published 0.21.0 wheel does not yet contain them.

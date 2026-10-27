@@ -386,3 +386,10 @@ Python 调用方可向 `H3Pipeline.generate` 传入 `latent_output=Path("clip.sa
 两个独立时长的舍入可能让未采用的拼接尾部少一个音频tick；该参数核对整个实际交付区间都有声音，
 并保留已有原生尾部供解码，调用方随后按声明时钟裁切PCM，不补造缺失声音。
 省略参数仍要求完整模型拼接时钟，包括模型补齐尾部。
+
+可用 `vflash.compiler.continuation.compile_native_history_tables` 准备这些表。
+传入本地基础transformer检查点；混合模型另传本地参考检查点和实际 `reference_blocks` 元组，
+例如 `tuple(range(25, 50))`。函数仅读取对应张量，在CPU编译51个干净上下文表，返回的tuple
+可直接用于 `NativeAVPrefix.from_latents`，并按模型选择复用。它不修改权重或全局线程数，
+可选 `progress(completed, total)` 回调可执行调用方期限。原生前缀接口目前是实验性源码接口，
+已发布的0.21.0 wheel尚未包含这些接口。
