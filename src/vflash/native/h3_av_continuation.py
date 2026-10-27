@@ -1,4 +1,4 @@
-"""Request-owned native AV target preservation on exact shared temporal boundaries.
+"""Request-owned native AV target preservation with bounded AV clock rounding.
 
 The context occupies the beginning of the generated target, rather than separate
 reference rows. Callers remove that overlap in latent space and decode the joined
@@ -29,10 +29,11 @@ class NativeAVPrefix:
             or not 0 < context_frames <= source_frames
             or source_frames % 17 != 5
             or context_frames % 17 != 5
-            or source_frames % 3
             or context_frames % 3
         ):
-            raise ValueError("native AV context needs exact shared 24fps/40Hz boundaries")
+            raise ValueError(
+                "native AV needs VAE-aligned source and shared 24fps/40Hz overlap boundaries"
+            )
         end = h3_video_latent_frame_count(source_frames)
         count = h3_video_latent_frame_count(context_frames)
         video, audio = latents["video_latents"], latents["audio_latents"]
@@ -44,7 +45,7 @@ class NativeAVPrefix:
             or audio.ndim != 3
             or tuple(audio.shape[:2]) != (2, 32)
             or video.shape[2] < end
-            or audio.shape[-1] < source_frames * 5 // 3
+            or audio.shape[-1] < (source_frames * 5 + 1) // 3
             or min(video.shape[-2:]) < 2
             or any(n % 2 for n in video.shape[-2:])
             or not video.is_floating_point()
@@ -57,7 +58,7 @@ class NativeAVPrefix:
             .detach()
             .to(device="cpu", dtype=torch.float32, copy=True)
         )
-        stop = source_frames * 5 // 3
+        stop = (source_frames * 5 + 1) // 3
         a = (
             audio[:, :, stop - context_frames * 5 // 3 : stop]
             .detach()
@@ -80,6 +81,67 @@ class NativeAVPrefix:
             ):
                 raise ValueError("clean timestep modulation table differs")
         return cls(v, a, tables, source_frames, context_frames)
+
+    def join(self, source, generated, *, generated_frames):
+        """Remove the preserved overlap and keep audio on the joined global clock.
+
+        Source cuts use the nearest 40Hz tick (at most 1/120s from a video
+        boundary). Rounding is recalculated from the complete sequence, so it
+        cannot accumulate across clips. An excess tail tick is cropped; missing
+        audio is rejected rather than synthesized or stretched.
+        """
+        import torch
+
+        from .h3_latent_layout import h3_video_latent_frame_count
+
+        if (
+            type(generated_frames) is not int
+            or generated_frames % 17 != 5
+            or generated_frames <= self.context_frames
+        ):
+            raise ValueError("continuation must have a VAE-aligned nonempty suffix")
+        end = h3_video_latent_frame_count(self.source_frames)
+        count = self.video.shape[2]
+        new_count = h3_video_latent_frame_count(generated_frames)
+        stop = (self.source_frames * 5 + 1) // 3
+        frames = self.source_frames + generated_frames - self.context_frames
+        ticks = (frames * 5 + 1) // 3
+        sv, sa = source["video_latents"], source["audio_latents"]
+        nv, na = generated["video_latents"], generated["audio_latents"]
+        if (
+            sv.ndim != 5
+            or nv.ndim != 5
+            or sa.ndim != 3
+            or na.ndim != 3
+            or tuple(sv.shape[:2]) != (1, 24)
+            or tuple(nv.shape[:2]) != (1, 24)
+            or tuple(sa.shape[:2]) != (2, 32)
+            or tuple(na.shape[:2]) != (2, 32)
+            or sv.shape[-2:] != nv.shape[-2:]
+            or sv.shape[2] < end
+            or nv.shape[2] != new_count
+            or sa.shape[-1] < stop
+            or not torch.equal(sv[:, :, end - count : end].float().cpu(), self.video)
+            or not torch.equal(
+                sa[:, :, stop - self.audio.shape[-1] : stop].float().cpu(), self.audio
+            )
+            or not torch.equal(nv[:, :, :count].float().cpu(), self.video)
+            or not torch.equal(na[:, :, : self.audio.shape[-1]].float().cpu(), self.audio)
+        ):
+            raise ValueError(
+                "join requires the original source and exactly preserved native AV prefix"
+            )
+        video = torch.cat((sv[:, :, :end], nv[:, :, count:]), 2)
+        audio = torch.cat((sa[:, :, :stop], na[:, :, self.audio.shape[-1] :]), 2)
+        if (
+            video.shape[2] != h3_video_latent_frame_count(frames)
+            or not 0 <= audio.shape[-1] - ticks <= 1
+        ):
+            raise ValueError("joined native AV clock is incomplete or differs")
+        return {
+            "video_latents": video.contiguous(),
+            "audio_latents": audio[:, :, :ticks].contiguous(),
+        }
 
 
 def _pack_video(video):

@@ -447,11 +447,19 @@ does not download or infer a different checkpoint. Python only; CLI/HTTP admissi
 
 The current execution scope is original-audio, four-step I2VA on the single SM89 Veda block
 ring, with one same-canvas keyframe. Audio refinement, repaint and profiling are rejected in
-this scope. Select 24fps video boundaries that are `17n+5` frames and divisible by 3, such as
-39 or 90, so the video VAE phase and 40Hz stereo audio agree. The first image represents the
+this scope. Both source cuts and overlap lengths must be `17n+5` frames. The overlap must
+also be divisible by 3 (for example 39 or 90), so it has an exact 40Hz audio duration. Source
+cuts may use any aligned frame, including 107 and 124; their nearest audio tick differs by
+at most 1/120 second. The first image represents the
 start of the context, not its last frame. The context occupies the generated target's beginning;
 remove that overlap in latent space and jointly decode the assembled sequence. A returned
 five-second MP4 still contains the context and must not be appended wholesale.
+
+`prefix.join(source_latents, generated_latents, generated_frames=124)` verifies the exact
+preserved prefix, removes the overlap and returns the joined latent dictionary. It rounds the
+audio length from the complete sequence clock, trimming at most one excess tail tick and
+rejecting missing audio. This prevents rounding drift across many continuations. Retain the
+joined frame count (`source_frames + generated_frames - context_frames`) with the artifact.
 
 The scope preserves video at conditioning strength 0.999 and audio at 1.0 during each Euler
 step, then restores exact clean AV context. Modulation and row plans belong to one request

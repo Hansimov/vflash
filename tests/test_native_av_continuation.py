@@ -121,3 +121,53 @@ def test_rejects_different_video_audio_clock_boundaries(source_frames, context_f
             context_frames=context_frames,
             clean_timestep_tables=prefix.clean_timestep_tables,
         )
+
+
+@pytest.mark.parametrize("frames", [90, 107, 124, 141])
+def test_join_uses_global_clock_over_twenty_four_continuations(frames):
+    from vflash.native.h3_latent_layout import h3_video_latent_frame_count
+
+    _, old, _ = fixture()
+    source = {
+        "video_latents": torch.randn(1, 24, h3_video_latent_frame_count(frames), 2, 2),
+        "audio_latents": torch.randn(2, 32, (frames * 5 + 1) // 3),
+    }
+    for _ in range(24):
+        prefix = NativeAVPrefix.from_latents(
+            source,
+            source_frames=frames,
+            context_frames=39,
+            clean_timestep_tables=old.clean_timestep_tables,
+        )
+        original_audio = source["audio_latents"].clone()
+        generated = {
+            "video_latents": torch.randn(1, 24, 37, 2, 2),
+            "audio_latents": torch.randn(2, 32, 207),
+        }
+        generated["video_latents"][:, :, :12] = prefix.video
+        generated["audio_latents"][:, :, :65] = prefix.audio
+        source = prefix.join(source, generated, generated_frames=124)
+        frames += 85
+        assert source["audio_latents"].shape[-1] == (frames * 5 + 1) // 3
+        assert abs(source["audio_latents"].shape[-1] / 40 - frames / 24) <= 1 / 120 + 1e-10
+        assert torch.equal(
+            source["audio_latents"][:, :, : original_audio.shape[-1]], original_audio
+        )
+        assert source["video_latents"].shape[2] == h3_video_latent_frame_count(frames)
+
+
+def test_join_rejects_changed_source_prefix_and_missing_audio():
+    source, prefix, _ = fixture()
+    generated = {
+        "video_latents": torch.randn(1, 24, 37, 8, 8),
+        "audio_latents": torch.randn(2, 32, 207),
+    }
+    generated["video_latents"][:, :, :12] = prefix.video
+    generated["audio_latents"][:, :, :65] = prefix.audio
+    generated["video_latents"][0, 0, 0, 0, 0] += 1
+    with pytest.raises(ValueError, match="exactly preserved"):
+        prefix.join(source, generated, generated_frames=124)
+    generated["video_latents"][:, :, :12] = prefix.video
+    generated["audio_latents"] = generated["audio_latents"][:, :, :-2]
+    with pytest.raises(ValueError, match="clock is incomplete"):
+        prefix.join(source, generated, generated_frames=124)
