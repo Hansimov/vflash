@@ -518,8 +518,12 @@ Initial retained nine/ten-second SM89 executions preserved all65 context ticks, 
 video latent and the encoded picture streams in joined ten/eighteen-second deliveries.
 A subsequent asset audit found hybrid refinement tables paired with pure-FL history tables
 in that trial. It is retained as a failed recipe, not a correctly matched audio qualification.
-Matching bundle compilation prevents that source-selection mistake. Six/twenty-step history
-variants and cached history execution currently have CPU ownership tests only.
+Matching bundle compilation prevents that source-selection mistake. Four subsequent SM89
+executions compared matched hybrid and original-FL twelve-step recipes on two retained targets.
+All kept the65-tick history and video bits. Each cached27 BF16 blocks under a20 GiB budget
+with0.25MP spatial audio context. This qualifies the combined execution path, without a
+GPU cache-equivalence or perceptual audio-quality claim. Six/twenty-step history variants
+currently have CPU ownership tests only.
 
 
 FL2VA additionally accepts the desired final image while preserving the same target history.
