@@ -1,0 +1,235 @@
+"""Request-owned native AV target preservation on exact shared temporal boundaries.
+
+The context occupies the beginning of the generated target, rather than separate
+reference rows. Callers remove that overlap in latent space and decode the joined
+sequence together. This experimental primitive does not certify motion quality.
+"""
+
+from contextlib import ExitStack, contextmanager
+from dataclasses import dataclass, replace
+
+
+@dataclass(frozen=True)
+class NativeAVPrefix:
+    video: object
+    audio: object
+    clean_timestep_tables: tuple
+    source_frames: int
+    context_frames: int
+
+    @classmethod
+    def from_latents(cls, latents, *, source_frames, context_frames, clean_timestep_tables):
+        import torch
+
+        from .h3_latent_layout import h3_video_latent_frame_count
+
+        if (
+            type(source_frames) is not int
+            or type(context_frames) is not int
+            or not 0 < context_frames <= source_frames
+            or source_frames % 17 != 5
+            or context_frames % 17 != 5
+            or source_frames % 3
+            or context_frames % 3
+        ):
+            raise ValueError("native AV context needs exact shared 24fps/40Hz boundaries")
+        end = h3_video_latent_frame_count(source_frames)
+        count = h3_video_latent_frame_count(context_frames)
+        video, audio = latents["video_latents"], latents["audio_latents"]
+        if (
+            not isinstance(video, torch.Tensor)
+            or not isinstance(audio, torch.Tensor)
+            or video.ndim != 5
+            or tuple(video.shape[:2]) != (1, 24)
+            or audio.ndim != 3
+            or tuple(audio.shape[:2]) != (2, 32)
+            or video.shape[2] < end
+            or audio.shape[-1] < source_frames * 5 // 3
+            or min(video.shape[-2:]) < 2
+            or any(n % 2 for n in video.shape[-2:])
+            or not video.is_floating_point()
+            or not audio.is_floating_point()
+            or (end - count) % 5
+        ):
+            raise ValueError("native AV source geometry or temporal phase differs")
+        v = (
+            video[:, :, end - count : end]
+            .detach()
+            .to(device="cpu", dtype=torch.float32, copy=True)
+        )
+        stop = source_frames * 5 // 3
+        a = (
+            audio[:, :, stop - context_frames * 5 // 3 : stop]
+            .detach()
+            .to(device="cpu", dtype=torch.float32, copy=True)
+        )
+        if not v.isfinite().all() or not a.isfinite().all():
+            raise ValueError("native AV context contains nonfinite values")
+        tables = tuple(clean_timestep_tables)
+        if len(tables) != 51:
+            raise ValueError(
+                "native AV context requires 50 matched block tables and a final table"
+            )
+        for i, table in enumerate(tables):
+            shape = (1, 1, 2, 5376) if i == 50 else (1, 3, 6, 5376)
+            if (
+                not isinstance(table, torch.Tensor)
+                or tuple(table.shape) != shape
+                or not table.is_floating_point()
+                or not table.isfinite().all()
+            ):
+                raise ValueError("clean timestep modulation table differs")
+        return cls(v, a, tables, source_frames, context_frames)
+
+
+def _pack_video(video):
+    _, channels, frames, height, width = video.shape
+    return (
+        video.reshape(1, channels, frames, height // 2, 2, width // 2, 2)
+        .permute(0, 2, 3, 5, 1, 4, 6)
+        .reshape(1, frames * height * width // 4, channels * 4)
+        .contiguous()
+    )
+
+
+class NativeAVPreservation:
+    """One engine's target prefix, with no class or process-global method mutation."""
+
+    def __init__(self, engine, request):
+        import torch
+
+        from .h3_native_scheduler import H3NativeRowTimestepStep
+
+        if not isinstance(request, NativeAVPrefix):
+            raise ValueError("native AV preservation requires an explicit prefix")
+        state = engine.latent_state
+        spatial = request.video.shape[-2] * request.video.shape[-1] // 4
+        if (
+            state.evaluation_index != 0
+            or engine.schedule.nfe != 4
+            or state.num_condition_audio_rows
+            or state.num_condition_video_rows != spatial
+            or state.audio_latents.shape[1] % 2
+            or engine._denoise_profile_records is not None
+        ):
+            raise ValueError(
+                "native AV preservation requires fresh four-step single-keyframe AV"
+            )
+        self.engine, self.request, self.state = engine, request, state
+        self.offset = state.num_condition_video_rows
+        self.video = _pack_video(request.video).to(device=state.device, dtype=torch.float32)
+        self.audio = (
+            request.audio.permute(0, 2, 1)
+            .contiguous()
+            .to(device=state.device, dtype=torch.float32)
+        )
+        self.ticks = self.audio.shape[1]
+        self.rows = self.video.shape[1]
+        if (
+            self.offset + self.rows >= state.video_latents.shape[1]
+            or self.ticks >= state.audio_latents.shape[1] // 2
+        ):
+            raise ValueError("native AV prefix must leave a nonempty generated suffix")
+        noise = state.video_latents[:, self.offset : self.offset + self.rows].clone()
+        self.kept = 0.999 * self.video + 0.001 * noise
+        locked_video = engine.video_indices[self.offset : self.offset + self.rows]
+        locked_audio = engine.audio_indices.reshape(2, -1)[:, : self.ticks].reshape(-1)
+        rows = []
+        for row in engine.row_timestep_plan:
+            if float(row.timesteps[-1]) >= 1:
+                raise ValueError("base trajectory already contains clean audio modulation")
+            times = torch.cat((row.timesteps, row.timesteps.new_tensor([1.0])))
+            idx = row.timestep_indices.clone()
+            pin = torch.searchsorted(times, times.new_tensor([0.999])).item()
+            if times[pin] != times.new_tensor(0.999):
+                raise ValueError("base trajectory lacks matching clean video modulation")
+            idx[locked_video] = pin
+            idx[locked_audio] = len(times) - 1
+            rows.append(H3NativeRowTimestepStep(times, idx))
+        self.plan = tuple(rows)
+        self.evaluations = 0
+        self.active = False
+
+    def _restore(self):
+        value = self.video if self.state.complete else self.kept
+        self.state.video_latents[:, self.offset : self.offset + self.rows].copy_(value)
+        self.state.audio_latents.reshape(2, -1, 32)[:, : self.ticks].copy_(self.audio)
+
+    @contextmanager
+    def preserve_targets(self):
+        if self.active or self.evaluations:
+            raise ValueError("native AV preservation scopes cannot be reused")
+        original = self.engine.row_timestep_plan
+        self.active = True
+        try:
+            self.engine.row_timestep_plan = self.plan
+            self._restore()
+            yield self
+        finally:
+            self.engine.row_timestep_plan = original
+            self.active = False
+
+    def advance(self):
+        if not self.active:
+            raise ValueError("native AV preservation scope is not active")
+        self.engine.step()
+        self._restore()
+        self.evaluations += 1
+
+    def record(self):
+        import torch
+
+        if not self.state.complete or self.evaluations != self.engine.schedule.nfe:
+            raise ValueError("native AV context trajectory is incomplete")
+        v = self.state.video_latents[:, self.offset : self.offset + self.rows]
+        a = self.state.audio_latents.reshape(2, -1, 32)[:, : self.ticks]
+        if not torch.equal(v, self.video) or not torch.equal(a, self.audio):
+            raise ValueError("native AV context was not preserved exactly")
+        return {
+            "context_frames": self.request.context_frames,
+            "source_frames": self.request.source_frames,
+            "audio_ticks": self.ticks,
+            "preserved_video_rows": self.rows,
+            "video_prefix_exact": True,
+            "audio_prefix_exact": True,
+            "evaluations": self.evaluations,
+        }
+
+    @contextmanager
+    def execution(self):
+        """Own expanded clean-audio modulation, preserving all original turbo weights."""
+        import torch
+
+        from .h3_refinement import _ring_modulation
+
+        engine = self.engine
+        ring = engine.denoiser
+        if not hasattr(ring, "host_blocks") or len(ring.host_blocks) != 50:
+            raise ValueError("native AV context currently requires the complete block ring")
+        original = engine.final_layer.weights
+
+        def expand(table, extra, modalities):
+            result = torch.zeros(
+                (4, 4 * modalities, *table.shape[2:]), device=table.device, dtype=table.dtype
+            )
+            for i, row in enumerate(engine.row_timestep_plan):
+                size = len(row.timesteps) * modalities
+                result[i, :size] = table[i, :size]
+                result[i, size : size + modalities] = extra[0].to(table.device, table.dtype)
+            return result.contiguous()
+
+        tables = [
+            expand(w.adaln_table, extra, 3)
+            for w, extra in zip(
+                ring.host_blocks, self.request.clean_timestep_tables[:-1], strict=True
+            )
+        ]
+        final = expand(original.adaln_table, self.request.clean_timestep_tables[-1], 1)
+        with ExitStack() as scope:
+            scope.enter_context(_ring_modulation(engine, [*tables, final], mode="face"))
+            engine.final_layer.weights = replace(original, adaln_table=final)
+            try:
+                with self.preserve_targets():
+                    yield self
+            finally:
+                engine.final_layer.weights = original

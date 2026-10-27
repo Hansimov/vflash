@@ -334,6 +334,7 @@ class H3Pipeline:
         conditioning_reuse_scope: ConditioningReuseScope | None = None,
         audio_refinement: Any | None = None,
         latent_output: Path | None = None,
+        native_av_prefix: Any | None = None,
     ) -> VideoResult:
         """Return a complete MP4; failed or concurrent requests never publish a partial file."""
         return self._generate(
@@ -343,6 +344,7 @@ class H3Pipeline:
             profile_denoise=profile_denoise,
             conditioning_reuse_scope=conditioning_reuse_scope,
             latent_output=latent_output,
+            **({"native_av_prefix": native_av_prefix} if native_av_prefix is not None else {}),
             **({"audio_refinement": audio_refinement} if audio_refinement is not None else {}),
         )
 
@@ -384,6 +386,7 @@ class H3Pipeline:
         conditioning_reuse_scope: ConditioningReuseScope | None = None,
         audio_refinement: Any | None = None,
         latent_output: Path | None = None,
+        native_av_prefix: Any | None = None,
     ) -> VideoResult:
         """Publish one complete artifact; failures never publish partial output."""
         started = time.monotonic()
@@ -406,6 +409,23 @@ class H3Pipeline:
             attention_backend=self.attention_backend,
             weight_residency=self.weight_residency,
         )
+        if native_av_prefix is not None:
+            from vflash.native.h3_av_continuation import NativeAVPrefix
+
+            if (
+                not isinstance(native_av_prefix, NativeAVPrefix)
+                or request.mode != "i2va"
+                or not request.generate_audio
+                or rgb
+                or audio_refinement is not None
+                or profile_denoise
+                or self._plan.parallel_strategy != "single"
+                or (self.weight_residency, self.attention_backend)
+                != ("block-ring", "veda-sm89")
+                or tuple(native_av_prefix.video.shape[-2:])
+                != (request.height // 16, request.width // 16)
+            ):
+                raise ContractError("native AV prefix requires original-audio Veda ring I2VA")
         if audio_refinement is not None:
             from vflash.media.audio_delivery import SILENT_AUDIO_PROFILE
             from vflash.native.h3_audio_refinement import AudioRefinementRequest
@@ -483,6 +503,11 @@ class H3Pipeline:
                     required_frames=required_frames,
                     latent_output=latent_output,
                     **(
+                        {"native_av_prefix": native_av_prefix}
+                        if native_av_prefix is not None
+                        else {}
+                    ),
+                    **(
                         {"audio_refinement": audio_refinement}
                         if audio_refinement is not None
                         else {}
@@ -541,6 +566,7 @@ class H3Pipeline:
         required_frames: tuple[int, ...] | None = None,
         audio_refinement: Any | None = None,
         latent_output: Path | None = None,
+        native_av_prefix: Any | None = None,
     ) -> VideoResult:
         def report(stage: str, completed: int, total: int) -> None:
             if progress is not None:
@@ -641,6 +667,8 @@ class H3Pipeline:
                 native_options["generate_audio"] = False
             if audio_refinement is not None:
                 native_options["audio_refinement"] = audio_refinement
+            if native_av_prefix is not None:
+                native_options["native_av_prefix"] = native_av_prefix
             predecoded_video = None
             overlap_enabled = (
                 getattr(self, "audio_decode_overlap", False)

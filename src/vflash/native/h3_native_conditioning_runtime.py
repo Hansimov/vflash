@@ -710,6 +710,7 @@ class H3NativeConditioningRuntime:
         video_repaint: Any | None = None,
         audio_refinement: Any | None = None,
         encoded_audio_source: Any | None = None,
+        native_av_prefix: Any | None = None,
         video_ready_callback: Callable[[Any], None] | None = None,
     ) -> H3NativeConditioningRuntimeResult:
         """Run one live request and export target-only VAE-ready latents."""
@@ -769,6 +770,26 @@ class H3NativeConditioningRuntime:
                     "explicit repaint requires unprofiled single-device video-only execution"
                 )
         bundle, tensors = self._load_request_tensors(conditioning)
+        if native_av_prefix is not None:
+            from vflash.native.h3_av_continuation import NativeAVPrefix
+
+            if (
+                not isinstance(native_av_prefix, NativeAVPrefix)
+                or not generate_audio
+                or audio_refinement is not None
+                or encoded_audio_source is not None
+                or video_repaint is not None
+                or profile_denoise
+                or len(self.devices) != 1
+                or self.weight_residency != "block-ring"
+                or self.attention_backend != "veda-sm89"
+                or bundle.profile.task != "i2va"
+                or tuple(native_av_prefix.video.shape[-2:])
+                != (bundle.profile.height // 16, bundle.profile.width // 16)
+            ):
+                raise H3NativeConditioningRuntimeError(
+                    "native AV prefix requires original-audio single-device Veda ring I2VA"
+                )
         if video_repaint is not None and (
             self.overlay.schedule.nfe != 4 or bundle.profile.task != "i2va"
         ):
@@ -864,6 +885,11 @@ class H3NativeConditioningRuntime:
             rotary_cos=tensors["rotary_cos"].to(device),
             rotary_sin=tensors["rotary_sin"].to(device),
         )
+        preservation = None
+        if native_av_prefix is not None:
+            from vflash.native.h3_av_continuation import NativeAVPreservation
+
+            preservation = NativeAVPreservation(engine, native_av_prefix)
         audio_noise = state.audio_latents.clone() if audio_refinement is not None else None
         del tensors
         repaint = None
@@ -906,12 +932,19 @@ class H3NativeConditioningRuntime:
                     engine.abort_denoise_profile()
                     raise
                 ring_profile_started = True
+        from contextlib import nullcontext
+
         try:
-            with torch.inference_mode():
+            with (
+                torch.inference_mode(),
+                preservation.execution() if preservation is not None else nullcontext(),
+            ):
                 while not (repaint.complete if repaint is not None else engine.complete):
                     evaluation = engine.evaluation_index
                     step_started = time.perf_counter() if profile_denoise else 0.0
-                    if repaint is None:
+                    if preservation is not None:
+                        preservation.advance()
+                    elif repaint is None:
                         engine.step()
                     else:
                         repaint.advance(step=lambda owner, **kwargs: owner.step(**kwargs))
@@ -975,6 +1008,11 @@ class H3NativeConditioningRuntime:
                     self.denoiser.abort_denoise_profile()
             raise
         denoise_seconds = time.monotonic() - denoise_started
+        if preservation is not None:
+            execution_schedule = {
+                **execution_schedule,
+                "native_av_prefix": preservation.record(),
+            }
         if video_ready_callback is not None:
             completed_video = unpatchify_h3_video_rows(
                 engine.latent_state.video_latents.detach().to("cpu")[

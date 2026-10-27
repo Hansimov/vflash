@@ -236,6 +236,7 @@ class NativeEngineSession:
         generate_audio: bool = True,
         audio_refinement: Any | None = None,
         encoded_audio_source: Any | None = None,
+        native_av_prefix: Any | None = None,
         video_ready_callback: Callable[[Any], None] | None = None,
     ) -> dict[str, Any]:
         if self.closed:
@@ -252,6 +253,8 @@ class NativeEngineSession:
             options["generate_audio"] = False
         if audio_refinement is not None:
             options["audio_refinement"] = audio_refinement
+        if native_av_prefix is not None:
+            options["native_av_prefix"] = native_av_prefix
         if encoded_audio_source is not None:
             if audio_refinement is None:
                 raise ContractError("encoded audio repair requires explicit audio refinement")

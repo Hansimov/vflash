@@ -435,3 +435,26 @@ The destination must be distinct from the MP4 and must not exist. The complete n
 is published atomically before media decoding; it remains available if decoding or encoding later
 fails. Successful `VideoResult` objects report the retained path. Omit the option for the existing
 temporary-file lifetime. Retention does not itself retry decoding or qualify a continuation method.
+
+### Experimental native AV target prefixes
+
+`H3Pipeline.generate(..., native_av_prefix=prefix, latent_output=path)` accepts an advanced
+`vflash.native.h3_av_continuation.NativeAVPrefix`. Construct it with `from_latents`, supplying
+native `video_latents` / `audio_latents`, the selected `source_frames`, `context_frames`, and
+51 clean-timestep modulation tensors compiled from the same model weights (50 block tensors
+at timestep 1.0 and the final-layer tensor). These are explicit caller-owned assets; the engine
+does not download or infer a different checkpoint. Python only; CLI/HTTP admission is unchanged.
+
+The current execution scope is original-audio, four-step I2VA on the single SM89 Veda block
+ring, with one same-canvas keyframe. Audio refinement, repaint and profiling are rejected in
+this scope. Select 24fps video boundaries that are `17n+5` frames and divisible by 3, such as
+39 or 90, so the video VAE phase and 40Hz stereo audio agree. The first image represents the
+start of the context, not its last frame. The context occupies the generated target's beginning;
+remove that overlap in latent space and jointly decode the assembled sequence. A returned
+five-second MP4 still contains the context and must not be appended wholesale.
+
+The scope preserves video at conditioning strength 0.999 and audio at 1.0 during each Euler
+step, then restores exact clean AV context. Modulation and row plans belong to one request
+and are restored on exit. A complete 960×544, five-second SM89 execution matched the tested
+scoped implementation's native video and audio exactly. This establishes integration parity;
+physical motion and subjective soundtrack quality remain output-specific evaluations.
