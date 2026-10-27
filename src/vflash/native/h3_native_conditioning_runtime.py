@@ -798,12 +798,12 @@ class H3NativeConditioningRuntime:
                 or len(self.devices) != 1
                 or self.weight_residency != "block-ring"
                 or self.attention_backend != "veda-sm89"
-                or bundle.profile.task != "i2va"
+                or bundle.profile.task not in ("i2va", "fl2va")
                 or tuple(native_av_prefix.video.shape[-2:])
                 != (bundle.profile.height // 16, bundle.profile.width // 16)
             ):
                 raise H3NativeConditioningRuntimeError(
-                    "native AV prefix needs matching audio history and Veda ring I2VA"
+                    "native AV prefix needs matching audio history and Veda ring keyframes"
                 )
         if video_repaint is not None and (
             self.overlay.schedule.nfe != 4 or bundle.profile.task != "i2va"

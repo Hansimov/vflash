@@ -208,7 +208,7 @@ class NativeAVPreservation:
             if audio_refinement
             else state.evaluation_index == 0
             and engine.schedule.nfe == 4
-            and state.num_condition_video_rows == spatial
+            and state.num_condition_video_rows in (spatial, 2 * spatial)
         )
         if (
             not trajectory_matches

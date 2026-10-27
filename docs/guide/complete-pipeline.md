@@ -445,8 +445,8 @@ native `video_latents` / `audio_latents`, the selected `source_frames`, `context
 at timestep 1.0 and the final-layer tensor). These are explicit caller-owned assets; the engine
 does not download or infer a different checkpoint. Python only; CLI/HTTP admission is unchanged.
 
-The current base execution scope is four-step I2VA on the single SM89 Veda block ring,
-with one same-canvas keyframe. Repaint and profiling are rejected; optional native audio
+The current base execution scope is four-step I2VA or FL2VA on the single SM89 Veda block ring,
+with one or two same-canvas keyframes. Repaint and profiling are rejected; optional native audio
 refinement must explicitly preserve matching history as described below. Both source cuts and overlap lengths must be `17n+5` frames. The overlap must
 also be divisible by 3 (for example 39 or 90), so it has an exact 40Hz audio duration. Source
 cuts may use any aligned frame, including 107 and 124; their nearest audio tick differs by
@@ -514,3 +514,12 @@ all65 context ticks and every video latent. Joined ten/eighteen-second deliverie
 their original encoded picture streams. These are execution and media-identity checks;
 native speech, timbre and seam quality remain listening evaluations. Six/twenty-step
 history variants and cached history execution currently have CPU ownership tests only.
+
+
+FL2VA additionally accepts the desired final image while preserving the same target history.
+Both conditioning keyframes precede the target rows; preservation offsets by their complete
+row count and does not overwrite either condition. One complete fifteen-second SM89 FL2VA
+target preserved all39 video frames and65 audio ticks, joining with its source into396 frames.
+The endpoint guided the eventual pose and framing in that trial; repeated movement and a
+long mid-shot hold remained. End-state constraints do not certify natural motion or pacing.
+History-aware audio refinement currently retains its I2VA-only admission.

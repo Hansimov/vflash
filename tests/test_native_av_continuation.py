@@ -12,7 +12,7 @@ from vflash.native.h3_native_scheduler import (
 torch = pytest.importorskip("torch")
 
 
-def fixture(context=39):
+def fixture(context=39, keyframes=1):
     torch.manual_seed(771)
     source = {
         "video_latents": torch.randn(1, 24, 42, 8, 8),
@@ -24,12 +24,12 @@ def fixture(context=39):
         source, source_frames=141, context_frames=context, clean_timestep_tables=tables
     )
     schedule = H3NativeSchedule.shifted_linear(4)
-    video, audio = torch.randn(1, 16 + 37 * 16, 96), torch.randn(1, 414, 32)
+    video, audio = torch.randn(1, 16 * keyframes + 37 * 16, 96), torch.randn(1, 414, 32)
     state = H3NativeLatentState(
         schedule,
         video_latents=video,
         audio_latents=audio,
-        num_condition_video_rows=16,
+        num_condition_video_rows=16 * keyframes,
         num_condition_audio_rows=0,
     )
     vi, ai, ti = (
@@ -42,7 +42,7 @@ def fixture(context=39):
         video_indices=vi,
         audio_indices=ai,
         text_indices=ti,
-        num_condition_video_rows=16,
+        num_condition_video_rows=16 * keyframes,
         num_condition_audio_rows=0,
         device="cpu",
     )
@@ -228,3 +228,17 @@ def test_explicit_delivery_can_discard_an_unavailable_model_padding_tick():
     generated["audio_latents"] = generated["audio_latents"][:, :, :-2]
     with pytest.raises(ValueError, match="clock is incomplete"):
         prefix.join_audio(source, generated, generated_frames=158, delivery_frames=240)
+
+
+def test_two_condition_keyframes_remain_untouched_by_target_history():
+    _, prefix, engine = fixture(keyframes=2)
+    state = engine.latent_state
+    conditions = state.video_latents[:, :32].clone()
+    scope = NativeAVPreservation(engine, prefix)
+    assert scope.offset == 32
+    with scope.preserve_targets():
+        for _ in range(4):
+            scope.advance()
+            assert torch.equal(state.video_latents[:, :32], conditions)
+    assert scope.record()["video_prefix_exact"]
+    assert scope.record()["audio_prefix_exact"]

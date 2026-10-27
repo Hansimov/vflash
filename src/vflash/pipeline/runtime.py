@@ -415,7 +415,7 @@ class H3Pipeline:
 
             if (
                 not isinstance(native_av_prefix, NativeAVPrefix)
-                or request.mode != "i2va"
+                or request.mode not in ("i2va", "fl2va")
                 or not request.generate_audio
                 or rgb
                 or (
@@ -433,7 +433,7 @@ class H3Pipeline:
                 != (request.height // 16, request.width // 16)
             ):
                 raise ContractError(
-                    "native AV prefix requires matched native audio history and Veda ring I2VA"
+                    "native AV prefix requires matched audio history and Veda ring keyframes"
                 )
         if audio_refinement is not None:
             from vflash.media.audio_delivery import SILENT_AUDIO_PROFILE

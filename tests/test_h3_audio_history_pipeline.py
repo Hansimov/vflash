@@ -80,3 +80,33 @@ def test_complete_pipeline_binds_history_before_loading_and_runs_serially(
         )
         assert result.output_path.is_file()
         assert "audio_video_overlap" not in result.stages
+
+
+def test_complete_pipeline_forwards_two_keyframe_history(video_request, tmp_path):
+    pipeline, _ = _pipeline()
+    pipeline.profile = model_profile("i2va-turbo4-v01-544-exact-sm120")
+    pipeline.prepared.profile_id = pipeline.profile.definition.id
+    pipeline.hybrid_model = object()
+    pipeline._check_hybrid_unchanged = lambda: None
+    pipeline.weight_residency = "block-ring"
+    pipeline.attention_backend = "veda-sm89"
+    pipeline.veda_dense_edge_layers = 3
+    pipeline._core.runtime = N(metadata=lambda: {"model_variant": {"hybrid": True}})
+    request = VideoRequest(
+        "One continuous movement.",
+        first_frame=video_request.reference,
+        last_frame=video_request.reference,
+    )
+    _, prefix, _ = fixture()
+    prefix = replace(
+        prefix, video=torch.zeros(1, 24, 12, request.height // 16, request.width // 16)
+    )
+
+    def generate(bundle, output, *, native_av_prefix, progress_callback):
+        assert native_av_prefix is prefix
+        output.write_bytes(b"owned latent test placeholder")
+        return {"generation": {"nfe": 4}}
+
+    pipeline._core.generate = generate
+    result = pipeline.generate(request, tmp_path / "endpoints.mp4", native_av_prefix=prefix)
+    assert result.output_path.is_file()
