@@ -4,6 +4,8 @@ Native **MiniMax H3 inference** with explicit GPU profiles. Vflash uses PyTorch 
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
+**0.22.0: segmented motion, texture and native sound.** The new explicit SM120 reference runtime defaults to Veda with four Larry plus six original visual evaluations, followed by twelve Larry native-audio evaluations. See [scope and asset contract](https://hansimov.github.io/vflash/reference/segmented-av).
+
 **0.21.0: combine appearance images and motion video.** The hybrid pipeline accepts ordered image references alongside one video. Explicit video-only spatial pooling preserves the appearance latents and lowers motion-context cost. Initial complete clips ran on RTX 4090 48 GiB and RTX PRO 6000 Blackwell Server; see [hardware timings and measured scope](https://hansimov.github.io/vflash/reference/releases).
 
 **0.17.2: choose the Veda layer partition independently of precision.** Set

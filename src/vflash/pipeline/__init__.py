@@ -24,6 +24,9 @@ __all__ = [
     "PipelineAssets",
     "PipelineProgress",
     "PreparedPipelineAssets",
+    "ReferenceAVRuntime",
+    "SegmentedAVRecipe",
+    "SegmentedAVSession",
     "VideoRequest",
     "VideoResult",
     "load_prepared_pipeline_assets",
@@ -37,6 +40,9 @@ def __getattr__(name: str) -> Any:
     # establishing a dependency cycle through their residency primitives.
     module = {
         "H3Pipeline": "runtime",
+        "ReferenceAVRuntime": "reference_av_runtime",
+        "SegmentedAVRecipe": "reference_av",
+        "SegmentedAVSession": "reference_av",
         "PreparedPipelineAssets": "assets",
         "load_prepared_pipeline_assets": "assets",
         "prepare_pipeline_assets": "assets",

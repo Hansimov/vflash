@@ -4,6 +4,8 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
+**0.22.0：分段画面与原生声音。** 新增SM120参考运行时，默认Veda、前4步Larry＋后6步原始画面，再以12步Larry生成原生声音。见[执行与资产范围](https://hansimov.github.io/vflash/zh/reference/segmented-av)。
+
 **0.21.0：组合外观图与动作视频。** 混合流水线接受有序图像与一份参考视频，显式视频空间池化保留外观图latent、降低动作条件成本。首批完整成片已在RTX 4090 48 GiB与RTX PRO 6000 Blackwell Server执行；硬件耗时及实测范围见[版本更新](https://hansimov.github.io/vflash/zh/reference/releases)。
 
 **0.17.0：Veda层数与精度分别选择。** `veda_dense_edge_layers=4`对应42稀疏/8密集，

@@ -1,5 +1,25 @@
 # Release notes
 
+## 0.22.0
+
+`ReferenceAVRuntime` adds an owned original-FL/Larry pipeline for complete 96 GiB SM120 allocations.
+The default is four Larry plus six original visual evaluations with Veda 44/6, followed by twelve Larry
+native-audio evaluations that preserve the full selected video. It combines prompt-encoding reuse,
+spatial video KV, QKV fusion and bounded overlap with official media decoding.
+
+Scope: one exact-canvas first frame, five seconds, at most 2 × 1024² pixels and 2048 pixels on the longest edge.
+Loading requires explicit pinned upstream source, original-base FP8 matrices, time tables and Larry assets.
+Full Sage is never an automatic fallback. Existing hybrid profiles and accepted requests retain their contracts.
+See the [asset, execution and quality scope](segmented-av).
+
+The application adapter completed two five-second deliveries on one RTX PRO 6000 Blackwell Server
+at a 400 W power limit (95.59 GiB): 1024×1024 dialogue in 101.770 s and 1920×1080 action in 228.338 s.
+These complete calls include conditioning, both sampling passes, official decode, encoding and exact-canvas
+finalization. Independent process initializations took 17.09/16.17 s; acquisition, asset transfer and upload
+are excluded. Both outputs contain 120 frames and 32 kHz stereo sound. Attention coverage and unchanged
+picture latents during audio were verified. These delivery checks make no new full-Sage comparison or
+matched four-step speed claim.
+
 ## 0.21.0
 
 The single-SM89/SM120 Veda hybrid accepts one video with one to three ordered appearance images.
