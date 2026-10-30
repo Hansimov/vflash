@@ -14,7 +14,7 @@ const text = computed(() => zh.value ? {
   eyebrow: '当前版本',
   title: 'MiniMax H3 视频，原生运行。',
   accent: '从文字或图片到带声音的 4MP 成片。',
-  intro: '原生 PyTorch/Triton 去噪运行时，一次请求生成 5–15 秒带音轨的 MP4：文字、首帧、尾帧、首尾帧或最多九张参考图，图像条件下最高 2720×1536。可选六步音频修复，经 Python、命令行或 HTTP 服务接入。',
+  intro: '原生 PyTorch/Triton 去噪运行时，一次请求生成 5–15 秒带音轨的 MP4：文字、首帧、尾帧、首尾帧或最多九张参考图，图像条件下最高 2720×1536。Python／CLI交付MP4，原生HTTP交付潜变量。另有96GiB SM120专用的前4后6分段画面与Larry十二步原生声音API。',
   start: '开始使用',
   support: '选择硬件',
   choose: '按显卡选择',
@@ -24,7 +24,7 @@ const text = computed(() => zh.value ? {
   inspect: '检查显卡匹配，不加载权重',
   copy: '复制', copied: '已复制', copyFailed: '请手动选择命令复制',
   gpu: [
-    { execution: '单卡 · 常驻或块环', profiles: '全部配置；混合 v0.1 最长 15 秒、原生 4MP', note: '参考平台。BF16 混合 Veda 44/6 实测 2720×1536 五秒约 660 秒；928×512 五秒含六步音频修复约 112 秒。' },
+    { execution: '单卡 · 常驻或块环', profiles: 'SM89配置；混合v0.1最长15秒、原生4MP', note: '参考平台。BF16 混合 Veda 44/6 实测 2720×1536 五秒约 660 秒；928×512 五秒含六步音频修复约 112 秒。' },
     { execution: '单卡 · FP8 常驻主干', profiles: '常驻 I2VA / L2VA / FL2VA / Ref2VA', note: '0.17 支持四种图像模式，最多九张参考图。FP8 常驻、Sage 44/6 实测 2720×1536 五秒 222.9 秒；各模式的画布与时长见硬件指南。' },
     { execution: '单卡 · 常驻或块环', profiles: 'SXM 混合 I2VA', note: '常驻主干需至少 75 GiB；1536×864 十五秒常驻实测 227 秒。更大画布使用块环。' },
     { execution: '双卡协作 · 块流式', profiles: 'Ref4 / T2VA / Base16', note: '两张 3080 共同处理一个请求（sequence-head）。每个 worker 预留至少 64 GiB 可用系统内存。' },
@@ -36,7 +36,7 @@ const text = computed(() => zh.value ? {
   guides: [
     { number: '01', title: '安装并检查环境', text: '安装轻量 CLI，用 doctor 与 plan 确认显卡和配置。无需下载权重。', path: '/guide/getting-started' },
     { number: '02', title: '生成第一个视频', text: '准备官方模型资源，用命令行、Python 或容器从文字和图片生成带音轨的 MP4。', path: '/guide/complete-pipeline' },
-    { number: '03', title: '调优速度与显存', text: '选择常驻或块环、Veda 注意力与音频修复，并分开测量冷启动与重复请求。', path: '/reference/performance' },
+    { number: '03', title: '分段画面与原生声音', text: '完整96GiB SM120上的显式Python运行时：Veda、前4步Larry后6步原始画面与12步Larry声音。', path: '/reference/segmented-av' },
   ],
   source: '理解实现，按需扩展。',
   sourceText: '原生去噪器、LoRA 合并、显存调度、双卡布局与媒体交付均由 Vflash 实现；编码器与 VAE 使用固定版本的官方代码。',
@@ -45,7 +45,7 @@ const text = computed(() => zh.value ? {
   eyebrow: 'Current release',
   title: 'MiniMax H3 video, natively.',
   accent: 'From text or images to 4 MP with sound.',
-  intro: 'A native PyTorch/Triton denoising runtime that turns one request into a 5–15 second MP4 with audio: text, first frame, last frame, both, or up to nine reference images, up to 2720×1536 when image-conditioned. Optional six-step audio refinement. Use it from Python, the CLI or an HTTP service.',
+  intro: 'A native PyTorch/Triton denoising runtime that turns one request into a 5–15 second MP4 with audio: text, first frame, last frame, both, or up to nine reference images, up to 2720×1536 when image-conditioned. Python and the CLI deliver MP4; native HTTP returns latents. A separate 96 GiB SM120 API combines 4+6 visual sampling with twelve-step Larry native audio.',
   start: 'Get started',
   support: 'Choose hardware',
   choose: 'Choose your GPU',
@@ -55,7 +55,7 @@ const text = computed(() => zh.value ? {
   inspect: 'Check the GPU match without loading weights',
   copy: 'Copy', copied: 'Copied', copyFailed: 'Select the command to copy it',
   gpu: [
-    { execution: 'One GPU · resident or block ring', profiles: 'Every profile; hybrid v0.1 up to 15 s and native 4 MP', note: 'The reference platform. BF16 hybrid Veda 44/6 measured about 660 s for 2720×1536 at five seconds and about 112 s for 928×512 with six-step audio refinement.' },
+    { execution: 'One GPU · resident or block ring', profiles: 'SM89 profiles; hybrid v0.1 up to 15 s and native 4 MP', note: 'The reference platform. BF16 hybrid Veda 44/6 measured about 660 s for 2720×1536 at five seconds and about 112 s for 928×512 with six-step audio refinement.' },
     { execution: 'One GPU · FP8 resident trunk', profiles: 'Resident I2VA / L2VA / FL2VA / Ref2VA', note: '0.17 supports four image modes and up to nine references. Resident FP8 with Sage 44/6 measured 222.9 s at 2720×1536 for five seconds; see hardware guidance for each mode’s canvas and duration.' },
     { execution: 'One GPU · resident or block ring', profiles: 'SXM hybrid I2VA', note: 'A resident trunk needs at least 75 GiB; 1536×864 for fifteen seconds measured 227 s resident. Larger canvases use the block ring.' },
     { execution: 'Two GPUs · streamed', profiles: 'Ref4 / T2VA / Base16', note: 'Two 3080s cooperate on one request with sequence-head. Allow at least 64 GiB of available host RAM per worker.' },
@@ -67,7 +67,7 @@ const text = computed(() => zh.value ? {
   guides: [
     { number: '01', title: 'Install and check', text: 'Install the lightweight CLI and confirm your GPU and profile with doctor and plan. No weights needed.', path: '/guide/getting-started' },
     { number: '02', title: 'Generate your first video', text: 'Prepare the official model assets and create an MP4 with sound from text and images via CLI, Python or Docker.', path: '/guide/complete-pipeline' },
-    { number: '03', title: 'Tune speed and memory', text: 'Pick residency, Veda attention and audio refinement, and measure cold start separately from repeated requests.', path: '/reference/performance' },
+    { number: '03', title: 'Segmented video and native audio', text: 'An explicit Python runtime on complete 96 GiB SM120: Veda, four Larry plus six original visual evaluations and twelve Larry audio evaluations.', path: '/reference/segmented-av' },
   ],
   source: 'Understand it. Build on it.',
   sourceText: 'The native denoiser, LoRA merging, memory scheduling, two-GPU layouts and media delivery are Vflash code; encoders and VAEs use pinned official implementations.',

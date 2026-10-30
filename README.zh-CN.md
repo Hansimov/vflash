@@ -9,7 +9,7 @@
 **0.21.0：组合外观图与动作视频。** 混合流水线接受有序图像与一份参考视频，显式视频空间池化保留外观图latent、降低动作条件成本。首批完整成片已在RTX 4090 48 GiB与RTX PRO 6000 Blackwell Server执行；硬件耗时及实测范围见[版本更新](https://hansimov.github.io/vflash/zh/reference/releases)。
 
 **0.17.0：Veda层数与精度分别选择。** `veda_dense_edge_layers=4`对应42稀疏/8密集，
-可选音频上下文阶段保持该分工；SM120沿用所选Sage FP8或FROST精度策略。默认保持40/10，
+可选音频上下文阶段保持该分工；SM120沿用所选Sage FP8或FROST精度策略。`H3Pipeline`的Veda默认保持40/10（显式分段运行时为44/6），
 同输入执行结果见[版本更新](https://hansimov.github.io/vflash/zh/reference/releases)。
 
 **0.16.0：SM120注意力更快。** 在RTX PRO 6000上，`veda_dense_backend="sageattention2"`现在让密集层与Veda稀疏层
