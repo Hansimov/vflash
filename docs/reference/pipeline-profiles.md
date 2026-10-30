@@ -1,5 +1,9 @@
 # Complete model profiles
 
+For the original-FL / Larry 4+6 picture and twelve-step native-audio runtime on a complete 96 GiB SM120 GPU,
+see [segmented AV](./segmented-av). It is an explicit Python API with its own assets;
+`H3Pipeline`, catalog profiles, CLI and native HTTP below retain their separate contracts and defaults.
+
 A prepared pipeline uses one fixed model, adapter and scheduler. The current source tree supports these complete pipelines:
 
 | Profile | Hardware | Input | Transformer | Adapter | Video/audio shifts |

@@ -1,5 +1,8 @@
 # 开始使用
 
+完整96 GiB SM120上的原始FL／Larry前4后6画面与十二步原生声音运行时，见[分段音画](../reference/segmented-av)。
+它是具有独立资产合同的显式Python API；下述 `H3Pipeline`、profile目录、CLI和原生HTTP保留各自合同与默认。
+
 Vflash 把一段提示词和可选图片生成为带音轨的完整 MP4。大多数用户使用**完整流水线**
 （`vflash generate`、`H3Pipeline` 或 Docker 流水线镜像）。已自行构建条件输入的应用可以使用更底层的
 **原生去噪器**，它返回 latent 而不是视频（[见下文](#native-latents)）。
@@ -13,7 +16,7 @@ Vflash 不会隐式下载或编译任何内容：你选择与显卡匹配的配�
 基础安装是不含 PyTorch 的轻量 CLI；按所用接口安装对应 extra。
 
 ```bash
-git clone --branch v0.17.2 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.22.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv && source .venv/bin/activate
 python -m pip install -e '.[pipeline]'     # 完整 MP4 流水线（已包含 GPU 依赖）
@@ -22,11 +25,11 @@ python -m pip install -e '.[pipeline]'     # 完整 MP4 流水线（已包含 GP
 只用原生去噪器时安装 `.[gpu]`，原生 HTTP 服务安装 `.[server]`。偏好容器时，[Docker 镜像](./docker)
 固定了相同环境（PyTorch 2.11 / CUDA 13.0）。
 
-也可直接安装[GitHub v0.17.2 发行包](https://github.com/Hansimov/vflash/releases/tag/v0.17.2)；
+也可直接安装[GitHub v0.22.0 发行包](https://github.com/Hansimov/vflash/releases/tag/v0.22.0)；
 wheel 与源码包对应同一 tag。完整流水线安装示例：
 
 ```bash
-python -m pip install "vflash[pipeline] @ https://github.com/Hansimov/vflash/releases/download/v0.17.2/vflash-0.17.2-py3-none-any.whl"
+python -m pip install "vflash[pipeline] @ https://github.com/Hansimov/vflash/releases/download/v0.22.0/vflash-0.22.0-py3-none-any.whl"
 ```
 
 ## 2. 检查显卡 {#check-your-gpu}

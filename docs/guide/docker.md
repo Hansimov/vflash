@@ -1,5 +1,9 @@
 # Docker and API
 
+The published image version is independent of the Python package version. The 0.18.0 images below
+do not include the 0.22.0 `ReferenceAVRuntime`. Use the pinned 0.22.0 source/wheel and its explicit
+Python API for segmented AV; no segmented HTTP route or container tag is implied.
+
 Generate a complete video with the [pipeline image](#pipeline), or run the native denoiser as a local HTTP service. The service accepts a compiled conditioning bundle and returns video and audio latents (tensors ready for decoding). It loads one profile and reuses it across serial requests.
 
 ::: tip Published images

@@ -1,5 +1,9 @@
 # Profiles and hardware
 
+For the original-FL / Larry 4+6 picture and twelve-step native-audio runtime on a complete 96 GiB SM120 GPU,
+see [segmented AV](../reference/segmented-av). It is an explicit Python API with its own assets;
+`H3Pipeline`, catalog profiles, CLI and native HTTP below retain their separate contracts and defaults.
+
 A profile fixes the model, LoRA revision, step count and arithmetic; its default memory strategy follows the
 selected hardware. Choose one that matches both your GPUs and your compiled assets. Vflash never substitutes
 devices or attention backends automatically, and a catalog entry or CUDA probe is not proof that a workload

@@ -1,5 +1,9 @@
 # Runtime assets
 
+For the original-FL / Larry 4+6 picture and twelve-step native-audio runtime on a complete 96 GiB SM120 GPU,
+see [segmented AV](./segmented-av). It is an explicit Python API with its own assets;
+`H3Pipeline`, catalog profiles, CLI and native HTTP below retain their separate contracts and defaults.
+
 The latent CLI starts from compiled inputs. Ref4 and T2VA Base4 on SM89 also have a [complete Python pipeline](../guide/complete-pipeline) and an [official-weight compiler](../guide/compile-weights). Installing the package does not automatically download model weights or example bundles.
 
 The CLI contract below applies to developers supplying compatible compiled assets.

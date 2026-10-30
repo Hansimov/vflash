@@ -1,5 +1,8 @@
 # 完整模型配置
 
+完整96 GiB SM120上的原始FL／Larry前4后6画面与十二步原生声音运行时，见[分段音画](./segmented-av)。
+它是具有独立资产合同的显式Python API；下述 `H3Pipeline`、profile目录、CLI和原生HTTP保留各自合同与默认。
+
 每份准备记录固定模型、LoRA 与调度方式。当前源码支持以下完整链路：
 
 | 配置 | 硬件 | 输入 | Transformer | LoRA | 视频/音频 shift |

@@ -1,5 +1,9 @@
 # Python integration
 
+For the original-FL / Larry 4+6 picture and twelve-step native-audio runtime on a complete 96 GiB SM120 GPU,
+see [segmented AV](../reference/segmented-av). It is an explicit Python API with its own assets;
+`H3Pipeline`, catalog profiles, CLI and native HTTP below retain their separate contracts and defaults.
+
 Use **`H3Pipeline`** when your application wants finished MP4s and should keep models loaded between
 requests. Use **`NativeEngineSession`** only when it already builds compatible conditioning bundles and
 wants latents ([below](#native-session)). Both own one fixed profile and device selection and process

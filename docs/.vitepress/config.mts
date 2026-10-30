@@ -23,6 +23,7 @@ const sidebar = (zh = false) => {
       items: [
         item('Generate a video', '生成视频', '/guide/complete-pipeline'),
         item('Python integration', 'Python 集成', '/guide/python'),
+        item('Segmented video and native audio', '分段画面与原生声音', '/reference/segmented-av'),
         item('Docker and HTTP API', 'Docker 与 HTTP API', '/guide/docker'),
       ],
     },
@@ -61,7 +62,7 @@ const sidebar = (zh = false) => {
 export default defineConfig({
   base: '/vflash/',
   title: 'Vflash',
-  description: 'Native MiniMax H3 video generation: text, image and keyframe modes up to 15 s and native 4 MP with six-step audio refinement, on RTX 4090 48 GB, RTX PRO 6000 Blackwell, H100 and RTX 3080 pairs.',
+  description: 'Native MiniMax H3 video generation: text, image and keyframe modes up to 15 s and native 4 MP, plus an explicit segmented video and native audio runtime, on RTX 4090 48 GB, RTX PRO 6000 Blackwell, H100 and RTX 3080 pairs.',
   cleanUrls: true,
   appearance: true,
   sitemap: { hostname: 'https://hansimov.github.io/vflash/' },
@@ -91,7 +92,7 @@ export default defineConfig({
     zh: {
       label: '简体中文',
       lang: 'zh-CN',
-      description: '原生 MiniMax H3 视频生成：文字、图像与关键帧模式，最长 15 秒、原生 4MP，可选六步音频修复；支持 RTX 4090 48GB、RTX PRO 6000 Blackwell、H100 与双 RTX 3080。',
+      description: '原生 MiniMax H3 视频生成：文字、图像与关键帧模式，最长 15 秒、原生4MP，以及显式分段画面与原生声音运行时；支持 RTX 4090 48GB、RTX PRO 6000 Blackwell、H100 与双 RTX 3080。',
       markdown: {
         container: {
           infoLabel: '说明', noteLabel: '备注', tipLabel: '提示', warningLabel: '注意',

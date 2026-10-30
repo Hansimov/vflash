@@ -1,5 +1,8 @@
 # 运行资源
 
+完整96 GiB SM120上的原始FL／Larry前4后6画面与十二步原生声音运行时，见[分段音画](./segmented-av)。
+它是具有独立资产合同的显式Python API；下述 `H3Pipeline`、profile目录、CLI和原生HTTP保留各自合同与默认。
+
 ## 可信本地快照：免大文件哈希
 
 Python接口 `prepare_weights`、`compile_assets` 和 `prepare_pipeline_assets`

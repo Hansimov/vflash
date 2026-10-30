@@ -36,8 +36,50 @@ the BF16 modulation projection. Upstream source remains unchanged. Asset distrib
 request admission and result publication remain with the caller. No application state or private assets ship in Vflash.
 
 `runtime.generate(VideoRequest(...), output_directory)` returns the MP4 path, native latent files, per-pass
-steps and CUDA timing, attention coverage, conditioning reuse, media stages, peak allocation and complete-call time.
+steps and CUDA timing, attention coverage, conditioning reuse, media stages, decoder-window peak allocation and complete-call time.
 Loading, acquisition, upload and browser playback are separate costs. The preceding `H3Pipeline` API keeps its contract.
 
 Motion blur, small faces and temporal identity still require output review against the brief; this recipe is a
 balanced motion/texture/native-audio choice, not a universal quality guarantee.
+
+## Python integration
+
+Install the `pipeline` extra from the [0.22.0 release](https://github.com/Hansimov/vflash/releases/tag/v0.22.0),
+plus the pinned Veda/Sage dependencies used by this runtime. Supply the verified paths below; the example
+is an integration function, not an automatic asset downloader or a CLI profile. `first_frame` must already
+be exactly 1024×1024 for this example. Each output directory must be new.
+
+```python
+from pathlib import Path
+from vflash.pipeline import VideoRequest
+from vflash.pipeline.reference_av_runtime import ReferenceAVRuntime
+
+
+def generate_clip(*, cache_root, source_root, tables, adapter, decoder_directory,
+                  predictor, text_loader, first_frame, prompt, output_directory):
+    runtime = ReferenceAVRuntime(
+        cache_root=Path(cache_root), source_root=Path(source_root),
+        tables=Path(tables), adapter=Path(adapter),
+        decoder_directory=Path(decoder_directory), predictor=Path(predictor),
+        text_loader=text_loader, trust_local_code=True,
+    )
+    try:
+        request = VideoRequest(
+            prompt=prompt, first_frame=Path(first_frame), width=1024, height=1024,
+            duration_seconds=5, seed=42, audio_delivery_profile="web-v1",
+        )
+        return runtime.generate(request, Path(output_directory))
+    finally:
+        runtime.close()
+```
+
+`text_loader` is a zero-argument callable returning the loaded Qwen3-VL text encoder. It owns the
+prepared quantization layout and source identity. `vflash.native.h3_fp8_text.load_row_fp8_text_encoder`
+with explicit `RowFP8TextShard` entries is the reusable loader; supply matching `RowFP8Execution` and
+original unchanged shards. Never substitute LightX-merged trunk weights for the original-FL cache.
+
+The runtime has no context-manager protocol: call `close()` in `finally` and serialize requests.
+`result["path"]` is the MP4; `visual.safetensors` and `native.safetensors` live in the output directory.
+`seconds` excludes construction and application delivery. `peak_cuda_bytes` is sampled after the
+media decoder resets CUDA peak statistics; it is **not a whole-request peak**. Use independent
+whole-window memory observation when sizing a deployment. The default call performs 22 evaluations.

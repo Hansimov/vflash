@@ -1,5 +1,9 @@
 # Generate a video {#generate-a-video}
 
+For the original-FL / Larry 4+6 picture and twelve-step native-audio runtime on a complete 96 GiB SM120 GPU,
+see [segmented AV](../reference/segmented-av). It is an explicit Python API with its own assets;
+`H3Pipeline`, catalog profiles, CLI and native HTTP below retain their separate contracts and defaults.
+
 `H3Pipeline` (Python) and `vflash generate` (CLI) produce a complete MP4 from a prompt and optional
 images or a short reference video. Vflash owns the native denoiser, stage lifetimes, local media loading
 and MP4 delivery; the text/image encoders use pinned Diffusers and Transformers code and the official
@@ -491,8 +495,8 @@ checkpoint and exact `reference_blocks` tuple, such as `tuple(range(25, 50))`. T
 reads only those tensors, computes all 51 clean-context tables on CPU and returns a tuple
 for `NativeAVPrefix.from_latents`. Reuse it for that model selection. It leaves weights
 and global thread settings unchanged; an optional `progress(completed, total)` callback
-can enforce the caller's deadline. The native-prefix interfaces are experimental source
-checkout APIs; the published 0.21.0 wheel does not yet contain them.
+can enforce the caller's deadline. The native-prefix interfaces are experimental Python APIs included in 0.22.0;
+0.21.0 and earlier wheels do not contain them.
 
 
 To refine sound while preserving that continuation, compile the refinement and its

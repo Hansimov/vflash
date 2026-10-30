@@ -1,5 +1,8 @@
 # Python 集成
 
+完整96 GiB SM120上的原始FL／Larry前4后6画面与十二步原生声音运行时，见[分段音画](../reference/segmented-av)。
+它是具有独立资产合同的显式Python API；下述 `H3Pipeline`、profile目录、CLI和原生HTTP保留各自合同与默认。
+
 需要完整 MP4、并希望在多次请求之间保持模型常驻时，使用 **`H3Pipeline`**。只有在应用已自行构建兼容的条件
 bundle、需要 latent 输出时，才使用 **`NativeEngineSession`**（[见下文](#native-session)）。两者都固定一个配置和
 设备选择，并**串行**处理请求。需要进程隔离和 HTTP 队列时，运行 [Docker 服务](./docker)。

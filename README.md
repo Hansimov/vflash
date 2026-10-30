@@ -11,7 +11,7 @@ Native **MiniMax H3 inference** with explicit GPU profiles. Vflash uses PyTorch 
 **0.17.2: choose the Veda layer partition independently of precision.** Set
 `veda_dense_edge_layers=4` for 42 sparse / 8 dense layers, including the optional
 audio context pass. SM120 keeps the selected Sage FP8 or FROST precision policy.
-The default stays 40/10; see [matched execution results](https://hansimov.github.io/vflash/reference/releases).
+The `H3Pipeline` Veda partition default stays 40/10 (the explicit segmented runtime uses 44/6); see [matched execution results](https://hansimov.github.io/vflash/reference/releases).
 
 **0.16.0: faster SM120 attention.** On RTX PRO 6000, `veda_dense_backend="sageattention2"` now runs
 INT8 Q·K / FP8 P·V in both dense and Veda sparse layers: denoising 6–14% shorter, with flicker and

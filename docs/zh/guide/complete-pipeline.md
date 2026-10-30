@@ -1,5 +1,8 @@
 # 生成视频 {#generate-a-video}
 
+完整96 GiB SM120上的原始FL／Larry前4后6画面与十二步原生声音运行时，见[分段音画](../reference/segmented-av)。
+它是具有独立资产合同的显式Python API；下述 `H3Pipeline`、profile目录、CLI和原生HTTP保留各自合同与默认。
+
 `H3Pipeline`（Python）和 `vflash generate`（命令行）根据提示词，以及可选的图片或一段短参考视频，生成完整 MP4。
 Vflash 负责原生去噪、阶段生命周期、本地媒体读取和 MP4 交付；文本/图像编码器使用固定版本的 Diffusers 与
 Transformers 代码，视频与音频由官方 H3 VAE 解码。不需要 LightX2V 运行时或应用服务器。
@@ -391,8 +394,8 @@ Python 调用方可向 `H3Pipeline.generate` 传入 `latent_output=Path("clip.sa
 传入本地基础transformer检查点；混合模型另传本地参考检查点和实际 `reference_blocks` 元组，
 例如 `tuple(range(25, 50))`。函数仅读取对应张量，在CPU编译51个干净上下文表，返回的tuple
 可直接用于 `NativeAVPrefix.from_latents`，并按模型选择复用。它不修改权重或全局线程数，
-可选 `progress(completed, total)` 回调可执行调用方期限。原生前缀接口目前是实验性源码接口，
-已发布的0.21.0 wheel尚未包含这些接口。
+可选 `progress(completed, total)` 回调可执行调用方期限。原生前缀接口是0.22.0已包含的实验性Python接口；
+0.21.0及更早wheel不包含这些接口。
 
 
 续接后精修声音时，用 `compile_refinement_tables(..., include_native_history=True)` 同时编译

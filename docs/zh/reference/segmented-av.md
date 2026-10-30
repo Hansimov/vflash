@@ -26,5 +26,44 @@ Larry十二步声音是下游验证的运行点；作者推荐四至八步。资
 Vflash不携带私有资产或应用状态。完整资产合同见[英文页](../../reference/segmented-av)。
 
 `runtime.generate(VideoRequest(...), output_directory)`返回MP4、原生潜变量、各阶段步数／CUDA耗时、
-注意力覆盖、条件复用、媒体阶段、显存峰值和完整调用耗时。加载、采购、上传与浏览器可播放时间另计。
+注意力覆盖、条件复用、媒体阶段、解码窗口显存峰值和完整调用耗时。加载、采购、上传与浏览器可播放时间另计。
 原`H3Pipeline`保持既有合同。运动模糊、远景人脸和时序身份仍需按实际创作要求审看。
+
+## Python集成
+
+从[0.22.0发行包](https://github.com/Hansimov/vflash/releases/tag/v0.22.0)安装 `pipeline` extra，
+并安装本运行时对应的固定Veda／Sage依赖。下例是显式资产集成函数，不自动下载资产，也不是CLI profile。
+本例首图必须预先处理为1024×1024，每次输出目录必须尚不存在。
+
+```python
+from pathlib import Path
+from vflash.pipeline import VideoRequest
+from vflash.pipeline.reference_av_runtime import ReferenceAVRuntime
+
+
+def generate_clip(*, cache_root, source_root, tables, adapter, decoder_directory,
+                  predictor, text_loader, first_frame, prompt, output_directory):
+    runtime = ReferenceAVRuntime(
+        cache_root=Path(cache_root), source_root=Path(source_root),
+        tables=Path(tables), adapter=Path(adapter),
+        decoder_directory=Path(decoder_directory), predictor=Path(predictor),
+        text_loader=text_loader, trust_local_code=True,
+    )
+    try:
+        request = VideoRequest(
+            prompt=prompt, first_frame=Path(first_frame), width=1024, height=1024,
+            duration_seconds=5, seed=42, audio_delivery_profile="web-v1",
+        )
+        return runtime.generate(request, Path(output_directory))
+    finally:
+        runtime.close()
+```
+
+`text_loader`是无参数回调，返回已加载的Qwen3-VL文本编码器，并负责其量化布局与来源。
+可复用 `vflash.native.h3_fp8_text.load_row_fp8_text_encoder`，显式提供 `RowFP8TextShard`、
+匹配的 `RowFP8Execution` 和原始未量化分片。原始FL缓存不能替换为已合并LightX的主干。
+
+运行时不实现上下文管理器，必须在 `finally` 中调用 `close()`，同一实例串行服务。
+`result["path"]`为MP4，输出目录保留 `visual.safetensors` 与 `native.safetensors`。
+`seconds`不含构造加载和应用交付；`peak_cuda_bytes`在媒体解码器重置峰值后读取，
+**不是整次请求显存峰值**，部署容量应另测完整窗口。默认调用执行22次评估。
