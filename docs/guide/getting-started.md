@@ -19,7 +19,7 @@ Linux, Python 3.11+, an NVIDIA driver for CUDA 13.0, and `ffmpeg`/`ffprobe` on `
 install is a light CLI without PyTorch; add the extra for the interface you use.
 
 ```bash
-git clone --branch v0.22.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.22.1 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv && source .venv/bin/activate
 python -m pip install -e '.[pipeline]'     # complete MP4 pipeline (includes GPU dependencies)
@@ -28,11 +28,11 @@ python -m pip install -e '.[pipeline]'     # complete MP4 pipeline (includes GPU
 Use `.[gpu]` for the native denoiser only and `.[server]` for the native HTTP service. The
 [Docker images](./docker) pin the same environment (PyTorch 2.11 / CUDA 13.0) if you prefer containers.
 
-The [GitHub v0.22.0 release](https://github.com/Hansimov/vflash/releases/tag/v0.22.0) also provides
+The [GitHub v0.22.1 release](https://github.com/Hansimov/vflash/releases/tag/v0.22.1) also provides
 a wheel and source archive from the same tag. Install the complete pipeline from the wheel:
 
 ```bash
-python -m pip install "vflash[pipeline] @ https://github.com/Hansimov/vflash/releases/download/v0.22.0/vflash-0.22.0-py3-none-any.whl"
+python -m pip install "vflash[pipeline] @ https://github.com/Hansimov/vflash/releases/download/v0.22.1/vflash-0.22.1-py3-none-any.whl"
 ```
 
 ## 2. Check your GPU {#check-your-gpu}

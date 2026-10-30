@@ -1,5 +1,13 @@
 # 版本更新
 
+## 0.22.1
+
+原生HTTP API的OpenAPI补齐健康、就绪、活动profile和作业响应类型，以及202受理、含Retry-After的
+队列拒绝、易失历史、错误和二进制／Range潜变量下载。保留原响应字段与执行器扩展，不改变推理算法、
+模型、注意力默认或数值输出。HTTP合同由受控执行器验证，未运行GPU推理。
+见[HTTP合同](http-api)。已发布0.18.0容器保持原schema，新声明通过0.22.1 server包提供。
+
+
 ## 0.22.0
 
 新增`ReferenceAVRuntime`，在完整96 GiB SM120显卡执行原始FL／Larry分段流水线。

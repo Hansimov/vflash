@@ -36,6 +36,7 @@ from vflash.hardware import NvidiaDevice, discover_nvidia_devices
 from vflash.native.runner import WEIGHT_PROFILES
 from vflash.native.worker import ResidentDenoiseWorker
 from vflash.planner import resolve_plan
+from vflash.server_contracts import Error, Health, Job, Profiles, Readiness
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_PROFILE_ID = "ref2va-turbo4-exact-sm89"
@@ -321,14 +322,16 @@ def create_app(
         title="Vflash API",
         version=__version__,
         description=(
-            "Ref2VA denoising on RTX 3080 20 GB and RTX 4090 48 GB. "
+            "Native denoising with the configured qualified profile and GPU allocation. "
             "A compiled conditioning bundle is converted "
-            "to VAE-ready latents. Prompt-to-MP4 generation is not exposed."
+            "to VAE-ready latents. Prompt-to-MP4 and ReferenceAVRuntime are not exposed. "
+            "Jobs are volatile; creation is not idempotent. "
+            "Do not blindly retry an unknown POST."
         ),
         lifespan=lifespan,
     )
 
-    @app.get("/healthz")
+    @app.get("/healthz", response_model=Health, summary="Process health")
     def health() -> dict[str, Any]:
         return {
             "status": "ok",
@@ -336,13 +339,20 @@ def create_app(
             "capabilities": CAPABILITIES,
         }
 
-    @app.get("/readyz")
+    @app.get(
+        "/readyz",
+        response_model=Readiness,
+        summary="Configured runtime readiness",
+        responses={
+            503: {"model": Readiness, "description": "Assets, device or worker unavailable"}
+        },
+    )
     def ready() -> JSONResponse:
         payload = readiness_payload()
         code = status.HTTP_200_OK if payload["ready"] else status.HTTP_503_SERVICE_UNAVAILABLE
         return JSONResponse(status_code=code, content=payload)
 
-    @app.get("/v1/profiles")
+    @app.get("/v1/profiles", response_model=Profiles, summary="The active configured profile")
     def profiles() -> dict[str, Any]:
         return {
             "profiles": [
@@ -359,7 +369,26 @@ def create_app(
             ]
         }
 
-    @app.post("/v1/denoise/jobs", status_code=status.HTTP_202_ACCEPTED)
+    @app.post(
+        "/v1/denoise/jobs",
+        status_code=status.HTTP_202_ACCEPTED,
+        response_model=Job,
+        summary="Submit a compiled conditioning bundle",
+        description=(
+            "Returns a volatile job. No idempotency key is supported; "
+            "an uncertain reply must not be blindly replayed."
+        ),
+        responses={
+            404: {"model": Error, "description": "Bundle not found"},
+            422: {"model": Error, "description": "Invalid request or incomplete bundle"},
+            429: {
+                "model": Error,
+                "description": "Queue full; this request was not accepted",
+                "headers": {"Retry-After": {"schema": {"type": "string"}}},
+            },
+            503: {"model": Error, "description": "Runtime not ready or stopping"},
+        },
+    )
     def submit_job(request: DenoiseJobRequest) -> dict[str, Any]:
         readiness = readiness_payload()
         if not readiness["ready"]:
@@ -381,7 +410,14 @@ def create_app(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
             ) from exc
 
-    @app.get("/v1/denoise/jobs/{job_id}")
+    @app.get(
+        "/v1/denoise/jobs/{job_id}",
+        response_model=Job,
+        summary="Read a retained job",
+        responses={
+            404: {"model": Error, "description": "Unknown, expired or lost-on-restart job"}
+        },
+    )
     def get_job(job_id: str) -> dict[str, Any]:
         try:
             return manager.get(job_id)
@@ -390,7 +426,31 @@ def create_app(
                 status_code=status.HTTP_404_NOT_FOUND, detail="job not found"
             ) from exc
 
-    @app.get("/v1/denoise/jobs/{job_id}/output")
+    @app.get(
+        "/v1/denoise/jobs/{job_id}/output",
+        response_class=FileResponse,
+        summary="Download completed native latents",
+        responses={
+            200: {
+                "content": {
+                    "application/octet-stream": {
+                        "schema": {"type": "string", "format": "binary"}
+                    }
+                }
+            },
+            206: {
+                "description": "Requested byte range",
+                "content": {
+                    "application/octet-stream": {
+                        "schema": {"type": "string", "format": "binary"}
+                    }
+                },
+            },
+            404: {"model": Error, "description": "Unknown job or missing output"},
+            409: {"model": Error, "description": "Job has not succeeded"},
+            416: {"description": "Unsatisfiable byte range"},
+        },
+    )
     def download_job_output(job_id: str) -> FileResponse:
         try:
             job = manager.get(job_id)

@@ -25,6 +25,7 @@ const sidebar = (zh = false) => {
         item('Python integration', 'Python 集成', '/guide/python'),
         item('Segmented video and native audio', '分段画面与原生声音', '/reference/segmented-av'),
         item('Docker and HTTP API', 'Docker 与 HTTP API', '/guide/docker'),
+        item('HTTP response contract', 'HTTP响应合同', '/reference/http-api'),
       ],
     },
     {

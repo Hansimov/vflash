@@ -252,3 +252,5 @@ Docker's predefined `HTTPS_PROXY`/`NO_PROXY` build arguments; keep values in the
 environment. A loopback-only host proxy needs a reachable build route. Do not globally
 change the build network just to retry one source: that invalidates unrelated dependency
 layers. Mirrors must provide the pinned versions; compare a bounded real download first.
+
+Typed responses are available in the 0.22.1 source/server package; published 0.18.0 images keep their original schema. See the [HTTP response and recovery contract](../reference/http-api).

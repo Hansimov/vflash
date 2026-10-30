@@ -1,5 +1,15 @@
 # Release notes
 
+## 0.22.1
+
+The native HTTP API now declares typed health, readiness, active-profile and job responses in OpenAPI.
+It describes 202 acceptance, queue rejection with Retry-After, volatile history, errors and binary/range
+latent downloads. Response fields and executor extensions are preserved; no inference algorithm, model,
+attention default or numeric result changes. HTTP tests use a controlled executor without GPU inference.
+See the [HTTP contract](http-api). Published 0.18.0 containers keep their original schema; install the
+0.22.1 server package to use the updated declarations.
+
+
 ## 0.22.0
 
 `ReferenceAVRuntime` adds an owned original-FL/Larry pipeline for complete 96 GiB SM120 allocations.

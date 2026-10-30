@@ -343,3 +343,48 @@ def test_veda_service_readiness_reports_partition_and_rejects_wrong_dense_gpu(
             )
     with pytest.raises(ContractError, match="requires Veda"):
         ServerSettings(veda_dense_edge_layers=3)
+
+
+def test_openapi_describes_native_job_and_binary_delivery(tmp_path):
+    from vflash.server_contracts import Job, Readiness
+
+    settings = _settings(tmp_path)
+
+    def execute(bundle, output):
+        output.write_bytes(b"native-latents")
+        return {"stage_seconds": {"denoise": 1.5}, "profile_extension": "preserved"}
+
+    with TestClient(
+        create_app(settings, device_provider=_sm89_devices, denoise_executor=execute)
+    ) as client:
+        schema = client.get("/openapi.json").json()
+        paths = schema["paths"]
+        submitted_schema = paths["/v1/denoise/jobs"]["post"]["responses"]["202"]["content"][
+            "application/json"
+        ]["schema"]
+        assert submitted_schema["$ref"].endswith("/Job")
+        assert schema["components"]["schemas"]["Job"]["properties"]["status"]["enum"] == [
+            "queued",
+            "running",
+            "succeeded",
+            "failed",
+        ]
+        assert "503" in paths["/readyz"]["get"]["responses"]
+        assert "Retry-After" in paths["/v1/denoise/jobs"]["post"]["responses"]["429"]["headers"]
+        content = paths["/v1/denoise/jobs/{job_id}/output"]["get"]["responses"]["200"][
+            "content"
+        ]
+        assert set(content) == {"application/octet-stream"}
+        assert content["application/octet-stream"]["schema"]["format"] == "binary"
+        Readiness.model_validate(client.get("/readyz").json())
+        response = client.post("/v1/denoise/jobs", json={"bundle": "example"})
+        assert response.status_code == 202
+        job = Job.model_validate(response.json())
+        deadline = time.monotonic() + 3
+        while job.status in {"queued", "running"} and time.monotonic() < deadline:
+            job = Job.model_validate(client.get(f"/v1/denoise/jobs/{job.id}").json())
+        assert job.status == "succeeded"
+        assert job.result["profile_extension"] == "preserved"
+        media = client.get(f"/v1/denoise/jobs/{job.id}/output", headers={"Range": "bytes=0-5"})
+        assert media.status_code == 206 and media.content == b"native"
+        assert client.get("/v1/denoise/jobs/missing").status_code == 404
