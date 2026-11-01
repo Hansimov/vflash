@@ -1,5 +1,30 @@
 # Release notes
 
+## 0.23.0
+
+Adds explicit Pika H3 Flex execution without changing existing hybrid or segmented profiles.
+The original full-precision entry pins upstream source, adapter manifests, FL/Ref partitions,
+original six-step re-noising and its separate dependency environment. Optional component reuse
+keeps ownership and cleanup explicit. Hosted high-resolution finishing and audio stems are not
+part of the released generator adapters.
+
+`PikaAVRuntime` reuses caller-prepared original-FL row-FP8 components for five-second direct text
+or first-frame generation. `PikaAVRecipe(audio_steps=0|10|12)` selects original joint sound or
+an explicit Larry native soundtrack over the fixed picture. The runtime retains the original
+Pika sampler and rank/alpha 128 adapter, reuses request conditioning, releases visual fused-QKV
+storage before sound, and records actual stage counts and decode overlap. Unit LoRA coefficients
+skip redundant tensor passes without changing arithmetic. See [contracts and preparation](../guide/pika-flex).
+
+Complete-call evidence on one 96 GiB RTX PRO 6000 Blackwell Workstation at a 440 W power limit,
+Torch 2.11/CUDA 13, 960×544, 124 model frames / 120 delivered frames, Veda 44/6 and Larry10:
+three text calls took 31.447–31.667 s; five warm image calls took 33.702–35.296 s. They include
+conditioning, sampling, native audio, decode, encoding and application audio inspection;
+model initialization, queue and publication are separate. One matched image control was
+34.386 s versus 33.702 s through the new adapter; all 120 decoded frames matched. These are
+single-device workload measurements, not general quality or latency guarantees. Wider geometry,
+longer clips and Ref2VA remain separately qualified from this prepared path. Existing HTTP
+contracts and published container versions retain their documented scope.
+
 ## 0.22.1
 
 The native HTTP API now declares typed health, readiness, active-profile and job responses in OpenAPI.

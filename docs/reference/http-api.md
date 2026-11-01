@@ -42,6 +42,6 @@ calling application's storage. There is no cancellation or automatic replay endp
 
 ## Version scopes
 
-Use the [current Python/server installation](../guide/getting-started) for 0.22.1. The
+Use the [current Python/server installation](../guide/getting-started) for 0.22.1 or later. The
 [published container inventory](../guide/docker) still describes 0.18.0 images, whose original endpoints
 continue working. Changing only documentation or package version does not qualify a different GPU/model.

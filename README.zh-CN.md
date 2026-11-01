@@ -4,7 +4,7 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
-**0.22.1：原生HTTP响应合同。** OpenAPI补齐就绪、作业生命周期、错误与二进制／Range下载，推理行为保持。见[HTTP API](https://hansimov.github.io/vflash/zh/reference/http-api)。
+**0.23.0：明确的 Pika H3 Flex 配方。** 新增固定原版六步采样、Pika画面／Larry原生声音运行时、直接文本输入和组件复用，保留既有hybrid默认。见[Pika H3 Flex](https://hansimov.github.io/vflash/zh/guide/pika-flex)。
 
 **0.22.0：分段画面与原生声音。** 新增SM120参考运行时，默认Veda、前4步Larry＋后6步原始画面，再以12步Larry生成原生声音。见[执行与资产范围](https://hansimov.github.io/vflash/zh/reference/segmented-av)。
 

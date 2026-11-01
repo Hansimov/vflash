@@ -37,6 +37,6 @@ application/octet-stream承载safetensors，不能直接当视频播放。流式
 
 ## 版本范围
 
-0.22.1通过[当前Python/server安装](../guide/getting-started)提供；
+0.22.1及以后版本通过[当前Python/server安装](../guide/getting-started)提供；
 [已发布容器清单](../guide/docker)仍描述0.18.0镜像，原接口继续工作。
 仅更新文档或包版本不能让另一GPU／模型自动获得资格。
