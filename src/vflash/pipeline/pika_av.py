@@ -6,7 +6,7 @@ It is separate from the full-precision Pika reference pipeline.
 
 import threading
 import time
-from contextlib import contextmanager, nullcontext
+from contextlib import ExitStack, contextmanager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -37,6 +37,7 @@ class PikaAVRecipe:
     audio_steps: int = 10
     visual_attention: str = "veda"
     overlap_decode: bool = True
+    decode_tile_batch_size: int = 1
 
     def __post_init__(self):
         if (
@@ -44,6 +45,8 @@ class PikaAVRecipe:
             or self.audio_steps not in {0, 10, 12}
             or self.visual_attention not in {"sdpa", "veda"}
             or type(self.overlap_decode) is not bool
+            or type(self.decode_tile_batch_size) is not int
+            or self.decode_tile_batch_size not in {1, 2, 4}
         ):
             raise ValueError(
                 "Pika AV requires explicit six-picture and zero/ten/twelve-audio settings"
@@ -99,6 +102,7 @@ class PikaAVSession:
             recipe.visual_attention,
             recipe.overlap_decode,
         )
+        batched_decode = recipe.decode_tile_batch_size > 1
         if (
             not request.generate_audio
             or request.keyframe_delivery_profile != "decoded"
@@ -110,6 +114,7 @@ class PikaAVSession:
             or request.height % 32
             or min(request.width, request.height) < 32
             or request.width * request.height > 2 * 1024**2
+            or (batched_decode and request.width * request.height > 960 * 544)
             or audio_steps not in {0, 10, 12}
             or attention not in {"sdpa", "veda"}
             or type(overlap_enabled) is not bool
@@ -143,6 +148,8 @@ class PikaAVSession:
             "keyframe_reuses": 0,
         }
         execution = {}
+        decode_scope_owner = ExitStack()
+        decode_batches = {"limit": 1}
 
         def encode(prompt, *args, **kwargs):
             if prompt != request.prompt:
@@ -167,6 +174,14 @@ class PikaAVSession:
             return condition_rows.clone()
 
         try:
+            if recipe.decode_tile_batch_size > 1:
+                from vflash.adapters.h3_decode_batches import batch_spatial_tiles
+
+                decode_batches = decode_scope_owner.enter_context(
+                    batch_spatial_tiles(
+                        rt.decoder.video.module.model, recipe.decode_tile_batch_size
+                    )
+                )
             output.mkdir(parents=True, exist_ok=True)
             if (output / "native.mp4").exists():
                 raise ValueError("New owned output required")
@@ -400,6 +415,7 @@ class PikaAVSession:
                 "conditioning": conditioning,
                 "execution": execution,
                 "overlap": dict(overlap.record) if overlap else {"applied": False},
+                "decode_tile_batches": dict(decode_batches),
                 "media_stage_seconds": media.stage_durations,
                 "media": media.media,
                 "actual_forwards": total,
@@ -408,6 +424,7 @@ class PikaAVSession:
                 "path": str(output / "native.mp4"),
             }
         finally:
+            decode_scope_owner.close()
             pipe.encode_prompt, pipe.encode_keyframes = original_encode, original_keyframes
             pipe.scheduler, pipe.audio_scheduler = schedulers
             rt.adapter.strength, self.pika_adapter.strength = strengths

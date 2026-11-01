@@ -13,6 +13,8 @@ from vflash.pipeline.pika_av import PikaAVRecipe
         {"audio_steps": True},
         {"visual_attention": "sage"},
         {"overlap_decode": 1},
+        {"decode_tile_batch_size": True},
+        {"decode_tile_batch_size": 3},
     ],
 )
 def test_recipe_rejects_implicit_or_unqualified_stage_choices(kwargs):
@@ -23,8 +25,9 @@ def test_recipe_rejects_implicit_or_unqualified_stage_choices(kwargs):
 @pytest.mark.parametrize("mode", ["t2va", "i2va"])
 @pytest.mark.parametrize("steps", [0, 10, 12])
 @pytest.mark.parametrize("fail_audio", [False, True])
+@pytest.mark.parametrize("tile_batch", [1, 4])
 def test_actual_session_counts_freezes_picture_and_restores_owners(
-    tmp_path, monkeypatch, mode, steps, fail_audio
+    tmp_path, monkeypatch, mode, steps, fail_audio, tile_batch
 ):
     torch = pytest.importorskip("torch")
     from PIL import Image
@@ -128,7 +131,12 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
         wrapper=NS(H3DiffusionWrapper=lambda model: model),
     )
     attention = NS(backend="sdpa", select=lambda _: None, reset=lambda: None)
-    decoder = NS(generate_mp4=lambda *_, **__: NS(stage_durations={}, media={}))
+    tile_model = NS(training=False, _run_tile_tasks=lambda *args: [])
+    original_tiles = tile_model._run_tile_tasks
+    decoder = NS(
+        generate_mp4=lambda *_, **__: NS(stage_durations={}, media={}),
+        video=NS(module=NS(model=tile_model)),
+    )
     runtime = NS(
         closed=False,
         pipe=pipe,
@@ -159,7 +167,12 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
     original_encode, original_keyframes = pipe.encode_prompt, pipe.encode_keyframes
     prior_schedulers = pipe.scheduler, pipe.audio_scheduler
     events = []
-    recipe = PikaAVRecipe(audio_steps=steps, visual_attention="sdpa", overlap_decode=False)
+    recipe = PikaAVRecipe(
+        audio_steps=steps,
+        visual_attention="sdpa",
+        overlap_decode=False,
+        decode_tile_batch_size=tile_batch,
+    )
     if fail_audio and steps:
         with pytest.raises(RuntimeError, match="fixture audio failure"):
             session.generate(request, tmp_path / "out", recipe=recipe)
@@ -181,6 +194,8 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
     assert all(layer.clock == "original" for layer in model.layers)
     assert not model._forward_hooks and not model._forward_pre_hooks
     assert not session.owner.locked() and not active and not torch.cuda.is_initialized()
+    assert tile_model._run_tile_tasks is original_tiles
+    assert not hasattr(tile_model, "_vflash_tile_batch_owner")
 
 
 @pytest.mark.parametrize("fail_clock", [False, True])

@@ -133,3 +133,20 @@ clips. Other admitted canvases are not a broad quality or memory qualification.
 Reported generation time excludes model initialization and application publication.
 No sub-25-second 0.5 MP end-to-end guarantee is made. Ref2VA, longer clips, omitted
 joint audio and exact endpoint repainting are not implemented by this prepared path.
+
+### Bounded decoder tile batches
+
+`PikaAVRecipe(decode_tile_batch_size=4)` optionally batches equal-size spatial decoder
+tiles for five-second canvases up to 960×544 on the prepared SM120 runtime. The default
+remains 1; 2 and 4 are explicit options. Original tile positions, temporal decoding and
+overlap composition are preserved, and the instance hook is restored after the request.
+
+Four short-scene trials on one PRO 6000 Server 96 GiB at a 600 W limit retained identical
+generated video/audio latents and decoded audio. FP16 batch-dependent decoding and
+encoding changed 8-bit pixels slightly (mean absolute differences about 1.3–1.8/255);
+inspected temporal frames and detail crops showed no evident new structural degradation.
+One repeated-input warm control bracket supported about 0.7–1.1 seconds saved in a
+roughly 30-second complete resident call. Other scene pairs also include first-use/cache
+differences. Initialization, orchestration and upload are separate; these trials do not
+establish a sub-25-second delivered result or qualification above that canvas size.
+The response records actual tile batch groups in `decode_tile_batches`.

@@ -1,5 +1,17 @@
 # Release notes
 
+## 0.23.1
+
+Adds opt-in bounded spatial decoder batches for the prepared Pika AV runtime. Equal-size
+tiles retain original positions, temporal decoding and composition; request-local hooks
+restore on success or failure. The default remains one tile. Complete resident trials
+on one 96 GiB PRO 6000 Server support a small latency gain at 960×544, with unchanged
+generated latents and audio; decoded pixels have small batch-dependent differences.
+See the [measured scope](../guide/pika-flex#bounded-decoder-tile-batches).
+
+Aligns the pipeline Pillow pin with the 13.0.0 environment used by the qualified media
+runtime. Existing profiles and published container images retain their own versions.
+
 ## 0.23.0
 
 Adds explicit Pika H3 Flex execution without changing existing hybrid or segmented profiles.

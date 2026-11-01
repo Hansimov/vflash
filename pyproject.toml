@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "vflash"
-version = "0.23.0"
+version = "0.23.1"
 description = "A hardware-specialized MiniMax H3 inference engine with explicit GPU profiles"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -40,11 +40,11 @@ pipeline = [
   "accelerate==1.13.0",
   "peft==0.19.1",
   "huggingface-hub==1.23.0",
-  "Pillow==12.2.0",
+  "Pillow==13.0.0",
   "einops==0.8.2",
   "PyYAML==6.0.3",
 ]
-dev = ["httpx>=0.28,<0.29", "pre-commit>=4.0", "pytest>=8.3", "ruff>=0.12", "Pillow>=12,<13"]
+dev = ["httpx>=0.28,<0.29", "pre-commit>=4.0", "pytest>=8.3", "ruff>=0.12", "Pillow>=13,<14"]
 restoration = ["ftfy>=6.3,<7", "opencv-python-headless>=4.11,<5"]
 
 [project.scripts]
