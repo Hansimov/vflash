@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import threading
 import time
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -25,6 +26,8 @@ from vflash.pipeline.pika_flex import (
     validate_adapter_manifest,
 )
 
+_PIPELINE_OWNER = threading.Lock()
+
 
 class PikaFlexRuntime:
     def __init__(
@@ -35,18 +38,26 @@ class PikaFlexRuntime:
         adapters_root: Path,
         trust_local_code: bool = False,
         cpu_offload: bool = False,
+        reuse_components: bool = False,
     ):
         from vflash.adapters.pika_flex_source import load_pika_source, validate_pika_environment
 
         if type(cpu_offload) is not bool:
             raise ContractError("cpu_offload must be explicit boolean")
+        if type(reuse_components) is not bool or (reuse_components and cpu_offload):
+            raise ContractError("Component reuse and group CPU offload have separate lifetimes")
         validate_pika_environment()
         self.base = base_path.resolve(strict=True)
         self.adapters = adapters_root.resolve(strict=True)
         self.pipeline = load_pika_source(source_root, trust_local_code=trust_local_code)
         self.cpu_offload = cpu_offload
         self.closed = False
-        self._owner = threading.Lock()
+        self._owner = _PIPELINE_OWNER
+        self.components = None
+        if reuse_components:
+            from vflash.pipeline.pika_components import PikaComponentCache
+
+            self.components = PikaComponentCache(self.pipeline)
         self.manifests = {}
         for partition in ("fl2va", "ref2va"):
             root = self.adapters / partition
@@ -100,7 +111,8 @@ class PikaFlexRuntime:
                 text_encoder_path=None,
             )
             on_progress("generation", 0, 1)
-            self.pipeline.generate(args)
+            with self.components.installed() if self.components else nullcontext():
+                self.pipeline.generate(args)
             metadata = json.loads(output.with_suffix(".json").read_text())
             manifest = self.manifests[partition]
             if (
@@ -123,10 +135,14 @@ class PikaFlexRuntime:
                 "metadata": metadata,
                 "weight_format": "original-bf16",
                 "separate_audio_pass": False,
+                "component_reuse": self.components is not None,
+                "component_stats": dict(self.components.stats) if self.components else None,
             }
         except BaseException:
             # Upstream stages need process teardown after a failed GPU operation.
             self.closed = True
+            if self.components:
+                self.components.close()
             raise
         finally:
             self._owner.release()
@@ -136,5 +152,7 @@ class PikaFlexRuntime:
             raise ContractError("Cannot close an active Pika request")
         try:
             self.closed = True
+            if self.components:
+                self.components.close()
         finally:
             self._owner.release()

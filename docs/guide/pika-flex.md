@@ -2,8 +2,9 @@
 
 `PikaFlexRuntime` adapts the original [Pika release](https://github.com/Pika-Labs/Pika-H3-Flex)
 without changing the hybrid or segmented pipeline defaults. This initial adapter preserves the
-upstream staged BF16 implementation. Hardware qualification and performance comparisons remain
-pending; CPU contract checks do not establish GPU output quality or service availability.
+upstream staged BF16 implementation. The staged path has completed 5-second 480p text and first-frame generation on a
+96 GiB Blackwell PRO 6000. Other modes, larger canvases and serving integration remain
+unqualified; CPU contract checks do not establish GPU output quality or service availability.
 
 Use a separate Python 3.12 environment with the upstream pinned requirements and its two
 Diffusers patches. The existing `vflash[pipeline]` stack pins different dependencies: do not
@@ -55,3 +56,18 @@ before retrying. Existing output files are never overwritten.
 Pika code is Apache-2.0. The adapters are Model Derivatives under the MiniMax H3 Community
 License Agreement. Keep the upstream LICENSE, NOTICE, modification notices and model licenses
 with any distributed assets. The integration contains release identities, not model weights.
+
+## Opt-in component reuse
+
+`reuse_components=True` retains one original BF16 transformer partition and one original FP32
+VAE pair. Before text encoding or decoding, the transformer moves to CPU; text weights load
+onto their target device without materializing a second full CPU model. Changing FL/Ref releases
+the previous trunk. Adapter injection/loading runs once for a retained trunk; changing the
+adapter file or configuration rejects reuse. Sampling, conditioning precision and native audio
+remain the original six-step computation.
+
+This option is a lifecycle candidate: CPU tests cover reuse, partition changes, exact small-tensor
+values, failure cleanup and restored hooks. Full-weight GPU memory, quality and latency validation
+is still pending. It cannot be combined with `cpu_offload=True`. Use a dedicated process; all
+`PikaFlexRuntime` calls in that interpreter share a nonblocking owner lock. `close()` releases
+retained components. Results include `component_reuse` and load/reuse counters in `component_stats`.

@@ -22,3 +22,16 @@ BF16执行，不改变现有hybrid或分段默认。当前GPU资格、输出质�
 
 代码Apache-2.0；模型衍生物适用MiniMax H3 Community License。分发时保留原LICENSE、NOTICE、
 作者修改声明及模型许可。本集成只保存固定身份，不包含权重。
+
+## 可选组件复用
+
+`reuse_components=True`保留一个原始BF16 transformer分区及一组原始FP32 VAE。
+文本编码或解码前将transformer移到CPU；文本权重直接装入目标设备，避免同时在CPU构造第二个
+完整模型。切换FL/Ref时释放旧trunk；同一trunk只注入／加载一次适配器，适配器文件或配置改变时
+拒绝复用。六步采样、条件精度和原生音频计算保持原始实现。
+
+此选项仍是生命周期候选：CPU检查覆盖复用、分区切换、小张量数值、失败清理和钩子恢复；
+完整权重GPU显存、质量和速度仍待验证。不能与`cpu_offload=True`合用。使用独立进程，同一解释器内
+所有`PikaFlexRuntime`共用非阻塞执行锁；`close()`释放组件。结果记录`component_reuse`和
+`component_stats`实际加载／复用次数。原始分阶段路径已完成96GiB Blackwell PRO 6000上5秒480p
+T2VA/I2VA生成；该范围不代表新复用路径或其他输入模式已通过。
