@@ -283,12 +283,21 @@ def frozen_visual_kv(model, *, maximum_bytes=40 * 1024**3):
                     if index == 0:
                         limit = maximum_bytes
                         if key.device.type == "cuda":
-                            limit = min(
-                                limit,
-                                max(0, torch.cuda.mem_get_info(key.device)[0] - 12 * 1024**3),
-                            )
+                            from vflash.native.cuda_memory import available_cuda_bytes
+
+                            available = available_cuda_bytes(torch, key.device)
+                            limit = min(limit, max(0, available - 12 * 1024**3))
+                            report["memory_admission"] = {
+                                "available_allocator_bytes": available,
+                                "safety_reserve_bytes": 12 * 1024**3,
+                                "kv_limit_bytes": limit,
+                                "expected_kv_bytes": expected,
+                            }
                         if not expected <= limit:
-                            raise ValueError("Visual KV trial exceeds declared memory headroom")
+                            raise ValueError(
+                                "Visual KV trial exceeds declared memory headroom "
+                                f"(expected={expected}, available_budget={limit})"
+                            )
                     caches[index] = {"key": key, "value": value, "step": forward_index}
                     report["cached_bytes"] += size
                     keys, values = (key, value)
