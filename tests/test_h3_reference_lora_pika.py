@@ -35,6 +35,13 @@ def test_original_pika_pairs_keep_names_rank_scale_and_bf16_execution(tmp_path, 
     assert torch.equal(model.layers[0](sample), expected)
     assert len(adapter.calls) == 312 and adapter.calls["layers.0"] == 1
     assert adapter.tensor_bytes == sum(t.numel() * 2 for t in state.values())
+    # Exercise the real installed hook, retaining the historical BF16 operation
+    # order for fractional strengths and checking disabled adapters too.
+    for strength in (0.0, 0.25, 1.0, 1.375):
+        adapter.strength = strength
+        delta = torch.nn.functional.linear(torch.nn.functional.linear(sample, a), b)
+        reference = sample + delta.to(sample.dtype) * 1.0 * strength
+        assert torch.equal(model.layers[0](sample), reference)
     adapter.close()
     assert torch.equal(model.layers[0](sample), sample)
     # A late bad target must remove already installed hooks from every earlier layer.

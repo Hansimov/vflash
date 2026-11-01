@@ -110,7 +110,14 @@ class H3ActivationAdapter:
                         delta = torch.nn.functional.linear(
                             torch.nn.functional.linear(args[0].to(a.dtype), a), b
                         )
-                        return result + delta.to(result.dtype) * scale * self.strength
+                        delta = delta.to(result.dtype)
+                        # Unit scaling is exact and needs no full-output tensor pass.
+                        # Preserve the two rounding points for nonunit coefficients.
+                        if scale != 1.0:
+                            delta = delta * scale
+                        if self.strength != 1.0:
+                            delta = delta * self.strength
+                        return result + delta
 
                     self.handles.append(module.register_forward_hook(forward))
             assert len(self.calls) == (312 if kind in {"lightx", "pika"} else 363)
