@@ -49,3 +49,39 @@ BF16调制和完整312项覆盖，并逐次检查实际模型调用。视觉时�
 视频的时间行，保留文本／声音时刻，空间抽样仍保留所有视频时间点；不创建首帧图片。
 CPU检查覆盖行／时钟映射、原画面保持和清理，Pika／Larry组合的完整GPU音质仍待单独验收。
 既有首帧声音路径和可选原版Pika运行时保持独立身份。
+
+
+## 预备权重的 Pika 画面与 Larry 原生声音
+
+可选的 `vflash.pipeline.pika_av_runtime.PikaAVRuntime` 复用 `ReferenceAVRuntime`
+显式接收的原始 FL 行 FP8 组件，将分段会话替换为唯一持有模型的 Pika 会话。在原组件之外，
+调用者需提供 `pika_source`、`pika_adapter`、`pika_manifest` 和 `pika_tables`；
+`trust_local_code=True` 核验并导入固定版本的 Pika 采样代码。引擎不推断模型位置、租赁资源或产品默认。
+
+```python
+from vflash.pipeline import VideoRequest
+from vflash.pipeline.pika_av import PikaAVRecipe
+from vflash.pipeline.pika_av_runtime import PikaAVRuntime
+
+# 路径、来源清单及文本加载器均由调用者明确准备和持有。
+runtime = PikaAVRuntime(**prepared_components, **pika_components, trust_local_code=True)
+try:
+    result = runtime.generate(
+        VideoRequest("一只陶瓷鸟展开翅膀。", width=960, height=544),
+        output_directory,
+        recipe=PikaAVRecipe(audio_steps=10, visual_attention="veda", overlap_decode=True),
+    )
+finally:
+    runtime.close()
+```
+
+此路径当前支持五秒 T2VA／I2VA、生成原生声音及解码后的首帧，使用原版六步重新加噪与未合并的
+Pika FL 适配器。`audio_steps=0` 保留六步联合音轨；10／12明确选择在固定画面上生成 Larry 原生音轨。
+同请求复用提示／首帧编码，视觉结束后释放融合 QKV 副本，再执行声音及可选的重叠视频解码。
+回执包含真实前向次数、注意力、条件复用、显存和完整调用计时。
+
+该路径与前文原始 BF16 Pika 实现分开。行 FP8、Veda 和空间视频 KV 声音复用均为近似选择；
+六步视觉加十步声音不等于完整请求只有六次前向。当前硬件证据覆盖完整 96 GiB SM120 PRO 6000
+上的 960×544／832×480 五秒视频；其他可受理画布尚无广泛的质量／显存资格结论。生成计时不含
+模型初始化和应用发布，也尚未达到 0.5MP 完整端到端低于25秒。此预备路径尚不支持 Ref2VA、
+更长片段、去掉联合音频计算或精确端点重绘。

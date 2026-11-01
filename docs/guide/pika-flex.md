@@ -89,3 +89,47 @@ all source video times when using spatial conditioning. It creates no first-fram
 checks cover row/clock mapping, source-picture preservation and cleanup; complete GPU audio
 quality for a Pika/Larry combination still needs its own qualification. The existing first-frame
 audio path and the optional original Pika runtime retain their separate identities.
+
+
+## Prepared Pika picture with native Larry audio
+
+The optional `vflash.pipeline.pika_av_runtime.PikaAVRuntime` reuses the explicit
+original-FL row-FP8 components accepted by `ReferenceAVRuntime`. It replaces the
+segmented session with one exclusively owned Pika session. Supply `pika_source`,
+`pika_adapter`, `pika_manifest` and `pika_tables` in addition to those components;
+`trust_local_code=True` validates and imports the pinned Pika sampler source.
+No model location, GPU rental or product default is inferred.
+
+```python
+from vflash.pipeline import VideoRequest
+from vflash.pipeline.pika_av import PikaAVRecipe
+from vflash.pipeline.pika_av_runtime import PikaAVRuntime
+
+# All paths, manifests and the text loader are explicit caller-owned components.
+runtime = PikaAVRuntime(**prepared_components, **pika_components, trust_local_code=True)
+try:
+    result = runtime.generate(
+        VideoRequest("A ceramic bird unfolds its wings.", width=960, height=544),
+        output_directory,
+        recipe=PikaAVRecipe(audio_steps=10, visual_attention="veda", overlap_decode=True),
+    )
+finally:
+    runtime.close()
+```
+
+This prepared path currently accepts five-second T2VA or I2VA with generated audio
+and decoded keyframes. It runs the original six-step re-noising schedule with the
+unmerged Pika FL adapter; `audio_steps=0` keeps that joint soundtrack, while 10 or
+12 explicitly selects a Larry native soundtrack over the frozen picture. Prompt
+and first-frame embeddings are reused within the request. The visual fused-QKV
+storage is released before audio and optional video-decode overlap. Execution
+counts, attention, conditioning reuse, memory and complete-call timings are returned.
+
+The original BF16 Pika pipeline above remains separate. Prepared row-FP8 weights,
+Veda attention and spatial video-KV audio reuse are approximate choices; six visual
+forwards plus ten audio forwards is not a six-forward complete request. Current
+hardware evidence covers a full 96 GiB SM120 PRO 6000 and 960×544 / 832×480 five-second
+clips. Other admitted canvases are not a broad quality or memory qualification.
+Reported generation time excludes model initialization and application publication.
+No sub-25-second 0.5 MP end-to-end guarantee is made. Ref2VA, longer clips, omitted
+joint audio and exact endpoint repainting are not implemented by this prepared path.
