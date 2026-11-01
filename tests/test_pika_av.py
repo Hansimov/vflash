@@ -15,6 +15,7 @@ from vflash.pipeline.pika_av import PikaAVRecipe
         {"overlap_decode": 1},
         {"decode_tile_batch_size": True},
         {"decode_tile_batch_size": 3},
+        {"strict_rotary": 1},
     ],
 )
 def test_recipe_rejects_implicit_or_unqualified_stage_choices(kwargs):
@@ -97,7 +98,8 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
     pipe = Pipe()
 
     @contextmanager
-    def execution(_model, *, qkv=True):
+    def execution(_model, *, qkv=True, rotary=False):
+        assert rotary is (steps == 10 and tile_batch == 4)
         active.append(qkv)
         try:
             yield {"qkv": qkv}
@@ -172,6 +174,7 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
         visual_attention="sdpa",
         overlap_decode=False,
         decode_tile_batch_size=tile_batch,
+        strict_rotary=steps == 10 and tile_batch == 4,
     )
     if fail_audio and steps:
         with pytest.raises(RuntimeError, match="fixture audio failure"):

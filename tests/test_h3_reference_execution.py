@@ -17,6 +17,15 @@ def _index_select_rows(table, indices):
     return table.float().index_select(0, indices).to(table.dtype)
 
 
+def apply_minimax_h3_rotary_emb(value, cosine, sine):
+    width = cosine.shape[-1]
+    half = width // 2
+    part = value[..., :width]
+    rotated = torch.cat((-part[..., half:], part[..., :half]), dim=-1)
+    result = part * cosine.to(value.dtype) + rotated * sine.to(value.dtype)
+    return torch.cat((result, value[..., width:]), dim=-1)
+
+
 class Execution:
     def __init__(self):
         self.calls = 0
@@ -151,6 +160,35 @@ class ReferenceExecutionTests(unittest.TestCase):
             _index_select_rows(table, indices)
             self.assertEqual(record["direct_bf16_gathers"], 1)
         torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+        self.assert_restored()
+
+    def test_rotary_cpu_fallback_preserves_partial_channels_and_restores_on_error(self):
+        original = apply_minimax_h3_rotary_emb
+        values = torch.randn(1, 7, 3, 12, dtype=torch.bfloat16)
+        cosine = torch.randn(1, 7, 1, 8)
+        sine = torch.randn_like(cosine)
+        expected = original(values, cosine, sine)
+        with (
+            self.assertRaisesRegex(RuntimeError, "owned failure"),
+            torch.inference_mode(),
+            dense_reference_execution(
+                self.model, qkv=False, elementwise=False, rotary=True
+            ) as record,
+        ):
+            actual = apply_minimax_h3_rotary_emb(values, cosine, sine)
+            torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+            self.assertEqual(record["rotary_reference_calls"], 1)
+            self.assertEqual(record["strict_rotary_calls"], 0)
+            raise RuntimeError("owned failure")
+        self.assertIs(apply_minimax_h3_rotary_emb, original)
+        self.assert_restored()
+
+    def test_rotary_selector_requires_boolean(self):
+        with (
+            self.assertRaisesRegex(ValueError, "explicit booleans"),
+            dense_reference_execution(self.model, rotary=1),
+        ):
+            self.fail("invalid option")
         self.assert_restored()
 
 

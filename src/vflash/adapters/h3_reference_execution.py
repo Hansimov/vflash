@@ -13,7 +13,7 @@ from contextlib import contextmanager
 
 @contextmanager
 def dense_reference_execution(
-    model, *, qkv=True, elementwise=True, maximum_weight_bytes=8 * 1024**3
+    model, *, qkv=True, elementwise=True, rotary=False, maximum_weight_bytes=8 * 1024**3
 ):
     """Temporarily fuse an exclusively owned reference model's inference work.
 
@@ -26,10 +26,11 @@ def dense_reference_execution(
     from vflash.native.h3_fused_ops import (
         triton_strict_bf16_gate_residual,
         triton_strict_bf16_modulate,
+        triton_strict_bf16_rotary,
         triton_strict_bf16_silu_mul,
     )
 
-    if type(qkv) is not bool or type(elementwise) is not bool:
+    if any(type(value) is not bool for value in (qkv, elementwise, rotary)):
         raise ValueError("Reference execution options must be explicit booleans")
     if type(maximum_weight_bytes) is not int or maximum_weight_bytes < 1:
         raise ValueError("Reference execution needs a positive weight memory bound")
@@ -37,6 +38,9 @@ def dense_reference_execution(
     if model.training or getattr(module, "_vflash_reference_execution_owner", None) is not None:
         raise ValueError("Reference execution requires an exclusively owned evaluation model")
     old_gather = module._index_select_rows
+    old_rotary = getattr(module, "apply_minimax_h3_rotary_emb", None)
+    if rotary and not callable(old_rotary):
+        raise ValueError("Rotary fusion requires the pinned split-half reference function")
     saved, handles = [], []
     record = {
         "direct_bf16_gathers": 0,
@@ -45,6 +49,9 @@ def dense_reference_execution(
         "strict_blocks": 0,
         "strict_swiglu": 0,
         "additional_weight_bytes": 0,
+        "strict_rotary_calls": 0,
+        "rotary_reference_calls": 0,
+        "rotary_contiguous_copies": 0,
     }
 
     def replace(obj, name, value):
@@ -57,6 +64,20 @@ def dense_reference_execution(
             return table.index_select(0, indices)
         # Preserve the source implementation's training/backward behavior.
         return old_gather(table, indices)
+
+    def apply_rotary(value, cosine, sine):
+        if (
+            torch.is_grad_enabled()
+            or value.device.type != "cuda"
+            or value.dtype != torch.bfloat16
+        ):
+            record["rotary_reference_calls"] += 1
+            return old_rotary(value, cosine, sine)
+        record["strict_rotary_calls"] += 1
+        record["rotary_contiguous_copies"] += int(not value.is_contiguous())
+        return triton_strict_bf16_rotary(
+            value.contiguous(), cosine.to(value.dtype), sine.to(value.dtype)
+        )
 
     def block_forward(
         block,
@@ -97,6 +118,8 @@ def dense_reference_execution(
     try:
         replace(module, "_vflash_reference_execution_owner", model)
         replace(module, "_index_select_rows", gather)
+        if rotary:
+            replace(module, "apply_minimax_h3_rotary_emb", apply_rotary)
         if elementwise:
             for block in model.transformer_blocks:
                 replace(block, "forward", types.MethodType(block_forward, block))

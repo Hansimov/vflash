@@ -38,6 +38,7 @@ class PikaAVRecipe:
     visual_attention: str = "veda"
     overlap_decode: bool = True
     decode_tile_batch_size: int = 1
+    strict_rotary: bool = False
 
     def __post_init__(self):
         if (
@@ -45,6 +46,7 @@ class PikaAVRecipe:
             or self.audio_steps not in {0, 10, 12}
             or self.visual_attention not in {"sdpa", "veda"}
             or type(self.overlap_decode) is not bool
+            or type(self.strict_rotary) is not bool
             or type(self.decode_tile_batch_size) is not int
             or self.decode_tile_batch_size not in {1, 2, 4}
         ):
@@ -242,7 +244,9 @@ class PikaAVSession:
 
             execution = {}
             with torch.inference_mode():
-                with dense_reference_execution(model) as visual_execution:
+                with dense_reference_execution(
+                    model, rotary=recipe.strict_rotary
+                ) as visual_execution:
                     began = time.monotonic()
                     with selected_clock(model, self.pika_clock):
                         handles = [
@@ -303,7 +307,9 @@ class PikaAVSession:
                     else nullcontext(None)
                 )
                 with (
-                    dense_reference_execution(model, qkv=False) as audio_execution,
+                    dense_reference_execution(
+                        model, qkv=False, rotary=recipe.strict_rotary
+                    ) as audio_execution,
                     decode_scope as overlap,
                 ):
                     if overlap:

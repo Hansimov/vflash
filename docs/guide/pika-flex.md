@@ -150,3 +150,20 @@ roughly 30-second complete resident call. Other scene pairs also include first-u
 differences. Initialization, orchestration and upload are separate; these trials do not
 establish a sub-25-second delivered result or qualification above that canvas size.
 The response records actual tile batch groups in `decode_tile_batches`.
+
+### Strict rotary execution (source, pending release)
+
+`PikaAVRecipe(strict_rotary=True)` opts into the existing strict BF16 split-half rotary
+kernel in both visual and native audio stages. The default is false. This changes execution,
+not the sampler, model weights or audio recipe. The scoped hook restores the source function
+on success or failure; CPU, other dtypes and gradient-enabled calls use the original function.
+Execution receipts count fused calls, reference fallbacks and required contiguous copies.
+
+Four five-second T2VA/I2VA pairs at 960×544 on one 450 W PRO 6000 Workstation, using Pika6,
+Larry10, Veda and native VAE tile batches of four, retained identical video latents, all
+120 decoded RGB frames and decoded PCM audio. A similarly warmed phase-first control took
+52.115 seconds versus 51.462 seconds with fusion. Larger cross-case differences also include
+conditioning-cache and warm-up effects, so they are not an isolated rotary speedup. These
+complete engine-call times exclude procurement, initialization and application delivery.
+The existing generation-quality limitations remain; pixel equality establishes this execution
+change's equivalence on the tested cases, not general content quality.
