@@ -71,3 +71,9 @@ values, failure cleanup and restored hooks. Full-weight GPU memory, quality and 
 is still pending. It cannot be combined with `cpu_offload=True`. Use a dedicated process; all
 `PikaFlexRuntime` calls in that interpreter share a nonblocking owner lock. `close()` releases
 retained components. Results include `component_reuse` and load/reuse counters in `component_stats`.
+
+The reusable activation adapter also accepts explicit `kind="pika"` with the original release
+manifest. It validates all 312 rank-128 pairs, retains the original parameter names, uses
+alpha/rank=1 and casts stored FP32 adapter tensors to BF16 as the released PEFT loader does.
+It never applies LightX's fallback alpha. Partial installation failures remove all hooks.
+This is a loader contract, not qualification of a quantized six-step generation pipeline.

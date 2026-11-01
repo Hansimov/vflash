@@ -1,11 +1,11 @@
-"""Original LightX and Larry activation-space adapters on the unpruned H3 model."""
+"""Declared original activation-space adapters on the unpruned H3 model."""
 
 import torch
 from safetensors import safe_open
 
 
 def converted(name, down, up, kind):
-    if kind == "lightx":
+    if kind in {"lightx", "pika"}:
         return [(name, down, up)]
     name = (
         name.replace("token_refiner.blocks.", "token_refiner.refiner_blocks.").replace(
@@ -35,7 +35,15 @@ def converted(name, down, up, kind):
 
 
 class H3ActivationAdapter:
-    def __init__(self, model, path, kind, *, validate_header=None):
+    def __init__(self, model, path, kind, *, validate_header=None, manifest=None):
+        if kind not in {"lightx", "larry", "pika"}:
+            raise ValueError("An explicit supported adapter family is required")
+        if kind == "pika":
+            from vflash.pipeline.pika_flex import validate_adapter_manifest
+
+            if not isinstance(manifest, dict):
+                raise ValueError("The original Pika release manifest is required")
+            validate_adapter_manifest(manifest, manifest.get("task"))
         self.handles = []
         self.calls = {}
         self.tensor_bytes = 0
@@ -60,11 +68,13 @@ class H3ActivationAdapter:
                 )
 
         try:
-            suffix = ".lora_A.default.weight" if kind == "lightx" else ".lora_A.weight"
-            other = ".lora_B.default.weight" if kind == "lightx" else ".lora_B.weight"
+            suffix = (
+                ".lora_A.default.weight" if kind in {"lightx", "pika"} else ".lora_A.weight"
+            )
+            other = ".lora_B.default.weight" if kind in {"lightx", "pika"} else ".lora_B.weight"
             names = sorted(k[: -len(suffix)] for k in keys if k.endswith(suffix))
             assert keys == {n + s for n in names for s in [suffix, other]}
-            assert len(names) == (312 if kind == "lightx" else 259)
+            assert len(names) == (312 if kind in {"lightx", "pika"} else 259)
             for name in names:
                 down, up = read(name + suffix), read(name + other)
                 scale = (
@@ -72,6 +82,13 @@ class H3ActivationAdapter:
                     if kind == "lightx"
                     else 1.0
                 )
+                if kind == "pika":
+                    if down.shape[0] != 128 or up.shape[1] != 128:
+                        raise ValueError("Pika requires every original rank-128 tensor pair")
+                    # PEFT in the release casts original FP32 stored adapters to BF16.
+                    # LightX's metadata fallback alpha=8 is not the Pika alpha=128.
+                    scale = manifest["alpha"] / manifest["rank"]
+                    down, up = down.to(torch.bfloat16), up.to(torch.bfloat16)
                 for target, a, b in converted(name, down, up, kind):
                     module = model.get_submodule(target)
                     assert isinstance(module, torch.nn.Linear)
@@ -96,7 +113,10 @@ class H3ActivationAdapter:
                         return result + delta.to(result.dtype) * scale * self.strength
 
                     self.handles.append(module.register_forward_hook(forward))
-            assert len(self.calls) == (312 if kind == "lightx" else 363)
+            assert len(self.calls) == (312 if kind in {"lightx", "pika"} else 363)
+        except BaseException:
+            self.close()
+            raise
         finally:
             if handle is not None:
                 handle.__exit__(None, None, None)

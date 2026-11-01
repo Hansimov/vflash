@@ -35,3 +35,8 @@ BF16执行，不改变现有hybrid或分段默认。当前GPU资格、输出质�
 所有`PikaFlexRuntime`共用非阻塞执行锁；`close()`释放组件。结果记录`component_reuse`和
 `component_stats`实际加载／复用次数。原始分阶段路径已完成96GiB Blackwell PRO 6000上5秒480p
 T2VA/I2VA生成；该范围不代表新复用路径或其他输入模式已通过。
+
+可复用激活适配器支持明确的`kind="pika"`及原版manifest：校验完整312组rank128矩阵，
+保留原参数名，使用alpha/rank=1，并按原PEFT加载器将存储的FP32适配器转为BF16。
+不沿用LightX缺省alpha；部分安装失败时清除所有钩子。这只是加载合同，尚不代表量化六步
+完整生成路径已完成资格化。
