@@ -1,0 +1,28 @@
+{
+  "source_repository": "https://github.com/Pika-Labs/Pika-H3-Flex",
+  "source_revision": "4bf8ea508891a432106e70f675d287c27f02306d",
+  "files": {
+    "src/pika_h3/__init__.py": "d95e511ecb2c5c1735fc63b4e570ee20e4999546608be2803a2b18ed25d211e8",
+    "src/pika_h3/cli.py": "4e85f61a9efe8b8f5d5eadf128215ca4f0870890179e59876fa232206e985978",
+    "src/pika_h3/core/__init__.py": "afac12fc7cc36aa7f62a5606da294a83a7093fee8b8855e355051f1eb9728695",
+    "src/pika_h3/core/buckets.py": "4b64584270db7889afb3314b05a5f142832f0866fda9170ae7bc3a501e456f71",
+    "src/pika_h3/core/buckets.yaml": "6752bfa788f48959624d82016e2aa08e1a4afb7d00856900f89639e273f1833b",
+    "src/pika_h3/core/canvas.py": "0b14a440a29e9a858fccfa92461a28d144ae1bad4953ee95006be62ba463f408",
+    "src/pika_h3/core/conditioning.py": "4a94ed2c7b0bec225d1329e13c63ad375fce084768dd9c47476bdc42e8db6863",
+    "src/pika_h3/core/evaluation.py": "408a4574b2cef28bd98112f6a212556e4772d547cd3a8ceb01eb0ac87589d6ad",
+    "src/pika_h3/core/geometry.py": "c6a215bbb00045140685395c9741660914d61f50786832edce7d20319204d845",
+    "src/pika_h3/core/loader.py": "adf215e02de936f037308980aadd7e8c216ca73a943eb1e2f79e07fdc6ea24b7",
+    "src/pika_h3/core/media.py": "9bb728897592c2a8e61c4575b215c4317a43a2fd4ecf1d02f27aed9e12caf88d",
+    "src/pika_h3/core/numerics.py": "4480784e21e2320eb983fb6dc95a5b57b3223749e7d3a2a4a88804c410711a60",
+    "src/pika_h3/core/packing.py": "d6629f479935135c77e22d5d05e25709ac0978c822351ba2d97745015975c11b",
+    "src/pika_h3/core/pipeline_geometry.py": "094053f8ac2614297a8b8c2de098edf5be166f9339086218a9bc6f05c8c905bf",
+    "src/pika_h3/core/presentation.py": "01b4f56cec5ce37a7861d2f300c7c7c0106f218185e3c92df0c1ab68e522631f",
+    "src/pika_h3/core/sampler.py": "5bdfd559c6659449ac94dc19c4ca148d6b24b88e6a96aa45c0da820ab67f8964",
+    "src/pika_h3/core/sampling.py": "e0760efd02f89194fd010d2f31d8af637300e5834b755252ed08d9341e86cf69",
+    "src/pika_h3/core/schedules.py": "f8f0b839eba524db692881458222d8dce47cc62ade571bc80b3c05170e4c1f47",
+    "src/pika_h3/core/vae.py": "b1b923d3274c8f5d3ad996ddfff8044e1a95c2efee124f5a2c7cef2ae4dfff24",
+    "src/pika_h3/core/wrapper.py": "c2f69dab82cca68413b4e40d9aa767e4110e1fecd4af2dc82a2dd8d020d16ef0",
+    "src/pika_h3/pipeline.py": "b721a8e83f2f603a939f86f9bb22fbe46c89bc6fcb38b71808a2d538ccc495af",
+    "src/pika_h3/runtime.py": "6116cf6bb81fbe93ffab0af24490ed590b12a80a79247e673614dac25c24864a"
+  }
+}

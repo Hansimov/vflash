@@ -42,6 +42,7 @@ const sidebar = (zh = false) => {
       items: [
         item('Attention LoRA', '注意力 LoRA', '/reference/attention-lora'),
         item('Video restoration', '画质增强', '/guide/restoration'),
+        item('Pika H3 Flex reference', 'Pika H3 Flex 参考执行', '/guide/pika-flex'),
         item('VDN8 community backend', 'VDN8 社区后端', '/guide/community-vdn'),
         item('Sol-Engine alignment', 'Sol-Engine 对齐', '/reference/sol-engine-alignment'),
       ],
