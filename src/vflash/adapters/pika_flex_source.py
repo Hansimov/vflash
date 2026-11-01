@@ -9,12 +9,13 @@ import sys
 from importlib.metadata import version
 from importlib.resources import files
 from pathlib import Path
+from types import SimpleNamespace
 
 from vflash.contracts import ContractError
 from vflash.pipeline.pika_flex import PIKA_SOURCE_REVISION
 
 
-def load_pika_source(root: Path, *, trust_local_code: bool = False):
+def _prepare_pika_source(root: Path, *, trust_local_code: bool = False):
     if trust_local_code is not True:
         raise ContractError("Pika source loading requires explicit trust_local_code=True")
     root = root.resolve(strict=True)
@@ -41,7 +42,26 @@ def load_pika_source(root: Path, *, trust_local_code: bool = False):
     entry = str(root / "src")
     if entry not in sys.path:
         sys.path.insert(0, entry)
+    return root
+
+
+def load_pika_source(root: Path, *, trust_local_code: bool = False):
+    _prepare_pika_source(root, trust_local_code=trust_local_code)
     return importlib.import_module("pika_h3.pipeline")
+
+
+def load_pika_sampling(root: Path, *, trust_local_code: bool = False):
+    """Load the pinned sampler for an explicitly separate prepared-weight runtime.
+
+    This shares source identity with the original BF16 pipeline, without silently
+    claiming that an alternative model or dependency stack is that reference.
+    """
+    root = _prepare_pika_source(root, trust_local_code=trust_local_code)
+    modules = {
+        name: importlib.import_module("pika_h3.core." + name)
+        for name in ("sampler", "wrapper", "numerics", "packing", "geometry")
+    }
+    return SimpleNamespace(source_root=root, source_revision=PIKA_SOURCE_REVISION, **modules)
 
 
 PIKA_DEPENDENCIES = {
