@@ -16,10 +16,11 @@ def spatial_video_condition(model, *, height, width, condition_rows, stride=2):
     if (
         torch.is_grad_enabled()
         or model.training
-        or any(type(value) is not int or value < 1 for value in (height, width, condition_rows))
+        or any(type(value) is not int or value < 1 for value in (height, width))
         or type(stride) is not int
         or stride not in (2, 4)
-        or condition_rows != height * width
+        or type(condition_rows) is not int
+        or condition_rows not in (0, height * width)
         or not getattr(model, "_vflash_fixed_audio_active", False)
         or getattr(model, "_vflash_spatial_audio_active", False)
     ):
@@ -31,7 +32,8 @@ def spatial_video_condition(model, *, height, width, condition_rows, stride=2):
         "approximate": True,
         "stride": stride,
         "all_source_times_retained": True,
-        "condition_frame_retained": True,
+        "condition_frame_retained": condition_rows > 0,
+        "condition_rows": condition_rows,
         "forwards": 0,
     }
     state = {}
@@ -40,7 +42,7 @@ def spatial_video_condition(model, *, height, width, condition_rows, stride=2):
         hidden, video = kwargs["hidden_states"], kwargs["video_indices"]
         if (
             hidden.shape != (1, len(video), 96)
-            or len(video) != 38 * height * width
+            or len(video) != 37 * height * width + condition_rows
             or not torch.all(kwargs["timestep"][kwargs["timestep_indices"][video]] == 0.999)
         ):
             raise ValueError("Spatial audio differs from its qualified pinned video layout")

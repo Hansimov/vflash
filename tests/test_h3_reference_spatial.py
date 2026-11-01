@@ -84,6 +84,38 @@ class SpatialAudioTests(unittest.TestCase):
             self.assertTrue(torch.equal(self.kwargs["position_ids"], original_positions))
         self.assert_restored()
 
+    def test_text_only_audio_adds_clean_clock_without_a_generated_image(self):
+        self.condition = 0
+        rows = 37 * self.height * self.width
+        self.kwargs.update(
+            hidden_states=torch.randn(1, rows, 96),
+            video_indices=torch.arange(7, 7 + rows),
+            position_ids=torch.arange((7 + rows) * 3).reshape(7 + rows, 3),
+            token_tags=torch.cat((torch.ones(3), torch.full((4,), 2), torch.zeros(rows))),
+            timestep_indices=torch.zeros(7 + rows, dtype=torch.long),
+            timestep=torch.tensor([0.2]),
+        )
+        seen = []
+        hook = self.model.register_forward_pre_hook(
+            lambda model, args, kw: seen.append(kw["timestep"].clone()), with_kwargs=True
+        )
+        original_video = self.video.clone()
+        try:
+            with torch.inference_mode(), self.pin(), self.spatial() as record:
+                result = self.model(**self.kwargs)
+                self.assertTrue(torch.equal(seen[0], torch.tensor([0.2, 0.999])))
+                self.assertEqual(record["retained_video_rows"], 37 * 6)
+                self.assertEqual(record["condition_rows"], 0)
+                self.assertFalse(record["condition_frame_retained"])
+                self.assertTrue((result["timestep_indices"][:7] == 0).all())
+                self.assertTrue(
+                    (result["timestep_indices"][result["video_indices"]] == 1).all()
+                )
+                torch.testing.assert_close(self.video, original_video, rtol=0, atol=0)
+        finally:
+            hook.remove()
+        self.assert_restored()
+
     def test_text_and_audio_remain_live_across_forwards(self):
         with torch.inference_mode(), self.pin(), self.spatial() as record:
             first = self.model(**self.kwargs)

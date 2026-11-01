@@ -77,3 +77,15 @@ manifest. It validates all 312 rank-128 pairs, retains the original parameter na
 alpha/rank=1 and casts stored FP32 adapter tensors to BF16 as the released PEFT loader does.
 It never applies LightX's fallback alpha. Partial installation failures remove all hooks.
 This is a loader contract, not qualification of a quantized six-step generation pipeline.
+
+`PikaSamplingClock` consumes separately prepared FL text/keyframe projection tables. It verifies
+the original six timestamps, FP32 time embeddings, BF16 modulation and all 312 table entries
+before use, and checks each actual model call. The table recipe is independent of a final audio
+recipe; changing it never turns the Pika denoiser into an Euler sampler.
+
+The native fixed-picture audio adapter can represent a text-only source with `condition_rows=0`.
+It adds the clean-video clock before projection validation, preserves text/audio times and retains
+all source video times when using spatial conditioning. It creates no first-frame image. CPU
+checks cover row/clock mapping, source-picture preservation and cleanup; complete GPU audio
+quality for a Pika/Larry combination still needs its own qualification. The existing first-frame
+audio path and the optional original Pika runtime retain their separate identities.

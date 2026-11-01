@@ -51,7 +51,7 @@ def native_audio_context(
     bitstream during delivery. False retains full-context computation. A failed
     pass restores state and propagates its error; retries need a fresh generator.
     Spatial stride two or four explicitly reduces spatial audio conditioning
-    on five-second I2VA canvases up to two megapixels, with all times retained.
+    on five-second T2VA/I2VA canvases up to two megapixels, with all times retained.
     """
     if type(expected_forwards) is not int or expected_forwards not in (10, 12):
         raise ValueError("This native audio adapter is qualified for 10 or 12 forwards")
@@ -59,18 +59,16 @@ def native_audio_context(
         raise ValueError("Visual context reuse must be explicit")
     if type(spatial_stride) is not int or spatial_stride not in (1, 2, 4):
         raise ValueError("Native audio spatial stride must be 1, 2 or 4")
-    # Only the actual five-second, single-first-frame matrix is qualified.
+    # Five-second geometry only; zero rows denotes direct text, with no image.
     if spatial_stride > 1 and (
         not reuse_visual_context
         or video.ndim != 5
         or tuple(video.shape[:3]) != (1, 24, 37)
         or max(video.shape[-2:]) * 16 > 2048
         or video.shape[-2] * video.shape[-1] * 256 > 2 * 1024**2
-        or condition_rows != (video.shape[-2] // 2) * (video.shape[-1] // 2)
+        or condition_rows not in (0, (video.shape[-2] // 2) * (video.shape[-1] // 2))
     ):
-        raise ValueError(
-            "Spatial audio requires qualified five-second I2VA geometry and KV reuse"
-        )
+        raise ValueError("Spatial audio requires qualified five-second geometry and KV reuse")
     with ExitStack() as stack:
         picture = stack.enter_context(
             fixed_video_audio_pass(
@@ -138,7 +136,7 @@ def fixed_video_audio_pass(transformer, video_scheduler, video, *, condition_row
     fixed = _pack_video(video)
     if (
         type(condition_rows) is not int
-        or condition_rows < 1
+        or condition_rows < 0
         or not torch.isfinite(fixed).all()
         or torch.is_grad_enabled()
         or transformer.training
@@ -164,6 +162,13 @@ def fixed_video_audio_pass(transformer, video_scheduler, video, *, condition_row
             raise ValueError("Picture preservation cannot lower its latent precision")
         hidden[:, condition_rows:].copy_(expected)
         clean = (kwargs["timestep"] == 0.999).nonzero().flatten()
+        if clean.numel() == 0 and condition_rows == 0:
+            # T2VA has no input image row. Add the fixed-picture clock without
+            # inventing an image or changing existing text/audio time indices.
+            kwargs["timestep"] = torch.cat(
+                (kwargs["timestep"], kwargs["timestep"].new_tensor([0.999]))
+            )
+            clean = (kwargs["timestep"] == 0.999).nonzero().flatten()
         if clean.numel() != 1:
             raise ValueError("Actual compiled clock lacks the image-conditioning row")
         indices = kwargs["timestep_indices"].clone()
@@ -177,7 +182,8 @@ def fixed_video_audio_pass(transformer, video_scheduler, video, *, condition_row
         record["pinned_updates"] += 1
         return (sample,)
 
-    hook = transformer.register_forward_pre_hook(before, with_kwargs=True)
+    # Pinning establishes the clock before a compiled-time validation hook.
+    hook = transformer.register_forward_pre_hook(before, with_kwargs=True, prepend=True)
     transformer._vflash_fixed_audio_active = True
     video_scheduler.step = keep_video
     try:
