@@ -4,6 +4,8 @@ Native **MiniMax H3 inference** with explicit GPU profiles. Vflash uses PyTorch 
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
+**0.24.0: explicit text-memory lifetimes and exact delivery canvases.** Optional staged text conditioning releases retained encoder device storage for larger requests; decoded RGB cropping before the only encode fixes left-crop browser differences. Defaults and numerical recipes stay unchanged. See [scope and complete-output evidence](https://hansimov.github.io/vflash/guide/pika-flex).
+
 **0.23.1: explicit Pika H3 Flex recipes and optional decoder batching.** Adds the pinned original six-step sampler and a prepared Pika-picture / Larry-audio runtime, with direct text inputs and owned component reuse. Existing hybrid defaults stay available. See [Pika H3 Flex](https://hansimov.github.io/vflash/guide/pika-flex).
 
 **0.22.0: segmented motion, texture and native sound.** The new explicit SM120 reference runtime defaults to Veda with four Larry plus six original visual evaluations, followed by twelve Larry native-audio evaluations. See [scope and asset contract](https://hansimov.github.io/vflash/reference/segmented-av).
