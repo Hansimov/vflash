@@ -164,4 +164,23 @@ memory. It reports upload time, CPU restore time and released device bytes under
 `conditioning.text_residency`. For memory-constrained large requests, combine it
 with `PikaAVRecipe(overlap_decode=False)` so decoding runs after audio rather than
 competing with its KV cache. Existing canvas, runtime and KV memory checks still
-apply. Target-hardware capacity and complete-output qualification are pending.
+apply. One 96 GiB SM120 trial completed five 5-second requests, including two
+1080p first-frame requests, releasing about 29.18 GB of text-encoder device
+storage per request. A matched first-frame control was byte-identical; a text
+control preserved decoded video frames but had a small audio difference with
+unmatched first/warm ordering. Broader quality and production adoption remain pending.
+
+### Encode the delivered canvas once
+
+`PikaAVRuntime.generate(..., video_crop=(left, top, right, bottom))` applies
+even pixel offsets to decoded RGB before encoding. It leaves model geometry,
+conditioning, generated latents and audio samples unchanged. The default is no
+crop. `OfficialMediaDecoder.generate_mp4` exposes the same option and records
+source and delivered dimensions in `media.video_crop`.
+
+This avoids relying on left-offset H.264 display cropping: some decoders round
+or ignore unaligned left crops. A real Chromium CPU fixture reproduced a
+90-pixel request being displayed as 92 pixels with metadata cropping; cropping
+before the single encode displayed the requested 90 pixels and preserved the
+encoded AAC packets. This is delivery-component evidence, not GPU quality or
+end-to-end performance qualification.

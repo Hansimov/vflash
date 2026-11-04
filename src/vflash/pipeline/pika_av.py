@@ -70,7 +70,9 @@ class PikaAVSession:
         self.predictor = predictor
         self.owner = threading.Lock()
 
-    def generate(self, request, output, *, recipe=None, on_progress=lambda *_: None):
+    def generate(
+        self, request, output, *, recipe=None, on_progress=lambda *_: None, video_crop=None
+    ):
         import torch
         from PIL import Image
         from safetensors.torch import save_file
@@ -121,6 +123,9 @@ class PikaAVSession:
             or type(overlap_enabled) is not bool
         ):
             raise ValueError("Explicit bounded Pika six and optional Larry ten/twelve required")
+        from vflash.media.canvas import crop_geometry
+
+        crop_geometry(request.width, request.height, video_crop)
         if not self.owner.acquire(blocking=False):
             raise ValueError("The mixed runtime already owns an active request")
         rt = self.runtime
@@ -414,6 +419,7 @@ class PikaAVSession:
                 video_input="pipe",
                 video_threads=16,
                 predecoded_video=predecoded,
+                **({"video_crop": video_crop} if video_crop is not None else {}),
             )
             on_progress("decoding", 1, 1)
             return {
