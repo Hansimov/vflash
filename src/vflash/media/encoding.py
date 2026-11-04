@@ -95,6 +95,7 @@ def encode_mp4(
     audio_delivery_profile: str = "unchanged",
     video_input: str = "file",
     video_threads: int | None = None,
+    square_pixels: bool = False,
 ) -> dict[str, Any]:
     """Encode CPU RGB and optional stereo audio without overwriting.
 
@@ -133,6 +134,8 @@ def encode_mp4(
     if type(crf) is not int or not 0 <= crf <= 51:
         raise MediaError("crf must be an integer between 0 and 51")
     validate_video_threads(video_threads)
+    if type(square_pixels) is not bool:
+        raise MediaError("square_pixels must be a boolean")
     if video_input not in {"file", "pipe"}:
         raise MediaError("video_input must be file or pipe")
     if not has_audio and audio_delivery_profile != "unchanged":
@@ -268,6 +271,7 @@ def encode_mp4(
             str(crf),
             "-pix_fmt",
             "yuv420p",
+            *(["-aspect", f"{width}:{height}"] if square_pixels else []),
             *(["-c:a", "aac"] if has_audio else []),
             *(["-af", ",".join(audio_filters)] if audio_filters else []),
             *(

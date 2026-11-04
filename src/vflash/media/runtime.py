@@ -346,6 +346,8 @@ class OfficialMediaDecoder:
             encode_options["video_threads"] = video_threads
         if video_input == "pipe":
             encode_options["video_input"] = "pipe"
+        if crop is not None:
+            encode_options["square_pixels"] = True
         media = encode_mp4(
             crop_rgb(video[:, :, :frames], crop),
             audio[:, :, :samples] if generate_audio else None,

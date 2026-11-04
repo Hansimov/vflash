@@ -109,3 +109,46 @@ def test_single_encoded_crop_preserves_audio_and_physical_dimensions(tmp_path):
         )
     )
     assert data["streams"][0] == {"width": 90, "height": 160, "nb_frames": "24"}
+
+
+def test_declared_square_pixels_preserve_decoded_rgb_and_audio(tmp_path):
+    video = (
+        torch.linspace(0, 1, 24 * 160 * 90).reshape(1, 1, 24, 160, 90).expand(1, 3, -1, -1, -1)
+    )
+    audio = torch.sin(torch.arange(32000) * 0.04).reshape(1, 1, -1).expand(1, 2, -1) * 0.1
+    original, declared = tmp_path / "original.mp4", tmp_path / "square.mp4"
+    encode_mp4(video, audio, original, preset="ultrafast", video_threads=1, video_input="pipe")
+    encode_mp4(
+        video,
+        audio,
+        declared,
+        preset="ultrafast",
+        video_threads=1,
+        video_input="pipe",
+        square_pixels=True,
+    )
+    probe = json.loads(
+        subprocess.check_output(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=width,height,sample_aspect_ratio",
+                "-of",
+                "json",
+                str(declared),
+            ]
+        )
+    )
+    assert probe["streams"][0] == {"width": 90, "height": 160, "sample_aspect_ratio": "1:1"}
+
+    def decoded(path):
+        result = subprocess.check_output(
+            ["ffmpeg", "-v", "error", "-i", str(path), "-map", "0", "-f", "framemd5", "-"]
+        ).decode()
+        return [line for line in result.splitlines() if not line.startswith("#")]
+
+    assert decoded(original) == decoded(declared)
