@@ -1,5 +1,14 @@
 # Release notes
 
+## 0.24.0
+
+Adds opt-in staged text conditioning with retained original CPU weights.
+The resident default and numerical recipes remain unchanged. Five complete
+requests on one 96 GiB SM120 device establish the staged memory boundary;
+broader quality and production adoption remain pending. Adds optional decoded
+RGB canvas cropping before the only encode, with CPU and Chromium coverage.
+
+
 ## 0.23.1
 
 Adds opt-in bounded spatial decoder batches for the prepared Pika AV runtime. Equal-size

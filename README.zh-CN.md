@@ -4,6 +4,8 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
+**0.24.0：明确文本显存生存期和交付画布。** 可选分时文本驻留为较大请求释放编码器设备存储；首次编码前裁剪RGB，修复浏览器左侧显示裁剪差异。原默认与数值配方保持。见[范围和完整成品证据](https://hansimov.github.io/vflash/zh/guide/pika-flex)。
+
 **0.23.0：明确的 Pika H3 Flex 配方。** 新增固定原版六步采样、Pika画面／Larry原生声音运行时、直接文本输入和组件复用，保留既有hybrid默认。见[Pika H3 Flex](https://hansimov.github.io/vflash/zh/guide/pika-flex)。
 
 **0.22.0：分段画面与原生声音。** 新增SM120参考运行时，默认Veda、前4步Larry＋后6步原始画面，再以12步Larry生成原生声音。见[执行与资产范围](https://hansimov.github.io/vflash/zh/reference/segmented-av)。

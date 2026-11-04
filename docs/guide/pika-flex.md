@@ -153,6 +153,8 @@ The response records actual tile batch groups in `decode_tile_batches`.
 
 ### Strict rotary execution (source, pending release)
 
+This option is present only in main source; it is not included in the pinned v0.24.0 release.
+
 `PikaAVRecipe(strict_rotary=True)` opts into the existing strict BF16 split-half rotary
 kernel in both visual and native audio stages. The default is false. This changes execution,
 not the sampler, model weights or audio recipe. The scoped hook restores the source function
@@ -167,3 +169,41 @@ conditioning-cache and warm-up effects, so they are not an isolated rotary speed
 complete engine-call times exclude procurement, initialization and application delivery.
 The existing generation-quality limitations remain; pixel equality establishes this execution
 change's equivalence on the tested cases, not general content quality.
+
+### Staged text conditioning
+
+`PikaAVRuntime(..., text_encoder_residency="staged")` retains original CPU text
+weights and uploads them only while computing input conditions. The resulting
+conditions stay on the device; the encoder returns to its original CPU storages
+before visual and native audio sampling. Weights, precision, prompt conditions
+and audio spatial sampling remain unchanged. The default is `"resident"`.
+
+The staged option requires a CPU `text_loader` and additional retained host
+memory. It reports upload time, CPU restore time and released device bytes under
+`conditioning.text_residency`. For memory-constrained large requests, combine it
+with `PikaAVRecipe(overlap_decode=False)` so decoding runs after audio rather than
+competing with its KV cache. Existing canvas, runtime and KV memory checks still
+apply. One 96 GiB SM120 trial completed five 5-second requests, including two
+1080p first-frame requests, releasing about 29.18 GB of text-encoder device
+storage per request. A matched first-frame control was byte-identical; a text
+control preserved decoded video frames but had a small audio difference with
+unmatched first/warm ordering. Broader quality and production adoption remain pending.
+
+### Encode the delivered canvas once
+
+`PikaAVRuntime.generate(..., video_crop=(left, top, right, bottom))` applies
+even pixel offsets to decoded RGB before encoding. It leaves model geometry,
+conditioning, generated latents and audio samples unchanged. The default is no
+crop. `OfficialMediaDecoder.generate_mp4` exposes the same option and records
+source and delivered dimensions in `media.video_crop`.
+
+This avoids relying on left-offset H.264 display cropping: some decoders round
+or ignore unaligned left crops. A real Chromium CPU fixture reproduced a
+90-pixel request being displayed as 92 pixels with metadata cropping; cropping
+before the single encode displayed the requested 90 pixels and preserved the
+encoded AAC packets. Three 5-second 720p first-frame requests subsequently
+completed on a 96 GiB SM120 device, covering portrait and landscape delivery.
+Chromium played all three at their exact target dimensions. Their AAC packet
+sequences matched the previous 0.23.1 controls. Sampled face crops showed no new
+detail change. This qualifies the delivery correction; it does not establish a
+new motion-quality or complete-workflow latency claim.

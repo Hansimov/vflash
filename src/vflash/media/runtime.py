@@ -259,6 +259,7 @@ class OfficialMediaDecoder:
         first_frame: Any | None = None,
         last_frame: Any | None = None,
         predecoded_video: DecodedVideo | None = None,
+        video_crop: tuple[int, int, int, int] | None = None,
     ) -> MediaResult:
         self._require_open()
         if not self._cuda_active:
@@ -269,6 +270,9 @@ class OfficialMediaDecoder:
             raise MediaError("this adapter preserves the native 24 fps model clock")
         if type(duration_seconds) is not int or not 5 <= duration_seconds <= 15:
             raise MediaError("this delivery supports whole seconds from five through fifteen")
+        from vflash.media.canvas import crop_geometry, crop_rgb
+
+        crop = crop_geometry(width, height, video_crop)
         validate_video_threads(video_threads)
         if video_input not in {"file", "pipe"}:
             raise MediaError("video_input must be file or pipe")
@@ -342,14 +346,18 @@ class OfficialMediaDecoder:
             encode_options["video_threads"] = video_threads
         if video_input == "pipe":
             encode_options["video_input"] = "pipe"
+        if crop is not None:
+            encode_options["square_pixels"] = True
         media = encode_mp4(
-            video[:, :, :frames],
+            crop_rgb(video[:, :, :frames], crop),
             audio[:, :, :samples] if generate_audio else None,
             output_path,
             fps=fps,
             audio_sample_rate=self.audio_sample_rate,
             **encode_options,
         )
+        if crop is not None:
+            media["video_crop"] = crop
         if keyframe_delivery is not None:
             media["keyframe_delivery"] = keyframe_delivery
         stages["media_encode"] = time.monotonic() - encode_started

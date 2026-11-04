@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
@@ -138,4 +140,41 @@ def validate_resident_request(
         raise ContractError(
             f"resident {modes} supports {envelope} and 15 seconds; "
             "use block-ring for other requests"
+        )
+
+
+@contextmanager
+def staged_text_conditioning(module, *, master=None, enabled=False, device="cuda:0"):
+    """Keep the original CPU weights between an owner's conditioning passes.
+
+    The caller has exclusive use of the encoder and retains the resulting
+    conditioning tensors. No weight, precision or conditioning row changes.
+    GPU storages are released even when conditioning fails; the next request
+    uploads the same CPU storages before executing its encoder.
+    """
+    if type(enabled) is not bool:
+        raise ValueError("Text residency requires an explicit boolean")
+    report = {"policy": "staged" if enabled else "resident", "applied": False}
+    if not enabled:
+        yield report
+        return
+    if not isinstance(master, CPUModuleMaster) or module is None:
+        raise CPUResidencyError("Staged text conditioning requires original CPU weights")
+    import torch
+
+    report["retained_cpu_bytes"] = master.tensor_bytes
+    began = time.monotonic()
+    try:
+        module.to(device=device)
+        torch.cuda.synchronize(device)
+        report.update(applied=True, resume_seconds=time.monotonic() - began)
+        yield report
+    finally:
+        began = time.monotonic()
+        torch.cuda.synchronize(device)
+        before = torch.cuda.memory_allocated(device)
+        restore_cpu_master(module, master)
+        report.update(
+            restore_seconds=time.monotonic() - began,
+            released_cuda_bytes=max(0, before - torch.cuda.memory_allocated(device)),
         )
