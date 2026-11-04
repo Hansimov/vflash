@@ -1,6 +1,6 @@
 # Release notes
 
-## 0.24.0 — unreleased
+## 0.24.0
 
 Adds opt-in staged text conditioning with retained original CPU weights.
 The resident default and numerical recipes remain unchanged. Five complete
