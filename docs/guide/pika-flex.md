@@ -182,5 +182,9 @@ This avoids relying on left-offset H.264 display cropping: some decoders round
 or ignore unaligned left crops. A real Chromium CPU fixture reproduced a
 90-pixel request being displayed as 92 pixels with metadata cropping; cropping
 before the single encode displayed the requested 90 pixels and preserved the
-encoded AAC packets. This is delivery-component evidence, not GPU quality or
-end-to-end performance qualification.
+encoded AAC packets. Three 5-second 720p first-frame requests subsequently
+completed on a 96 GiB SM120 device, covering portrait and landscape delivery.
+Chromium played all three at their exact target dimensions. Their AAC packet
+sequences matched the previous 0.23.1 controls. Sampled face crops showed no new
+detail change. This qualifies the delivery correction; it does not establish a
+new motion-quality or complete-workflow latency claim.
