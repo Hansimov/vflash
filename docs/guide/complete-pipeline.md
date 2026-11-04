@@ -545,3 +545,10 @@ covering that frame. For example, joining124+124−39 frames needs349 audio tick
 all209 video frames, although the nearest-clock count is348. This preserves real decoder
 padding instead of validating349 ticks and then cropping one away. Missing required
 audio is still rejected; the default nearest-clock join remains unchanged.
+
+### Opt-in 1 MP tile batching (development)
+
+The 0.25 candidate admits tile batches 2 or 4 through 1024² pixels only when the text encoder
+is staged back to its retained CPU master after conditioning. This preserves the original sampling
+and soundtrack controls; resident text and larger batched canvases remain rejected. The default
+batch is still one. CPU ownership checks do not establish GPU memory, quality or latency qualification.

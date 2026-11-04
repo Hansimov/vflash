@@ -28,7 +28,7 @@ def test_recipe_rejects_implicit_or_unqualified_stage_choices(kwargs):
 @pytest.mark.parametrize("tile_batch", [1, 4])
 @pytest.mark.parametrize("staged_text", [False, True])
 def test_actual_session_counts_freezes_picture_and_restores_owners(
-    tmp_path, monkeypatch, mode, steps, fail_audio, tile_batch, staged_text
+    tmp_path, monkeypatch, mode, steps, fail_audio, tile_batch, staged_text, canvas=(32, 32)
 ):
     torch = pytest.importorskip("torch")
     from PIL import Image
@@ -81,14 +81,14 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
             return torch.zeros(1, 3, 5120), torch.ones(3, dtype=torch.long)
 
         def encode_keyframes(self, *_args, **_kwargs):
-            return torch.zeros(1, 96)
+            return torch.zeros(canvas[0] // 32 * (canvas[1] // 32), 96)
 
         def __call__(self, **kwargs):
             self.encode_prompt(kwargs["prompt"])
             rows = _pack_video(self.fixed)[0]
             if kwargs["image"] is not None:
                 self.encode_keyframes([kwargs["image"]])
-                rows = torch.cat([torch.zeros(1, 96), rows])
+                rows = torch.cat([torch.zeros(canvas[0] // 32 * (canvas[1] // 32), 96), rows])
             for i in range(kwargs["num_inference_steps"]):
                 model()
                 kwargs["callback_on_step_end"](
@@ -124,7 +124,7 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
     def sample(wrapper, cond, **_):
         for _ in range(6):
             wrapper()
-        return torch.zeros(1, 37, 24, 2, 2), torch.zeros(1, 414, 32)
+        return torch.zeros(1, 37, 24, canvas[1] // 16, canvas[0] // 16), torch.zeros(1, 414, 32)
 
     sampling = NS(
         source_revision="fixture",
@@ -160,11 +160,11 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
     )
     session = PikaAVSession(runtime, adapter, clock, sampling=sampling)
     first = tmp_path / "first.png"
-    Image.new("RGB", (32, 32)).save(first)
+    Image.new("RGB", canvas).save(first)
     request = VideoRequest(
         "A paper shape unfolds.",
-        width=32,
-        height=32,
+        width=canvas[0],
+        height=canvas[1],
         first_frame=first if mode == "i2va" else None,
     )
     monkeypatch.setattr(
@@ -270,3 +270,19 @@ def test_runtime_replaces_segmented_owner_and_unwinds_partial_load(
         runtime.close()
         assert not clock.tensors and runtime.closed
     assert closed == ["pika-adapter", "base"]
+
+
+def test_one_megapixel_batched_request_releases_text_and_restores_owners(tmp_path, monkeypatch):
+    test_actual_session_counts_freezes_picture_and_restores_owners(
+        tmp_path, monkeypatch, "i2va", 10, False, 4, True, canvas=(1024, 1024)
+    )
+
+
+@pytest.mark.parametrize("canvas,staged", [((1024, 1024), False), ((1920, 1088), True)])
+def test_large_batched_decode_rejects_unsafe_residency_and_unqualified_size(
+    tmp_path, monkeypatch, canvas, staged
+):
+    with pytest.raises(ValueError, match="Explicit bounded Pika"):
+        test_actual_session_counts_freezes_picture_and_restores_owners(
+            tmp_path, monkeypatch, "i2va", 10, False, 4, staged, canvas=canvas
+        )

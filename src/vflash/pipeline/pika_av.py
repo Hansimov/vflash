@@ -117,7 +117,14 @@ class PikaAVSession:
             or request.height % 32
             or min(request.width, request.height) < 32
             or request.width * request.height > 2 * 1024**2
-            or (batched_decode and request.width * request.height > 960 * 544)
+            or (
+                batched_decode
+                and request.width * request.height > 960 * 544
+                and (
+                    request.width * request.height > 1024**2
+                    or getattr(self.runtime, "text_encoder_residency", "resident") != "staged"
+                )
+            )
             or audio_steps not in {0, 10, 12}
             or attention not in {"sdpa", "veda"}
             or type(overlap_enabled) is not bool
