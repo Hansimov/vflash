@@ -93,6 +93,7 @@ class PikaAVSession:
             unpack_h3_audio_rows,
             unpatchify_h3_video_rows,
         )
+        from vflash.pipeline.residency import staged_text_conditioning
 
         recipe = recipe or PikaAVRecipe()
         if not isinstance(recipe, PikaAVRecipe):
@@ -194,7 +195,14 @@ class PikaAVSession:
             configure_numerics_backend(BF16_CONDITIONING, runtime="inference")
             on_progress("conditioning", 0, 1)
             began = time.monotonic()
-            with torch.inference_mode():
+            with (
+                staged_text_conditioning(
+                    getattr(pipe, "text_encoder", None),
+                    master=getattr(rt, "text_cpu_master", None),
+                    enabled=getattr(rt, "text_encoder_residency", "resident") == "staged",
+                ) as text_residency,
+                torch.inference_mode(),
+            ):
                 embeddings, tags = encode(request.prompt, images=[image] if image else None)
                 geom = SimpleNamespace(
                     num_latent_frames=37,
@@ -222,6 +230,7 @@ class PikaAVSession:
                 cond = prepare_conditioning(cond, "cuda:0", policy=BF16_CONDITIONING)
             torch.cuda.synchronize()
             conditioning["seconds"] = time.monotonic() - began
+            conditioning["text_residency"] = text_residency
             on_progress("conditioning", 1, 1)
             on_progress("denoising", 0, total)
             self.pika_clock.select_mode(request.mode)

@@ -1,5 +1,12 @@
 # Release notes
 
+## 0.24.0 — unreleased
+
+Adds opt-in staged text conditioning with retained original CPU weights.
+The resident default and numerical recipes remain unchanged. Target-hardware
+capacity and complete-output qualification are pending.
+
+
 ## 0.23.1
 
 Adds opt-in bounded spatial decoder batches for the prepared Pika AV runtime. Equal-size

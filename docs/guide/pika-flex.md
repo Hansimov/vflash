@@ -150,3 +150,18 @@ roughly 30-second complete resident call. Other scene pairs also include first-u
 differences. Initialization, orchestration and upload are separate; these trials do not
 establish a sub-25-second delivered result or qualification above that canvas size.
 The response records actual tile batch groups in `decode_tile_batches`.
+
+### Staged text conditioning
+
+`PikaAVRuntime(..., text_encoder_residency="staged")` retains original CPU text
+weights and uploads them only while computing input conditions. The resulting
+conditions stay on the device; the encoder returns to its original CPU storages
+before visual and native audio sampling. Weights, precision, prompt conditions
+and audio spatial sampling remain unchanged. The default is `"resident"`.
+
+The staged option requires a CPU `text_loader` and additional retained host
+memory. It reports upload time, CPU restore time and released device bytes under
+`conditioning.text_residency`. For memory-constrained large requests, combine it
+with `PikaAVRecipe(overlap_decode=False)` so decoding runs after audio rather than
+competing with its KV cache. Existing canvas, runtime and KV memory checks still
+apply. Target-hardware capacity and complete-output qualification are pending.

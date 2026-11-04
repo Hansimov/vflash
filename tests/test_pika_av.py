@@ -26,8 +26,9 @@ def test_recipe_rejects_implicit_or_unqualified_stage_choices(kwargs):
 @pytest.mark.parametrize("steps", [0, 10, 12])
 @pytest.mark.parametrize("fail_audio", [False, True])
 @pytest.mark.parametrize("tile_batch", [1, 4])
+@pytest.mark.parametrize("staged_text", [False, True])
 def test_actual_session_counts_freezes_picture_and_restores_owners(
-    tmp_path, monkeypatch, mode, steps, fail_audio, tile_batch
+    tmp_path, monkeypatch, mode, steps, fail_audio, tile_batch, staged_text
 ):
     torch = pytest.importorskip("torch")
     from PIL import Image
@@ -95,6 +96,16 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
                 )
 
     pipe = Pipe()
+    from vflash.pipeline.residency import capture_cpu_master
+
+    class TextEncoder(torch.nn.Linear):
+        def to(self, *, device):
+            assert device == "cuda:0"
+            self.weight = torch.nn.Parameter(self.weight.detach().clone())
+            return self
+
+    pipe.text_encoder = TextEncoder(2, 2, bias=False)
+    text_master = capture_cpu_master(pipe.text_encoder)
 
     @contextmanager
     def execution(_model, *, qkv=True):
@@ -144,6 +155,8 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
         attention=attention,
         clock=NS(select=lambda *_: None, before=lambda *_: None),
         decoder=decoder,
+        text_encoder_residency="staged" if staged_text else "resident",
+        text_cpu_master=text_master if staged_text else None,
     )
     session = PikaAVSession(runtime, adapter, clock, sampling=sampling)
     first = tmp_path / "first.png"
@@ -161,7 +174,7 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
         "vflash.adapters.h3_reference_audio.native_audio_context", audio_context
     )
     for name in ("synchronize", "memory_allocated", "memory_reserved"):
-        monkeypatch.setattr(torch.cuda, name, lambda: 0)
+        monkeypatch.setattr(torch.cuda, name, lambda *_: 0)
     generator = torch.Generator
     monkeypatch.setattr(torch, "Generator", lambda **_: generator())
     original_encode, original_keyframes = pipe.encode_prompt, pipe.encode_keyframes
@@ -188,6 +201,8 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
         assert result["conditioning"]["prompt_calls"] == 1
         assert result["conditioning"]["prompt_reuses"] == int(steps > 0)
         assert len(events) == 11 + steps
+        assert result["conditioning"]["text_residency"]["applied"] is staged_text
+    assert pipe.text_encoder.weight.data_ptr() == text_master.state_dict["weight"].data_ptr()
     assert pipe.encode_prompt == original_encode and pipe.encode_keyframes == original_keyframes
     assert (pipe.scheduler, pipe.audio_scheduler) == prior_schedulers
     assert adapter.strength == runtime.adapter.strength == 0

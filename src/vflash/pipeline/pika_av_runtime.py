@@ -20,6 +20,7 @@ class PikaAVRuntime(ReferenceAVRuntime):
         pika_adapter: Path,
         pika_manifest: dict,
         pika_tables: Path,
+        text_encoder_residency: str = "resident",
         trust_local_code: bool = False,
         **components,
     ):
@@ -28,6 +29,25 @@ class PikaAVRuntime(ReferenceAVRuntime):
         from vflash.adapters.pika_flex_source import load_pika_sampling
         from vflash.pipeline.pika_av import PikaAVSession
 
+        if text_encoder_residency not in {"resident", "staged"}:
+            raise ValueError("Text encoder residency must be resident or staged")
+        self.text_encoder_residency = text_encoder_residency
+        self.text_cpu_master = None
+        if text_encoder_residency == "staged":
+            from vflash.adapters.h3_text_encoder import retain_h3_text_encoder_prefix
+            from vflash.pipeline.residency import capture_cpu_master
+
+            original_text_loader = components.get("text_loader")
+            if not callable(original_text_loader):
+                raise ValueError("Staged text weights require an explicit CPU loader")
+
+            def retained_text_loader():
+                text = original_text_loader()
+                retain_h3_text_encoder_prefix(text)
+                self.text_cpu_master = capture_cpu_master(text)
+                return text
+
+            components = {**components, "text_loader": retained_text_loader}
         self.pika_adapter = self.pika_clock = None
         sampling = load_pika_sampling(pika_source, trust_local_code=trust_local_code)
         super().__init__(trust_local_code=trust_local_code, **components)
@@ -56,3 +76,4 @@ class PikaAVRuntime(ReferenceAVRuntime):
             self.pika_clock.tensors.clear()
             self.pika_clock = None
         super().close()
+        self.text_cpu_master = None
