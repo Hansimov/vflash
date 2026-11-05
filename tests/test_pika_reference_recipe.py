@@ -46,3 +46,12 @@ def test_initialized_reference_budget_cannot_be_changed_by_a_request():
     for recipe in [PikaAVRecipe(), PikaReferenceRecipe(reference_short_edge=2048)]:
         with pytest.raises(ValueError, match="candidate"):
             session.generate(request, Path("unused"), recipe=recipe)
+
+
+def test_reference_recipe_never_enters_fl_session_or_loads_models(tmp_path):
+    from vflash.pipeline.pika_av import PikaAVSession
+
+    session = PikaAVSession(None, None, None, sampling=None)
+    with pytest.raises(ValueError, match="frozen Pika AV"):
+        session.generate(None, tmp_path / "uncreated", recipe=PikaReferenceRecipe())
+    assert not (tmp_path / "uncreated").exists()

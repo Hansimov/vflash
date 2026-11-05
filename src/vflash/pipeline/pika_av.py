@@ -75,6 +75,9 @@ class PikaAVSession:
     def generate(
         self, request, output, *, recipe=None, on_progress=lambda *_: None, video_crop=None
     ):
+        recipe = recipe or PikaAVRecipe()
+        if type(recipe) is not PikaAVRecipe:
+            raise ValueError("A frozen Pika AV recipe is required")
         import torch
         from PIL import Image
         from safetensors.torch import save_file
@@ -99,9 +102,6 @@ class PikaAVSession:
         )
         from vflash.pipeline.residency import staged_text_conditioning
 
-        recipe = recipe or PikaAVRecipe()
-        if not isinstance(recipe, PikaAVRecipe):
-            raise ValueError("A frozen Pika AV recipe is required")
         audio_steps, attention, overlap_enabled = (
             recipe.audio_steps,
             recipe.visual_attention,

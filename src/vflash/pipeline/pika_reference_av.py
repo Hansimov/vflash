@@ -28,7 +28,7 @@ class PikaReferenceAVSession:
             reference_short_edge=getattr(rt, "reference_short_edge", None)
         )
         if (
-            not isinstance(recipe, PikaReferenceRecipe)
+            type(recipe) is not PikaReferenceRecipe
             or recipe.reference_short_edge != getattr(rt, "reference_short_edge", None)
             or recipe.overlap_decode
             or recipe.decode_tile_batch_size != 1

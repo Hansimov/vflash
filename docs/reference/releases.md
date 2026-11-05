@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.25.1
+
+Rejects a reference recipe passed to an FL-only Pika session before loading models
+or optional tensor dependencies. Each prepared session now requires its own exact
+frozen recipe type. Sampling, numerical settings and existing defaults are unchanged.
+
 ## 0.25.0
 
 Adds the opt-in prepared `PikaReferenceAVRuntime` and frozen `PikaReferenceRecipe`.
