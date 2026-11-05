@@ -39,6 +39,7 @@ def test_initialized_reference_budget_cannot_be_changed_by_a_request():
     from vflash.pipeline import VideoRequest
     from vflash.pipeline.pika_reference_av import PikaReferenceAVSession
 
+    pytest.importorskip("torch")
     runtime = SimpleNamespace(closed=False, reference_short_edge=1024)
     session = PikaReferenceAVSession(runtime, predictor=None)
     request = VideoRequest("Use the reference subject.", reference=Path("subject.png"))

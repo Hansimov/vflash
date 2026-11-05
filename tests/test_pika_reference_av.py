@@ -5,11 +5,12 @@ from pathlib import Path
 from types import SimpleNamespace as NS
 
 import pytest
-import torch
 
 from vflash.pipeline import VideoRequest
 from vflash.pipeline.pika_reference_av import PikaReferenceAVSession
 from vflash.pipeline.pika_reference_recipe import PikaReferenceRecipe
+
+torch = pytest.importorskip("torch")
 
 
 @pytest.mark.parametrize("steps", [0, 10, 12])

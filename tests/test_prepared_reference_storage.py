@@ -3,11 +3,16 @@
 from types import SimpleNamespace
 
 import pytest
-import torch
 
-from vflash.adapters.h3_reference_assets import CachedMatrix, CachedProjection, _trunk_directory
-from vflash.native.h3_fp8_linear import RowFP8Execution
-from vflash.pipeline.residency import capture_cpu_master, restore_cpu_master
+torch = pytest.importorskip("torch")
+
+from vflash.adapters.h3_reference_assets import (  # noqa: E402
+    CachedMatrix,
+    CachedProjection,
+    _trunk_directory,
+)
+from vflash.native.h3_fp8_linear import RowFP8Execution  # noqa: E402
+from vflash.pipeline.residency import capture_cpu_master, restore_cpu_master  # noqa: E402
 
 
 def test_projection_clone_and_restore_never_expand_the_original_matrix():

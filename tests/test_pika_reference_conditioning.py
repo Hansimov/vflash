@@ -2,12 +2,13 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-import torch
 from PIL import Image
 
 from vflash.adapters.pika_reference_conditioning import reference_conditioning
 from vflash.contracts import ContractError
 from vflash.pipeline.contracts import VideoRequest
+
+torch = pytest.importorskip("torch")
 
 
 @pytest.fixture
