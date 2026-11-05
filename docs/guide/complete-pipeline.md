@@ -562,3 +562,9 @@ The resolved policy, source/encoded image sizes and reference-row count are incl
 in the conditioning receipt. An override is an approximate quality/performance
 candidate, not an equivalence claim or a qualified default. Keep same-input controls
 and check identity, detail, action/contact and sound on the delivered videos.
+
+
+The experimental session accepts a frozen `PikaReferenceRecipe`. Its identity includes
+`ref6`, the native soundtrack and the reference encoding budget, for example
+`pika-ref6-larry10-r1024-v1`. It cannot be confused with the FL-only
+`pika6-larry10-v1` recipe, and its budget must match the initialized runtime.

@@ -4,7 +4,7 @@ import threading
 import time
 from pathlib import Path
 
-from vflash.pipeline.pika_av import PikaAVRecipe
+from vflash.pipeline.pika_reference_recipe import PikaReferenceRecipe
 
 
 class PikaReferenceAVSession:
@@ -23,10 +23,13 @@ class PikaReferenceAVSession:
         from vflash.media.canvas import crop_geometry
         from vflash.pipeline.larry_soundtrack import frozen_larry_soundtrack
 
-        recipe = recipe or PikaAVRecipe(overlap_decode=False)
         rt = self.runtime
+        recipe = recipe or PikaReferenceRecipe(
+            reference_short_edge=getattr(rt, "reference_short_edge", None)
+        )
         if (
-            not isinstance(recipe, PikaAVRecipe)
+            not isinstance(recipe, PikaReferenceRecipe)
+            or recipe.reference_short_edge != getattr(rt, "reference_short_edge", None)
             or recipe.overlap_decode
             or recipe.decode_tile_batch_size != 1
             or rt.closed

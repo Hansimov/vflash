@@ -8,8 +8,8 @@ import pytest
 import torch
 
 from vflash.pipeline import VideoRequest
-from vflash.pipeline.pika_av import PikaAVRecipe
 from vflash.pipeline.pika_reference_av import PikaReferenceAVSession
+from vflash.pipeline.pika_reference_recipe import PikaReferenceRecipe
 
 
 @pytest.mark.parametrize("steps", [0, 10, 12])
@@ -164,7 +164,9 @@ def test_separate_model_ownership_counts_frozen_picture_and_failure_cleanup(
     request = VideoRequest(
         "Use <Picture 1> as the subject.", reference=Path("image"), width=32, height=32
     )
-    recipe = PikaAVRecipe(audio_steps=steps, visual_attention="sdpa", overlap_decode=False)
+    recipe = PikaReferenceRecipe(
+        audio_steps=steps, visual_attention="sdpa", overlap_decode=False
+    )
     encode = pipe.encode_prompt
     schedulers = pipe.scheduler, pipe.audio_scheduler
     expected_failure = failure is not None and (
