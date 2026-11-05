@@ -23,9 +23,15 @@ class PikaReferenceAVRuntime(ReferenceAVRuntime):
         reference_adapter: Path,
         reference_manifest: dict,
         pika_source: Path,
+        reference_short_edge: int | None = None,
         trust_local_code: bool = False,
         **components,
     ):
+        if reference_short_edge is not None and (
+            type(reference_short_edge) is not int or reference_short_edge not in (1024, 2048)
+        ):
+            raise ValueError("Explicit reference short edge must be 1024 or 2048")
+        self.reference_short_edge = reference_short_edge
         import torch
 
         from vflash.adapters.h3_reference_assets import (

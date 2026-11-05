@@ -12,11 +12,22 @@ from vflash.contracts import ContractError
 
 
 def reference_conditioning(
-    pipe, request, *, source, conditioning, reference_type, device="cuda:0"
+    pipe,
+    request,
+    *,
+    source,
+    conditioning,
+    reference_type,
+    device="cuda:0",
+    reference_short_edge=None,
 ):
     import torch
     from PIL import Image
 
+    if reference_short_edge is not None and (
+        type(reference_short_edge) is not int or reference_short_edge not in (1024, 2048)
+    ):
+        raise ContractError("Explicit reference short edge must be 1024 or 2048")
     if (
         request.mode != "ref2va"
         or request.reference_video is not None
@@ -42,7 +53,14 @@ def reference_conditioning(
     for path in request.ordered_references:
         with Image.open(path) as original:
             image, size = conditioning.fit_reference_image(
-                original.convert("RGB"), geometry, "tiered"
+                original.convert("RGB"),
+                geometry,
+                "tiered",
+                **(
+                    {"short_edge": reference_short_edge, "allow_upscale": True}
+                    if reference_short_edge is not None
+                    else {}
+                ),
             )
         references.append(reference_type(image=image))
         sizes.append(size)
@@ -85,6 +103,11 @@ def reference_conditioning(
             "mode": "ref2va",
             "reference_order": ["image"] * len(entries),
             "reference_images": sizes,
+            "reference_encoding_policy": {
+                "rule": "tiered" if reference_short_edge is None else "explicit",
+                "short_edge": reference_short_edge,
+                "allow_upscale": True,
+            },
             "reference_video_rows": rows,
             "numerics_policy": source.numerics.FP32_CONDITIONING,
             "temporal_keyframes": 0,

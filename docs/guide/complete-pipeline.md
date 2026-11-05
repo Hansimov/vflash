@@ -545,3 +545,20 @@ covering that frame. For example, joining124+124−39 frames needs349 audio tick
 all209 video frames, although the nearest-clock count is348. This preserves real decoder
 padding instead of validating349 ticks and then cropping one away. Missing required
 audio is still rejected; the default nearest-clock join remains unchanged.
+
+
+### Experimental Pika image-reference runtime
+
+`PikaReferenceAVRuntime` is a separate prepared-weight candidate; the fixed-profile
+CLI/server does not select it. It uses the original Ref adapter for six picture
+forwards and an independent FL model for optional Larry native audio. It currently
+accepts five-second ordered image references within 1 MP, with original FP32 image
+conditioning and sequential GPU residency for the two transformers.
+
+`reference_short_edge=None` retains the original tiered reference geometry. An
+explicit `reference_short_edge=1024` or `2048` changes only the reference-image
+encoding size, with upscaling enabled; the requested output canvas stays unchanged.
+The resolved policy, source/encoded image sizes and reference-row count are included
+in the conditioning receipt. An override is an approximate quality/performance
+candidate, not an equivalence claim or a qualified default. Keep same-input controls
+and check identity, detail, action/contact and sound on the delivered videos.

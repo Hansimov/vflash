@@ -103,3 +103,34 @@ def test_encoder_cannot_return_wrong_reference_count_or_rounded_latents(fixture)
     )
     with pytest.raises(ContractError, match="precision"):
         reference_conditioning(pipe, request, **options)
+
+
+@pytest.mark.parametrize("edge", [1024, 2048])
+def test_explicit_reference_budget_keeps_output_geometry_roles_and_precision(fixture, edge):
+    request, pipe, options, _calls = fixture
+    original_fit = options["conditioning"].fit_reference_image
+    seen = []
+
+    def fit(image, geometry, rule, *, short_edge, allow_upscale):
+        seen.append((short_edge, allow_upscale, geometry.width, geometry.height))
+        result, size = original_fit(image, geometry, rule)
+        return result, {**size, "short_edge": short_edge, "rule": "explicit"}
+
+    options["conditioning"].fit_reference_image = fit
+    result = reference_conditioning(pipe, request, reference_short_edge=edge, **options)
+    assert seen == [(edge, True, 1280, 736)] * 2
+    assert result.metadata["reference_encoding_policy"] == {
+        "rule": "explicit",
+        "short_edge": edge,
+        "allow_upscale": True,
+    }
+    assert result.metadata["reference_order"] == ["image", "image"]
+    assert result.conditional_dict["references"][0]["video_latents"].dtype == torch.float32
+
+
+@pytest.mark.parametrize("edge", [True, 1024.0, 512, 4096, "1024"])
+def test_bad_reference_budget_fails_before_encoding(fixture, edge):
+    request, pipe, options, calls = fixture
+    with pytest.raises(ContractError, match="short edge"):
+        reference_conditioning(pipe, request, reference_short_edge=edge, **options)
+    assert calls == []

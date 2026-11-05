@@ -68,6 +68,7 @@ class PikaReferenceAVSession:
                 source=source,
                 conditioning=rt.conditioning_source,
                 reference_type=rt.family.pipeline.MiniMaxH3ImageReference,
+                reference_short_edge=getattr(rt, "reference_short_edge", None),
             )
             audio_embeddings = audio_tags = None
             if recipe.audio_steps:
