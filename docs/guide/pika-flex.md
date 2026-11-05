@@ -207,3 +207,23 @@ Chromium played all three at their exact target dimensions. Their AAC packet
 sequences matched the previous 0.23.1 controls. Sampled face crops showed no new
 detail change. This qualifies the delivery correction; it does not establish a
 new motion-quality or complete-workflow latency claim.
+
+### Prepared reference components (unreleased)
+
+The prepared projection loader now accepts an explicit `partition="ref2va"`.
+Its manifest binds `transformer_ref`, the released Ref adapter identity and
+`fp32_conditioning_v1`; FL tables cannot be selected for that partition. Visual
+reference rows keep their 0.999 clock, while reference audio adds the clean 1.0
+clock. Both variants retain the original six renoising evaluations.
+
+`validate_cached_structure` and `load_cached_trunk` accept an explicit
+`trunk="transformer_ref"`; their default remains `"transformer"`. Loading onto
+`device="cpu"` can retain original CPU storages before a caller-owned upload.
+Frozen projection descriptors preserve their one-element storage during device
+moves, instead of materializing the original large projection matrices.
+
+These are preparation and residency primitives, covered by CPU storage and
+partition checks. They do not expand `PikaAVSession` beyond its qualified T2VA
+and I2VA modes or qualify Ref2VA speed, mixed Larry audio or generation quality.
+The separate original-precision Pika reference pipeline retains its existing
+Ref2VA request contract.

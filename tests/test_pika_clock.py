@@ -86,3 +86,61 @@ def test_incomplete_or_wrong_precision_table_never_becomes_active(clocks):
     with pytest.raises(ContractError, match="FP32"):
         clock.select_mode("t2va")
     assert clock.plan is None and clock.tensors == {}
+
+
+@pytest.mark.parametrize("reference_audio", [False, True])
+def test_reference_clock_binds_partition_and_exact_clean_audio_time(clocks, reference_audio):
+    import torch
+
+    from vflash.pipeline.pika_flex import PIKA_ADAPTER_SHA256
+
+    module, root, proof, contents = clocks
+    proof.update(
+        partition="ref2va",
+        trunk="transformer_ref",
+        adapter_sha256=PIKA_ADAPTER_SHA256["ref2va"],
+        numerics_policy="fp32_conditioning_v1",
+    )
+    times = module.pika_times("ref2va", reference_audio=reference_audio)
+    name = f"pika6-ref-{'audio' if reference_audio else 'visual'}.safetensors"
+    (root / name).write_bytes(b"fixture")
+    tensors = {}
+    for step, t in enumerate(times):
+        expected = module.pika_fl_times("i2va")[step]
+        if reference_audio:
+            expected = torch.unique(torch.cat([expected, torch.tensor([1.0])]))
+        assert torch.equal(t, expected)
+        tensors[f"time-{step}"] = torch.zeros((), dtype=torch.float32).expand(len(t), 2688)
+        for block in range(51):
+            tensors[f"block-{block:03d}-step-{step:02d}"] = torch.zeros(
+                (), dtype=torch.bfloat16
+            ).expand(len(t), (18 if block < 50 else 2) * 5376)
+    contents[str(root / name)] = tensors
+    proof["files"] = [
+        {"name": name, "bytes": 7, "plan": {"nfe": 6, "timesteps": [t.tolist() for t in times]}}
+    ]
+    (root / "manifest.json").write_text(json.dumps(proof))
+    with pytest.raises(ContractError, match="partition"):
+        module.PikaSamplingClock(root, device="cpu")
+    clock = module.PikaSamplingClock(root, device="cpu", partition="ref2va")
+    clock.select_mode("ref2va", reference_audio=reference_audio)
+    for t in times:
+        clock.before(None, (), {"timestep": t})
+        clock.after(None, (), None)
+    assert clock.completed_forwards == 6
+    with pytest.raises(ContractError, match="cannot be mixed"):
+        clock.select_mode("i2va")
+    assert clock.plan is None and clock.tensors == {}
+    proof["adapter_sha256"] = PIKA_ADAPTER_SHA256["fl2va"]
+    (root / "manifest.json").write_text(json.dumps(proof))
+    with pytest.raises(ContractError, match="original base and adapter"):
+        module.PikaSamplingClock(root, device="cpu", partition="ref2va")
+
+
+def test_reference_clocks_cannot_add_audio_to_keyframe_or_accept_implicit_flags():
+    from vflash.adapters.pika_clock import pika_times
+
+    with pytest.raises(ContractError, match="Reference audio"):
+        pika_times("i2va", reference_audio=True)
+    with pytest.raises(ContractError, match="Reference audio"):
+        pika_times("ref2va", reference_audio=1)

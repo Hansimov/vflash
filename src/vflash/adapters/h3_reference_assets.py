@@ -15,15 +15,15 @@ from vflash.native.h3_fp8_linear import RowFP8Execution
 
 
 class CachedMatrix(torch.nn.Linear):
-    def __init__(self, original, values, scales, execution):
+    def __init__(self, original, values, scales, execution, *, device="cuda:0"):
         torch.nn.Module.__init__(self)
         self.in_features, self.out_features = original.in_features, original.out_features
         assert values.shape == original.weight.shape
         assert values.dtype == torch.float8_e4m3fn
         assert scales.dtype == torch.float32 and scales.shape == (self.out_features, 1)
         assert original.bias is None
-        self.weight = torch.nn.Parameter(values.to("cuda:0"), requires_grad=False)
-        self.register_buffer("row_scale", scales.to("cuda:0"))
+        self.weight = torch.nn.Parameter(values.to(device), requires_grad=False)
+        self.register_buffer("row_scale", scales.to(device))
         self.bias = None
         self.execution = execution
 
@@ -34,12 +34,12 @@ class CachedMatrix(torch.nn.Linear):
 class CachedProjection(torch.nn.Linear):
     """Frozen timestep projection; the descriptor is not a trainable base matrix."""
 
-    def __init__(self, original, clock, index):
+    def __init__(self, original, clock, index, *, device="cuda:0"):
         torch.nn.Module.__init__(self)
         self.in_features, self.out_features = original.in_features, original.out_features
         # Only dtype/geometry are consumed by the model and adapter loader. The
         # actual original projection, including bias, is in the declared table.
-        descriptor = torch.zeros((1, 1), device="cuda:0", dtype=torch.bfloat16)
+        descriptor = torch.zeros((1, 1), device=device, dtype=torch.bfloat16)
         self.weight = torch.nn.Parameter(
             descriptor.expand(self.out_features, self.in_features), requires_grad=False
         )
@@ -47,6 +47,20 @@ class CachedProjection(torch.nn.Linear):
             descriptor.flatten().expand(self.out_features), requires_grad=False
         )
         self.clock, self.index = clock, index
+
+    def _apply(self, fn, recurse=True):
+        # Module.to would otherwise materialize the expanded descriptor as the
+        # full original projection matrix. Move only its one-element storage.
+        descriptor = fn(self.weight[:1, :1].contiguous())
+        if descriptor.dtype != torch.bfloat16:
+            raise ValueError("Prepared projections retain their BF16 descriptor")
+        self.weight = torch.nn.Parameter(
+            descriptor.expand(self.out_features, self.in_features), requires_grad=False
+        )
+        self.bias = torch.nn.Parameter(
+            descriptor.flatten().expand(self.out_features), requires_grad=False
+        )
+        return self
 
     def forward(self, values):
         result = self.clock.tensors[f"block-{self.index:03d}-step-{self.clock.step:02d}"]
@@ -85,7 +99,15 @@ class SamplingClock:
         return self.tensors[f"time-{self.step}"]
 
 
-def validate_cached_structure(model, root, table_root, *, manifest_name="manifest.json"):
+def _trunk_directory(root, trunk):
+    if trunk not in {"transformer", "transformer_ref"}:
+        raise ValueError("Prepared assets require an explicit FL or Ref trunk")
+    return Path(root) / "model" / trunk
+
+
+def validate_cached_structure(
+    model, root, table_root, *, manifest_name="manifest.json", trunk="transformer"
+):
     root, table_root = Path(root), Path(table_root)
     expected = dict(model.named_parameters())
     covered = set()
@@ -94,7 +116,7 @@ def validate_cached_structure(model, root, table_root, *, manifest_name="manifes
         assert name in expected and tuple(shape) == tuple(expected[name].shape), name
         covered.add(name)
 
-    directory = root / "model/transformer"
+    directory = _trunk_directory(root, trunk)
     inventory = json.loads(
         (directory / "diffusion_pytorch_model.safetensors.index.json").read_text()
     )["weight_map"]
@@ -146,7 +168,7 @@ def validate_cached_structure(model, root, table_root, *, manifest_name="manifes
     return len(covered)
 
 
-def load_cached_trunk(model, root, clock):
+def load_cached_trunk(model, root, clock, *, trunk="transformer", device="cuda:0"):
     """Assign each declared base matrix once, preserving runtime LoRA independence."""
     root = Path(root)
     execution = RowFP8Execution("w8a8", activation_quantizer="triton", fast_accum=False)
@@ -156,10 +178,10 @@ def load_cached_trunk(model, root, clock):
         parent, _, leaf = name.rpartition(".")
         module = model.get_submodule(parent)
         assert module._parameters[leaf].shape == value.shape
-        module._parameters[leaf] = torch.nn.Parameter(value.to("cuda:0"), requires_grad=False)
+        module._parameters[leaf] = torch.nn.Parameter(value.to(device), requires_grad=False)
         assigned.add(name)
 
-    directory = root / "model/transformer"
+    directory = _trunk_directory(root, trunk)
     inventory = json.loads(
         (directory / "diffusion_pytorch_model.safetensors.index.json").read_text()
     )["weight_map"]
@@ -183,7 +205,10 @@ def load_cached_trunk(model, root, clock):
             ):
                 name = "attn.to_" + suffix
                 block.set_submodule(
-                    name, CachedMatrix(block.get_submodule(name), values, scale, execution)
+                    name,
+                    CachedMatrix(
+                        block.get_submodule(name), values, scale, execution, device=device
+                    ),
                 )
             for target, key in [
                 ("attn.to_out.0", "attn.out.weight"),
@@ -197,6 +222,7 @@ def load_cached_trunk(model, root, clock):
                         source.get_tensor(key),
                         source.get_tensor(key + ".row_scale"),
                         execution,
+                        device=device,
                     ),
                 )
             for target, key in [
@@ -206,10 +232,12 @@ def load_cached_trunk(model, root, clock):
                 ("attn.norm_k.weight", "attn.k_norm.weight"),
             ]:
                 assign(f"transformer_blocks.{index}." + target, source.get_tensor(key))
-        block.adaln_proj.linear = CachedProjection(block.adaln_proj.linear, clock, index)
-    model.norm_out.linear = CachedProjection(model.norm_out.linear, clock, 50)
+        block.adaln_proj.linear = CachedProjection(
+            block.adaln_proj.linear, clock, index, device=device
+        )
+    model.norm_out.linear = CachedProjection(model.norm_out.linear, clock, 50, device=device)
     model.time_embedder.forward = clock.time_embedding
-    model.rope.inv_freq = model.rope._compute_inv_freq(device=torch.device("cuda:0"))
+    model.rope.inv_freq = model.rope._compute_inv_freq(device=torch.device(device))
     assert not any(v.is_meta for v in model.parameters())
     assert not any(v.is_meta for v in model.buffers())
     model.eval().requires_grad_(False)

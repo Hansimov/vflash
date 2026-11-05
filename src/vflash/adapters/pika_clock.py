@@ -1,4 +1,4 @@
-"""Original six-step FL timestep projections over explicit prepared base weights.
+"""Original six-step partition-bound timestep projections over explicit prepared base weights.
 
 The table removes request-independent matrix work; it does not replace the
 released renoising sampler or grant a quantized runtime quality qualification.
@@ -14,16 +14,19 @@ from safetensors.torch import load_file
 
 from vflash.contracts import ContractError
 from vflash.pipeline.pika_flex import (
+    PIKA_ADAPTER_SHA256,
     PIKA_BASE_REVISION,
     PIKA_RECIPE,
     PIKA_SOURCE_REVISION,
+    adapter_partition,
     shifted_sigmas,
 )
 
 
-def pika_fl_times(mode):
-    if mode not in {"t2va", "i2va", "fl2va", "l2va"}:
-        raise ContractError("The prepared Pika clock covers the FL partition only")
+def pika_times(mode, *, reference_audio=False):
+    partition = adapter_partition(mode)
+    if type(reference_audio) is not bool or (reference_audio and partition != "ref2va"):
+        raise ContractError("Reference audio clocks require an explicit Ref2VA partition")
     video = torch.tensor(shifted_sigmas(12), dtype=torch.float32)
     audio = torch.tensor(shifted_sigmas(3), dtype=torch.float32)
     rows = []
@@ -31,12 +34,23 @@ def pika_fl_times(mode):
         clocks = [1.0 - float(v), 1.0 - float(a)]
         if mode != "t2va":
             clocks.append(0.999)
+        if reference_audio:
+            clocks.append(1.0)
         rows.append(torch.tensor(sorted(set(clocks)), dtype=torch.float32))
     return rows
 
 
+def pika_fl_times(mode):
+    if adapter_partition(mode) != "fl2va":
+        raise ContractError("This clock request requires the FL partition")
+    return pika_times(mode)
+
+
 class PikaSamplingClock:
-    def __init__(self, root, *, device="cuda:0"):
+    def __init__(self, root, *, device="cuda:0", partition="fl2va"):
+        if partition not in {"fl2va", "ref2va"}:
+            raise ContractError("An explicit Pika projection partition is required")
+        self.partition = partition
         self.root = Path(root)
         self.manifest = json.loads((self.root / "manifest.json").read_text())
         expected = {
@@ -47,16 +61,34 @@ class PikaSamplingClock:
         }
         if any(self.manifest.get(k) != v for k, v in expected.items()):
             raise ContractError("Pika projection tables differ from the fixed original recipe")
+        if self.manifest.get("partition", "fl2va") != partition:
+            raise ContractError("Pika projection partition differs from the selected model")
+        if partition == "ref2va" and any(
+            self.manifest.get(key) != value
+            for key, value in {
+                "trunk": "transformer_ref",
+                "adapter_sha256": PIKA_ADAPTER_SHA256["ref2va"],
+                "numerics_policy": "fp32_conditioning_v1",
+            }.items()
+        ):
+            raise ContractError(
+                "Ref2VA projections require their original base and adapter identity"
+            )
         self.device = device
         self.tensors = {}
         self.plan = None
         self.step = self.completed_forwards = 0
 
-    def select_mode(self, mode):
+    def select_mode(self, mode, *, reference_audio=False):
         self.tensors, self.plan = {}, None
         self.step = self.completed_forwards = 0
-        expected = pika_fl_times(mode)
-        name = f"pika6-fl-{'t2va' if mode == 't2va' else 'keyframe'}.safetensors"
+        if adapter_partition(mode) != self.partition:
+            raise ContractError("The FL partition and Ref2VA projection tables cannot be mixed")
+        expected = pika_times(mode, reference_audio=reference_audio)
+        if self.partition == "ref2va":
+            name = f"pika6-ref-{'audio' if reference_audio else 'visual'}.safetensors"
+        else:
+            name = f"pika6-fl-{'t2va' if mode == 't2va' else 'keyframe'}.safetensors"
         rows = [row for row in self.manifest["files"] if row["name"] == name]
         if len(rows) != 1:
             raise ContractError(
