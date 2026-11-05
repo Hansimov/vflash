@@ -27,6 +27,8 @@ class ReferenceAVRuntime:
         predictor: Path,
         text_loader,
         table_manifest: str = "manifest.json",
+        retain_trunk_cpu: bool = False,
+        conditioning_precision: str = "bf16",
         trust_local_code: bool = False,
     ):
         import torch
@@ -44,6 +46,9 @@ class ReferenceAVRuntime:
         from vflash.media.runtime import OfficialMediaDecoder
         from vflash.pipeline.reference_av import SegmentedAVSession
 
+        if type(retain_trunk_cpu) is not bool or conditioning_precision not in {"bf16", "fp32"}:
+            raise ValueError("Explicit CPU trunk retention and conditioning precision required")
+        self.trunk_cpu_master = None
         if not callable(text_loader):
             raise ValueError("Reference text weights require an explicit loader")
         if torch.cuda.get_device_capability() != (12, 0):
@@ -70,7 +75,14 @@ class ReferenceAVRuntime:
                 )
             validate_cached_structure(transformer, root, tables, manifest_name=table_manifest)
             self.clock = SamplingClock(tables, manifest_name=table_manifest)
-            load_cached_trunk(transformer, root, self.clock)
+            load_cached_trunk(
+                transformer, root, self.clock, device="cpu" if retain_trunk_cpu else "cuda:0"
+            )
+            if retain_trunk_cpu:
+                from vflash.pipeline.residency import capture_cpu_master
+
+                self.trunk_cpu_master = capture_cpu_master(transformer)
+                transformer.to(device="cuda:0")
             self.adapter = H3ActivationAdapter(transformer, adapter, "larry")
             self.adapter.strength = 0
             self.attention = H3ReferenceAttention(family.models.MiniMaxH3Transformer3DModel)
@@ -90,7 +102,9 @@ class ReferenceAVRuntime:
                 model_directory,
                 subfolder="vae",
                 low_cpu_mem_usage=True,
-                torch_dtype=torch.bfloat16,
+                torch_dtype=(
+                    torch.float32 if conditioning_precision == "fp32" else torch.bfloat16
+                ),
                 local_files_only=True,
             ).eval()
             vae.encoder.to("cuda:0")
@@ -147,4 +161,5 @@ class ReferenceAVRuntime:
         self.session = self.pipe = self.adapter = self.attention = self.decoder = self.clock = (
             None
         )
+        self.trunk_cpu_master = None
         gc.collect()

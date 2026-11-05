@@ -236,3 +236,24 @@ The upstream bucket rule places 1280×736 and 736×1280 in the p768 tier, which
 encodes image references at a 2048-pixel short edge; 960×544 uses 1024.
 These are CPU contract/source checks. Full prepared Ref sampling and its separate
 FL/Larry soundtrack still require runtime integration and GPU qualification.
+
+
+### Separate Ref picture and FL soundtrack candidate
+
+`vflash.pipeline.pika_reference_runtime.PikaReferenceAVRuntime` now provides an
+unreleased complete candidate over explicit Ref base/tables/adapter and the
+existing FL/Larry components. It preserves the original FP32 image conditioning
+and six Ref sampling evaluations. The optional ten/twelve-step soundtrack runs
+on the distinct FL model with its own text-only conditioning and frozen picture
+KV context; generated video latents must remain exactly unchanged.
+
+CPU master storages let one transformer occupy the GPU at a time. Receipts
+separate model upload/suspend, reference and audio conditioning, sampling and
+media delivery. This candidate uses native VAE batch one without overlapping
+picture decode. It bounds requests to five seconds, 1 MP and ordered image
+references; video/audio references remain outside this candidate.
+
+CPU session tests exercise actual stage ownership, forward counts, changed
+picture rejection and cleanup failures. They do not establish GPU memory fit,
+latency or media quality. The qualified `PikaAVRuntime` default and the product
+admission envelope remain unchanged until a complete GPU qualification.
