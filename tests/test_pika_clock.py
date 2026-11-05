@@ -138,6 +138,7 @@ def test_reference_clock_binds_partition_and_exact_clean_audio_time(clocks, refe
 
 
 def test_reference_clocks_cannot_add_audio_to_keyframe_or_accept_implicit_flags():
+    pytest.importorskip("torch")
     from vflash.adapters.pika_clock import pika_times
 
     with pytest.raises(ContractError, match="Reference audio"):
