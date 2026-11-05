@@ -4,7 +4,7 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
-**0.24.0：明确文本显存生存期和交付画布。** 可选分时文本驻留为较大请求释放编码器设备存储；首次编码前裁剪RGB，修复浏览器左侧显示裁剪差异。原默认与数值配方保持。见[范围和完整成品证据](https://hansimov.github.io/vflash/zh/guide/pika-flex)。
+**0.25.0：独立 Pika 图片参考执行。** 实验性准备权重运行时保留有序 FP32 图片条件，区分 Ref 画面与 FL 原生声音模型，并记录明确的参考编码预算。现役固定配置保持不变。详见[范围与合同](https://hansimov.github.io/vflash/zh/guide/complete-pipeline#实验性-pika-图片参考运行时)。
 
 **0.23.0：明确的 Pika H3 Flex 配方。** 新增固定原版六步采样、Pika画面／Larry原生声音运行时、直接文本输入和组件复用，保留既有hybrid默认。见[Pika H3 Flex](https://hansimov.github.io/vflash/zh/guide/pika-flex)。
 

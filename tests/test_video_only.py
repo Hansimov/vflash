@@ -172,6 +172,7 @@ def test_video_only_decoder_does_not_read_or_decode_audio(monkeypatch):
     decoder = object.__new__(runtime.OfficialMediaDecoder)
     decoder._torch = torch
     decoder.device = torch.device("cpu")
+    decoder._closed, decoder._cuda_active = False, True
     decoder.video = object()
     decoder.audio = object()
 

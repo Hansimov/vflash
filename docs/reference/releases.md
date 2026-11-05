@@ -1,5 +1,26 @@
 # Release notes
 
+## 0.25.0
+
+Adds the opt-in prepared `PikaReferenceAVRuntime` and frozen `PikaReferenceRecipe`.
+Ordered image references keep the original FP32 conditioning and Ref six-forward
+sampler. Optional Larry sound uses a separately loaded original FL model and
+preserves the generated picture. Compact CPU masters and sequential transformer
+residency make ownership and transfer stages explicit.
+
+Reference geometry remains tiered by default. Explicit 1024/2048 short-edge
+candidates retain the requested output canvas and report their policy and token
+count. The runtime rejects a recipe whose budget differs from its allocation;
+reference recipes have identities separate from FL-only Pika generation.
+
+Complete GPU evidence covers five-second landscape/portrait outputs within 1 MP,
+one/two image references, original-tier and explicit-1024 conditioning, native
+single-tile decoding and Larry10 on complete 96 GiB SM120 allocations. This is
+execution and bounded performance evidence, not universal identity/action/sound
+qualification. More references, longer video, reference audio/video, and automatic
+serving adoption remain outside this prepared candidate's measured scope.
+Fixed-profile CLI/HTTP defaults and published container images are unchanged.
+
 ## 0.24.0
 
 Adds opt-in staged text conditioning with retained original CPU weights.

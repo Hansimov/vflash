@@ -151,9 +151,9 @@ differences. Initialization, orchestration and upload are separate; these trials
 establish a sub-25-second delivered result or qualification above that canvas size.
 The response records actual tile batch groups in `decode_tile_batches`.
 
-### Strict rotary execution (source, pending release)
+### Strict rotary execution (opt-in)
 
-This option is present only in main source; it is not included in the pinned v0.24.0 release.
+This optional source path is included from 0.25.0; it was absent from the pinned 0.24.0 package. It remains disabled by default.
 
 `PikaAVRecipe(strict_rotary=True)` opts into the existing strict BF16 split-half rotary
 kernel in both visual and native audio stages. The default is false. This changes execution,

@@ -54,6 +54,7 @@ def test_real_silent_aac_preserves_every_video_frame_and_the_callers_audio(tmp_p
 def test_silent_decode_does_not_read_or_decode_audio_latents(monkeypatch):
     decoder = OfficialMediaDecoder.__new__(OfficialMediaDecoder)
     decoder._torch, decoder.device = torch, "unused"
+    decoder._closed, decoder._cuda_active = False, True
     decoder.video = object()
     requested = []
     latent = torch.zeros(1, 4, 2, 4, 4)
