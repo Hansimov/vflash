@@ -227,3 +227,12 @@ partition checks. They do not expand `PikaAVSession` beyond its qualified T2VA
 and I2VA modes or qualify Ref2VA speed, mixed Larry audio or generation quality.
 The separate original-precision Pika reference pipeline retains its existing
 Ref2VA request contract.
+
+
+The candidate also exposes ordered image-reference conditioning over the pinned
+Pika geometry rules and the original FP32 VAE encoder. It retains image roles,
+reference order, FP32 latent values and the absence of temporal keyframes.
+The upstream bucket rule places 1280×736 and 736×1280 in the p768 tier, which
+encodes image references at a 2048-pixel short edge; 960×544 uses 1024.
+These are CPU contract/source checks. Full prepared Ref sampling and its separate
+FL/Larry soundtrack still require runtime integration and GPU qualification.

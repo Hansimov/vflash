@@ -64,6 +64,12 @@ def load_pika_sampling(root: Path, *, trust_local_code: bool = False):
     return SimpleNamespace(source_root=root, source_revision=PIKA_SOURCE_REVISION, **modules)
 
 
+def load_pika_reference_conditioning(root: Path, *, trust_local_code: bool = False):
+    """The original geometry/packing rules for an explicit reference runtime."""
+    _prepare_pika_source(root, trust_local_code=trust_local_code)
+    return importlib.import_module("pika_h3.core.conditioning")
+
+
 PIKA_DEPENDENCIES = {
     "torch": "2.13.0+cu129",
     "torchvision": "0.28.0+cu129",
