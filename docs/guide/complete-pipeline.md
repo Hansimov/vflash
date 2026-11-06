@@ -570,7 +570,7 @@ The experimental session accepts a frozen `PikaReferenceRecipe`. Its identity in
 `pika6-larry10-v1` recipe, and its budget must match the initialized runtime.
 
 
-### Experimental QAD visual weights (0.26.0a1)
+### Experimental QAD visual weights (0.26.0a2)
 
 The Python `PikaAVRuntime` accepts an explicit `qad_packed_weights`, `qad_dense_weights`,
 and `qad_manifest` set. Select `PikaAVRecipe(visual_weights="nvfp4-qad", audio_steps=10)`
@@ -591,7 +591,9 @@ Install the optional `qad` dependencies in addition to the complete pipeline. Th
 backend uses FlashInfer 0.6.18 CUTLASS W4A4, 16-value blocks and 128×4 scale layout;
 precompile its SM120 quantization/GEMM modules in the matching CUDA/Torch environment
 or provide a CUDA compiler for first use. No unsupported-device or arithmetic fallback
-is provided. Text and both visual/audio weight sets must fit the resident allocation.
+is provided. The original audio model stays resident. QAD keeps its immutable source tensors
+mapped on the host and materializes CUDA copies only for the visual scope, releasing
+them before the audio KV cache is built. Copy time remains part of complete latency.
 Attention, native VAE and the audio recipe retain their explicit independent choices.
 The execution receipt distinguishes visual NVFP4 from original row-FP8 sound and
 records complete matrix/refiner coverage and restoration, including failure cleanup.

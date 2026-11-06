@@ -446,7 +446,7 @@ FL2VA可同时给定目标末帧与已有目标历史。两个条件关键帧均
 参考预算必须与初始化运行时一致。
 
 
-### 实验性 QAD 画面权重（0.26.0a1）
+### 实验性 QAD 画面权重（0.26.0a2）
 
 Python `PikaAVRuntime` 可显式接收 `qad_packed_weights`、`qad_dense_weights` 和
 `qad_manifest`。通过 `PikaAVRecipe(visual_weights="nvfp4-qad", audio_steps=10)`
@@ -462,7 +462,7 @@ Python `PikaAVRuntime` 可显式接收 `qad_packed_weights`、`qad_dense_weights
 
 在完整流水线依赖之外安装可选 `qad` 依赖。执行采用 FlashInfer 0.6.18 CUTLASS W4A4、
 16 值分块及 128×4 缩放布局；在匹配的 CUDA／Torch 环境预编译 SM120 量化和矩阵模块，
-或为首次执行提供 CUDA 编译器。不支持的设备或数学路径会明确失败。文本和画面／声音
-两套权重必须容纳在驻留显存中。注意力、原生 VAE 和声音配方保持各自显式选择。
+或为首次执行提供 CUDA 编译器。不支持的设备或数学路径会明确失败。原始声音模型保持驻留；QAD保留主机侧不可变源张量映射，
+只在画面阶段创建CUDA副本，并在建立声音KV缓存之前释放。复制耗时计入完整请求。注意力、原生 VAE 和声音配方保持各自显式选择。
 执行回执区分画面 NVFP4 与声音原始 row-FP8，记录完整主块／refiner 调用和权重恢复，
 异常清理同样恢复原模型。

@@ -6,6 +6,7 @@ native soundtrack sampling. No public/product default is selected here.
 """
 
 import threading
+import time
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -59,6 +60,7 @@ class H3QADVisualWeights:
         self.owner = threading.Lock()
         self.execution = NVFP4Execution()
         self.matrices, self.dense, self.handles = {}, [], []
+        self.cpu_matrices, self.cpu_dense = {}, []
         self.calls, self.refiner_calls = {}, {}
         targets = {
             f"transformer_blocks.{i}.{name}": f"transformer_blocks.{i}.{source}"
@@ -74,7 +76,7 @@ class H3QADVisualWeights:
         expected_dense = set(parameters) - projections - {name + ".weight" for name in targets}
         if len(expected_dense) != 238 or not expected_dense >= CLOCK_KEYS:
             raise ValueError("QAD dense coverage differs from the original H3 model")
-        device = next(model.parameters()).device
+        device = self.device = next(model.parameters()).device
         if device.type != "cuda" or torch.cuda.get_device_capability(device) != (12, 0):
             raise ValueError("QAD visual substitution requires its owned SM120 model")
         try:
@@ -96,13 +98,7 @@ class H3QADVisualWeights:
                         # Preparation proved equality of all original projections.
                         continue
                     parent, _, leaf = name.rpartition(".")
-                    self.dense.append(
-                        (
-                            model.get_submodule(parent),
-                            leaf,
-                            torch.nn.Parameter(tensor.to(device), requires_grad=False),
-                        )
-                    )
+                    self.cpu_dense.append((model.get_submodule(parent), leaf, tensor))
             with safe_open(str(packed_weights), framework="pt", device="cpu") as source:
                 fields = {
                     "_nvfp4_weight",
@@ -120,14 +116,14 @@ class H3QADVisualWeights:
                 )
                 if set(source.keys()) != required:
                     raise ValueError("QAD must cover all 300 original main-block linears")
-                unit = torch.ones((), dtype=torch.float32, device=device)
+                unit = torch.ones((), dtype=torch.float32, device="cpu")
                 for name, prefix in targets.items():
                     module = model.get_submodule(name)
                     weight = NVFP4Weight(
-                        source.get_tensor(prefix + "::_nvfp4_weight").to(device),
-                        source.get_tensor(prefix + "::_nvfp4_weight_scale").to(device),
-                        source.get_tensor(prefix + "::_nvfp4_alpha").to(device),
-                        source.get_tensor(prefix + "::_nvfp4_input_global_sf").to(device)
+                        source.get_tensor(prefix + "::_nvfp4_weight"),
+                        source.get_tensor(prefix + "::_nvfp4_weight_scale"),
+                        source.get_tensor(prefix + "::_nvfp4_alpha"),
+                        source.get_tensor(prefix + "::_nvfp4_input_global_sf")
                         if ".ff." in prefix
                         else unit,
                     )
@@ -137,7 +133,7 @@ class H3QADVisualWeights:
                         or module.out_features != weight.out_features
                     ):
                         raise ValueError("QAD packed matrix differs from its target")
-                    self.matrices[name] = (module, weight)
+                    self.cpu_matrices[name] = (module, weight)
             for block in range(2):
                 for name in LINEARS:
                     target = f"token_refiner.refiner_blocks.{block}.{name}"
@@ -153,6 +149,36 @@ class H3QADVisualWeights:
             self.close()
             raise
 
+    def _materialize(self):
+        """Create only this visual scope's CUDA copies; mapped source tensors stay owned."""
+        if self.matrices or self.dense:
+            raise ValueError("Previous QAD visual copies were not released")
+        for module, leaf, tensor in self.cpu_dense:
+            self.dense.append(
+                (module, leaf, torch.nn.Parameter(tensor.to(self.device), requires_grad=False))
+            )
+        for name, (module, weight) in self.cpu_matrices.items():
+            self.matrices[name] = (
+                module,
+                NVFP4Weight(
+                    weight.packed.to(self.device),
+                    weight.scales.to(self.device),
+                    weight.alpha.to(self.device),
+                    weight.input_scale.to(self.device),
+                ),
+            )
+
+    def _release_materialized(self):
+        owned_bytes = sum(t.numel() * t.element_size() for _, _, t in self.dense)
+        owned_bytes += sum(
+            t.numel() * t.element_size()
+            for _, weight in self.matrices.values()
+            for t in (weight.packed, weight.scales, weight.alpha, weight.input_scale)
+        )
+        self.matrices.clear()
+        self.dense.clear()
+        return owned_bytes
+
     @contextmanager
     def selected(self, *, adapters):
         if self.closed or not self.owner.acquire(blocking=False):
@@ -167,6 +193,9 @@ class H3QADVisualWeights:
         try:
             if self.model.training or any(a.strength != 0 for a in adapters):
                 raise ValueError("Merged QAD must not receive a second Pika or Larry adapter")
+            began = time.monotonic()
+            self._materialize()
+            record["load_seconds"] = time.monotonic() - began
             self.active = True
             self.calls = dict.fromkeys(self.matrices, 0)
             self.refiner_calls = dict.fromkeys(self.refiner_calls, 0)
@@ -210,6 +239,9 @@ class H3QADVisualWeights:
             for module, leaf, original in reversed(saved_parameters):
                 module._parameters[leaf] = original
             self.active = False
+            record["released_visual_bytes"] = self._release_materialized()
+            record["visual_copies_after_scope"] = len(self.matrices) + len(self.dense)
+            record["host_storage"] = "source-mapped"
             record["restored"] = True
             self.owner.release()
 
@@ -219,6 +251,7 @@ class H3QADVisualWeights:
         for handle in self.handles:
             handle.remove()
         self.handles = []
-        self.matrices.clear()
-        self.dense.clear()
+        self._release_materialized()
+        self.cpu_matrices.clear()
+        self.cpu_dense.clear()
         self.closed = True

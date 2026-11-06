@@ -18,4 +18,4 @@ __all__ = [
     "ProfileCatalog",
 ]
 
-__version__ = "0.26.0a1"
+__version__ = "0.26.0a2"
