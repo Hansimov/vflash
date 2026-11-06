@@ -577,7 +577,14 @@ and `qad_manifest` set. Select `PikaAVRecipe(visual_weights="nvfp4-qad", audio_s
 to use the pinned FastVideo Pika QAD FL checkpoint for all six visual forwards and
 restore the independently retained original FL model before Larry audio sampling.
 The ordinary recipe remains unchanged. This is an experimental SM120 capability;
-CPU tests establish ownership and arithmetic contracts, not video quality or GPU speed.
+CPU tests establish ownership and arithmetic contracts. Six complete five-second T2VA/I2VA
+outputs have also executed on RTX PRO 6000 with the pinned SM120 backend, native VAE
+and independent Larry ten-step audio. Actual forward coverage, original-model restoration
+and release of visual CUDA copies before audio KV allocation were checked. This is
+execution evidence, not general quality acceptance or a matched-device speed benchmark.
+Human comparison found weaker squash motion and slightly lower sharpness than the
+original Pika visual path. Keep this option experimental and compare complete outputs
+against the intended brief before choosing its speed/quality trade-off.
 
 The model source is `FastVideo/Pika-H3-Flex-NVFP4-QAD` at
 `0434eb89466c15ab451cb92fdd20995b4a2d1f1a`. Its Pika adapter is already merged in

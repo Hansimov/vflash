@@ -452,7 +452,11 @@ Python `PikaAVRuntime` 可显式接收 `qad_packed_weights`、`qad_dense_weights
 `qad_manifest`。通过 `PikaAVRecipe(visual_weights="nvfp4-qad", audio_steps=10)`
 选择固定 FastVideo Pika QAD FL 权重执行六步画面，然后恢复独立保留的原始 FL 模型
 进行 Larry 声音采样。普通配方保持原样。这是实验性 SM120 能力；CPU 检查只证明
-资源归属和数学调用合同，尚不代表视频质量或 GPU 速度资格。
+资源归属和数学调用合同。另外已有六条五秒T2VA／I2VA完整音画在RTX PRO 6000执行，
+使用固定SM120后端、原生VAE及独立Larry十步声音。实际前向次数、原模型恢复、
+声音KV建立前的画面CUDA副本释放均核对通过。这是执行证据，不是普遍质量验收或
+同卡匹配速度基准。人工对照发现壁球动作较弱、锐度略低于原Pika画面路径；保持
+实验性选项，应按原始需求比较完整成片后选择速度与质量的取舍。
 
 模型来源为 `FastVideo/Pika-H3-Flex-NVFP4-QAD` 的
 `0434eb89466c15ab451cb92fdd20995b4a2d1f1a`。300 个主块线性层和密集文本 refiner
