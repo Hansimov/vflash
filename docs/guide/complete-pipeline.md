@@ -568,3 +568,30 @@ The experimental session accepts a frozen `PikaReferenceRecipe`. Its identity in
 `ref6`, the native soundtrack and the reference encoding budget, for example
 `pika-ref6-larry10-r1024-v1`. It cannot be confused with the FL-only
 `pika6-larry10-v1` recipe, and its budget must match the initialized runtime.
+
+
+### Experimental QAD visual weights (0.26.0a1)
+
+The Python `PikaAVRuntime` accepts an explicit `qad_packed_weights`, `qad_dense_weights`,
+and `qad_manifest` set. Select `PikaAVRecipe(visual_weights="nvfp4-qad", audio_steps=10)`
+to use the pinned FastVideo Pika QAD FL checkpoint for all six visual forwards and
+restore the independently retained original FL model before Larry audio sampling.
+The ordinary recipe remains unchanged. This is an experimental SM120 capability;
+CPU tests establish ownership and arithmetic contracts, not video quality or GPU speed.
+
+The model source is `FastVideo/Pika-H3-Flex-NVFP4-QAD` at
+`0434eb89466c15ab451cb92fdd20995b4a2d1f1a`. Its Pika adapter is already merged in
+300 main-block linears and the dense text refiner. Do not apply the adapter again.
+Preparation must retain all 238 dense tensor descriptors and establish byte equality
+of all 106 projection/time/output tensors with the original base before reusing the
+original six-step tables. The manifest validation contract is in
+`vflash.adapters.h3_qad.validate_manifest`; model licenses remain those of the sources.
+
+Install the optional `qad` dependencies in addition to the complete pipeline. The
+backend uses FlashInfer 0.6.18 CUTLASS W4A4, 16-value blocks and 128×4 scale layout;
+precompile its SM120 quantization/GEMM modules in the matching CUDA/Torch environment
+or provide a CUDA compiler for first use. No unsupported-device or arithmetic fallback
+is provided. Text and both visual/audio weight sets must fit the resident allocation.
+Attention, native VAE and the audio recipe retain their explicit independent choices.
+The execution receipt distinguishes visual NVFP4 from original row-FP8 sound and
+records complete matrix/refiner coverage and restoration, including failure cleanup.

@@ -39,6 +39,7 @@ class PikaAVRecipe:
     overlap_decode: bool = True
     decode_tile_batch_size: int = 1
     strict_rotary: bool = False
+    visual_weights: str = "original-row-fp8"
 
     def __post_init__(self):
         if (
@@ -47,6 +48,7 @@ class PikaAVRecipe:
             or self.visual_attention not in {"sdpa", "veda"}
             or type(self.overlap_decode) is not bool
             or type(self.strict_rotary) is not bool
+            or self.visual_weights not in {"original-row-fp8", "nvfp4-qad"}
             or type(self.decode_tile_batch_size) is not int
             or self.decode_tile_batch_size not in {1, 2, 4}
         ):
@@ -56,6 +58,12 @@ class PikaAVRecipe:
 
     @property
     def identity(self):
+        if self.visual_weights == "nvfp4-qad":
+            return (
+                f"pika-qad6-larry{self.audio_steps}-v1"
+                if self.audio_steps
+                else "pika-h3-qad6-v1"
+            )
         return f"pika6-larry{self.audio_steps}-v1" if self.audio_steps else "pika-h3-flex-6-v1"
 
 
@@ -78,6 +86,19 @@ class PikaAVSession:
         recipe = recipe or PikaAVRecipe()
         if type(recipe) is not PikaAVRecipe:
             raise ValueError("A frozen Pika AV recipe is required")
+        qad = (
+            getattr(self.runtime, "qad_visual", None)
+            if recipe.visual_weights == "nvfp4-qad"
+            else None
+        )
+        if recipe.visual_weights == "nvfp4-qad" and (
+            qad is None
+            or self.runtime.text_encoder_residency != "resident"
+            or self.runtime.trunk_cpu_master is not None
+        ):
+            raise ValueError(
+                "QAD requires explicit resident visual weights and independent original audio"
+            )
         import torch
         from PIL import Image
         from safetensors.torch import save_file
@@ -242,7 +263,7 @@ class PikaAVSession:
             on_progress("denoising", 0, total)
             self.pika_clock.select_mode(request.mode)
             rt.adapter.strength = 0
-            self.pika_adapter.strength = 1
+            self.pika_adapter.strength = 0 if qad is not None else 1
             rt.attention.select(attention)
             rt.attention.reset()
             if attention == "veda":
@@ -258,9 +279,16 @@ class PikaAVSession:
 
             execution = {}
             with torch.inference_mode():
-                with dense_reference_execution(
-                    model, rotary=recipe.strict_rotary
-                ) as visual_execution:
+                with (
+                    (
+                        qad.selected(adapters=(self.pika_adapter, rt.adapter))
+                        if qad is not None
+                        else nullcontext({})
+                    ) as visual_weights_execution,
+                    dense_reference_execution(
+                        model, qkv=qad is None, rotary=recipe.strict_rotary
+                    ) as visual_execution,
+                ):
                     began = time.monotonic()
                     with selected_clock(model, self.pika_clock):
                         handles = [
@@ -281,7 +309,8 @@ class PikaAVSession:
                     if self.pika_clock.completed_forwards != 6:
                         raise ValueError("Actual Pika forward count differs")
                     if any(
-                        self.pika_adapter.calls[k] - v != 6 for k, v in adapter_before.items()
+                        self.pika_adapter.calls[k] - v != (0 if qad is not None else 6)
+                        for k, v in adapter_before.items()
                     ):
                         raise ValueError("Not every Pika target executed in all six steps")
                     if attention == "veda":
@@ -296,9 +325,13 @@ class PikaAVSession:
                             "forwards": 6,
                             "seconds": time.monotonic() - began,
                             "attention": attention,
-                            "adapter": "original-pika-fl-r128-alpha128",
+                            "adapter": "merged-pika-fl-r128-alpha128"
+                            if qad is not None
+                            else "original-pika-fl-r128-alpha128",
                             "clock": "original-renoise-six",
-                            "weight_format": "unmerged-row-fp8",
+                            "weight_format": "nvfp4-qad-merged"
+                            if qad is not None
+                            else "unmerged-row-fp8",
                         }
                     )
                     visual_execution["live_bytes_before_release"] = (
@@ -306,6 +339,8 @@ class PikaAVSession:
                     )
                     del v, a, cond, wrapper
                 execution["visual"] = visual_execution
+                if qad is not None:
+                    execution["visual_weights"] = visual_weights_execution
                 execution["after_visual_live_bytes"] = torch.cuda.memory_allocated()
                 execution["after_visual_reserved_bytes"] = torch.cuda.memory_reserved()
                 if attention == "veda":
@@ -431,7 +466,8 @@ class PikaAVSession:
             return {
                 "recipe": recipe.identity,
                 "source_revision": source.source_revision,
-                "weight_format": "unmerged-row-fp8",
+                "weight_format": "nvfp4-qad-merged" if qad is not None else "unmerged-row-fp8",
+                **({"audio_weight_format": "unmerged-row-fp8"} if qad is not None else {}),
                 "stages": events,
                 "conditioning": conditioning,
                 "execution": execution,

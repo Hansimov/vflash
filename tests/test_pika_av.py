@@ -29,7 +29,7 @@ def test_recipe_rejects_implicit_or_unqualified_stage_choices(kwargs):
 @pytest.mark.parametrize("tile_batch", [1, 4])
 @pytest.mark.parametrize("staged_text", [False, True])
 def test_actual_session_counts_freezes_picture_and_restores_owners(
-    tmp_path, monkeypatch, mode, steps, fail_audio, tile_batch, staged_text
+    tmp_path, monkeypatch, mode, steps, fail_audio, tile_batch, staged_text, qad=False
 ):
     torch = pytest.importorskip("torch")
     from PIL import Image
@@ -40,6 +40,7 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
     from vflash.pipeline.pika_av import PikaAVSession
 
     active = []
+    qad_active = []
     adapter = NS(strength=0, calls={"projection": 0})
     clock = NS(completed_forwards=0, time_embedding=lambda x: x)
     clock.select_mode = lambda mode: setattr(clock, "completed_forwards", 0)
@@ -58,9 +59,10 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
                 self.layers.append(layer)
 
         def forward(self):
-            if adapter.strength:
-                assert active == [True]
-                adapter.calls["projection"] += 1
+            if adapter.strength or qad_active:
+                assert active == [not qad]
+                if adapter.strength:
+                    adapter.calls["projection"] += 1
             else:
                 assert active == [False]
                 if fail_audio:
@@ -159,7 +161,22 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
         decoder=decoder,
         text_encoder_residency="staged" if staged_text else "resident",
         text_cpu_master=text_master if staged_text else None,
+        trunk_cpu_master=None,
     )
+    if qad:
+
+        @contextmanager
+        def selected(*, adapters):
+            assert all(a.strength == 0 for a in adapters)
+            qad_active.append(True)
+            record = {"restored": False}
+            try:
+                yield record
+            finally:
+                qad_active.pop()
+                record["restored"] = True
+
+        runtime.qad_visual = NS(selected=selected)
     session = PikaAVSession(runtime, adapter, clock, sampling=sampling)
     first = tmp_path / "first.png"
     Image.new("RGB", (32, 32)).save(first)
@@ -188,6 +205,7 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
         overlap_decode=False,
         decode_tile_batch_size=tile_batch,
         strict_rotary=steps == 10 and tile_batch == 4,
+        visual_weights="nvfp4-qad" if qad else "original-row-fp8",
     )
     if fail_audio and steps:
         with pytest.raises(RuntimeError, match="fixture audio failure"):
@@ -200,6 +218,9 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
             on_progress=lambda *args: events.append(args),
         )
         assert result["actual_forwards"] == 6 + steps
+        if qad:
+            assert result["execution"]["visual_weights"]["restored"]
+            assert result["weight_format"] == "nvfp4-qad-merged"
         assert result["recipe"] == recipe.identity and result["video_preserved_during_audio"]
         assert result["conditioning"]["prompt_calls"] == 1
         assert result["conditioning"]["prompt_reuses"] == int(steps > 0)
@@ -211,7 +232,12 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
     assert adapter.strength == runtime.adapter.strength == 0
     assert all(layer.clock == "original" for layer in model.layers)
     assert not model._forward_hooks and not model._forward_pre_hooks
-    assert not session.owner.locked() and not active and not torch.cuda.is_initialized()
+    assert (
+        not session.owner.locked()
+        and not active
+        and not qad_active
+        and not torch.cuda.is_initialized()
+    )
     assert tile_model._run_tile_tasks is original_tiles
     assert not hasattr(tile_model, "_vflash_tile_batch_owner")
 
@@ -273,3 +299,24 @@ def test_runtime_replaces_segmented_owner_and_unwinds_partial_load(
         runtime.close()
         assert not clock.tensors and runtime.closed
     assert closed == ["pika-adapter", "base"]
+
+
+@pytest.mark.parametrize("mode", ["t2va", "i2va"])
+@pytest.mark.parametrize("fail_audio", [False, True])
+def test_qad_picture_scope_exits_before_original_soundtrack(
+    tmp_path, monkeypatch, mode, fail_audio
+):
+    test_actual_session_counts_freezes_picture_and_restores_owners(
+        tmp_path, monkeypatch, mode, 10, fail_audio, 1, False, qad=True
+    )
+
+
+def test_qad_requires_explicit_assets_without_changing_original_recipe_identity():
+    from vflash.pipeline.pika_av import PikaAVSession
+
+    assert PikaAVRecipe().identity == "pika6-larry10-v1"
+    recipe = PikaAVRecipe(visual_weights="nvfp4-qad")
+    assert recipe.identity == "pika-qad6-larry10-v1"
+    session = PikaAVSession(NS(), None, None, sampling=None)
+    with pytest.raises(ValueError, match="explicit resident visual weights"):
+        session.generate(None, None, recipe=recipe)

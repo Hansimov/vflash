@@ -444,3 +444,25 @@ FL2VA可同时给定目标末帧与已有目标历史。两个条件关键帧均
 实验会话接收冻结的 `PikaReferenceRecipe`，身份同时包含 `ref6`、原生声音和参考编码预算，
 例如 `pika-ref6-larry10-r1024-v1`。它不会与仅使用 FL 分区的 `pika6-larry10-v1` 混淆；
 参考预算必须与初始化运行时一致。
+
+
+### 实验性 QAD 画面权重（0.26.0a1）
+
+Python `PikaAVRuntime` 可显式接收 `qad_packed_weights`、`qad_dense_weights` 和
+`qad_manifest`。通过 `PikaAVRecipe(visual_weights="nvfp4-qad", audio_steps=10)`
+选择固定 FastVideo Pika QAD FL 权重执行六步画面，然后恢复独立保留的原始 FL 模型
+进行 Larry 声音采样。普通配方保持原样。这是实验性 SM120 能力；CPU 检查只证明
+资源归属和数学调用合同，尚不代表视频质量或 GPU 速度资格。
+
+模型来源为 `FastVideo/Pika-H3-Flex-NVFP4-QAD` 的
+`0434eb89466c15ab451cb92fdd20995b4a2d1f1a`。300 个主块线性层和密集文本 refiner
+已合入 Pika 适配器，不能重复叠加。准备时必须保留 238 个密集张量描述，并核实全部
+106 个投影／时间／输出张量与原始基础模型逐字节相同，才能复用原始六步时间表。
+清单合同见 `vflash.adapters.h3_qad.validate_manifest`；模型沿用各原始来源许可证。
+
+在完整流水线依赖之外安装可选 `qad` 依赖。执行采用 FlashInfer 0.6.18 CUTLASS W4A4、
+16 值分块及 128×4 缩放布局；在匹配的 CUDA／Torch 环境预编译 SM120 量化和矩阵模块，
+或为首次执行提供 CUDA 编译器。不支持的设备或数学路径会明确失败。文本和画面／声音
+两套权重必须容纳在驻留显存中。注意力、原生 VAE 和声音配方保持各自显式选择。
+执行回执区分画面 NVFP4 与声音原始 row-FP8，记录完整主块／refiner 调用和权重恢复，
+异常清理同样恢复原模型。

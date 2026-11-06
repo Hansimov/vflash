@@ -21,6 +21,9 @@ class PikaAVRuntime(ReferenceAVRuntime):
         pika_manifest: dict,
         pika_tables: Path,
         text_encoder_residency: str = "resident",
+        qad_packed_weights: Path | None = None,
+        qad_dense_weights: Path | None = None,
+        qad_manifest: dict | None = None,
         trust_local_code: bool = False,
         **components,
     ):
@@ -48,6 +51,16 @@ class PikaAVRuntime(ReferenceAVRuntime):
                 return text
 
             components = {**components, "text_loader": retained_text_loader}
+        configured_qad = (qad_packed_weights, qad_dense_weights, qad_manifest)
+        if any(v is not None for v in configured_qad) and (
+            any(v is None for v in configured_qad)
+            or text_encoder_residency != "resident"
+            or components.get("retain_trunk_cpu", False)
+        ):
+            raise ValueError(
+                "Complete explicit QAD assets and resident components are required"
+            )
+        self.qad_visual = None
         self.pika_adapter = self.pika_clock = None
         sampling = load_pika_sampling(pika_source, trust_local_code=trust_local_code)
         super().__init__(trust_local_code=trust_local_code, **components)
@@ -57,6 +70,15 @@ class PikaAVRuntime(ReferenceAVRuntime):
             )
             self.pika_adapter.strength = 0
             self.pika_clock = PikaSamplingClock(pika_tables)
+            if qad_manifest is not None:
+                from vflash.adapters.h3_qad import H3QADVisualWeights
+
+                self.qad_visual = H3QADVisualWeights(
+                    self.pipe.transformer,
+                    packed_weights=qad_packed_weights,
+                    dense_weights=qad_dense_weights,
+                    manifest=qad_manifest,
+                )
             self.session = PikaAVSession(
                 self,
                 self.pika_adapter,
@@ -69,6 +91,9 @@ class PikaAVRuntime(ReferenceAVRuntime):
             raise
 
     def close(self):
+        if self.qad_visual is not None:
+            self.qad_visual.close()
+            self.qad_visual = None
         if self.pika_adapter is not None:
             self.pika_adapter.close()
             self.pika_adapter = None
