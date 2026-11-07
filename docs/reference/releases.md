@@ -1,5 +1,18 @@
 # Release notes
 
+## 0.27.0a1 (candidate)
+
+Adds explicit CPU admission for prepared Pika AV four/five-second text or first-frame requests,
+including aligned 1376×768 and 768×1376 canvases. A four-second request uses 96 delivery frames,
+107 model frames and 32 video latents; picture, native soundtrack, Veda geometry and delivery
+receive the same request clock. Ordinary fixed-profile H3 admission keeps its previous envelope.
+The new scope is disabled for QAD. Prepared reference modes retain their prior duration rules.
+
+CPU tests cover actual sampling/audio call counts, clock propagation, video preservation and
+owner restoration, plus request rejection before accelerator access. GPU capacity, media quality
+and complete service delivery for the added scope are pending qualification. Recommended stable
+installation and published Docker images remain unchanged.
+
 ## 0.25.1
 
 Rejects a reference recipe passed to an FL-only Pika session before loading models

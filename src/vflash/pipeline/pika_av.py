@@ -67,8 +67,42 @@ class PikaAVRecipe:
         return f"pika6-larry{self.audio_steps}-v1" if self.audio_steps else "pika-h3-flex-6-v1"
 
 
+def validate_pika_av_request(request, recipe):
+    """CPU admission for the explicit Pika pipeline, before any CUDA work.
+
+    Four-second and 768P text inputs keep their native clock and exact canvas.
+    Allocation owners still qualify the selected runtime and hardware scope.
+    """
+    from vflash.pipeline.contracts import PIKA_T2_MAX_CANVAS_PIXELS, VideoRequest
+
+    if not isinstance(request, VideoRequest) or type(recipe) is not PikaAVRecipe:
+        raise ValueError("Explicit Pika video request and recipe required")
+    pixels = request.width * request.height
+    maximum = (
+        PIKA_T2_MAX_CANVAS_PIXELS
+        if request.duration_seconds == 4 or request.mode == "t2va"
+        else 2 * 1024**2
+    )
+    if (
+        not request.generate_audio
+        or request.keyframe_delivery_profile != "decoded"
+        or request.mode not in {"t2va", "i2va"}
+        or request.duration_seconds not in {4, 5}
+        or request.width % 32
+        or request.height % 32
+        or min(request.width, request.height) < 32
+        or pixels > maximum
+        or (recipe.decode_tile_batch_size > 1 and pixels > 960 * 544)
+        or (
+            recipe.visual_weights != "original-row-fp8"
+            and (request.duration_seconds != 5 or (request.mode == "t2va" and pixels > 1024**2))
+        )
+    ):
+        raise ValueError("Explicit bounded Pika six and optional Larry ten/twelve required")
+
+
 class PikaAVSession:
-    """One exclusively owned FL runtime; five-second text or first-frame inputs.
+    """One exclusively owned FL runtime; four/five-second text or first-frame inputs.
 
     Source loading and component lifetime belong to PikaAVRuntime. A soundtrack
     pass uses the same prompt and frozen generated picture, without external Foley.
@@ -86,6 +120,7 @@ class PikaAVSession:
         recipe = recipe or PikaAVRecipe()
         if type(recipe) is not PikaAVRecipe:
             raise ValueError("A frozen Pika AV recipe is required")
+        validate_pika_av_request(request, recipe)
         qad = (
             getattr(self.runtime, "qad_visual", None)
             if recipe.visual_weights == "nvfp4-qad"
@@ -128,24 +163,8 @@ class PikaAVSession:
             recipe.visual_attention,
             recipe.overlap_decode,
         )
-        batched_decode = recipe.decode_tile_batch_size > 1
-        if (
-            not request.generate_audio
-            or request.keyframe_delivery_profile != "decoded"
-            or self.runtime.closed
-            or self.runtime.pipe.transformer.training
-            or request.mode not in {"t2va", "i2va"}
-            or request.duration_seconds != 5
-            or request.width % 32
-            or request.height % 32
-            or min(request.width, request.height) < 32
-            or request.width * request.height > 2 * 1024**2
-            or (batched_decode and request.width * request.height > 960 * 544)
-            or audio_steps not in {0, 10, 12}
-            or attention not in {"sdpa", "veda"}
-            or type(overlap_enabled) is not bool
-        ):
-            raise ValueError("Explicit bounded Pika six and optional Larry ten/twelve required")
+        if self.runtime.closed or self.runtime.pipe.transformer.training:
+            raise ValueError("Pika requires an open inference runtime")
         from vflash.media.canvas import crop_geometry
 
         crop_geometry(request.width, request.height, video_crop)
@@ -233,10 +252,10 @@ class PikaAVSession:
             ):
                 embeddings, tags = encode(request.prompt, images=[image] if image else None)
                 geom = SimpleNamespace(
-                    num_latent_frames=37,
+                    num_latent_frames=G.video_latent_num_frames(request.model_frames),
                     latent_height=request.height // 16,
                     latent_width=request.width // 16,
-                    num_audio_latents=G.audio_latent_num_frames(124),
+                    num_audio_latents=G.audio_latent_num_frames(request.model_frames),
                 )
                 cond = {
                     "prompt_embeds": embeddings,
@@ -268,7 +287,13 @@ class PikaAVSession:
             rt.attention.reset()
             if attention == "veda":
                 rt.attention.configure(
-                    model, {"width": request.width, "height": request.height}, self.predictor
+                    model,
+                    {
+                        "width": request.width,
+                        "height": request.height,
+                        "frames": request.model_frames,
+                    },
+                    self.predictor,
                 )
                 rt.attention.profile.num_condition_video_rows = spatial
             adapter_before = dict(self.pika_adapter.calls)
@@ -383,7 +408,9 @@ class PikaAVSession:
                             if index + 1 == audio_steps:
                                 captured["video_latents"] = unpatchify_h3_video_rows(
                                     values["latents"][spatial:][None].float().cpu(),
-                                    num_latent_frames=37,
+                                    num_latent_frames=G.video_latent_num_frames(
+                                        request.model_frames
+                                    ),
                                     latent_height=request.height // 16,
                                     latent_width=request.width // 16,
                                 )
@@ -412,7 +439,7 @@ class PikaAVSession:
                                     image=image,
                                     height=request.height,
                                     width=request.width,
-                                    num_frames=124,
+                                    num_frames=request.model_frames,
                                     num_inference_steps=audio_steps,
                                     flow_shift=12.0,
                                     audio_flow_shift=3.0,
@@ -454,7 +481,7 @@ class PikaAVSession:
                 output / "native.mp4",
                 width=request.width,
                 height=request.height,
-                duration_seconds=5,
+                duration_seconds=request.duration_seconds,
                 fps=24,
                 audio_delivery_profile=request.audio_delivery_profile,
                 video_input="pipe",

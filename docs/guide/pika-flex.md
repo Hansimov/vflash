@@ -257,3 +257,13 @@ CPU session tests exercise actual stage ownership, forward counts, changed
 picture rejection and cleanup failures. They do not establish GPU memory fit,
 latency or media quality. The qualified `PikaAVRuntime` default and the product
 admission envelope remain unchanged until a complete GPU qualification.
+
+## Candidate short-duration and 768P scope
+
+Version 0.27.0a1 adds `validate_pika_av_request(request, recipe)` in
+`vflash.pipeline.pika_av`, using the same CPU admission called by the prepared session.
+`VideoRequest(duration_seconds=4)` retains the 24 fps clock: 96 delivered frames and 107 aligned
+model frames. The new text/first-frame scope is bounded to 1376×768 pixels; five-second
+first-frame generation keeps its separate larger software ceiling. Native one-tile decoding is
+required above the existing small-canvas batch limit. Ordinary `H3Pipeline` and QAD do not acquire
+this new scope. These are candidate software contracts; new GPU and quality qualification is pending.

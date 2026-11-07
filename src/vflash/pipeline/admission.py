@@ -30,6 +30,10 @@ def validate_request(
         raise ContractError(
             "request admission requires VideoRequest and an explicit hybrid flag"
         )
+    if request.duration_seconds < 5 or (
+        request.mode == "t2va" and request.width * request.height > 1024**2
+    ):
+        raise ContractError("four-second or 768P text requests require the Pika AV pipeline")
     if weight_residency not in {"block-ring", "resident"}:
         raise ContractError("unknown weight residency")
     if request.reference_video is not None:

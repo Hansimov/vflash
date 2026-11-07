@@ -24,12 +24,15 @@ class H3ReferenceAttention:
         self.prepared = False
 
     def configure(self, model, case, predictor):
+        frames = case.get("frames", 124)
+        if type(frames) is not int or frames < 5 or frames % 17 != 5:
+            raise ValueError("Reference attention requires aligned model frames")
         for handle in self.handles:
             handle.remove()
         self.handles = []
         self.index = None
         self.profile = SimpleNamespace(
-            frames=124,
+            frames=frames,
             height=case["height"],
             width=case["width"],
             num_condition_video_rows=(case["height"] // 32) * (case["width"] // 32),

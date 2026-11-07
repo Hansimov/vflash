@@ -18,6 +18,7 @@ from vflash.model_assets import MODEL_REVISION as MODEL_REVISION
 
 PIPELINE_PROFILE = DEFAULT_MODEL_PROFILE
 MAX_CANVAS_PIXELS = 1024**2
+PIKA_T2_MAX_CANVAS_PIXELS = 1376 * 768
 NATIVE_HD_MAX_PIXELS = 2048**2
 # Native HD keeps the 2048**2 area with a 2720-pixel long edge (16:9 reaches 2720x1536).
 NATIVE_HD_MAX_LONG_EDGE = 2720
@@ -90,7 +91,10 @@ class PipelineAssets:
 
 @dataclass(frozen=True)
 class VideoRequest:
-    """A text-, image- or video-guided 5-15-second video at the native 24 fps clock.
+    """A text-, image- or video-guided request at the native 24 fps clock.
+
+    Four-second text/first-frame and 768P text requests require Pika AV; other
+    complete pipelines retain their separate admission and hardware envelopes.
 
     The prompt is used verbatim; an application may format or polish it before
     this boundary. Images are ordered and labeled ``<Picture 1>`` through
@@ -206,8 +210,10 @@ class VideoRequest:
             )
         if type(self.seed) is not int or not 0 <= self.seed < 2**63:
             raise ContractError("seed must be an integer between 0 and 2^63-1")
-        if type(self.duration_seconds) is not int or not 5 <= self.duration_seconds <= 15:
-            raise ContractError("duration_seconds must be an integer from 5 to 15")
+        if type(self.duration_seconds) is not int or not 4 <= self.duration_seconds <= 15:
+            raise ContractError("duration_seconds must be an integer from 4 to 15")
+        if self.duration_seconds == 4 and self.mode not in {"t2va", "i2va"}:
+            raise ContractError("four-second requests require Pika text or first-frame input")
         if self.duration_seconds > 5 and self.mode not in {"i2va", "l2va", "fl2va", "ref2va"}:
             raise ContractError(
                 "complete requests over five seconds require image conditioning"
@@ -216,7 +222,13 @@ class VideoRequest:
             raise ContractError("video reference delivery supports five seconds")
         if self.width * self.height > MAX_CANVAS_PIXELS and (
             max(self.width, self.height) > NATIVE_HD_MAX_LONG_EDGE
-            or self.mode not in {"i2va", "l2va", "fl2va", "ref2va"}
+            or (
+                self.mode not in {"i2va", "l2va", "fl2va", "ref2va"}
+                and not (
+                    self.mode == "t2va"
+                    and self.width * self.height <= PIKA_T2_MAX_CANVAS_PIXELS
+                )
+            )
         ):
             raise ContractError(
                 "native HD requires image conditioning within "

@@ -171,3 +171,11 @@ T2VA／I2VA的已验证范围，也不构成Ref2VA速度、Larry混合声音或�
 参考，视频／声音参考仍不在此候选范围内。CPU测试覆盖实际阶段归属、采样次数、
 画面变化拒绝和失败清理，不代表GPU显存、耗时或质量资格。原`PikaAVRuntime`和产品
 准入保持既有合格范围，等待完整GPU验证。
+
+## 候选四秒与768P范围
+
+0.27.0a1在`vflash.pipeline.pika_av`新增`validate_pika_av_request(request, recipe)`，
+准备权重会话实际调用同一CPU准入。`VideoRequest(duration_seconds=4)`保持原生24fps，
+交付96帧、对齐模型107帧；新增文本／首帧范围不超过1376×768像素。五秒首帧保留其
+独立更大软件上限，超过已有小画幅合批范围仍要求原生单块解码。普通`H3Pipeline`及QAD
+不获得新增范围；这是候选软件合同，新的GPU与质量资格仍待完成。

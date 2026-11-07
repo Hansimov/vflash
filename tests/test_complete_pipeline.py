@@ -506,8 +506,8 @@ def test_request_duration_is_discrete_and_defaults_to_five_seconds():
             "Continue.", first_frame=Path("first.png"), duration_seconds=duration
         )
         assert (middle.model_frames, middle.delivery_frames) == (model_frames, duration * 24)
-    for invalid in (True, 5.0, 4, 16):
-        with pytest.raises(ContractError, match="integer from 5 to 15"):
+    for invalid in (True, 5.0, 3, 16):
+        with pytest.raises(ContractError, match="integer from 4 to 15"):
             VideoRequest("Continue.", first_frame=Path("first.png"), duration_seconds=invalid)
     with pytest.raises(ContractError, match="require image conditioning"):
         VideoRequest("A scene.", duration_seconds=6)

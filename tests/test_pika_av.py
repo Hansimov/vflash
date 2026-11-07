@@ -29,7 +29,15 @@ def test_recipe_rejects_implicit_or_unqualified_stage_choices(kwargs):
 @pytest.mark.parametrize("tile_batch", [1, 4])
 @pytest.mark.parametrize("staged_text", [False, True])
 def test_actual_session_counts_freezes_picture_and_restores_owners(
-    tmp_path, monkeypatch, mode, steps, fail_audio, tile_batch, staged_text, qad=False
+    tmp_path,
+    monkeypatch,
+    mode,
+    steps,
+    fail_audio,
+    tile_batch,
+    staged_text,
+    qad=False,
+    duration=5,
 ):
     torch = pytest.importorskip("torch")
     from PIL import Image
@@ -87,6 +95,7 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
             return torch.zeros(1, 96)
 
         def __call__(self, **kwargs):
+            assert kwargs["num_frames"] == (107 if duration == 4 else 124)
             self.encode_prompt(kwargs["prompt"])
             rows = _pack_video(self.fixed)[0]
             if kwargs["image"] is not None:
@@ -126,13 +135,18 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
         yield {}
 
     def sample(wrapper, cond, **_):
+        frames = 32 if duration == 4 else 37
+        assert cond["geometry"].num_latent_frames == frames
         for _ in range(6):
             wrapper()
-        return torch.zeros(1, 37, 24, 2, 2), torch.zeros(1, 414, 32)
+        return torch.zeros(1, frames, 24, 2, 2), torch.zeros(1, 414, 32)
 
     sampling = NS(
         source_revision="fixture",
-        geometry=NS(audio_latent_num_frames=lambda _: 414),
+        geometry=NS(
+            audio_latent_num_frames=lambda frames: {107: 414, 124: 414}[frames],
+            video_latent_num_frames=lambda frames: {107: 32, 124: 37}[frames],
+        ),
         numerics=NS(
             prepare_conditioning=lambda value, *_, **__: value,
             configure_numerics_backend=lambda *_, **__: None,
@@ -148,8 +162,13 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
     attention = NS(backend="sdpa", select=lambda _: None, reset=lambda: None)
     tile_model = NS(training=False, _run_tile_tasks=lambda *args: [])
     original_tiles = tile_model._run_tile_tasks
+
+    def decode(*_, **kwargs):
+        assert kwargs["duration_seconds"] == duration
+        return NS(stage_durations={}, media={})
+
     decoder = NS(
-        generate_mp4=lambda *_, **__: NS(stage_durations={}, media={}),
+        generate_mp4=decode,
         video=NS(module=NS(model=tile_model)),
     )
     runtime = NS(
@@ -185,6 +204,7 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
         width=32,
         height=32,
         first_frame=first if mode == "i2va" else None,
+        duration_seconds=duration,
     )
     monkeypatch.setattr(
         "vflash.adapters.h3_reference_execution.dense_reference_execution", execution
@@ -317,6 +337,8 @@ def test_qad_requires_explicit_assets_without_changing_original_recipe_identity(
     assert PikaAVRecipe().identity == "pika6-larry10-v1"
     recipe = PikaAVRecipe(visual_weights="nvfp4-qad")
     assert recipe.identity == "pika-qad6-larry10-v1"
+    from vflash.pipeline import VideoRequest
+
     session = PikaAVSession(NS(), None, None, sampling=None)
     with pytest.raises(ValueError, match="explicit resident visual weights"):
-        session.generate(None, None, recipe=recipe)
+        session.generate(VideoRequest("A scene."), None, recipe=recipe)
