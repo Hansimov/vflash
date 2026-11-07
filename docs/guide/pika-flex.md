@@ -260,7 +260,7 @@ admission envelope remain unchanged until a complete GPU qualification.
 
 ## Candidate short-duration and 768P scope
 
-Version 0.27.0a2 adds `validate_pika_av_request(request, recipe)` in
+Version 0.27.0a3 includes `validate_pika_av_request(request, recipe)` in
 `vflash.pipeline.pika_av`, using the same CPU admission called by the prepared session.
 `VideoRequest(duration_seconds=4)` retains the 24 fps clock: 96 delivered frames and 107 aligned
 model frames. The new text/first-frame scope is bounded to 1376×768 pixels; five-second
@@ -270,6 +270,6 @@ this new scope. These are candidate software contracts; new GPU and quality qual
 
 The four-second candidate requires the separate Larry ten-forward soundtrack. Its audio adapter
 receives the actual 32-frame latent clock, including spatial selection and retained image rows.
-Version 0.27.0a1 still had a five-second-only inner audio guard and cannot complete this short scope.
+Version 0.27.0a1 retained a five-second-only inner audio guard; a2 retained the upstream input and final delivery lower bounds. The a3 candidate scopes the original upstream minimum to the owned short request, restores it after completion or failure, and delivers the native four-second window. Actual upstream CPU scheduling and real MP4 encoding are covered; GPU/media acceptance remains separate.
 CPU tests now exercise the real pinned-picture, spatial and visual-KV hooks together; GPU and complete
 media qualification remain separate requirements.

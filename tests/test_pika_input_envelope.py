@@ -90,8 +90,9 @@ assert 'torch' not in sys.modules
 
 
 @pytest.mark.parametrize("mode", ["t2va", "i2va"])
+@pytest.mark.parametrize("fail_audio", [False, True])
 def test_actual_session_propagates_four_seconds_through_picture_audio_and_delivery(
-    tmp_path, monkeypatch, mode
+    tmp_path, monkeypatch, mode, fail_audio
 ):
     from test_pika_av import test_actual_session_counts_freezes_picture_and_restores_owners
 
@@ -100,7 +101,7 @@ def test_actual_session_propagates_four_seconds_through_picture_audio_and_delive
         monkeypatch,
         mode,
         steps=10,
-        fail_audio=False,
+        fail_audio=fail_audio,
         tile_batch=1,
         staged_text=False,
         duration=4,
@@ -133,3 +134,26 @@ def test_attention_configuration_tracks_actual_frames_and_keeps_previous_on_inva
     finally:
         adapter.close()
     assert not model._forward_pre_hooks and not torch.cuda.is_initialized()
+
+
+@pytest.mark.parametrize("local", [False, True])
+def test_upstream_duration_owner_restores_on_admission_or_execution_failure(local):
+    from vflash.pipeline.pika_av import selected_input_duration
+
+    class Pipe:
+        _min_duration = 5.0
+
+        def check_inputs(self, prompt, height, width, frames, steps):
+            assert self._min_duration == 4.0 and frames == 107
+            if steps == 0:
+                raise ValueError("steps")
+
+    pipe = Pipe()
+    if local:
+        pipe._min_duration = 5.0
+    request = VideoRequest("A scene.", duration_seconds=4)
+    for steps in (0, 10):
+        with pytest.raises(ValueError), selected_input_duration(pipe, request, steps):
+            raise ValueError("execution")
+        assert pipe._min_duration == 5.0
+        assert ("_min_duration" in vars(pipe)) is local

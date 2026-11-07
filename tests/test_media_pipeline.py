@@ -232,7 +232,7 @@ def test_close_fences_resources_before_retirement_and_can_retry() -> None:
     assert decoder._released and decoder.video is None and decoder._video_master is None
 
 
-@pytest.mark.parametrize("duration", [10, 15])
+@pytest.mark.parametrize("duration", [4, 5, 10, 15])
 def test_media_decoder_delivers_the_exact_audio_video_window(
     tmp_path, monkeypatch, duration
 ) -> None:
@@ -430,3 +430,33 @@ def test_real_explicit_codec_threads_keep_media_contract(tmp_path, video_input):
     assert result["frames"] == 24 and result["audio_samples"] == 32000
     assert result["duration_seconds"] == 1
     assert sorted(p.name for p in tmp_path.iterdir()) == ["output.mp4"]
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg") or not shutil.which("ffprobe"), reason="FFmpeg")
+def test_short_native_window_reaches_real_mp4_encoding(tmp_path):
+    decoder = OfficialMediaDecoder.__new__(OfficialMediaDecoder)
+    decoder._closed = False
+    decoder._cuda_active = True
+    decoder.device = "cuda:0"
+    decoder.audio_sample_rate = 32000
+    decoder._torch = SimpleNamespace(
+        cuda=SimpleNamespace(
+            reset_peak_memory_stats=lambda _: None, max_memory_allocated=lambda _: 0
+        )
+    )
+    picture = torch.zeros(1, 3, 107, 32, 32)
+    sound = torch.zeros(1, 2, 142666)
+    decoder._decode_cpu = lambda *a, **k: (picture, sound, {})
+    result = decoder.generate_mp4(
+        tmp_path / "latent.safetensors",
+        tmp_path / "short.mp4",
+        width=32,
+        height=32,
+        duration_seconds=4,
+        video_input="pipe",
+        video_threads=1,
+    )
+    assert result.media["frames"] == 96
+    assert result.media["audio_samples"] == 128000
+    assert result.media["duration_seconds"] == 4
+    assert picture.shape[2] == 107 and sound.shape[2] == 142666

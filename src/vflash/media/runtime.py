@@ -268,8 +268,8 @@ class OfficialMediaDecoder:
             raise MediaError("the H3 canvas must be positive and divisible by 32")
         if fps != 24 or type(fps) is not int:
             raise MediaError("this adapter preserves the native 24 fps model clock")
-        if type(duration_seconds) is not int or not 5 <= duration_seconds <= 15:
-            raise MediaError("this delivery supports whole seconds from five through fifteen")
+        if type(duration_seconds) is not int or not 4 <= duration_seconds <= 15:
+            raise MediaError("this delivery supports whole seconds from four through fifteen")
         from vflash.media.canvas import crop_geometry, crop_rgb
 
         crop = crop_geometry(width, height, video_crop)

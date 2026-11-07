@@ -32,6 +32,30 @@ def selected_clock(model, clock):
             module.clock = original
 
 
+@contextmanager
+def selected_input_duration(pipe, request, steps):
+    """Own the pinned upstream duration floor without changing its other checks."""
+    short = request.duration_seconds == 4
+    prior = vars(pipe).get("_min_duration")
+    local = "_min_duration" in vars(pipe)
+    if short and getattr(pipe, "_min_duration", None) != 5.0:
+        raise ValueError("Short input requires the pinned five-second upstream boundary")
+    try:
+        if short:
+            pipe._min_duration = 4.0
+        # Validate the actual upstream consumer before conditioning or sampling.
+        pipe.check_inputs(
+            request.prompt, request.height, request.width, request.model_frames, steps
+        )
+        yield
+    finally:
+        if short:
+            if local:
+                pipe._min_duration = prior
+            else:
+                del pipe._min_duration
+
+
 @dataclass(frozen=True)
 class PikaAVRecipe:
     audio_steps: int = 10
@@ -223,6 +247,9 @@ class PikaAVSession:
             return condition_rows.clone()
 
         try:
+            decode_scope_owner.enter_context(
+                selected_input_duration(pipe, request, audio_steps or 6)
+            )
             if recipe.decode_tile_batch_size > 1:
                 from vflash.adapters.h3_decode_batches import batch_spatial_tiles
 

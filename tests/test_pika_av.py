@@ -83,6 +83,7 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
     model = Model().eval()
 
     class Pipe:
+        _min_duration = 5.0
         transformer = model
         scheduler = Scheduler()
         audio_scheduler = Scheduler()
@@ -94,7 +95,18 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
         def encode_keyframes(self, *_args, **_kwargs):
             return torch.zeros(1, 96)
 
+        def check_inputs(self, prompt, height, width, frames, steps):
+            assert self._min_duration <= frames / 24 <= 15
+            assert prompt and height % 32 == width % 32 == 0 and steps > 0
+
         def __call__(self, **kwargs):
+            self.check_inputs(
+                kwargs["prompt"],
+                kwargs["height"],
+                kwargs["width"],
+                kwargs["num_frames"],
+                kwargs["num_inference_steps"],
+            )
             assert kwargs["num_frames"] == (107 if duration == 4 else 124)
             self.encode_prompt(kwargs["prompt"])
             rows = _pack_video(self.fixed)[0]
@@ -247,6 +259,7 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
         assert result["conditioning"]["prompt_reuses"] == int(steps > 0)
         assert len(events) == 11 + steps
         assert result["conditioning"]["text_residency"]["applied"] is staged_text
+    assert pipe._min_duration == 5.0 and "_min_duration" not in vars(pipe)
     assert pipe.text_encoder.weight.data_ptr() == text_master.state_dict["weight"].data_ptr()
     assert pipe.encode_prompt == original_encode and pipe.encode_keyframes == original_keyframes
     assert (pipe.scheduler, pipe.audio_scheduler) == prior_schedulers

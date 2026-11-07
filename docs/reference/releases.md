@@ -1,5 +1,15 @@
 # Release notes
 
+## 0.27.0a3 (candidate)
+
+Scopes the pinned upstream audio pipeline's minimum duration to the explicit four-second
+request, restores it afterward, and calls its original full input validation before sampling.
+The actual 107 model frames pass unchanged; prompt, canvas, step and upper-bound checks remain.
+The a2 spatial/KV fix alone still encountered the upstream five-second admission limit.
+New GPU/media qualification remains pending.
+
+The final media decoder also accepts the four-second native window (96 frames and 128,000 stereo samples); FFmpeg delivery is covered on CPU.
+
 ## 0.27.0a2 (candidate)
 
 Fixes the inner spatial-audio frame clock for the explicit four-second Pika candidate.
