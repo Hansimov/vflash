@@ -152,3 +152,36 @@ def test_declared_square_pixels_preserve_decoded_rgb_and_audio(tmp_path):
         return [line for line in result.splitlines() if not line.startswith("#")]
 
     assert decoded(original) == decoded(declared)
+
+
+@pytest.mark.parametrize("width,height", [(1366, 768), (768, 1366), (1280, 720)])
+def test_exact_nonstandard_display_ratio_has_unit_pixel_aspect(tmp_path, width, height):
+    video = torch.zeros(1, 3, 2, height, width)
+    target = tmp_path / "canvas.mp4"
+    encode_mp4(
+        video,
+        None,
+        target,
+        square_pixels=True,
+        video_threads=1,
+        preset="ultrafast",
+        video_input="pipe",
+    )
+    data = json.loads(
+        subprocess.check_output(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=width,height,sample_aspect_ratio",
+                "-of",
+                "json",
+                str(target),
+            ],
+            timeout=20,
+        )
+    )["streams"][0]
+    assert data == {"width": width, "height": height, "sample_aspect_ratio": "1:1"}

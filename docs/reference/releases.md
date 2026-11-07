@@ -1,5 +1,13 @@
 # Release notes
 
+## 0.27.0a4 (candidate)
+
+Declares square pixels directly with `setsar=1` during the original encode. Setting a display
+aspect ratio rounded 1366×768 / 768×1366 to a small non-unit pixel ratio in FFmpeg,
+which strict product canvas validation correctly rejected. Both exact canvases and the
+existing 720P shape now have real codec checks. Media geometry qualification remains
+separate from picture and sound acceptance.
+
 ## 0.27.0a3 (candidate)
 
 Scopes the pinned upstream audio pipeline's minimum duration to the explicit four-second

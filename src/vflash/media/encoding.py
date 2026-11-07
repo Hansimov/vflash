@@ -271,7 +271,7 @@ def encode_mp4(
             str(crf),
             "-pix_fmt",
             "yuv420p",
-            *(["-aspect", f"{width}:{height}"] if square_pixels else []),
+            *(["-vf", "setsar=1"] if square_pixels else []),
             *(["-c:a", "aac"] if has_audio else []),
             *(["-af", ",".join(audio_filters)] if audio_filters else []),
             *(
