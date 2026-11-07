@@ -4,7 +4,7 @@ Native **MiniMax H3 inference** with explicit GPU profiles. Vflash uses PyTorch 
 
 [Documentation](https://hansimov.github.io/vflash/) · [Get started](https://hansimov.github.io/vflash/guide/getting-started) · [Release notes](https://hansimov.github.io/vflash/reference/releases) · [中文](README.zh-CN.md)
 
-**0.25.1: independent Pika image-reference execution.** The experimental prepared runtime preserves ordered FP32 image conditions, separates Ref picture and FL native-sound weights, and records explicit reference encoding budgets. Existing serving profiles stay unchanged. See [scope and contracts](https://hansimov.github.io/vflash/guide/complete-pipeline#experimental-pika-image-reference-runtime).
+**0.27.0: native four-second Pika video with Larry audio.** Prepared text/first-frame execution shares an exact video/audio clock and supports square-pixel 768P delivery. The bounded GPU scope, remaining motion/framing limitations and unchanged fixed profiles are documented in [Pika integration](https://hansimov.github.io/vflash/guide/pika-flex#native-four-second-and-exact-768p-scope).
 
 **0.23.1: explicit Pika H3 Flex recipes and optional decoder batching.** Adds the pinned original six-step sampler and a prepared Pika-picture / Larry-audio runtime, with direct text inputs and owned component reuse. Existing hybrid defaults stay available. See [Pika H3 Flex](https://hansimov.github.io/vflash/guide/pika-flex).
 

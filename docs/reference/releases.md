@@ -1,5 +1,22 @@
 # Release notes
 
+## 0.27.0
+
+Promotes native four/five-second prepared Pika FL generation with a separately selected
+Larry ten-forward soundtrack. The six-step visual sampler, model partitions and attention
+recipe are unchanged. Four seconds use 107 model frames, 32 video latent times, 96 delivered
+frames and 128,000 stereo samples. Text and first-frame inputs use the same request clock;
+scoped upstream validation and audio hooks restore their owners after failures.
+
+Real complete 96 GiB SM120 execution covers portrait four-second first-frame input,
+landscape five-second first-frame input and both orientations of four-second text input at
+1376×768 / 768×1376 model canvases. The original encoder supports exact 1366×768 / 768×1366
+cropping with unit pixel aspect ratio. The resulting videos were fully decoded and played;
+two spoken lines were reviewed as complete without evident new audio issues. Framing and
+motion-completion defects remain in some scenes, so this is bounded execution and media
+qualification, not universal semantic quality. Ordinary H3 profiles, QAD and Ref durations
+retain their existing scopes. Published container images keep their separately documented versions.
+
 ## 0.27.0a4 (candidate)
 
 Declares square pixels directly with `setsar=1` during the original encode. Setting a display

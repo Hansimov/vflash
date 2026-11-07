@@ -4,7 +4,7 @@
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
-**0.25.1：独立 Pika 图片参考执行。** 实验性准备权重运行时保留有序 FP32 图片条件，区分 Ref 画面与 FL 原生声音模型，并记录明确的参考编码预算。现役固定配置保持不变。详见[范围与合同](https://hansimov.github.io/vflash/zh/guide/complete-pipeline#实验性-pika-图片参考运行时)。
+**0.27.0：原生四秒 Pika 画面与 Larry 声音。** 准备权重文本／首帧执行共用精确音画时间，支持正方形像素的768P交付。限定GPU范围、现有动作／取景问题及固定profile边界见[Pika执行说明](https://hansimov.github.io/vflash/zh/guide/pika-flex#原生四秒与精确768p范围)。
 
 **0.23.0：明确的 Pika H3 Flex 配方。** 新增固定原版六步采样、Pika画面／Larry原生声音运行时、直接文本输入和组件复用，保留既有hybrid默认。见[Pika H3 Flex](https://hansimov.github.io/vflash/zh/guide/pika-flex)。
 

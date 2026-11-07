@@ -117,7 +117,8 @@ finally:
     runtime.close()
 ```
 
-This prepared path currently accepts five-second T2VA or I2VA with generated audio
+This prepared path accepts five-second T2VA/I2VA and the bounded four-second Larry10
+scope below, with generated audio
 and decoded keyframes. It runs the original six-step re-noising schedule with the
 unmerged Pika FL adapter; `audio_steps=0` keeps that joint soundtrack, while 10 or
 12 explicitly selects a Larry native soundtrack over the frozen picture. Prompt
@@ -127,8 +128,8 @@ counts, attention, conditioning reuse, memory and complete-call timings are retu
 
 The original BF16 Pika pipeline above remains separate. Prepared row-FP8 weights,
 Veda attention and spatial video-KV audio reuse are approximate choices; six visual
-forwards plus ten audio forwards is not a six-forward complete request. Current
-hardware evidence covers a full 96 GiB SM120 PRO 6000 and 960×544 / 832×480 five-second
+forwards plus ten audio forwards is not a six-forward complete request. Initial
+five-second hardware evidence covers a full 96 GiB SM120 PRO 6000 and 960×544 / 832×480 five-second
 clips. Other admitted canvases are not a broad quality or memory qualification.
 Reported generation time excludes model initialization and application publication.
 No sub-25-second 0.5 MP end-to-end guarantee is made. Ref2VA, longer clips, omitted
@@ -234,14 +235,14 @@ Pika geometry rules and the original FP32 VAE encoder. It retains image roles,
 reference order, FP32 latent values and the absence of temporal keyframes.
 The upstream bucket rule places 1280×736 and 736×1280 in the p768 tier, which
 encodes image references at a 2048-pixel short edge; 960×544 uses 1024.
-These are CPU contract/source checks. Full prepared Ref sampling and its separate
-FL/Larry soundtrack still require runtime integration and GPU qualification.
+The geometry follows the pinned source. Separate prepared Ref GPU scope is documented in
+[the complete pipeline](complete-pipeline#experimental-pika-image-reference-runtime).
 
 
 ### Separate Ref picture and FL soundtrack candidate
 
 `vflash.pipeline.pika_reference_runtime.PikaReferenceAVRuntime` now provides an
-unreleased complete candidate over explicit Ref base/tables/adapter and the
+complete runtime, available since 0.25, over explicit Ref base/tables/adapter and the
 existing FL/Larry components. It preserves the original FP32 image conditioning
 and six Ref sampling evaluations. The optional ten/twelve-step soundtrack runs
 on the distinct FL model with its own text-only conditioning and frozen picture
@@ -255,21 +256,29 @@ references; video/audio references remain outside this candidate.
 
 CPU session tests exercise actual stage ownership, forward counts, changed
 picture rejection and cleanup failures. They do not establish GPU memory fit,
-latency or media quality. The qualified `PikaAVRuntime` default and the product
-admission envelope remain unchanged until a complete GPU qualification.
+latency or media quality. Separate Ref execution has completed five-second, 1 MP, one/two-image and Larry10 delivery
+on complete 96 GiB SM120 allocations; see the [measured scope](complete-pipeline#experimental-pika-image-reference-runtime).
+That scope does not extend FL-only `PikaAVRuntime` or automatically change application admission.
 
-## Candidate short-duration and 768P scope
+## Native four-second and exact 768P scope
 
-Version 0.27.0a3 includes `validate_pika_av_request(request, recipe)` in
-`vflash.pipeline.pika_av`, using the same CPU admission called by the prepared session.
-`VideoRequest(duration_seconds=4)` retains the 24 fps clock: 96 delivered frames and 107 aligned
-model frames. The new text/first-frame scope is bounded to 1376×768 pixels; five-second
-first-frame generation keeps its separate larger software ceiling. Native one-tile decoding is
-required above the existing small-canvas batch limit. Ordinary `H3Pipeline` and QAD do not acquire
-this new scope. These are candidate software contracts; new GPU and quality qualification is pending.
+Version 0.27.0 provides `validate_pika_av_request(request, recipe)` in
+`vflash.pipeline.pika_av`, using the same CPU admission as the prepared session.
+`VideoRequest(duration_seconds=4)` with `PikaAVRecipe(audio_steps=10)` retains the native
+24 fps clock: 96 delivered frames, 107 aligned model frames and 32 latent times. Spatial
+sound conditioning keeps every video time and all supplied first-frame condition rows.
+The scoped upstream minimum duration is restored on completion or failure.
 
-The four-second candidate requires the separate Larry ten-forward soundtrack. Its audio adapter
-receives the actual 32-frame latent clock, including spatial selection and retained image rows.
-Version 0.27.0a1 retained a five-second-only inner audio guard; a2 retained the upstream input and final delivery lower bounds. The a3 candidate scopes the original upstream minimum to the owned short request, restores it after completion or failure, and delivers the native four-second window. Actual upstream CPU scheduling and real MP4 encoding are covered; GPU/media acceptance remains separate.
-CPU tests now exercise the real pinned-picture, spatial and visual-KV hooks together; GPU and complete
-media qualification remain separate requirements.
+Four-second text/first-frame input is bounded to 1376×768 pixels, in either orientation;
+above the small-canvas batch limit use native single-tile decoding. Five-second first-frame
+input retains its independent larger software ceiling. `EncodedCanvas` can crop the aligned
+output to exactly 1366×768 or 768×1366 in the original encode; `setsar=1` declares square
+pixels without rounding a display-aspect fraction. Ordinary `H3Pipeline`, QAD and Ref do
+not gain this short-input scope.
+
+Complete GPU delivery on a 96 GiB SM120 allocation covers four-second portrait I2VA,
+five-second landscape I2VA and both four-second T2VA orientations at these model canvases.
+All outputs fully decoded and played, and two short spoken lines were reviewed as complete
+without evident new audio issues. Some framing and motion-completion failures remain.
+Service admission, queueing, procurement and delivered-latency qualification belong to the
+application; these results do not establish a universal quality or end-to-end speed guarantee.
