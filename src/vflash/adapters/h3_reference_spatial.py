@@ -9,14 +9,16 @@ from contextlib import contextmanager
 
 
 @contextmanager
-def spatial_video_condition(model, *, height, width, condition_rows, stride=2):
-    """Own the row-layout adapter inside an already pinned five-second pass."""
+def spatial_video_condition(model, *, height, width, condition_rows, stride=2, frames=37):
+    """Own the row-layout adapter inside an explicitly timed pinned-video pass."""
     import torch
 
     if (
         torch.is_grad_enabled()
         or model.training
         or any(type(value) is not int or value < 1 for value in (height, width))
+        or type(frames) is not int
+        or frames not in (32, 37)
         or type(stride) is not int
         or stride not in (2, 4)
         or type(condition_rows) is not int
@@ -42,13 +44,13 @@ def spatial_video_condition(model, *, height, width, condition_rows, stride=2):
         hidden, video = kwargs["hidden_states"], kwargs["video_indices"]
         if (
             hidden.shape != (1, len(video), 96)
-            or len(video) != 37 * height * width + condition_rows
+            or len(video) != frames * height * width + condition_rows
             or not torch.all(kwargs["timestep"][kwargs["timestep_indices"][video]] == 0.999)
         ):
             raise ValueError("Spatial audio differs from its qualified pinned video layout")
         if not state:
-            cells = torch.arange(37 * height * width, device=video.device)
-            cells = cells.reshape(37, height, width)
+            cells = torch.arange(frames * height * width, device=video.device)
+            cells = cells.reshape(frames, height, width)
             selected = torch.cat(
                 (
                     torch.arange(condition_rows, device=video.device),

@@ -174,8 +174,12 @@ T2VA／I2VA的已验证范围，也不构成Ref2VA速度、Larry混合声音或�
 
 ## 候选四秒与768P范围
 
-0.27.0a1在`vflash.pipeline.pika_av`新增`validate_pika_av_request(request, recipe)`，
+0.27.0a2在`vflash.pipeline.pika_av`新增`validate_pika_av_request(request, recipe)`，
 准备权重会话实际调用同一CPU准入。`VideoRequest(duration_seconds=4)`保持原生24fps，
 交付96帧、对齐模型107帧；新增文本／首帧范围不超过1376×768像素。五秒首帧保留其
 独立更大软件上限，超过已有小画幅合批范围仍要求原生单块解码。普通`H3Pipeline`及QAD
 不获得新增范围；这是候选软件合同，新的GPU与质量资格仍待完成。
+
+四秒候选要求独立Larry十步原生声音。声音适配器接收实际32帧潜变量时间，空间抽样及
+首图条件保留使用相同帧数。0.27.0a1的内层声音约束仍固定五秒，不能完成新增四秒范围。
+现CPU检查直接组合真实画面固定、空间抽样与视觉KV钩子；GPU和完整音画资格继续单独验证。

@@ -43,6 +43,7 @@ def native_audio_context(
     reuse_visual_context=False,
     maximum_bytes=40 * 1024**3,
     spatial_stride=1,
+    latent_frames=37,
 ):
     """Own one fixed-picture audio pass, optionally reusing visual attention.
 
@@ -51,7 +52,9 @@ def native_audio_context(
     bitstream during delivery. False retains full-context computation. A failed
     pass restores state and propagates its error; retries need a fresh generator.
     Spatial stride two or four explicitly reduces spatial audio conditioning
-    on five-second T2VA/I2VA canvases up to two megapixels, with all times retained.
+    on declared native T2VA/I2VA canvases, with all times retained. The default
+    keeps the five-second scope; 32 latent frames explicitly select the bounded
+    four-second ten-forward scope.
     """
     if type(expected_forwards) is not int or expected_forwards not in (10, 12):
         raise ValueError("This native audio adapter is qualified for 10 or 12 forwards")
@@ -59,16 +62,20 @@ def native_audio_context(
         raise ValueError("Visual context reuse must be explicit")
     if type(spatial_stride) is not int or spatial_stride not in (1, 2, 4):
         raise ValueError("Native audio spatial stride must be 1, 2 or 4")
-    # Five-second geometry only; zero rows denotes direct text, with no image.
+    if type(latent_frames) is not int or latent_frames not in (32, 37):
+        raise ValueError("Spatial audio requires an explicit native frame count")
+    maximum_pixels = 1376 * 768 if latent_frames == 32 else 2 * 1024**2
+    # Zero condition rows denotes direct text, with no generated first image.
     if spatial_stride > 1 and (
         not reuse_visual_context
         or video.ndim != 5
-        or tuple(video.shape[:3]) != (1, 24, 37)
+        or tuple(video.shape[:3]) != (1, 24, latent_frames)
+        or (latent_frames == 32 and expected_forwards != 10)
         or max(video.shape[-2:]) * 16 > 2048
-        or video.shape[-2] * video.shape[-1] * 256 > 2 * 1024**2
+        or video.shape[-2] * video.shape[-1] * 256 > maximum_pixels
         or condition_rows not in (0, (video.shape[-2] // 2) * (video.shape[-1] // 2))
     ):
-        raise ValueError("Spatial audio requires qualified five-second geometry and KV reuse")
+        raise ValueError("Spatial audio requires declared native geometry and KV reuse")
     with ExitStack() as stack:
         picture = stack.enter_context(
             fixed_video_audio_pass(
@@ -89,6 +96,7 @@ def native_audio_context(
                     width=video.shape[-1] // 2,
                     condition_rows=condition_rows,
                     stride=spatial_stride,
+                    frames=latent_frames,
                 )
             )
         visual = (

@@ -129,7 +129,8 @@ def test_actual_session_counts_freezes_picture_and_restores_owners(
             assert active.pop() == qkv
 
     @contextmanager
-    def audio_context(_model, _scheduler, video, **_):
+    def audio_context(_model, _scheduler, video, **options):
+        assert options["latent_frames"] == (32 if duration == 4 else 37)
         assert active == [False]
         pipe.fixed = video
         yield {}

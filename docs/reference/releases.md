@@ -1,5 +1,13 @@
 # Release notes
 
+## 0.27.0a2 (candidate)
+
+Fixes the inner spatial-audio frame clock for the explicit four-second Pika candidate.
+The ten-forward audio pass retains all 32 video times and its full image condition; the default 37-time
+five-second scope is unchanged. Rejects unqualified short zero/twelve-audio configurations before
+execution. CPU regression combines the real pinning, spatial selection and KV owners instead of
+replacing the audio context with a stub. New GPU and media qualification are still pending.
+
 ## 0.27.0a1 (candidate)
 
 Adds explicit CPU admission for prepared Pika AV four/five-second text or first-frame requests,

@@ -88,6 +88,7 @@ def validate_pika_av_request(request, recipe):
         or request.keyframe_delivery_profile != "decoded"
         or request.mode not in {"t2va", "i2va"}
         or request.duration_seconds not in {4, 5}
+        or (request.duration_seconds == 4 and recipe.audio_steps != 10)
         or request.width % 32
         or request.height % 32
         or min(request.width, request.height) < 32
@@ -433,6 +434,7 @@ class PikaAVSession:
                                 expected_forwards=audio_steps,
                                 reuse_visual_context=True,
                                 spatial_stride=2,
+                                latent_frames=G.video_latent_num_frames(request.model_frames),
                             ) as context:
                                 pipe(
                                     prompt=request.prompt,

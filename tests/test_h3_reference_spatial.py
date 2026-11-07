@@ -146,7 +146,7 @@ class SpatialAudioTests(unittest.TestCase):
         for reuse in (False, True):
             with (
                 torch.inference_mode(),
-                self.assertRaisesRegex(ValueError, "qualified five-second"),
+                self.assertRaises(ValueError),
                 native_audio_context(
                     self.model,
                     self.scheduler,

@@ -260,10 +260,16 @@ admission envelope remain unchanged until a complete GPU qualification.
 
 ## Candidate short-duration and 768P scope
 
-Version 0.27.0a1 adds `validate_pika_av_request(request, recipe)` in
+Version 0.27.0a2 adds `validate_pika_av_request(request, recipe)` in
 `vflash.pipeline.pika_av`, using the same CPU admission called by the prepared session.
 `VideoRequest(duration_seconds=4)` retains the 24 fps clock: 96 delivered frames and 107 aligned
 model frames. The new text/first-frame scope is bounded to 1376×768 pixels; five-second
 first-frame generation keeps its separate larger software ceiling. Native one-tile decoding is
 required above the existing small-canvas batch limit. Ordinary `H3Pipeline` and QAD do not acquire
 this new scope. These are candidate software contracts; new GPU and quality qualification is pending.
+
+The four-second candidate requires the separate Larry ten-forward soundtrack. Its audio adapter
+receives the actual 32-frame latent clock, including spatial selection and retained image rows.
+Version 0.27.0a1 still had a five-second-only inner audio guard and cannot complete this short scope.
+CPU tests now exercise the real pinned-picture, spatial and visual-KV hooks together; GPU and complete
+media qualification remain separate requirements.
