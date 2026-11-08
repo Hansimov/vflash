@@ -1,8 +1,6 @@
 # Complete model profiles
 
-For the original-FL / Larry 4+6 picture and twelve-step native-audio runtime on a complete 96 GiB SM120 GPU,
-see [segmented AV](./segmented-av). It is an explicit Python API with its own assets;
-`H3Pipeline`, catalog profiles, CLI and native HTTP below retain their separate contracts and defaults.
+Choose a complete-video path using [runtimes and interfaces](../guide/runtime-selection): prepared Pika6 with Larry audio, original BF16 Pika, and fixed-profile `H3Pipeline` each have distinct inputs, assets and dependencies. The instructions below describe the fixed-profile path; they do not select Pika automatically.
 
 A prepared pipeline uses one fixed model, adapter and scheduler. The current source tree supports these complete pipelines:
 

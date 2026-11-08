@@ -1,4 +1,8 @@
-# Pika H3 Flex参考执行
+# Pika H3 Flex 运行时
+
+准备权重的 `PikaAVRuntime` 支持六步画面及可选 Larry10／12 原生声音，见[准备权重路径](#prepared-pika-av)。原版 `PikaFlexRuntime` 保留 BF16 上游执行，两者的精度、依赖、输入及硬件范围不同；[接口选择表](./runtime-selection)集中说明这些边界。
+
+## 原版 BF16 参考执行
 
 `PikaFlexRuntime`接入[官方Pika发布](https://github.com/Pika-Labs/Pika-H3-Flex)，保留上游分阶段
 BF16执行，不改变现有hybrid或分段默认。该原版分阶段路径已在96 GiB PRO 6000完成五秒480P文本和首帧生成；其他模式、大画布及服务集成仍按各自资格，不与下方准备权重路径混算。
@@ -51,7 +55,7 @@ CPU检查覆盖行／时钟映射、原画面保持和清理，Pika／Larry组�
 既有首帧声音路径和可选原版Pika运行时保持独立身份。
 
 
-## 预备权重的 Pika 画面与 Larry 原生声音
+## 预备权重的 Pika 画面与 Larry 原生声音 {#prepared-pika-av}
 
 可选的 `vflash.pipeline.pika_av_runtime.PikaAVRuntime` 复用 `ReferenceAVRuntime`
 显式接收的原始 FL 行 FP8 组件，将分段会话替换为唯一持有模型的 Pika 会话。在原组件之外，

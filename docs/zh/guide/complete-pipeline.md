@@ -1,7 +1,6 @@
 # 生成视频 {#generate-a-video}
 
-完整96 GiB SM120上的原始FL／Larry前4后6画面与十二步原生声音运行时，见[分段音画](../reference/segmented-av)。
-它是具有独立资产合同的显式Python API；下述 `H3Pipeline`、profile目录、CLI和原生HTTP保留各自合同与默认。
+先按[运行时与接口](./runtime-selection)选择完整视频路径：准备权重的 Pika6＋Larry 音轨、原版 BF16 Pika、固定配置 `H3Pipeline` 各有自己的输入、资产和依赖。下文介绍固定配置路径，不会自动选择 Pika。
 
 `H3Pipeline`（Python）和 `vflash generate`（命令行）根据提示词，以及可选的图片或一段短参考视频，生成完整 MP4。
 Vflash 负责原生去噪、阶段生命周期、本地媒体读取和 MP4 交付；文本/图像编码器使用固定版本的 Diffusers 与

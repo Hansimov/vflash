@@ -1,7 +1,6 @@
 # 配置与硬件
 
-完整96 GiB SM120上的原始FL／Larry前4后6画面与十二步原生声音运行时，见[分段音画](../reference/segmented-av)。
-它是具有独立资产合同的显式Python API；下述 `H3Pipeline`、profile目录、CLI和原生HTTP保留各自合同与默认。
+先按[运行时与接口](./runtime-selection)选择完整视频路径：准备权重的 Pika6＋Larry 音轨、原版 BF16 Pika、固定配置 `H3Pipeline` 各有自己的输入、资产和依赖。下文介绍固定配置路径，不会自动选择 Pika。
 
 配置（profile）固定模型、LoRA 版本、步数和计算精度，默认内存策略随所选硬件而定。请选择同时匹配显卡和已编译资源的配置。
 Vflash 不会自动替换设备或注意力后端；目录条目或 CUDA 探测都不能证明某个任务可以运行或达到质量要求。

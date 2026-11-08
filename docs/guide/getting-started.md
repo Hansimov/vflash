@@ -1,8 +1,6 @@
 # Get started
 
-For the original-FL / Larry 4+6 picture and twelve-step native-audio runtime on a complete 96 GiB SM120 GPU,
-see [segmented AV](../reference/segmented-av). It is an explicit Python API with its own assets;
-`H3Pipeline`, catalog profiles, CLI and native HTTP below retain their separate contracts and defaults.
+Choose a complete-video path using [runtimes and interfaces](./runtime-selection): prepared Pika6 with Larry audio, original BF16 Pika, and fixed-profile `H3Pipeline` each have distinct inputs, assets and dependencies. The instructions below describe the fixed-profile path; they do not select Pika automatically.
 
 Vflash turns a prompt and optional images into a complete MP4 with audio. Most users want the
 **complete pipeline** (`vflash generate`, `H3Pipeline` or the Docker pipeline image). Applications

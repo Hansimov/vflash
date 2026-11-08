@@ -1,7 +1,6 @@
 # 开始使用
 
-完整96 GiB SM120上的原始FL／Larry前4后6画面与十二步原生声音运行时，见[分段音画](../reference/segmented-av)。
-它是具有独立资产合同的显式Python API；下述 `H3Pipeline`、profile目录、CLI和原生HTTP保留各自合同与默认。
+先按[运行时与接口](./runtime-selection)选择完整视频路径：准备权重的 Pika6＋Larry 音轨、原版 BF16 Pika、固定配置 `H3Pipeline` 各有自己的输入、资产和依赖。下文介绍固定配置路径，不会自动选择 Pika。
 
 Vflash 把一段提示词和可选图片生成为带音轨的完整 MP4。大多数用户使用**完整流水线**
 （`vflash generate`、`H3Pipeline` 或 Docker 流水线镜像）。已自行构建条件输入的应用可以使用更底层的

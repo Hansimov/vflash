@@ -31,7 +31,7 @@ Vflash不携带私有资产或应用状态。完整资产合同见[英文页](..
 
 ## Python集成
 
-从[0.22.0发行包](https://github.com/Hansimov/vflash/releases/tag/v0.22.0)安装 `pipeline` extra，
+从[0.22.0发行包](https://github.com/Hansimov/vflash/releases/tag/v0.27.0)安装 `pipeline` extra，
 并安装本运行时对应的固定Veda／Sage依赖。下例是显式资产集成函数，不自动下载资产，也不是CLI profile。
 本例首图必须预先处理为1024×1024，每次输出目录必须尚不存在。
 

@@ -1,8 +1,6 @@
 # Profiles and hardware
 
-For the original-FL / Larry 4+6 picture and twelve-step native-audio runtime on a complete 96 GiB SM120 GPU,
-see [segmented AV](../reference/segmented-av). It is an explicit Python API with its own assets;
-`H3Pipeline`, catalog profiles, CLI and native HTTP below retain their separate contracts and defaults.
+Choose a complete-video path using [runtimes and interfaces](./runtime-selection): prepared Pika6 with Larry audio, original BF16 Pika, and fixed-profile `H3Pipeline` each have distinct inputs, assets and dependencies. The instructions below describe the fixed-profile path; they do not select Pika automatically.
 
 A profile fixes the model, LoRA revision, step count and arithmetic; its default memory strategy follows the
 selected hardware. Choose one that matches both your GPUs and your compiled assets. Vflash never substitutes

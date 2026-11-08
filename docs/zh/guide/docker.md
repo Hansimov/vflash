@@ -1,7 +1,6 @@
 # Docker 与 API
 
-已发布镜像与Python包独立版本化。下述0.18.0镜像不包含0.22.0的 `ReferenceAVRuntime`；
-分段音画需使用固定0.22.0源码／wheel和其显式Python API，不表示已有分段HTTP接口或同版本镜像。
+公开镜像与 Python 包独立版本化。下述 0.18.0 镜像提供固定配置 CLI／原生 HTTP，未包含较新的 Pika 或分段完整运行时。使用当前固定发行的 Python 包和[对应运行时](./runtime-selection)构建独立容器；新 Python API 不会自动扩展旧镜像或 HTTP 路由。
 
 把 Vflash 作为本地 HTTP 服务运行。服务接收预编译条件包，返回视频和音频潜变量（latents，即解码前的张量）；加载一个固定配置后，连续串行处理多个请求。
 

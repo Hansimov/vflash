@@ -13,6 +13,7 @@ const sidebar = (zh = false) => {
       text: zh ? '开始使用' : 'Start here',
       items: [
         item('Get started', '开始使用', '/guide/getting-started'),
+        item('Runtimes and interfaces', '运行时与接口', '/guide/runtime-selection'),
         item('Choose hardware', '选择硬件与配置', '/guide/profiles'),
         item('Prepare runtime assets', '准备运行资源', '/reference/runtime-assets'),
         item('Compile official weights', '编译官方权重', '/guide/compile-weights'),
@@ -22,6 +23,7 @@ const sidebar = (zh = false) => {
       text: zh ? '生成视频' : 'Generate',
       items: [
         item('Generate a video', '生成视频', '/guide/complete-pipeline'),
+        item('Pika H3 Flex runtimes', 'Pika H3 Flex 运行时', '/guide/pika-flex'),
         item('Python integration', 'Python 集成', '/guide/python'),
         item('Segmented video and native audio', '分段画面与原生声音', '/reference/segmented-av'),
         item('Docker and HTTP API', 'Docker 与 HTTP API', '/guide/docker'),
@@ -42,7 +44,6 @@ const sidebar = (zh = false) => {
       items: [
         item('Attention LoRA', '注意力 LoRA', '/reference/attention-lora'),
         item('Video restoration', '画质增强', '/guide/restoration'),
-        item('Pika H3 Flex reference', 'Pika H3 Flex 参考执行', '/guide/pika-flex'),
         item('VDN8 community backend', 'VDN8 社区后端', '/guide/community-vdn'),
         item('Sol-Engine alignment', 'Sol-Engine 对齐', '/reference/sol-engine-alignment'),
       ],
@@ -64,7 +65,7 @@ const sidebar = (zh = false) => {
 export default defineConfig({
   base: '/vflash/',
   title: 'Vflash',
-  description: 'Native MiniMax H3 video generation: text, image and keyframe modes up to 15 s and native 4 MP, plus an explicit segmented video and native audio runtime, on RTX 4090 48 GB, RTX PRO 6000 Blackwell, H100 and RTX 3080 pairs.',
+  description: 'MiniMax H3 inference with prepared Pika audio/video runtimes, fixed-profile complete pipelines and native latent execution. Each path has explicit model assets, input limits and hardware scope.',
   cleanUrls: true,
   appearance: true,
   sitemap: { hostname: 'https://hansimov.github.io/vflash/' },
@@ -94,7 +95,7 @@ export default defineConfig({
     zh: {
       label: '简体中文',
       lang: 'zh-CN',
-      description: '原生 MiniMax H3 视频生成：文字、图像与关键帧模式，最长 15 秒、原生4MP，以及显式分段画面与原生声音运行时；支持 RTX 4090 48GB、RTX PRO 6000 Blackwell、H100 与双 RTX 3080。',
+      description: 'MiniMax H3 推理：准备权重的Pika音画运行时、固定配置的完整流水线和原生潜变量执行。各路径独立声明模型资产、输入限制和硬件范围。',
       markdown: {
         container: {
           infoLabel: '说明', noteLabel: '备注', tipLabel: '提示', warningLabel: '注意',

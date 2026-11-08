@@ -44,7 +44,7 @@ balanced motion/texture/native-audio choice, not a universal quality guarantee.
 
 ## Python integration
 
-Install the `pipeline` extra from the [0.22.0 release](https://github.com/Hansimov/vflash/releases/tag/v0.22.0),
+Install the `pipeline` extra from the [0.27.0 release](https://github.com/Hansimov/vflash/releases/tag/v0.27.0),
 plus the pinned Veda/Sage dependencies used by this runtime. Supply the verified paths below; the example
 is an integration function, not an automatic asset downloader or a CLI profile. `first_frame` must already
 be exactly 1024×1024 for this example. Each output directory must be new.

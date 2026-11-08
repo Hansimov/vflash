@@ -1,7 +1,6 @@
 # 完整模型配置
 
-完整96 GiB SM120上的原始FL／Larry前4后6画面与十二步原生声音运行时，见[分段音画](./segmented-av)。
-它是具有独立资产合同的显式Python API；下述 `H3Pipeline`、profile目录、CLI和原生HTTP保留各自合同与默认。
+先按[运行时与接口](../guide/runtime-selection)选择完整视频路径：准备权重的 Pika6＋Larry 音轨、原版 BF16 Pika、固定配置 `H3Pipeline` 各有自己的输入、资产和依赖。下文介绍固定配置路径，不会自动选择 Pika。
 
 每份准备记录固定模型、LoRA 与调度方式。当前源码支持以下完整链路：
 

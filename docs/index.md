@@ -2,7 +2,7 @@
 layout: home
 title: Vflash — native H3 video generation
 titleTemplate: false
-description: Native MiniMax H3 video generation from text, images or keyframes — 5–15 s, native 4 MP, optional native audio refinement and explicit segmented AV — on RTX 4090 48 GB, RTX PRO 6000 Blackwell, H100 and RTX 3080 pairs.
+description: MiniMax H3 inference with prepared Pika audio/video runtimes, fixed-profile complete pipelines and native latent execution. Each path has explicit model assets, input limits and hardware scope.
 ---
 
 <HomePage />

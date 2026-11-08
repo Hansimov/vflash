@@ -1,4 +1,8 @@
-# Pika H3 Flex reference integration
+# Pika H3 Flex runtimes
+
+The prepared `PikaAVRuntime` provides six visual evaluations with optional Larry10/12 native audio; see the [prepared path](#prepared-pika-av). The original `PikaFlexRuntime` retains upstream BF16 execution. Their precision, dependencies, inputs and hardware scope differ; the [interface guide](./runtime-selection) compares these boundaries.
+
+## Original BF16 reference execution
 
 `PikaFlexRuntime` adapts the original [Pika release](https://github.com/Pika-Labs/Pika-H3-Flex)
 without changing the hybrid or segmented pipeline defaults. This initial adapter preserves the
@@ -91,7 +95,7 @@ quality for a Pika/Larry combination still needs its own qualification. The exis
 audio path and the optional original Pika runtime retain their separate identities.
 
 
-## Prepared Pika picture with native Larry audio
+## Prepared Pika picture with native Larry audio {#prepared-pika-av}
 
 The optional `vflash.pipeline.pika_av_runtime.PikaAVRuntime` reuses the explicit
 original-FL row-FP8 components accepted by `ReferenceAVRuntime`. It replaces the
@@ -209,7 +213,7 @@ sequences matched the previous 0.23.1 controls. Sampled face crops showed no new
 detail change. This qualifies the delivery correction; it does not establish a
 new motion-quality or complete-workflow latency claim.
 
-### Prepared reference components (unreleased)
+### Prepared reference components (since 0.25)
 
 The prepared projection loader now accepts an explicit `partition="ref2va"`.
 Its manifest binds `transformer_ref`, the released Ref adapter identity and
@@ -241,7 +245,7 @@ The geometry follows the pinned source. Separate prepared Ref GPU scope is docum
 
 ### Separate Ref picture and FL soundtrack candidate
 
-`vflash.pipeline.pika_reference_runtime.PikaReferenceAVRuntime` now provides an
+`vflash.pipeline.pika_reference_runtime.PikaReferenceAVRuntime` now provides a
 complete runtime, available since 0.25, over explicit Ref base/tables/adapter and the
 existing FL/Larry components. It preserves the original FP32 image conditioning
 and six Ref sampling evaluations. The optional ten/twelve-step soundtrack runs
