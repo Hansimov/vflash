@@ -110,3 +110,20 @@ different GPU or step schedule are hypotheses, not qualification evidence.
 The released Turbo profiles preserve the original low-rank residual computations alongside the base weights. Their compiled adapter and schedule are fixed for the session. Switching adapters requires compatible resources and a new session; it is not an unchecked per-request option.
 
 Exact attention describes an implementation choice. It does not mean that a distilled Turbo profile has base-model quality. Judge a generated result against the task and references, not only against tensor similarity.
+
+### Activation adapter layouts
+
+Development source separates original tensor naming and scaling in
+`adapters/h3_lora_layout.py` from hook/device ownership in `H3ActivationAdapter`.
+Existing LightX, Larry and Pika layouts keep their own coverage and scale.
+The explicit `akatz-v1.5` layout accepts the complete rank-16
+[original character adapter](https://huggingface.co/akatz-ai/MiniMax-H3-Character-Swap-LoRA):
+208 A/B pairs map to 312 projections, with QKV splitting and SwiGLU gate/value
+ordering. Incomplete pairs, foreign projections and incompatible shapes fail
+before use; failure removes installed hooks. CPU devices can be selected for
+numerical checks, while existing callers retain their CUDA placement.
+
+This is an activation-adapter primitive, not a released character-swap pipeline.
+It does not implement masks, the author's eight-step sampler or long-video
+continuations. Activation-space BF16 arithmetic also does not establish parity
+with merged or quantized weights. Complete workflow qualification remains separate.

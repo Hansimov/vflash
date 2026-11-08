@@ -3,40 +3,14 @@
 import torch
 from safetensors import safe_open
 
-
-def converted(name, down, up, kind):
-    if kind in {"lightx", "pika"}:
-        return [(name, down, up)]
-    name = (
-        name.replace("token_refiner.blocks.", "token_refiner.refiner_blocks.").replace(
-            "blocks.", "transformer_blocks."
-        )
-        if name.startswith("blocks.")
-        else name.replace("token_refiner.blocks.", "token_refiner.refiner_blocks.")
-    )
-    name = name.replace("final_layer.adaln_proj.linear", "norm_out.linear")
-    if name.endswith(".attn.qkv_proj"):
-        return [
-            (name.replace(".attn.qkv_proj", ".attn.to_" + k), down, b)
-            for k, b in zip(["q", "k", "v"], up.chunk(3, dim=0), strict=True)
-        ]
-    if name.endswith(".mlp.fc1"):
-        gate, value = up.chunk(2, dim=0)
-        return [
-            (name.replace(".mlp.fc1", ".ff.net.0.proj"), down, torch.cat([value, gate], dim=0))
-        ]
-    return [
-        (
-            name.replace(".attn.out_proj", ".attn.to_out.0").replace(".mlp.fc2", ".ff.net.2"),
-            down,
-            up,
-        )
-    ]
+from vflash.adapters.h3_lora_layout import LAYOUTS, adapter_names, adapter_scale, converted
 
 
 class H3ActivationAdapter:
-    def __init__(self, model, path, kind, *, validate_header=None, manifest=None):
-        if kind not in {"lightx", "larry", "pika"}:
+    def __init__(
+        self, model, path, kind, *, validate_header=None, manifest=None, device="cuda:0"
+    ):
+        if kind not in LAYOUTS:
             raise ValueError("An explicit supported adapter family is required")
         if kind == "pika":
             from vflash.pipeline.pika_flex import validate_adapter_manifest
@@ -68,39 +42,35 @@ class H3ActivationAdapter:
                 )
 
         try:
-            suffix = (
-                ".lora_A.default.weight" if kind in {"lightx", "pika"} else ".lora_A.weight"
-            )
-            other = ".lora_B.default.weight" if kind in {"lightx", "pika"} else ".lora_B.weight"
-            names = sorted(k[: -len(suffix)] for k in keys if k.endswith(suffix))
-            assert keys == {n + s for n in names for s in [suffix, other]}
-            assert len(names) == (312 if kind in {"lightx", "pika"} else 259)
+            layout = LAYOUTS[kind]
+            suffix, other = layout.suffixes
+            names = adapter_names(keys, kind)
             for name in names:
                 down, up = read(name + suffix), read(name + other)
-                scale = (
-                    float(metadata.get("alpha", 8.0)) / down.shape[0]
-                    if kind == "lightx"
-                    else 1.0
-                )
+                if down.ndim != 2 or down.shape[0] < 1:
+                    raise ValueError("Adapter A must be a nonempty matrix")
+                scale = adapter_scale(kind, metadata, down.shape[0], manifest)
                 if kind == "pika":
-                    if down.shape[0] != 128 or up.shape[1] != 128:
-                        raise ValueError("Pika requires every original rank-128 tensor pair")
-                    # PEFT in the release casts original FP32 stored adapters to BF16.
-                    # LightX's metadata fallback alpha=8 is not the Pika alpha=128.
-                    scale = manifest["alpha"] / manifest["rank"]
+                    # Match original PEFT BF16 execution, retaining its alpha/rank.
                     down, up = down.to(torch.bfloat16), up.to(torch.bfloat16)
                 for target, a, b in converted(name, down, up, kind):
                     module = model.get_submodule(target)
-                    assert isinstance(module, torch.nn.Linear)
-                    assert list(a.shape) == [a.shape[0], module.in_features] and list(
-                        b.shape
-                    ) == [module.out_features, a.shape[0]]
-                    assert target not in self.calls
+                    if not isinstance(module, torch.nn.Linear):
+                        raise ValueError("Adapter target must be an unpruned Linear projection")
+                    if list(a.shape) != [a.shape[0], module.in_features] or list(b.shape) != [
+                        module.out_features,
+                        a.shape[0],
+                    ]:
+                        raise ValueError("Adapter projection does not match the target model")
+                    if target in self.calls:
+                        raise ValueError("An adapter cannot target a projection twice")
                     self.calls[target] = 0
                     if validate_header is not None:
                         continue
-                    a, b = a.to("cuda:0").contiguous(), b.to("cuda:0").contiguous()
-                    self.tensor_bytes += (a.numel() + b.numel()) * 2
+                    a, b = a.to(device).contiguous(), b.to(device).contiguous()
+                    self.tensor_bytes += (
+                        a.numel() * a.element_size() + b.numel() * b.element_size()
+                    )
 
                     def forward(module, args, result, *, a=a, b=b, scale=scale, target=target):
                         if self.strength == 0.0:
@@ -120,7 +90,8 @@ class H3ActivationAdapter:
                         return result + delta
 
                     self.handles.append(module.register_forward_hook(forward))
-            assert len(self.calls) == (312 if kind in {"lightx", "pika"} else 363)
+            if len(self.calls) != layout.target_pairs:
+                raise ValueError("Converted adapter coverage differs from its declared family")
         except BaseException:
             self.close()
             raise
