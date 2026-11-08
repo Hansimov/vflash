@@ -93,10 +93,11 @@ class PikaFlexRuntime:
             args = SimpleNamespace(
                 task=request.mode,
                 prompt=request.prompt,
-                first_image=request.first_frame,
-                last_image=request.last_frame,
+                first_image=request.conditioning.first_frame,
+                last_image=request.conditioning.last_frame,
                 ref=[
-                    f"{kind}:{path.resolve(strict=True)}" for kind, path in request.references
+                    f"{item.kind}:{item.path.resolve(strict=True)}"
+                    for item in request.conditioning.references
                 ],
                 resolution=request.resolution,
                 aspect=request.aspect,

@@ -2,6 +2,27 @@
 
 Vflash owns the native H3 transformer, LoRA residuals, schedule updates and output heads in PyTorch and Triton. The complete Ref4/T2VA Python pipeline also coordinates explicit official encoder/VAE adapters and MP4 delivery. It does not import the LightX2V inference framework.
 
+## Request, media and application boundaries {#media-boundaries}
+
+Complete `VideoRequest` and original `PikaFlexRequest` expose a common immutable
+`ConditioningInputs` view. Temporal first/last anchors are distinct from ordered
+image/video/audio content references. Their mode, local path checks and per-kind
+labels come from this shared contract; the complete and original Pika input
+readers consume that same ordering.
+
+`ReferenceLimits` belongs to each recipe. The complete request still allows at
+most one video with three appearance images and no reference audio; the original
+Pika release declares its own 9-image / 3-video / 3-audio allocation with a total
+of 12. Both require a visual reference when audio conditioning is supplied.
+The prepared Pika reference session keeps its narrower image-only qualification.
+A shared input type does not enable a new encoder, sampler or GPU envelope.
+
+Applications resolve uploaded assets, analysis-only media, person identities,
+shot boundaries, output formats and durable workflow dependencies before calling
+the engine. Vflash receives explicit local model conditions and owns their
+encoding and execution lifetime. Accounts, prices, procurement and long-video
+job recovery stay outside this package.
+
 ## The data path {#data-path}
 
 ```text

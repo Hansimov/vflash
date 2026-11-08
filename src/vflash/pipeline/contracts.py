@@ -15,6 +15,7 @@ from vflash.media.keyframe_delivery import KEYFRAME_DELIVERY_PROFILES
 from vflash.model_assets import DEFAULT_MODEL_PROFILE
 from vflash.model_assets import DIFFUSERS_REVISION as DIFFUSERS_REVISION
 from vflash.model_assets import MODEL_REVISION as MODEL_REVISION
+from vflash.pipeline.inputs import ConditioningInputs, MediaReference, ReferenceLimits
 
 PIPELINE_PROFILE = DEFAULT_MODEL_PROFILE
 MAX_CANVAS_PIXELS = 1024**2
@@ -160,30 +161,9 @@ class VideoRequest:
             raise ContractError(
                 "video reference profile requires full or explicit spatial-half video"
             )
-        if self.reference_video is not None:
-            if not isinstance(self.reference_video, Path):
-                raise ContractError("reference_video must be a local pathlib.Path")
-            if len(self.ordered_references) > 3:
-                raise ContractError("mixed references support up to three images and one video")
-        if self.first_frame is not None:
-            if not isinstance(self.first_frame, Path):
-                raise ContractError("first_frame must be a local pathlib.Path")
-            if self.ordered_references or self.reference_video is not None:
-                raise ContractError("provide one first frame or Ref2VA references, not both")
-        if self.last_frame is not None:
-            if not isinstance(self.last_frame, Path):
-                raise ContractError("last_frame must be a local pathlib.Path")
-            if self.ordered_references or self.reference_video is not None:
-                raise ContractError("provide keyframes or Ref2VA references, not both")
-        if len(self.ordered_references) > 9:
-            raise ContractError("Ref2VA supports at most nine reference images")
-        picture_count = (
-            2
-            if self.first_frame is not None and self.last_frame is not None
-            else 1
-            if self.first_frame is not None or self.last_frame is not None
-            else len(self.ordered_references)
-        )
+        inputs = self.conditioning
+        inputs.validate_references(ReferenceLimits(9, 1, 0, 10, images_with_video=3))
+        picture_count = sum(item.kind == "image" for item in inputs.ordered_media)
         if any(
             index not in {str(value) for value in range(1, picture_count + 1)}
             for index in re.findall(r"<Picture (\d+)>", self.prompt)
@@ -254,16 +234,15 @@ class VideoRequest:
         return self.references or ((self.reference,) if self.reference is not None else ())
 
     @property
+    def conditioning(self) -> ConditioningInputs:
+        references = tuple(MediaReference("image", path) for path in self.ordered_references)
+        if self.reference_video is not None:
+            references += (MediaReference("video", self.reference_video),)
+        return ConditioningInputs(self.first_frame, self.last_frame, references)
+
+    @property
     def mode(self) -> str:
-        if self.first_frame is not None and self.last_frame is not None:
-            return "fl2va"
-        if self.first_frame is not None:
-            return "i2va"
-        if self.last_frame is not None:
-            return "l2va"
-        return (
-            "ref2va" if self.ordered_references or self.reference_video is not None else "t2va"
-        )
+        return self.conditioning.mode
 
     @property
     def model_frames(self) -> int:

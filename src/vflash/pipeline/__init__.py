@@ -15,16 +15,20 @@ from vflash.pipeline.contracts import (
     VideoRequest,
     VideoResult,
 )
+from vflash.pipeline.inputs import ConditioningInputs, MediaReference, ReferenceLimits
 
 __all__ = [
     "AttentionAdapter",
+    "ConditioningInputs",
     "ConditioningReuseScope",
     "H3Pipeline",
     "HybridModel",
+    "MediaReference",
     "PipelineAssets",
     "PipelineProgress",
     "PreparedPipelineAssets",
     "ReferenceAVRuntime",
+    "ReferenceLimits",
     "SegmentedAVRecipe",
     "SegmentedAVSession",
     "VideoRequest",

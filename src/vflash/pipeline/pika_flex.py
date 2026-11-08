@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from vflash.contracts import ContractError
+from vflash.pipeline.inputs import ConditioningInputs, MediaReference, ReferenceLimits
 
 PIKA_SOURCE_REVISION = "4bf8ea508891a432106e70f675d287c27f02306d"
 PIKA_MODEL_REVISION = "0ddf55ad7067ca1e76812253bd7b4600df87f759"
@@ -111,15 +112,6 @@ class PikaFlexRequest:
             raise ContractError("Pika duration must be an integer from 5 to 15 seconds")
         if type(self.seed) is not int or not 0 <= self.seed <= 2147483647:
             raise ContractError("Pika seed must be an integer in the model range")
-        if any(
-            p is not None and not isinstance(p, Path)
-            for p in (self.first_frame, self.last_frame)
-        ):
-            raise ContractError("Keyframes must be explicit local Paths")
-        if (self.first_frame is not None) != (self.mode in {"i2va", "fl2va"}) or (
-            self.last_frame is not None
-        ) != (self.mode in {"l2va", "fl2va"}):
-            raise ContractError("Temporal anchors disagree with the Pika input mode")
         if not isinstance(self.references, tuple) or any(
             not isinstance(r, tuple)
             or len(r) != 2
@@ -128,17 +120,15 @@ class PikaFlexRequest:
             for r in self.references
         ):
             raise ContractError("References must be ordered (kind, local Path) tuples")
-        if self.mode == "ref2va":
-            counts = {
-                k: sum(r[0] == k for r in self.references) for k in ("image", "video", "audio")
-            }
-            if (
-                counts["image"] + counts["video"] == 0
-                or len(self.references) > 12
-                or counts["image"] > 9
-                or counts["video"] > 3
-                or counts["audio"] > 3
-            ):
-                raise ContractError("References exceed the original Pika release allocation")
-        elif self.references:
-            raise ContractError("References require the Ref2VA partition")
+        inputs = self.conditioning
+        if inputs.mode != self.mode:
+            raise ContractError("Media roles disagree with the Pika input mode")
+        inputs.validate_references(ReferenceLimits(9, 3, 3, 12))
+
+    @property
+    def conditioning(self) -> ConditioningInputs:
+        return ConditioningInputs(
+            self.first_frame,
+            self.last_frame,
+            tuple(MediaReference(kind, path) for kind, path in self.references),
+        )

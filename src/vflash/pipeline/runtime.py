@@ -493,14 +493,9 @@ class H3Pipeline:
             with tempfile.TemporaryFile(dir=output_path.parent):
                 pass
             reference_started = time.monotonic()
-            for path in request.ordered_references:
-                references.append(read_reference(path))
-            if request.first_frame is not None:
-                references.append(read_reference(request.first_frame))
-            if request.last_frame is not None:
-                references.append(read_reference(request.last_frame))
-            if request.reference_video is not None:
-                references.append(read_video_reference(request.reference_video))
+            for item in request.conditioning.ordered_media:
+                reader = read_reference if item.kind == "image" else read_video_reference
+                references.append(reader(item.path))
             reference_loading_seconds = time.monotonic() - reference_started
             input_preparation_seconds = time.monotonic() - started
             try:
