@@ -1,63 +1,31 @@
 # Vflash
 
-采用显式GPU配置的原生 **MiniMax H3 推理引擎**。Vflash 使用 PyTorch 与 Triton 实现自己的去噪运行时，支持固定版本的 LightX2V Turbo LoRA。
+基于 PyTorch 与 Triton 的 **MiniMax H3 音视频推理引擎**。提供完整视频流水线及常驻潜变量
+生成服务，明确指定模型资产、采样配方和 GPU 分配。
 
 [文档](https://hansimov.github.io/vflash/zh/) · [开始使用](https://hansimov.github.io/vflash/zh/guide/getting-started) · [版本更新](https://hansimov.github.io/vflash/zh/reference/releases) · [English](README.md)
 
-**0.27.0：原生四秒 Pika 画面与 Larry 声音。** 准备权重文本／首帧执行共用精确音画时间，支持正方形像素的768P交付。限定GPU范围、现有动作／取景问题及固定profile边界见[Pika执行说明](https://hansimov.github.io/vflash/zh/guide/pika-flex#原生四秒与精确768p范围)。
+## 选择入口
 
-**0.23.0：明确的 Pika H3 Flex 配方。** 新增固定原版六步采样、Pika画面／Larry原生声音运行时、直接文本输入和组件复用，保留既有hybrid默认。见[Pika H3 Flex](https://hansimov.github.io/vflash/zh/guide/pika-flex)。
+| 入口 | 输出 | 使用说明 |
+| --- | --- | --- |
+| `H3Pipeline` / `vflash generate` | 在所选配置范围内，从文本、关键帧或内容参考生成完整 MP4 | [完整流水线](https://hansimov.github.io/vflash/zh/guide/complete-pipeline) |
+| `PikaAVRuntime` | 准备权重的 Pika H3 Flex 画面，明确选择联合声音或 Larry 声音配方 | [Pika 接入](https://hansimov.github.io/vflash/zh/guide/pika-flex) |
+| 原生会话 / HTTP worker | 从编译条件包生成音视频潜变量 | [Python](https://hansimov.github.io/vflash/zh/guide/python) · [HTTP](https://hansimov.github.io/vflash/zh/reference/http-api) |
 
-**0.22.0：分段画面与原生声音。** 新增SM120参考运行时，默认Veda、前4步Larry＋后6步原始画面，再以12步Larry生成原生声音。见[执行与资产范围](https://hansimov.github.io/vflash/zh/reference/segmented-av)。
+当前稳定版本为 **0.27.0**。准备权重的 Pika 文本／首帧路径包含已验证的四秒及精确768P交付。
+其他模式、时长和画布分别遵守各自配置；[配置指南](https://hansimov.github.io/vflash/zh/guide/profiles)
+记录硬件与实测范围。模型名称本身不能替代完整运行配置。
 
-**0.21.0：组合外观图与动作视频。** 混合流水线接受有序图像与一份参考视频，显式视频空间池化保留外观图latent、降低动作条件成本。首批完整成片已在RTX 4090 48 GiB与RTX PRO 6000 Blackwell Server执行；硬件耗时及实测范围见[版本更新](https://hansimov.github.io/vflash/zh/reference/releases)。
+Vflash负责条件编码、采样、解码和本地执行资源。接入应用负责账户、持久任务调度、多步骤
+工作流及媒体交付。原生HTTP的有界队列不是应用层持久任务队列。
 
-**0.17.0：Veda层数与精度分别选择。** `veda_dense_edge_layers=4`对应42稀疏/8密集，
-可选音频上下文阶段保持该分工；SM120沿用所选Sage FP8或FROST精度策略。`H3Pipeline`的Veda默认保持40/10（显式分段运行时为44/6），
-同输入执行结果见[版本更新](https://hansimov.github.io/vflash/zh/reference/releases)。
-
-**0.16.0：SM120注意力更快。** 在RTX PRO 6000上，`veda_dense_backend="sageattention2"`现在让密集层与Veda稀疏层
-都使用INT8 Q·K / FP8 P·V，去噪缩短6–14%，并以BF16基线对照测量闪烁与清晰度。见[版本更新](https://hansimov.github.io/vflash/zh/reference/releases)。
-
-**0.15.0：96 GiB Blackwell常驻4MP。** 单张SM120常驻I2VA改用原生高清像素帧预算，不再固定1536×864：
-RTX PRO 6000以FP8主干及人脸、六步音频修复完成1920×1088五秒163秒、2720×1536五秒261秒、
-1920×1088十秒245秒，显存峰值42.1 GiB。见[常驻](https://hansimov.github.io/vflash/zh/guide/profiles#h100-resident)。
-
-**0.14.0：真4MP原生高清。** 图像条件原生高清保持2048²像素上限，但最长边放宽到2720，
-五秒请求可达2720×1536（16:9）、1536×2720（9:16）或2368×1760（4:3）。五条RTX4090完整请求
-画面连贯；联合像素帧预算不变。见[画布限制](https://hansimov.github.io/vflash/zh/guide/complete-pipeline#extended-hybrid)。
-
-**0.13.0：显式音频隐藏上下文复用。** 自有六步音频接口可复用首次非音频隐藏状态，
-后续每步保持实时音频并重建K/V。两组48GiB RTX4090的512²/5秒对照画面逐帧保持、试听获认可，
-音频阶段约少34%。这是默认关闭的近似选项，较大缓存场景未资格，见
-[音频指南](docs/zh/guide/complete-pipeline.md#audio-hidden-context)。
-
-可选六步音频支持原生BF16权重双槽和已资格的常驻FP8路径，使用Veda 44/6与约0.5MP
-空间条件，保持交付视频像素。[完整流水线指南](https://hansimov.github.io/vflash/zh/guide/complete-pipeline)
-分别说明硬件资格、试听证据和执行成本。
-
-Vflash提供两类入口：
-
-- **完整视频生成**：`H3Pipeline`与`vflash generate`管理条件编码、原生去噪、官方音视频解码和MP4编码。
-  文本、关键帧、内容参考使用各自prepared配置；原始LightX v0.1及hybrid遵守已验证的
-  [时长、参考数量与像素帧组合限制](https://hansimov.github.io/vflash/zh/guide/complete-pipeline#extended-hybrid)。
-- **原生推理服务**：常驻GPU进程接收预编译条件包并返回音视频潜变量；有界HTTP队列不管理账号和持久任务，
-  应用负责鉴权、调度与媒体交付。
-
-显式配置覆盖单SM89、协作SM86/SM89双卡以及已验证的H100与Blackwell范围。准确显存、模式和几何必须符合
-[当前配置指南](https://hansimov.github.io/vflash/zh/guide/profiles)，不能用显卡名称或旧发行记录推导容量。
-设备和注意力后端不静默替换。
-
-可复用的[人脸重绘与编码接口](https://hansimov.github.io/vflash/zh/guide/complete-pipeline)是可选基础模块；
-人脸检测、轨迹选择、修复模型和最终合成由接入应用负责。单独安装引擎不会自动开启产品的完整人脸修复链路。
-原模型、精度和注意力默认保持。
-
-## 检查运行环境
+## 安装与环境检查
 
 需要 Python 3.11 或更新版本。基础安装不会下载模型权重或 PyTorch。
 
 ```bash
-git clone --branch v0.17.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.27.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m venv .venv
 source .venv/bin/activate
@@ -68,36 +36,24 @@ vflash profiles
 vflash plan ref2va-turbo4-exact-sm89 --gpu 0
 ```
 
-协作多卡须显式选择`--peer-gpu`，同一进程持有整个设备组直至关闭。主机内存需要覆盖权重、编码器、解码器及
-当前请求，参见[硬件与内存限制](https://hansimov.github.io/vflash/zh/guide/profiles)。
+上述plan命令检查一个明确配置，不执行生成。按[安装指南](https://hansimov.github.io/vflash/zh/guide/getting-started)
+为选定流水线安装依赖并取得固定资产。协作多卡须用`--peer-gpu`指定第二张卡，同一进程
+持有整个分配；主机内存也需要覆盖所选模型和媒体组件。
 
-## 接入应用
+## 使用与接入
 
-- [生成 MP4](https://hansimov.github.io/vflash/zh/guide/complete-pipeline)，使用纯文字或一至三张参考图，并在连续请求间复用模型。
-- [编译官方权重](https://hansimov.github.io/vflash/zh/guide/compile-weights)，从固定版本的模型与 LoRA 创建 Ref4 或 Base4 运行资源。
-- [运行条件包](https://hansimov.github.io/vflash/zh/guide/getting-started#run-a-bundle)，使用匹配的编译资源执行推理。
-- [通过 Python 接入](https://hansimov.github.io/vflash/zh/guide/python)，在多个请求之间复用模型。
-- [启动 Docker 与 HTTP 服务](https://hansimov.github.io/vflash/zh/guide/docker)，使用独立 worker 和有容量限制的任务队列。
-- [测量性能与质量](https://hansimov.github.io/vflash/zh/reference/performance)，区分加载、推理和端到端成本。
-- [对照 Sol-Engine](https://hansimov.github.io/vflash/zh/reference/sol-engine-alignment)，只采用通过 SM86/SM89 实测的机制。
-- [排查问题](https://hansimov.github.io/vflash/zh/guide/troubleshooting)，在不削弱资源所有权检查的情况下定位启动、内存、双卡与输出故障。
+- [生成视频](https://hansimov.github.io/vflash/zh/guide/complete-pipeline)：文本、首尾帧与内容参考分别表达。
+- [准备权重](https://hansimov.github.io/vflash/zh/guide/compile-weights)及[运行资产](https://hansimov.github.io/vflash/zh/reference/runtime-assets)：使用准确的模型、适配器与组件清单。
+- [复用Python会话](https://hansimov.github.io/vflash/zh/guide/python)，或[部署Docker](https://hansimov.github.io/vflash/zh/guide/docker)。
+- [测量性能](https://hansimov.github.io/vflash/zh/reference/performance)，或[排查](https://hansimov.github.io/vflash/zh/guide/troubleshooting)启动、内存及输出故障。
 
-Turbo4 和 Turbo8 使用蒸馏 LoRA。精确注意力不保证基础模型的质量；不同显卡或并行策略也不保证逐位一致的结果。完整生成使用明确固定配置的资产和会话。双 SM86 的 Ref4 必须使用 `sequence-head`；单 SM86 与其他仅原生Turbo配置使用条件包接口。W8 以及任意适配器或模式切换不在支持范围内。请查看[验证范围](https://hansimov.github.io/vflash/zh/guide/profiles)。
+各配方的质量、耗时和硬件证据保存在指南与[版本记录](https://hansimov.github.io/vflash/zh/reference/releases)。
+精确注意力、蒸馏和CPU检查成功分别表达不同事实，应沿所选配方的实测范围使用。
+重绘与人脸编码属于可选基础模块，不等于完整的人物跟踪或替换工作流。
 
-## 参与开发
-
-```bash
-python -m pip install -e '.[dev,server]'
-pre-commit install
-pre-commit run --all-files
-pytest
-```
-
-使用 `npm ci` 和 `npm run docs:build` 构建双语文档。证据、隐私与发布要求见
-[参与开发](https://hansimov.github.io/vflash/zh/guide/contributing)和[贡献者地图](AGENTS.md)。
+开发环境和发布步骤见[贡献指南](https://hansimov.github.io/vflash/zh/guide/contributing)。
 
 ## 许可证
 
-Vflash 源码使用 [Apache-2.0](LICENSE)。模型和 LoRA 各自遵循相应许可证和使用条款，本仓库不含模型权重。运行时不依赖 LightX2V 推理框架。
-
-感谢 [MiniMax H3](https://huggingface.co/MiniMaxAI/MiniMax-H3)、[LightX2V](https://github.com/ModelTC/LightX2V)，以及 PyTorch、Triton 和 CUDA 社区。[来源与致谢](https://hansimov.github.io/vflash/zh/reference/license)。
+Vflash源码使用[Apache-2.0](LICENSE)。模型和适配器各自遵循相应许可证及使用条款，本仓库
+不含模型权重，运行时不依赖LightX2V推理框架。参见[来源与致谢](https://hansimov.github.io/vflash/zh/reference/license)。
