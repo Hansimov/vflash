@@ -322,7 +322,7 @@ def test_i2va_request_owns_one_explicit_first_frame():
     assert request.mode == "i2va"
     assert request.first_frame == frame
     assert request.ordered_references == ()
-    with pytest.raises(ContractError, match="first frame or Ref2VA"):
+    with pytest.raises(ContractError, match="temporal keyframes or content references"):
         VideoRequest("A scene.", references=(Path("ref.png"),), first_frame=frame)
     with pytest.raises(ContractError, match="picture label"):
         VideoRequest("Continue from <Picture 2>.", first_frame=frame)
@@ -336,7 +336,7 @@ def test_l2va_request_owns_one_explicit_last_frame():
     assert request.mode == "l2va"
     assert request.last_frame == frame
     assert request.ordered_references == ()
-    with pytest.raises(ContractError, match="keyframes or Ref2VA"):
+    with pytest.raises(ContractError, match="temporal keyframes or content references"):
         VideoRequest("A scene.", references=(Path("ref.png"),), last_frame=frame)
     with pytest.raises(ContractError, match="picture label"):
         VideoRequest("Resolve at <Picture 2>.", last_frame=frame)
@@ -359,7 +359,7 @@ def test_fl2va_request_requires_two_explicit_temporal_anchors():
             first_frame=first,
             last_frame=last,
         )
-    with pytest.raises(ContractError, match="first frame or Ref2VA"):
+    with pytest.raises(ContractError, match="temporal keyframes or content references"):
         VideoRequest(
             "A scene.",
             references=(Path("ref.png"),),
