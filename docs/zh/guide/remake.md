@@ -1,6 +1,6 @@
 # Remake 源视频窗口
 
-0.28.0a1 的实验性接口将原版 **Viggle Remake** H3 的 `swap`／`edit` 图编译并交给已准备、由调用方
+0.28.0a2 的实验性接口将原版 **Viggle Remake** H3 的 `swap`／`edit` 图编译并交给已准备、由调用方
 拥有的本地 Comfy 运行服务执行。请显式选择下方预览 tag；稳定版 0.27.0 wheel 不包含此接口。普通 Pika 与原生执行配置保留现有接口。
 
 ## 运行时与模型
@@ -23,7 +23,7 @@
 从固定预览 tag 安装 CPU 客户端，并提供系统 `ffmpeg`／`ffprobe`：
 
 ```bash
-git clone --branch v0.28.0a1 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.28.0a2 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m pip install '.[remake-client]'
 ```
@@ -99,3 +99,14 @@ LoadVideo 的输入预览不会被当成结果。取消、超时和不确定执�
 
 接口分开源归属、执行和完整拼装，后续原生渲染器可以复用同一窗口／参考／历史合同。
 已有 HTTP 服务的原生潜变量 API 与普通完整流水线继续保持各自范围。
+
+## 恢复已持久保存的完成结果
+
+调用方在模型结果保存后、更新自身任务前退出时，可调用
+`recover_completed_remake(request, input_directory=..., output_directory=...,
+execution_directory=...)`读取原本地完成回执和历史。它核对原请求图、输入文件身份和
+已保存MP4；不访问网络、不创建新模型执行，原运行服务可以已经停止。
+不完整、已变化或缺少文件身份的旧回执仍须由原所有者明确核对，不自动重发。
+普通`execute_remake`继续要求新执行目录。恢复时共同保留原输入、输出和执行回执。
+
+该恢复合同从0.28.0a2提供，不改变采样，也不扩展场景、时长、硬件和质量资格。

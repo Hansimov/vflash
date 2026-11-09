@@ -1,6 +1,6 @@
 # Remake source-video windows
 
-The experimental 0.28.0a1 API compiles and executes the original **Viggle Remake** H3
+The experimental 0.28.0a2 API compiles and executes the original **Viggle Remake** H3
 `swap` and `edit` graphs against an already provisioned, caller-owned local Comfy runtime.
 Use the explicit preview tag below; the stable 0.27.0 wheel does not include this interface.
 Ordinary Pika and native execution profiles retain their existing interfaces.
@@ -27,7 +27,7 @@ The model's license and Viggle attribution requirements apply separately from Vf
 Install the CPU client from its fixed preview tag and provide system `ffmpeg`/`ffprobe`:
 
 ```bash
-git clone --branch v0.28.0a1 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.28.0a2 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m pip install '.[remake-client]'
 ```
@@ -112,3 +112,17 @@ complete prepared source AAC during final assembly. `silent` omits audio from th
 This interface keeps source ownership, execution and final assembly separate, allowing a future
 native renderer to consume the same explicit window/reference/history contract. The existing
 HTTP server's native latent API and ordinary complete pipelines keep their separate scopes.
+
+## Recover a durable completion
+
+If the caller exits after the model result is saved but before its own job is updated,
+`recover_completed_remake(request, input_directory=..., output_directory=...,
+execution_directory=...)` reads the original local completion and history. It validates
+that the request graph, input identities and saved MP4 still match. This performs no
+network calls and creates no new model execution. The original server may already be stopped.
+An incomplete, changed or older receipt without file identities requires explicit owner
+reconciliation; it is never resubmitted automatically. Ordinary `execute_remake` continues
+to require a fresh execution directory. Keep the original inputs, output and receipts together.
+
+This recovery contract is available from 0.28.0a2. It does not change sampling or qualify
+additional scene, duration, hardware or quality ranges.

@@ -6,6 +6,7 @@ request and its outcome survive a lost HTTP response in a private execution jour
 """
 
 import json
+import math
 import os
 import threading
 import time
@@ -13,7 +14,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from vflash.cancellation import GenerationCancelled
 from vflash.media.probe import probe_normalized_video
@@ -130,6 +131,105 @@ def _artifact(entry, output_directory, prefix, request, cancel_check):
     }
 
 
+def _identity(path):
+    if not isinstance(path, Path) or path.is_symlink() or not path.is_file():
+        raise RemakeExecutionError("Recovery requires the original owned regular files")
+    info = path.stat()
+    return {"path": str(path.resolve()), "bytes": info.st_size, "mtime_ns": info.st_mtime_ns}
+
+
+def _input_identities(request):
+    paths = [request.source, *(ref.path for ref in request.references)]
+    if request.prefix:
+        paths.append(request.prefix.take)
+    return [_identity(path) for path in paths]
+
+
+def _read_receipt(path):
+    _identity(path)
+    if path.stat().st_size > 2 * 1024**2:
+        raise RemakeExecutionError("The execution receipt exceeds its bounded contract")
+    result = json.loads(path.read_text())
+    if not isinstance(result, dict):
+        raise RemakeExecutionError("The execution receipt must be an object")
+    return result
+
+
+def recover_completed_remake(
+    request: RemakeRequest,
+    *,
+    input_directory: Path,
+    output_directory: Path,
+    execution_directory: Path,
+    cancel_check=None,
+) -> dict:
+    """Read a completed original execution after a caller restart, without any HTTP.
+
+    Only a durable completion with its exact graph, history and unchanged files is
+    recoverable here. Interrupted/unknown executions still require their original
+    owner's reconciliation. This operation never submits, stops or rents anything.
+    Receipts written before input/output identities were recorded are not adopted.
+    """
+    for directory in (execution_directory, output_directory):
+        if not isinstance(directory, Path) or directory.is_symlink() or not directory.is_dir():
+            raise ValueError(
+                "Recovery needs the original owned execution and output directories"
+            )
+    state = _read_receipt(execution_directory / "execution.json")
+    ident = state.get("prompt_id")
+    try:
+        valid_id = isinstance(ident, str) and str(UUID(ident)) == ident
+    except ValueError:
+        valid_id = False
+    if (
+        state.get("status") != "completed"
+        or not valid_id
+        or state.get("submission_count") != 1
+        or state.get("source_revision") != SOURCE_REVISION
+        or state.get("comfy_revision") != COMFY_REVISION
+        or state.get("output_prefix") != "remake-" + ident
+        or type(state.get("seconds")) not in {int, float}
+        or not math.isfinite(state["seconds"])
+        or state["seconds"] < 0
+    ):
+        raise RemakeExecutionError(
+            "Reconcile the original execution: no valid completion receipt"
+        )
+    graph = remake_graph(
+        request,
+        input_directory=input_directory,
+        output_prefix=state["output_prefix"] + "/video",
+        cancel_check=cancel_check,
+    )
+    if graph != state.get("graph") or _input_identities(request) != state.get("inputs"):
+        raise RemakeExecutionError(
+            "Recovery must retain the original graph and input identities"
+        )
+    entry = _read_receipt(execution_directory / "history.json")
+    executed = entry.get("prompt")
+    if (
+        not isinstance(executed, list)
+        or len(executed) < 3
+        or executed[1] != ident
+        or executed[2] != graph
+    ):
+        raise RemakeExecutionError("Executed graph differs from the frozen request")
+    path, media = _artifact(
+        entry,
+        output_directory.resolve(strict=True),
+        state["output_prefix"],
+        request,
+        cancel_check,
+    )
+    if (
+        str(path) != state.get("artifact")
+        or media != state.get("media")
+        or _identity(path) != state.get("artifact_identity")
+    ):
+        raise RemakeExecutionError("The completed artifact changed after publication")
+    return {key: state[key] for key in ("prompt_id", "artifact", "media", "seconds")}
+
+
 def execute_remake(
     request: RemakeRequest,
     *,
@@ -231,6 +331,7 @@ def _execute_remake(
         "graph": graph,
         "output_prefix": prefix,
         "submission_count": 0,
+        "inputs": _input_identities(request),
     }
     _save(journal, state)
     submitted, completed, rejected = False, False, False
@@ -295,6 +396,7 @@ def _execute_remake(
                     completed_at=time.time(),
                     seconds=time.monotonic() - started,
                     artifact=str(path),
+                    artifact_identity=_identity(path),
                     media=media,
                 )
                 _save(journal, state)

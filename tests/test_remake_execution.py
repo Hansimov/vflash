@@ -6,6 +6,7 @@ import socket
 import subprocess
 import threading
 from contextlib import contextmanager
+from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from uuid import UUID
@@ -19,6 +20,7 @@ from vflash.pipeline.remake_execution import (
     LocalRemakeRuntime,
     RemakeExecutionError,
     execute_remake,
+    recover_completed_remake,
 )
 
 
@@ -262,3 +264,37 @@ def test_unconfirmed_runtime_stop_is_recorded_without_hiding_original_timeout(tm
         journal = json.loads((tmp_path / "execution/execution.json").read_text())
         assert journal["runtime_stop"] == "needs_reconciliation"
         assert journal["error_type"] == "TimeoutError" and len(server["posts"]) == 1
+
+
+@pytest.mark.parametrize("change", [None, "input", "artifact", "seed", "history", "unknown"])
+def test_completed_recovery_is_offline_and_checks_original_evidence(tmp_path, media, change):
+    request, inputs, outputs = media
+    directory = tmp_path / "execution"
+    options = dict(
+        input_directory=inputs, output_directory=outputs, execution_directory=directory
+    )
+    with model_server(media, mode="lost_reply") as (runtime, stop, server):
+        result = execute_remake(request, **options, runtime=runtime, stop_runtime=stop)
+    # The server is gone. Recovery has no transport argument and cannot submit work.
+    if change == "input":
+        request.references[0].path.touch()
+    elif change == "artifact":
+        Path(result["artifact"]).touch()
+    elif change == "seed":
+        request = replace(request, seed=request.seed + 1)
+    elif change in {"history", "unknown"}:
+        path = directory / ("history.json" if change == "history" else "execution.json")
+        value = json.loads(path.read_text())
+        if change == "history":
+            value["prompt"][2]["12"]["inputs"]["seed"] += 1
+        else:
+            value["status"] = "interrupted"
+        path.write_text(json.dumps(value))
+    before = {p.name: p.read_bytes() for p in directory.iterdir()}
+    if change:
+        with pytest.raises(RemakeExecutionError):
+            recover_completed_remake(request, **options)
+    else:
+        assert recover_completed_remake(request, **options) == result
+    assert {p.name: p.read_bytes() for p in directory.iterdir()} == before
+    assert len(server["posts"]) == 1 and server["stops"] == 0
