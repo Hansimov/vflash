@@ -1,5 +1,7 @@
 # Choose a runtime and interface
 
+Original source-video editing: [Remake windows](./remake) (experimental source-checkout adapter).
+
 Vflash 0.27.0 provides several independently configured execution paths. Select the request mode,
 result type and hardware first, then prepare that path’s assets. The package version alone does
 not select a model recipe. A catalog profile, a Python class and a published Docker image are

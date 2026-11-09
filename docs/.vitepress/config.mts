@@ -42,6 +42,7 @@ const sidebar = (zh = false) => {
       text: zh ? '可选与实验功能' : 'Optional and experimental',
       collapsed: true,
       items: [
+        item('Remake source-video windows', 'Remake 源视频窗口', '/guide/remake'),
         item('Attention LoRA', '注意力 LoRA', '/reference/attention-lora'),
         item('Video restoration', '画质增强', '/guide/restoration'),
         item('VDN8 community backend', 'VDN8 社区后端', '/guide/community-vdn'),

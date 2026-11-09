@@ -21,6 +21,7 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
+remake-client = ["Pillow>=13,<14"]
 qad = ["flashinfer-python==0.6.18"]
 weight-io = ["zstandard>=0.25,<0.26"]
 gpu = [
