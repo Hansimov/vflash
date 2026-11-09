@@ -1,8 +1,7 @@
 # Remake 源视频窗口
 
-此实验性源码接口将原版 **Viggle Remake** H3 的 `swap`／`edit` 图编译并交给已准备、由调用方
-拥有的本地 Comfy 运行服务执行。接口正在进行下一 minor 发行的资格验证，已发布的 0.27.0
-wheel 尚不包含它。普通 Pika 与原生执行配置保留现有接口。
+0.28.0a1 的实验性接口将原版 **Viggle Remake** H3 的 `swap`／`edit` 图编译并交给已准备、由调用方
+拥有的本地 Comfy 运行服务执行。请显式选择下方预览 tag；稳定版 0.27.0 wheel 不包含此接口。普通 Pika 与原生执行配置保留现有接口。
 
 ## 运行时与模型
 
@@ -21,7 +20,14 @@ wheel 尚不包含它。普通 Pika 与原生执行配置保留现有接口。
 分开。适配器只提交固定图。模型许可证及 Viggle 署名要求独立于 Vflash 的源码许可证。
 
 
-在源码 checkout 中运行 `pip install '.[remake-client]'`，并提供系统 `ffmpeg`／`ffprobe`。
+从固定预览 tag 安装 CPU 客户端，并提供系统 `ffmpeg`／`ffprobe`：
+
+```bash
+git clone --branch v0.28.0a1 --depth 1 https://github.com/Hansimov/vflash.git
+cd vflash
+python -m pip install '.[remake-client]'
+```
+
 此 CPU extra 不安装 GPU 框架。可选 `attention="veda-r2va"` 需要安装固定的
 [Veda 节点](https://github.com/veda-sparse/Veda-on-ComfyUI/tree/67e4eb5541b648555563144401ebaba832bd73ec)和
 [R2VA 预测器](https://huggingface.co/Veda-Sparse/Minimax-H3-R2VA-Veda-Preview/tree/1598b407905b7c0af85aa0c13acdfa6f01ff2982)。

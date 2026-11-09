@@ -1,5 +1,22 @@
 # Release notes
 
+## 0.28.0a1 (preview)
+
+Adds an explicit original Viggle Remake client for source-video editing, with separate
+six-step swap/edit models and optional R2VA Veda attention. Frozen source, reference images,
+target pins and generated-history frames have distinct roles. The owned loopback executor
+persists one submission, reconciles a lost reply by that original identity, verifies the executed
+graph and saved media, and asks the caller's process owner to confirm cancellation or timeout.
+The `remake-client` extra installs Pillow only; the pinned Comfy model runtime remains separate.
+
+Original-graph GPU evidence covers one SM120 96 GiB allocation at 832×480 with 124, 192 and
+226 model frames: character/object/style edits, two identities, and 17-frame generated-history
+continuation. Full and sparse graphs retain separate evidence; Veda changes pixels. The new
+client reproduces eleven of those frozen graphs and has local HTTP/media recovery checks.
+Deployment through the new transport, longer multi-window films and other shapes remain open
+qualification scopes. This preview does not change ordinary Pika/native profiles or published
+Docker images. See [Remake inputs and ownership](../guide/remake).
+
 ## 0.27.0
 
 Promotes native four/five-second prepared Pika FL generation with a separately selected

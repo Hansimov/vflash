@@ -1,8 +1,8 @@
 # Remake source-video windows
 
-This experimental source-checkout API compiles and executes the original **Viggle Remake** H3
+The experimental 0.28.0a1 API compiles and executes the original **Viggle Remake** H3
 `swap` and `edit` graphs against an already provisioned, caller-owned local Comfy runtime.
-It is being qualified for the next minor release and is not included in the published 0.27.0 wheel.
+Use the explicit preview tag below; the stable 0.27.0 wheel does not include this interface.
 Ordinary Pika and native execution profiles retain their existing interfaces.
 
 ## Runtime and model identity
@@ -24,8 +24,15 @@ fixed graph; the owner controls process startup, GPU allocation, readiness and s
 The model's license and Viggle attribution requirements apply separately from Vflash's source license.
 
 
-Install the CPU client from a source checkout with `pip install '.[remake-client]'`, and provide
-system `ffmpeg`/`ffprobe`. No GPU framework is installed by that extra. For optional
+Install the CPU client from its fixed preview tag and provide system `ffmpeg`/`ffprobe`:
+
+```bash
+git clone --branch v0.28.0a1 --depth 1 https://github.com/Hansimov/vflash.git
+cd vflash
+python -m pip install '.[remake-client]'
+```
+
+ No GPU framework is installed by that extra. For optional
 `attention="veda-r2va"`, install [Veda-on-ComfyUI](https://github.com/veda-sparse/Veda-on-ComfyUI/tree/67e4eb5541b648555563144401ebaba832bd73ec)
 and its [R2VA predictor](https://huggingface.co/Veda-Sparse/Minimax-H3-R2VA-Veda-Preview/tree/1598b407905b7c0af85aa0c13acdfa6f01ff2982).
 Both generated and reference budgets use the predictor's trained policy. The default is `full`.
