@@ -111,6 +111,11 @@ the final soundtrack. `preserve` holds source audio as clean model conditioning,
 graph decodes it through the audio VAE. To retain original sound without that round trip, copy the
 complete prepared source AAC during final assembly. `silent` omits audio from the raw output.
 
+Keep the original display geometry and frame-rate metadata before preparing smaller 24 fps model
+inputs. The caller can select a separate final canvas and frame rate after assembling the windows,
+and retain its chosen source soundtrack. Frame-time resampling changes the output clock; the model's
+motion sampling and generated spatial detail remain those of its working canvas.
+
 This interface keeps source ownership, execution and final assembly separate, allowing a future
 native renderer to consume the same explicit window/reference/history contract. The existing
 HTTP server's native latent API and ordinary complete pipelines keep their separate scopes.
