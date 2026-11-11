@@ -43,6 +43,12 @@ The tested sparse route changes pixels and must be judged against the intended s
 
 Prepare reference images as edited source-scene frames, following the [original Remake workflow](https://huggingface.co/Viggle/Viggle-Remake/blob/main/README.md). Portrait, product and style images supply attributes to the image-editing stage; an arbitrary portrait alone is not a prepared replacement scene. Keep the source composition and pose while applying the requested appearance, then optionally pin that edited frame to its source index. Vflash executes the resulting references and does not perform this image preparation.
 
+A caller accepting supplied edited frames can reuse these pixels directly, skipping image generation.
+Resolve each timestamp relative to its selected source interval onto the canonical 24 fps timeline,
+then translate it into the chosen window's frame index. Normalize the image to that window's canvas
+and preserve the caller's original binding in its preparation record. Source-time milliseconds and
+product asset IDs are caller metadata; this engine consumes the prepared pixels and frame indices.
+
 `RemakeRequest` owns explicit paths and roles:
 
 - A complete H.264 source window at 24 fps, with the declared canvas and `17n + 5` frames
