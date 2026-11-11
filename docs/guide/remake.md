@@ -117,6 +117,11 @@ the final soundtrack. `preserve` holds source audio as clean model conditioning,
 graph decodes it through the audio VAE. To retain original sound without that round trip, copy the
 complete prepared source AAC during final assembly. `silent` omits audio from the raw output.
 
+Optional source-text restoration or mask compositing belongs to the caller after source-window
+assembly. Apply it to aligned source/result frames before final size and clock conversion. These
+tools have their own dependencies and quality scope; the engine interface does not provide OCR
+or guarantee exact generated lettering.
+
 Keep the original display geometry and frame-rate metadata before preparing smaller 24 fps model
 inputs. The caller can select a separate final canvas and frame rate after assembling the windows,
 and retain its chosen source soundtrack. Frame-time resampling changes the output clock; the model's
