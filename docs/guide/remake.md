@@ -41,6 +41,8 @@ The tested sparse route changes pixels and must be judged against the intended s
 
 ## Prepared inputs
 
+Prepare reference images as edited source-scene frames, following the [original Remake workflow](https://huggingface.co/Viggle/Viggle-Remake/blob/main/README.md). Portrait, product and style images supply attributes to the image-editing stage; an arbitrary portrait alone is not a prepared replacement scene. Keep the source composition and pose while applying the requested appearance, then optionally pin that edited frame to its source index. Vflash executes the resulting references and does not perform this image preparation.
+
 `RemakeRequest` owns explicit paths and roles:
 
 - A complete H.264 source window at 24 fps, with the declared canvas and `17n + 5` frames
@@ -71,7 +73,7 @@ request = RemakeRequest(
     source=inputs / 'source.mp4',
     prompt=Path('prompt.txt').read_text(),  # Original H3 six-section editing prompt.
     mode='swap', frames=124, width=832, height=480,
-    references=(RemakeReference(inputs / 'appearance.png'),),
+    references=(RemakeReference(inputs / 'edited-scene.png'),),
     soundtrack='preserve', seed=0,
 )
 

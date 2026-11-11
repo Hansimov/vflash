@@ -1,6 +1,6 @@
 # Choose a runtime and interface
 
-Original source-video editing: [Remake windows](./remake) (experimental 0.28.0a1 preview).
+Original source-video editing: [Remake windows](./remake) (experimental 0.28.0a2 preview).
 
 Vflash 0.27.0 provides several independently configured execution paths. Select the request mode,
 result type and hardware first, then prepare that path’s assets. The package version alone does

@@ -36,6 +36,8 @@ T2VA 预测器。已测试的稀疏路线会改变像素，应按原始场景和
 
 ## 准备输入
 
+按[原版Remake流程](https://huggingface.co/Viggle/Viggle-Remake/blob/main/README.md)，先把对应源场景帧编辑为目标画面。肖像、产品与风格图在图像编辑阶段提供所需属性；单独肖像不等于准备好的替换场景。保持源构图与姿态，完成指定外观修改后，可将该帧pin到对应源索引。Vflash执行准备好的参考，不负责这一步图像生成。
+
 `RemakeRequest` 明确声明路径与角色：
 
 - 完整 H.264 源窗口、24fps、明确画布及 `17n + 5` 帧数（90–345）。保留声音时传入真实源音轨。
@@ -62,7 +64,7 @@ request = RemakeRequest(
     source=inputs / 'source.mp4',
     prompt=Path('prompt.txt').read_text(),  # 原版H3六字段编辑提示。
     mode='swap', frames=124, width=832, height=480,
-    references=(RemakeReference(inputs / 'appearance.png'),),
+    references=(RemakeReference(inputs / 'edited-scene.png'),),
     soundtrack='preserve', seed=0,
 )
 
