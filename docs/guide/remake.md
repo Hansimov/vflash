@@ -122,12 +122,18 @@ assembly. Apply it to aligned source/result frames before final size and clock c
 tools have their own dependencies and quality scope; the engine interface does not provide OCR
 or guarantee exact generated lettering.
 
-Optional final-video subtitle or watermark removal is also application-owned. Run it after final
-canvas and timing conversion, using coordinates in the delivered video. Keep subtitle and watermark
-choices separate, preserve the original audio packets and presentation timestamps, and retain the
-uncleaned result with the processing receipt for recovery. Hosted API cleanup options are not fields
-of `RemakeRequest` or `VideoRequest`; their availability comes from the hosting application. The same
-boundary applies to ordinary generated videos and does not require changing the pinned inference core.
+An application can combine requested subtitle or watermark removal with an existing edit: paint
+the same removal into the source-bound target frames and describe the revealed scene in the
+six-section prompt. The existing Remake render then propagates those changes, without a separate
+OCR or frame-repair pass. Inspect the complete result for reappearing overlays, unintended text
+changes and temporal artifacts; a clean target frame alone does not qualify the entire video.
+
+When the application instead selects final-video cleanup, apply it after final canvas and timing
+conversion using delivered-video coordinates. Keep subtitle and watermark choices separate,
+preserve original audio packets and presentation timestamps, and retain the uncleaned result and
+processing receipt. Hosted API cleanup choices are application-owned, not new fields of
+`RemakeRequest` or `VideoRequest`. Both approaches preserve this pinned inference-core interface;
+ordinary generation and exact region/time processing retain their separately qualified scope.
 
 Keep the original display geometry and frame-rate metadata before preparing smaller 24 fps model
 inputs. The caller can select a separate final canvas and frame rate after assembling the windows,
