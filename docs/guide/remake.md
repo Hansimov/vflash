@@ -122,6 +122,13 @@ assembly. Apply it to aligned source/result frames before final size and clock c
 tools have their own dependencies and quality scope; the engine interface does not provide OCR
 or guarantee exact generated lettering.
 
+Optional final-video subtitle or watermark removal is also application-owned. Run it after final
+canvas and timing conversion, using coordinates in the delivered video. Keep subtitle and watermark
+choices separate, preserve the original audio packets and presentation timestamps, and retain the
+uncleaned result with the processing receipt for recovery. Hosted API cleanup options are not fields
+of `RemakeRequest` or `VideoRequest`; their availability comes from the hosting application. The same
+boundary applies to ordinary generated videos and does not require changing the pinned inference core.
+
 Keep the original display geometry and frame-rate metadata before preparing smaller 24 fps model
 inputs. The caller can select a separate final canvas and frame rate after assembling the windows,
 and retain its chosen source soundtrack. Frame-time resampling changes the output clock; the model's
