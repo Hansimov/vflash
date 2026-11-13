@@ -266,9 +266,15 @@ def test_unconfirmed_runtime_stop_is_recorded_without_hiding_original_timeout(tm
         assert journal["error_type"] == "TimeoutError" and len(server["posts"]) == 1
 
 
-@pytest.mark.parametrize("change", [None, "input", "artifact", "seed", "history", "unknown"])
+@pytest.mark.parametrize(
+    "change", [None, "input", "mask", "artifact", "seed", "history", "unknown"]
+)
 def test_completed_recovery_is_offline_and_checks_original_evidence(tmp_path, media, change):
     request, inputs, outputs = media
+    if change == "mask":
+        mask = inputs / "source-mask.png"
+        Image.new("RGB", (480, 480), "white").save(mask)
+        request = replace(request, source_mask=mask)
     directory = tmp_path / "execution"
     options = dict(
         input_directory=inputs, output_directory=outputs, execution_directory=directory
@@ -278,6 +284,8 @@ def test_completed_recovery_is_offline_and_checks_original_evidence(tmp_path, me
     # The server is gone. Recovery has no transport argument and cannot submit work.
     if change == "input":
         request.references[0].path.touch()
+    elif change == "mask":
+        request.source_mask.touch()
     elif change == "artifact":
         Path(result["artifact"]).touch()
     elif change == "seed":

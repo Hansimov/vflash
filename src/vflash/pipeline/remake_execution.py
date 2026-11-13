@@ -142,6 +142,8 @@ def _input_identities(request):
     paths = [request.source, *(ref.path for ref in request.references)]
     if request.prefix:
         paths.append(request.prefix.take)
+    if request.source_mask:
+        paths.append(request.source_mask)
     return [_identity(path) for path in paths]
 
 

@@ -1,5 +1,6 @@
 import subprocess
 from dataclasses import replace
+from itertools import pairwise
 
 import pytest
 from PIL import Image
@@ -145,3 +146,58 @@ def test_reference_attention_is_an_explicit_recipe_choice(tmp_path, remake_reque
     assert sparse == dense
     with pytest.raises(ValueError):
         replace(remake_request, attention="implicit")
+
+
+@pytest.mark.parametrize("mode", ["edit", "swap"])
+def test_distillation_adds_only_turbo_delta_to_existing_task_weights(
+    tmp_path,
+    remake_request,
+    mode,
+):
+    request = replace(remake_request, mode=mode, attention="veda-r2va")
+    original = remake_graph(request, input_directory=tmp_path, output_prefix="test/edit")
+    candidate = remake_graph(
+        replace(request, distillation="fl2v-v1.2-4step"),
+        input_directory=tmp_path,
+        output_prefix="test/edit",
+    )
+    assert candidate["1"] == original["1"]
+    assert candidate["24"]["inputs"]["model"] == ["1", 0]
+    assert candidate["24"]["inputs"]["lora_name"].startswith("minimax_h3_fl2v_turbo_")
+    assert candidate["24"]["class_type"] == "LoraLoaderBypassModelOnly"
+    assert candidate["3"]["inputs"]["model"] == ["24", 0]
+    assert candidate["30"]["inputs"]["model"] == ["3", 0]
+    sigmas = [float(value) for value in candidate["15"]["inputs"]["sigmas"].split(",")]
+    assert len(sigmas) - 1 == 4 and sigmas[0] == 1 and sigmas[-1] == 0
+    assert all(left > right for left, right in pairwise(sigmas))
+    del candidate["24"]
+    candidate["3"] = original["3"]
+    candidate["15"] = original["15"]
+    assert candidate == original
+    with pytest.raises(ValueError):
+        replace(request, distillation="implicit")
+
+
+def test_source_mask_keeps_reference_roles_and_binds_owned_exact_canvas(
+    tmp_path,
+    remake_request,
+):
+    mask = tmp_path / "mask.png"
+    Image.new("RGB", (832, 480), "white").save(mask)
+    request = replace(remake_request, source_mask=mask)
+    original = remake_graph(remake_request, input_directory=tmp_path, output_prefix="test/edit")
+    graph = remake_graph(request, input_directory=tmp_path, output_prefix="test/edit")
+    assert graph["11"] == original["11"]  # The mask is not a new picture reference.
+    assert graph["12"] == original["12"]  # Preserve the original random-noise stream.
+    assert graph["26"]["inputs"]["latent"] == ["11", 1]
+    assert graph["16"]["inputs"]["latent_image"] == ["26", 0]
+    continued = replace(
+        request,
+        references=(RemakeReference(request.references[0].path),),
+        prefix=RemakePrefix(request.source, 0, 17),
+    )
+    graph = remake_graph(continued, input_directory=tmp_path, output_prefix="test/continued")
+    assert graph["26"]["inputs"]["latent"] == ["23", 0]
+    Image.new("RGB", (416, 240), "white").save(mask)
+    with pytest.raises(ValueError, match="match the prepared canvas"):
+        remake_graph(request, input_directory=tmp_path, output_prefix="test/mismatch")

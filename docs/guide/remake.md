@@ -67,6 +67,54 @@ Original-graph GPU evidence covers SM120 96 GiB, 832×480, 124/192/226 frames, c
 editing, two identities and a two-window 17-frame continuation. Multiple-window long films,
 other canvases and deployment through this new transport remain open qualification scopes.
 
+## Optional generation-time source preservation
+
+Development builds after 0.28.0a2 accept `source_mask=inputs / 'edit-mask.png'`.
+The mask is a static, canvas-sized RGB image owned by the same input directory. Black
+regions condition the sampler with the original source latent; white regions remain
+editable. Cells intersecting a white region remain editable after pooling to the latent
+grid. Previously generated prefix frames retain their own clean history.
+
+Install the same Vflash version in the caller-owned Comfy environment and register its
+node mapping in a small `custom_nodes/VFlashRemake/__init__.py` module:
+
+```python
+from vflash.pipeline.remake_conditioning import NODE_CLASS_MAPPINGS
+```
+
+This reuses the source VAE encoding already in the conditioning graph. It does not detect
+text, track an object or paste original pixels over decoded output. The original H3
+visual-conditioning timestep applies; source reconstruction and boundary interactions
+can still change pixels. Supply masks aligned with each prepared source window, including
+canvas padding, and keep regions requiring an edit white. A screen-fixed region is not a
+moving foreground mask. Request and mask identities are retained for offline recovery.
+
+A complete four-window, 480×864 edit on SM120 96 GiB preserved a dynamic caption and its
+fade while changing an object outside the protected region. Temporal samples and full
+output decoding support that narrow result; automatic segmentation, moving masks and
+universal text fidelity are not established. Six-step sampling remains the default.
+
+## Optional four-step composition
+
+Development builds after 0.28.0a2 also accept
+`distillation="fl2v-v1.2-4step"`. Install the pure
+[LightX2V FL2V v1.2 adapter](https://huggingface.co/lightx2v/Minimax-h3-Turbo/tree/1a4a150fc6707329409eb52e5d75a0e987ac1928)
+under the runtime's `loras` model path:
+`minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors`.
+The fixed graph uses `LoraLoaderBypassModelOnly` at strength 1 with sigmas
+`1.0, 0.947368, 0.857143, 0.666667, 0.0`. It keeps the original premerged task model,
+source/audio conditioning and explicit attention choice. Do not add a fused task-plus-turbo
+adapter on top of a model that already contains the same task weights.
+
+The original `RemakeKeyframeUntil` threshold remains 0.9; the last two denoising steps
+therefore run below that threshold. Four steps do not imply holding target keyframes
+throughout every step. This option is an approximate recipe with a separate quality
+scope, not an equivalent faster implementation of the six-step default. Initial full
+edit evidence covers a four-window portrait product clip; caption and hand/detail
+failures remain. Swap, silent output, generated-prefix quality and other scene families
+need their own output evidence before deployment. CPU graph composition checks do not
+qualify these combinations.
+
 ## Execute an owned window
 
 ```python

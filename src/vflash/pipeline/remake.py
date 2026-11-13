@@ -19,6 +19,8 @@ SIGMAS = {
     "swap": "1.0, 0.990476, 0.965243, 0.923077, 0.8, 0.631579, 0.0",
     "edit": "1.0, 0.983607, 0.96, 0.923077, 0.857143, 0.705882, 0.0",
 }
+DISTILLATION_ADAPTER = "minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors"
+DISTILLATION_SIGMAS = "1.0, 0.947368, 0.857143, 0.666667, 0.0"
 
 
 @dataclass(frozen=True)
@@ -68,6 +70,8 @@ class RemakeRequest:
     seed: int = 0
     prefix: RemakePrefix | None = None
     attention: Literal["full", "veda-r2va"] = "full"
+    distillation: Literal["none", "fl2v-v1.2-4step"] = "none"
+    source_mask: Path | None = None
 
     def __post_init__(self):
         if (
@@ -90,6 +94,8 @@ class RemakeRequest:
             or not 0 <= self.seed <= 2**64 - 1
             or self.soundtrack not in {"preserve", "silent"}
             or self.attention not in {"full", "veda-r2va"}
+            or self.distillation not in {"none", "fl2v-v1.2-4step"}
+            or (self.source_mask is not None and not isinstance(self.source_mask, Path))
             or not isinstance(self.references, tuple)
             or not 1 <= len(self.references) <= 4
             or any(not isinstance(ref, RemakeReference) for ref in self.references)
@@ -122,7 +128,7 @@ def remake_graph(
     output_prefix: str,
     cancel_check=None,
 ) -> dict:
-    """Bind owned files to the unchanged six-forward author graph.
+    """Bind owned files to the original graph or an explicit distilled composition.
 
     Inspect actual frame/canvas metadata before selecting the original nodes. The
     caller owns source display normalization; this decoder consumes raw pixels,
@@ -256,6 +262,17 @@ def remake_graph(
             codec="h264",
         ),
     }
+    if request.distillation == "fl2v-v1.2-4step":
+        # The diffusion file already contains Remake's task adapter. Add only
+        # the pure FL2V turbo delta, never a fused Remake+turbo task LoRA.
+        graph["24"] = node(
+            "LoraLoaderBypassModelOnly",
+            model=["1", 0],
+            lora_name=DISTILLATION_ADAPTER,
+            strength_model=1.0,
+        )
+        graph["3"]["inputs"]["model"] = ["24", 0]
+        graph["15"]["inputs"]["sigmas"] = DISTILLATION_SIGMAS
     for index, ref in enumerate(request.references, 1):
         ident = str(index + 8) if index <= 2 else str(index + 30)
         graph[ident] = node("LoadImage", image=owned(ref.path))
@@ -272,6 +289,19 @@ def remake_graph(
             prefix_at=request.prefix.start,
         )
         graph["16"]["inputs"]["latent_image"] = ["23", 0]
+    if request.source_mask is not None:
+        mask_name = owned(request.source_mask)
+        with Image.open(request.source_mask) as mask:
+            if mask.size != (request.width, request.height):
+                raise ValueError("The source mask must match the prepared canvas")
+        graph["25"] = node("LoadImage", image=mask_name)
+        graph["26"] = node(
+            "VFlashRemakeSourceMask",
+            positive=["11", 0],
+            latent=graph["16"]["inputs"]["latent_image"],
+            edit_mask=["25", 0],
+        )
+        graph["16"]["inputs"]["latent_image"] = ["26", 0]
     if request.attention == "veda-r2va":
         graph["30"] = node(
             "VedaSparseAttention",
