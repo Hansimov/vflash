@@ -1,6 +1,6 @@
 # Remake source-video windows
 
-The experimental 0.28.0a2 API compiles and executes the original **Viggle Remake** H3
+The experimental 0.28.0a3 API compiles and executes the original **Viggle Remake** H3
 `swap` and `edit` graphs against an already provisioned, caller-owned local Comfy runtime.
 Use the explicit preview tag below; the stable 0.27.0 wheel does not include this interface.
 Ordinary Pika and native execution profiles retain their existing interfaces.
@@ -27,7 +27,7 @@ The model's license and Viggle attribution requirements apply separately from Vf
 Install the CPU client from its fixed preview tag and provide system `ffmpeg`/`ffprobe`:
 
 ```bash
-git clone --branch v0.28.0a2 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.28.0a3 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m pip install '.[remake-client]'
 ```
@@ -69,7 +69,7 @@ other canvases and deployment through this new transport remain open qualificati
 
 ## Optional generation-time source preservation
 
-Development builds after 0.28.0a2 accept `source_mask=inputs / 'edit-mask.png'`.
+The 0.28.0a3 preview accepts `source_mask=inputs / 'edit-mask.png'`.
 The mask is a static, canvas-sized RGB image owned by the same input directory. Black
 regions condition the sampler with the original source latent; white regions remain
 editable. Cells intersecting a white region remain editable after pooling to the latent
@@ -96,7 +96,7 @@ universal text fidelity are not established. Six-step sampling remains the defau
 
 ## Optional four-step composition
 
-Development builds after 0.28.0a2 also accept
+The 0.28.0a3 preview also accepts
 `distillation="fl2v-v1.2-4step"`. Install the pure
 [LightX2V FL2V v1.2 adapter](https://huggingface.co/lightx2v/Minimax-h3-Turbo/tree/1a4a150fc6707329409eb52e5d75a0e987ac1928)
 under the runtime's `loras` model path:
@@ -110,8 +110,11 @@ The original `RemakeKeyframeUntil` threshold remains 0.9; the last two denoising
 therefore run below that threshold. Four steps do not imply holding target keyframes
 throughout every step. This option is an approximate recipe with a separate quality
 scope, not an equivalent faster implementation of the six-step default. Initial full
-edit evidence covers a four-window portrait product clip; caption and hand/detail
-failures remain. Swap, silent output, generated-prefix quality and other scene families
+edit evidence covers a four-window portrait product clip and a seven-window 20-second
+landscape clip; caption/inset and hand/detail failures remain. The long clip required a
+confirmed stop after a source-decoder stall, reusing five completed windows and finishing
+the last two. Its total elapsed time including recovery did not improve.
+Swap, silent output, generated-prefix quality and other scene families
 need their own output evidence before deployment. CPU graph composition checks do not
 qualify these combinations.
 

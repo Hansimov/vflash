@@ -1,5 +1,24 @@
 # Release notes
 
+## 0.28.0a3 (preview)
+
+Adds explicit static source-region conditioning and an optional pure FL2V v1.2 four-step
+composition. Six-step defaults and durable completion recovery remain. The mask reuses the
+source latent in the existing sampler, without OCR or final pixel compositing; its file identity
+participates in recovery.
+
+Complete SM120 96 GiB edit evidence covers a portrait product clip and a multi-shot 20-second
+landscape clip. Protected dynamic captions survived; text/inset and hand/detail failures remain
+in unprotected four-step outputs. The long clip stalled in upstream source decoding and needed
+a confirmed stop followed by recovery of its last two windows. Step savings do not establish
+reliable end-to-end speed. These optional experimental interfaces do not change default quality
+or deployment guarantees. See [scopes and setup](../guide/remake).
+
+## 0.28.0a2 (preview)
+
+Adds offline recovery of a durable original Remake completion. The request graph, input identities,
+executed history and output media must match; recovery performs no new model submission.
+
 ## 0.28.0a1 (preview)
 
 Adds an explicit original Viggle Remake client for source-video editing, with separate

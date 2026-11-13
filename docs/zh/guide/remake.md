@@ -1,6 +1,6 @@
 # Remake 源视频窗口
 
-0.28.0a2 的实验性接口将原版 **Viggle Remake** H3 的 `swap`／`edit` 图编译并交给已准备、由调用方
+0.28.0a3 的实验性接口将原版 **Viggle Remake** H3 的 `swap`／`edit` 图编译并交给已准备、由调用方
 拥有的本地 Comfy 运行服务执行。请显式选择下方预览 tag；稳定版 0.27.0 wheel 不包含此接口。普通 Pika 与原生执行配置保留现有接口。
 
 ## 运行时与模型
@@ -23,7 +23,7 @@
 从固定预览 tag 安装 CPU 客户端，并提供系统 `ffmpeg`／`ffprobe`：
 
 ```bash
-git clone --branch v0.28.0a2 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.28.0a3 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m pip install '.[remake-client]'
 ```
@@ -59,7 +59,7 @@ T2VA 预测器。已测试的稀疏路线会改变像素，应按原始场景和
 
 ## 可选的生成内源区域保留
 
-0.28.0a2之后的开发版本接受 `source_mask=inputs / 'edit-mask.png'`。
+0.28.0a3预览版接受 `source_mask=inputs / 'edit-mask.png'`。
 这是同一输入目录拥有、与模型画布同尺寸的静态RGB图：黑色区域将原源latent作为采样条件，
 白色区域继续编辑；池化到latent网格时，与白色相交的单元保留可编辑状态。
 已有生成历史帧继续使用自己的干净历史条件。
@@ -81,7 +81,7 @@ SM120 96GiB上一次完整四窗口、480×864编辑保住动态字幕及淡出�
 
 ## 可选四步组合
 
-0.28.0a2之后的开发版本还接受 `distillation="fl2v-v1.2-4step"`。
+0.28.0a3预览版还接受 `distillation="fl2v-v1.2-4step"`。
 将固定[LightX2V纯FL2V v1.2适配器](https://huggingface.co/lightx2v/Minimax-h3-Turbo/tree/1a4a150fc6707329409eb52e5d75a0e987ac1928)
 放入运行服务的 `loras` 路径，文件为
 `minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors`。
@@ -91,7 +91,8 @@ SM120 96GiB上一次完整四窗口、480×864编辑保住动态字幕及淡出�
 
 原 `RemakeKeyframeUntil` 阈值仍为0.9，后两个去噪步骤低于此阈值；四步不意味着全程固定
 目标关键帧。这是独立质量范围的近似配方，不是与六步等价的更快实现。初始完整编辑证据覆盖
-四窗口竖屏商品片，字幕及手部／细节失败仍在。换人、静音、生成历史续接质量及其他源场景须
+四窗口竖屏商品片及七窗口20秒横片，字幕／插图及手部细节失败仍在。长片曾在源解码阶段卡住，
+确认停止后复用五窗并补齐末两窗，含恢复的完整耗时未改善。换人、静音、生成历史续接及其他源须
 有各自实片证据再采用，CPU图组合检查不能代替这些范围的验证。
 
 ## 执行一个窗口

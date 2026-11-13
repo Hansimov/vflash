@@ -24,7 +24,7 @@ Vflash owns conditioning, sampling, decoding and local execution resources. The
 integrating application owns accounts, durable job scheduling, multi-step workflows
 and media delivery. Its bounded native HTTP queue is not a persistent application queue.
 
-The **0.28.0a1 preview** adds the [original Remake editing client](https://hansimov.github.io/vflash/guide/remake). Select it explicitly; the stable installation below remains 0.27.0.
+The **0.28.0a3 preview** adds the [original Remake editing client](https://hansimov.github.io/vflash/guide/remake). Select it explicitly; the stable installation below remains 0.27.0.
 
 ## Install and check your setup
 
