@@ -67,9 +67,9 @@ Original-graph GPU evidence covers SM120 96 GiB, 832×480, 124/192/226 frames, c
 editing, two identities and a two-window 17-frame continuation. Multiple-window long films,
 other canvases and deployment through this new transport remain open qualification scopes.
 
-## Optional generation-time source preservation
+## Experimental source preservation and legacy recovery
 
-The 0.28.0a3 preview accepts `source_mask=inputs / 'edit-mask.png'`.
+The 0.28.0a3 preview accepts `source_mask=inputs / 'edit-mask.png'` for existing experiments and frozen-request recovery. This is not a recommended general quality route for new edits. A preserved face or region can retain incompatible lighting, reflections or surroundings, even when conditioning happens inside the sampler. Evaluate the complete scene, identity, motion and sound together; local similarity alone does not qualify an output.
 The mask is a static, canvas-sized RGB image owned by the same input directory. Black
 regions condition the sampler with the original source latent; white regions remain
 editable. Cells intersecting a white region remain editable after pooling to the latent
@@ -168,10 +168,10 @@ the final soundtrack. `preserve` holds source audio as clean model conditioning,
 graph decodes it through the audio VAE. To retain original sound without that round trip, copy the
 complete prepared source AAC during final assembly. `silent` omits audio from the raw output.
 
-Optional source-text restoration or mask compositing belongs to the caller after source-window
-assembly. Apply it to aligned source/result frames before final size and clock conversion. These
-tools have their own dependencies and quality scope; the engine interface does not provide OCR
-or guarantee exact generated lettering.
+Prefer coherent whole-scene generation for visual edits. Freezing regions, restoring source text or
+compositing pixels can introduce lighting and motion seams; local repair is not a general fidelity
+solution. Preserve frozen historical contracts for recovery. Timeline, canvas and soundtrack assembly
+remain ordinary media operations; the engine does not provide OCR or exact generated lettering.
 
 An application can combine requested subtitle or watermark removal with an existing edit: paint
 the same removal into the source-bound target frames and describe the revealed scene in the
