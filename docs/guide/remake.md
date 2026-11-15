@@ -1,6 +1,6 @@
 # Remake source-video windows
 
-The experimental 0.28.0a3 API compiles and executes the original **Viggle Remake** H3
+The experimental 0.28.0a4 API compiles and executes the original **Viggle Remake** H3
 `swap` and `edit` graphs against an already provisioned, caller-owned local Comfy runtime.
 Use the explicit preview tag below; the stable 0.27.0 wheel does not include this interface.
 Ordinary Pika and native execution profiles retain their existing interfaces.
@@ -27,7 +27,7 @@ The model's license and Viggle attribution requirements apply separately from Vf
 Install the CPU client from its fixed preview tag and provide system `ffmpeg`/`ffprobe`:
 
 ```bash
-git clone --branch v0.28.0a3 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.28.0a4 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m pip install '.[remake-client]'
 ```
@@ -218,5 +218,8 @@ Comfy runtime. This node widens the original conditioning node's input range and
 delegates its computation unchanged. Smaller canvases keep their original graph.
 These bounds do not establish GPU memory capacity, image quality or a service
 time guarantee. Qualify each intended shape and window length on the target GPU.
-One to four edited-scene references remain required; an optional pin does not
-make the reference image itself optional.
+One to four reference images remain required; an optional pin does not make the
+image input optional. Edited scene frames are the recommended reference role. A source
+frame is also a valid image input, but prompt-only changes with that condition need their
+own quality evaluation, especially for identity replacement. Applications can prepare
+these images; this is not a requirement to ask users for an extra upload.

@@ -1,5 +1,17 @@
 # Release notes
 
+## 0.28.0a4 (preview)
+
+Adds explicit prepared canvases up to a 1440-pixel short edge. Larger canvases use
+`VFlashRemakeCanvas` to widen the original conditioning node's range and delegate its
+computation unchanged; smaller canvases keep their original graph. Sampling defaults and
+per-window temporal bounds are unchanged.
+
+One NVIDIA RTX PRO 6000 executed a 1920×1088, 226-model-frame edit. This is a bounded
+hardware execution observation, not a general memory, quality, throughput or service-time
+guarantee. Application timelines and delivery sizes remain separately owned. See
+[extended canvas setup](../guide/remake#extended-canvas-preview).
+
 ## 0.28.0a3 (preview)
 
 Adds explicit static source-region conditioning and an optional pure FL2V v1.2 four-step

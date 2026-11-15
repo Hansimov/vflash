@@ -1,6 +1,6 @@
 # Remake 源视频窗口
 
-0.28.0a3 的实验性接口将原版 **Viggle Remake** H3 的 `swap`／`edit` 图编译并交给已准备、由调用方
+0.28.0a4 的实验性接口将原版 **Viggle Remake** H3 的 `swap`／`edit` 图编译并交给已准备、由调用方
 拥有的本地 Comfy 运行服务执行。请显式选择下方预览 tag；稳定版 0.27.0 wheel 不包含此接口。普通 Pika 与原生执行配置保留现有接口。
 
 ## 运行时与模型
@@ -23,7 +23,7 @@
 从固定预览 tag 安装 CPU 客户端，并提供系统 `ffmpeg`／`ffprobe`：
 
 ```bash
-git clone --branch v0.28.0a3 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.28.0a4 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m pip install '.[remake-client]'
 ```
@@ -185,3 +185,5 @@ execution_directory=...)`读取原本地完成回执和历史。它核对原请�
 原 conditioning 节点的输入范围，计算仍委托原实现；较小画布保留原执行图。
 这些结构边界不代表显存、图像质量或服务耗时资格，须按目标 GPU 验证尺寸和窗口。
 仍须提供一至四张编辑后场景参考；关键帧绑定可省略，不等于参考图可省略。
+
+参考图片是模型条件；应用可以自动准备，不意味着必须要求用户额外上传。通常推荐编辑后的完整场景帧；原始源帧也是合法图片输入，但依赖文字完成修改的质量须单独评估，尤其不能据简单改色推断人物替换可靠。
