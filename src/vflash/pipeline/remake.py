@@ -87,7 +87,7 @@ class RemakeRequest:
                 type(v) is not int or not 480 <= v <= 3072 or v % 32
                 for v in (self.width, self.height)
             )
-            or not 480 <= min(self.width, self.height) <= 736
+            or not 480 <= min(self.width, self.height) <= 1440
             or not 0.25 <= self.width / self.height <= 4
             or self.width * self.height > 2048**2
             or type(self.seed) is not int
@@ -238,7 +238,12 @@ def remake_graph(
         "6": node("VAELoader", vae_name="minimax_h3_audio_vae_fp32.safetensors"),
         "7": node("LoadVideo", file=source_name),
         "8": node("GetVideoComponents", video=["7", 0]),
-        "11": node("RemakeConditioning", **conditioning),
+        "11": node(
+            "VFlashRemakeCanvas"
+            if min(request.width, request.height) > 736
+            else "RemakeConditioning",
+            **conditioning,
+        ),
         "12": node("RemakeNoise", positive=["11", 0], seed=request.seed),
         "13": node("BasicGuider", model=["3", 0], conditioning=["11", 0]),
         "14": node("KSamplerSelect", sampler_name="euler"),

@@ -5,6 +5,8 @@ The existing H3 sampler injects clean regions at its visual condition timestep.
 This module neither detects regions nor composites decoded output pixels.
 """
 
+from vflash.pipeline.remake_canvas import VFlashRemakeCanvas
+
 
 def preserved_video_latent(video, noise_mask, source, edit_mask):
     """Keep generated history and expose the source in newly preserved regions."""
@@ -72,4 +74,7 @@ class VFlashRemakeSourceMask:
         )
 
 
-NODE_CLASS_MAPPINGS = {"VFlashRemakeSourceMask": VFlashRemakeSourceMask}
+NODE_CLASS_MAPPINGS = {
+    "VFlashRemakeSourceMask": VFlashRemakeSourceMask,
+    "VFlashRemakeCanvas": VFlashRemakeCanvas,
+}

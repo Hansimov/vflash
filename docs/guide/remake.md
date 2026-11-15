@@ -208,3 +208,15 @@ to require a fresh execution directory. Keep the original inputs, output and rec
 
 This recovery contract is available from 0.28.0a2. It does not change sampling or qualify
 additional scene, duration, hardware or quality ranges.
+
+## Extended canvas preview
+
+Version 0.28.0a4 accepts prepared canvases up to a 1440-pixel short edge, including
+1920×1088, 1088×1920 and 1440×1440. Larger canvases select `VFlashRemakeCanvas`;
+register `vflash.pipeline.remake_conditioning.NODE_CLASS_MAPPINGS` in the owned
+Comfy runtime. This node widens the original conditioning node's input range and
+delegates its computation unchanged. Smaller canvases keep their original graph.
+These bounds do not establish GPU memory capacity, image quality or a service
+time guarantee. Qualify each intended shape and window length on the target GPU.
+One to four edited-scene references remain required; an optional pin does not
+make the reference image itself optional.
