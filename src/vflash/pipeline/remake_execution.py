@@ -144,6 +144,8 @@ def _input_identities(request):
         paths.append(request.prefix.take)
     if request.source_mask:
         paths.append(request.source_mask)
+    if request.prepared_text:
+        paths.append(request.prepared_text.path)
     return [_identity(path) for path in paths]
 
 

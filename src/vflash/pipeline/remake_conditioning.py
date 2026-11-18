@@ -6,6 +6,7 @@ This module neither detects regions nor composites decoded output pixels.
 """
 
 from vflash.pipeline.remake_canvas import VFlashRemakeCanvas
+from vflash.pipeline.remake_text import VFlashRemakePreparedText
 
 
 def preserved_video_latent(video, noise_mask, source, edit_mask):
@@ -77,4 +78,5 @@ class VFlashRemakeSourceMask:
 NODE_CLASS_MAPPINGS = {
     "VFlashRemakeSourceMask": VFlashRemakeSourceMask,
     "VFlashRemakeCanvas": VFlashRemakeCanvas,
+    "VFlashRemakePreparedText": VFlashRemakePreparedText,
 }

@@ -225,3 +225,7 @@ own quality evaluation, especially for identity replacement. Applications can pr
 these images; this is not a requirement to ask users for an extra upload.
 
 On the development branch, the extended-canvas node encodes an identical reference and pinned frame once per request. The two roles receive independent latent tensors. Resized views are encoded separately.
+
+### Prepared text conditioning
+
+An application with an owned MiniMax CLIP encoder can prepare the text embedding while a render GPU starts. Call `vflash.pipeline.remake_text.prepare_remake_text(clip, prompt=prompt, frames=frames, references=len(references), destination=path)` with the pinned Qwen3-VL MiniMax NVFP4 AWQ encoder. Use its return value as `RemakeRequest(prepared_text=..., ...)`. The safetensors file must be in the runtime input directory. Install the existing Vflash Comfy node mappings on the consumer. The request binds the file digest, encoder revision, exact prompt, frame clock and number of visual reference labels. Source frames, reference images, audio and sampling still use the original graph. Numeric differences between CPU and GPU encoding can affect individual pixels.

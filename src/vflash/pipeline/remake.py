@@ -12,6 +12,12 @@ from pathlib import Path
 from typing import Literal
 
 from vflash.media.probe import probe_video
+from vflash.pipeline.remake_text import (
+    PreparedRemakeText,
+    owned_text,
+    segment_digest,
+    text_segments,
+)
 
 SOURCE_REVISION = "7e5be143702dd53b9154482de673b8519ed2d4d6"
 COMFY_REVISION = "355cd6b14c92c19ac3188fe528e47a3f21ef5178"
@@ -72,10 +78,15 @@ class RemakeRequest:
     attention: Literal["full", "veda-r2va"] = "full"
     distillation: Literal["none", "fl2v-v1.2-4step"] = "none"
     source_mask: Path | None = None
+    prepared_text: PreparedRemakeText | None = None
 
     def __post_init__(self):
         if (
-            not isinstance(self.source, Path)
+            (
+                self.prepared_text is not None
+                and not isinstance(self.prepared_text, PreparedRemakeText)
+            )
+            or not isinstance(self.source, Path)
             or not isinstance(self.prompt, str)
             or not self.prompt.strip()
             or len(self.prompt) > 65536
@@ -267,6 +278,15 @@ def remake_graph(
             codec="h264",
         ),
     }
+    if request.prepared_text is not None:
+        graph["4"] = node(
+            "VFlashRemakePreparedText",
+            file=owned_text(request.prepared_text.path, directory),
+            sha256=request.prepared_text.sha256,
+            segments=segment_digest(
+                text_segments(request.prompt, request.frames, len(request.references))
+            ),
+        )
     if request.distillation == "fl2v-v1.2-4step":
         # The diffusion file already contains Remake's task adapter. Add only
         # the pure FL2V turbo delta, never a fused Remake+turbo task LoRA.

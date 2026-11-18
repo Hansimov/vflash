@@ -189,3 +189,7 @@ execution_directory=...)`读取原本地完成回执和历史。它核对原请�
 参考图片是模型条件；应用可以自动准备，不意味着必须要求用户额外上传。通常推荐编辑后的完整场景帧；原始源帧也是合法图片输入，但依赖文字完成修改的质量须单独评估，尤其不能据简单改色推断人物替换可靠。
 
 开发分支中的大画布节点在同一请求中只编码一次完全相同的参考图与绑定关键帧。两个角色分别持有独立的潜变量张量，经过不同缩放的视图分别编码。
+
+### 预先计算文本条件
+
+应用可用自有 MiniMax CLIP 编码器，在渲染 GPU 启动期间计算文本条件。使用固定的 Qwen3-VL MiniMax NVFP4 AWQ 编码器调用 `vflash.pipeline.remake_text.prepare_remake_text(clip, prompt=prompt, frames=frames, references=len(references), destination=path)`。将返回值传给 `RemakeRequest(prepared_text=..., ...)`，safetensors 文件放在运行时输入目录。消费端加载已有的 Vflash Comfy 节点集合。请求绑定文件摘要、编码器版本、完整提示词、帧时钟及参考标签数；源帧、参考图、音频与采样沿用原图。CPU 和 GPU 编码的数值差别可能影响像素。

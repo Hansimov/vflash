@@ -201,3 +201,73 @@ def test_source_mask_keeps_reference_roles_and_binds_owned_exact_canvas(
     Image.new("RGB", (416, 240), "white").save(mask)
     with pytest.raises(ValueError, match="match the prepared canvas"):
         remake_graph(request, input_directory=tmp_path, output_prefix="test/mismatch")
+
+
+def test_prepared_text_binds_exact_segment_order_and_owned_file(
+    tmp_path, remake_request, monkeypatch
+):
+    import sys
+    from types import SimpleNamespace
+
+    torch = pytest.importorskip("torch")
+    pytest.importorskip("safetensors")
+    from vflash.pipeline.remake_text import (
+        VFlashRemakePreparedText,
+        prepare_remake_text,
+        text_segments,
+    )
+
+    seen = []
+
+    class Clip:
+        def tokenize(self, segment):
+            seen.append(segment)
+            return {"qwen3vl_32b": [[len(seen)]]}
+
+        def encode_from_tokens_scheduled(self, tokens):
+            assert tokens == {"qwen3vl_32b": [list(range(1, len(seen) + 1))]}
+            return [
+                [
+                    torch.ones((1, len(seen), 5120)),
+                    {"minimax_token_tags": torch.arange(len(seen)), "pooled_output": None},
+                ]
+            ]
+
+    path = tmp_path / "prepared.safetensors"
+    kwargs = dict(prompt=remake_request.prompt, frames=90, references=1, destination=path)
+    prepared = prepare_remake_text(Clip(), **kwargs)
+    assert seen == [
+        "<Video 1>: ",
+        "<0.2 seconds>",
+        "<1.2 seconds>",
+        "<2.2 seconds>",
+        "<3.2 seconds>",
+        "<Picture 1>: ",
+        remake_request.prompt,
+    ]
+    assert text_segments("sample", 107, 2)[-4:] == [
+        "<4.0 seconds>",
+        "<Picture 1>: ",
+        "<Picture 2>: ",
+        "sample",
+    ]
+    graph = remake_graph(
+        replace(remake_request, prepared_text=prepared),
+        input_directory=tmp_path,
+        output_prefix="case/prepared",
+    )
+    assert graph["4"]["class_type"] == "VFlashRemakePreparedText"
+    monkeypatch.setitem(
+        sys.modules, "folder_paths", SimpleNamespace(get_input_directory=lambda: tmp_path)
+    )
+    node = VFlashRemakePreparedText()
+    (clip,) = node.load(**graph["4"]["inputs"])
+    cond, extra = clip.encode_from_tokens_scheduled({"qwen3vl_32b": [seen]})[0]
+    assert torch.all(cond == 1) and extra["minimax_token_tags"].tolist() == list(
+        range(len(seen))
+    )
+    with pytest.raises(ValueError, match="does not match"):
+        clip.encode_from_tokens_scheduled({"qwen3vl_32b": [[*seen[:-1], "different"]]})
+    path.write_bytes(path.read_bytes() + b"x")
+    with pytest.raises(ValueError, match="content differs"):
+        node.load(**graph["4"]["inputs"])
