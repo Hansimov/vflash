@@ -5,8 +5,8 @@
 The six-step Pika content-reference recipe now supports 12-second output. Its sampled
 video, attention layout, audio refinement and decoder follow the same duration. One
 1280×720 run on a 96 GB RTX PRO 6000 produced 288 frames at 24 fps with ten soundtrack
-refinement steps. An optional host-memory budget lets the audio stage retain part of
-its frozen attention cache in RAM. Five seconds remains the default. Dialogue accuracy
+refinement steps. On this 12-second recipe the audio stage can keep up to 12 GiB of frozen
+attention keys and values in host RAM when its device cache budget is insufficient. Five seconds remains the default. Dialogue accuracy
 and facial detail vary with the scene.
 
 Remake can consume request-bound precomputed text conditioning, reuse an identical
