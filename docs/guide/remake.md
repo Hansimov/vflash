@@ -223,3 +223,5 @@ image input optional. Edited scene frames are the recommended reference role. A 
 frame is also a valid image input, but prompt-only changes with that condition need their
 own quality evaluation, especially for identity replacement. Applications can prepare
 these images; this is not a requirement to ask users for an extra upload.
+
+On the development branch, the extended-canvas node encodes an identical reference and pinned frame once per request. The two roles receive independent latent tensors. Resized views are encoded separately.
