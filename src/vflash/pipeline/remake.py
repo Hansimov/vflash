@@ -79,6 +79,7 @@ class RemakeRequest:
     distillation: Literal["none", "fl2v-v1.2-4step"] = "none"
     source_mask: Path | None = None
     prepared_text: PreparedRemakeText | None = None
+    half_size_source_reference: bool = False
 
     def __post_init__(self):
         if (
@@ -115,6 +116,19 @@ class RemakeRequest:
         for ref in self.references:
             ref.__post_init__()
         pins = [ref.frame for ref in self.references if ref.frame is not None]
+        if type(self.half_size_source_reference) is not bool or (
+            self.half_size_source_reference
+            and (
+                self.mode != "edit"
+                or self.source_mask is not None
+                or min(self.width, self.height) < 960
+                or self.width % 64
+                or self.height % 64
+            )
+        ):
+            raise ValueError(
+                "Half-size source conditioning requires an aligned large edit canvas"
+            )
         if pins and (len(pins) != len(self.references) or max(pins) >= self.frames):
             raise ValueError("Original Remake pins every reference or uses none")
         if self.prefix is not None:
@@ -278,6 +292,8 @@ def remake_graph(
             codec="h264",
         ),
     }
+    if request.half_size_source_reference:
+        graph["11"]["inputs"]["half_size_source_reference"] = True
     if request.prepared_text is not None:
         graph["4"] = node(
             "VFlashRemakePreparedText",

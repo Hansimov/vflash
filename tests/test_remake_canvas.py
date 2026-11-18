@@ -82,3 +82,56 @@ def test_two_megapixel_request_keeps_grid_and_reference_contract(remake_request,
         replace(request, width=width + 1)
     with pytest.raises(ValueError):
         replace(request, references=())
+
+
+def test_half_size_video_keeps_time_and_full_size_image_pins(monkeypatch):
+    torch = pytest.importorskip("torch")
+    calls = []
+    source = torch.arange(5 * 64 * 128 * 3).reshape(5, 64, 128, 3).float()
+    picture = source[:1]
+
+    class Encoder:
+        def encode(self, pixels):
+            calls.append(pixels)
+            return torch.zeros(
+                1, 24, pixels.shape[0], pixels.shape[1] // 16, pixels.shape[2] // 16
+            )
+
+    class Original:
+        def run(self, vae, source, ref_1, pins):
+            z = vae.encode(source)
+            image = vae.encode(ref_1)
+            pin = vae.encode(ref_1)
+            meta = {
+                "minimax_refs": [
+                    {"kind": "video", "latent": z, "latent_h": 4, "latent_w": 8},
+                    {"kind": "image", "latent": image},
+                ],
+                "minimax_keyframes": [pin],
+            }
+            return [[None, meta]], "original-target"
+
+    monkeypatch.setattr("vflash.pipeline.remake_canvas.original_conditioning", lambda: Original)
+    positive, latent = VFlashRemakeCanvas().run(
+        half_size_source_reference=True,
+        vae=Encoder(),
+        source=source,
+        ref_1=picture,
+        pins="0",
+    )
+    assert latent == "original-target" and len(calls) == 2
+    pooled = source.reshape(5, 32, 2, 64, 2, 3).mean((2, 4))
+    assert torch.equal(calls[0], pooled) and calls[1] is picture
+    video, ref = positive[0][1]["minimax_refs"]
+    assert (video["latent_h"], video["latent_w"]) == (2, 4)
+    assert (
+        ref["latent"].shape[-2:] == positive[0][1]["minimax_keyframes"][0].shape[-2:] == (4, 8)
+    )
+
+
+def test_half_size_source_rejects_incompatible_canvas_or_mask(remake_request, tmp_path):
+    with pytest.raises(ValueError, match="aligned large edit canvas"):
+        replace(remake_request, half_size_source_reference=True)
+    request = replace(remake_request, width=1920, height=1088, half_size_source_reference=True)
+    with pytest.raises(ValueError, match="aligned large edit canvas"):
+        replace(request, source_mask=tmp_path / "mask.png")
