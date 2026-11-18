@@ -1,5 +1,18 @@
 # Release notes
 
+## 0.28.0a5 (preview)
+
+The six-step Pika content-reference recipe now supports 12-second output. Its sampled
+video, attention layout, audio refinement and decoder follow the same duration. One
+1280×720 run on a 96 GB RTX PRO 6000 produced 288 frames at 24 fps with ten soundtrack
+refinement steps. An optional host-memory budget lets the audio stage retain part of
+its frozen attention cache in RAM. Five seconds remains the default. Dialogue accuracy
+and facial detail vary with the scene.
+
+Remake can consume request-bound precomputed text conditioning, reuse an identical
+source-image encoding for a pinned frame, and explicitly select half-size source video
+conditioning for eligible large edits. See the [complete pipeline guide](../guide/complete-pipeline).
+
 ## 0.28.0a4 (preview)
 
 Adds explicit prepared canvases up to a 1440-pixel short edge. Larger canvases use
