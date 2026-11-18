@@ -18,7 +18,7 @@ def spatial_video_condition(model, *, height, width, condition_rows, stride=2, f
         or model.training
         or any(type(value) is not int or value < 1 for value in (height, width))
         or type(frames) is not int
-        or frames not in (32, 37, 87)
+        or frames not in (32, 37, 57, 87)
         or type(stride) is not int
         or stride not in (2, 4)
         or type(condition_rows) is not int

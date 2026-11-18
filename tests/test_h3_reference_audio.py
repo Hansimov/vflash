@@ -249,6 +249,29 @@ class AudioContextTests(unittest.TestCase):
         self.assertNotIn("step", scheduler.__dict__)
         self.assertFalse(model._forward_pre_hooks)
 
+    def test_eight_second_reference_audio_accepts_all_spatial_time_rows(self):
+        class Scheduler:
+            def step(self):
+                return None
+
+        source = torch.zeros(1, 24, 57, 4, 6)
+        with (
+            torch.inference_mode(),
+            self.assertRaisesRegex(ValueError, "declared forwards"),
+            native_audio_context(
+                self.model,
+                Scheduler(),
+                source,
+                condition_rows=0,
+                expected_forwards=10,
+                reuse_visual_context=True,
+                spatial_stride=2,
+                latent_frames=57,
+            ),
+        ):
+            self.assertTrue(self.model._vflash_spatial_audio_active)
+        self.assert_restored()
+
     def test_incomplete_audio_pass_rejects_and_restores_owner(self):
         class Scheduler:
             def step(self):

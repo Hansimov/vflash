@@ -87,7 +87,7 @@ def frozen_larry_soundtrack(
                 reuse_visual_context=True,
                 spatial_stride=2,
                 latent_frames=visual["video_latents"].shape[2],
-                maximum_host_bytes=12 * 1024**3 if request.duration_seconds == 12 else 0,
+                maximum_host_bytes=12 * 1024**3 if request.duration_seconds in (8, 12) else 0,
             ) as context,
         ):
             pipe(

@@ -1,5 +1,12 @@
 # Release notes
 
+## 0.28.0a6 (preview)
+
+Adds an eight-second option to the six-step Pika content-reference recipe with ten native
+soundtrack refinement steps. The reference encoder, spatial audio attention and decoder
+share a 57-latent-frame clock. One 1280×720 RTX PRO 6000 run produced 192 frames at 24 fps
+and stereo audio. Small faces in wide shots can still lack detail.
+
 ## 0.28.0a5 (preview)
 
 The six-step Pika content-reference recipe now supports 12-second output. Its sampled

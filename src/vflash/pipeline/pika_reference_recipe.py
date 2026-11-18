@@ -15,8 +15,8 @@ class PikaReferenceRecipe(PikaAVRecipe):
         super().__post_init__()
         if (
             type(self.duration_seconds) is not int
-            or self.duration_seconds not in (5, 12)
-            or (self.duration_seconds == 12 and self.audio_steps != 10)
+            or self.duration_seconds not in (5, 8, 12)
+            or (self.duration_seconds != 5 and self.audio_steps != 10)
             or self.overlap_decode
             or self.decode_tile_batch_size != 1
             or (
@@ -38,7 +38,7 @@ class PikaReferenceRecipe(PikaAVRecipe):
         )
         sound = f"larry{self.audio_steps}" if self.audio_steps else "joint"
         base = f"pika-ref6-{sound}-r{budget}-v1"
-        return base if self.duration_seconds == 5 else f"{base}-12s"
+        return base if self.duration_seconds == 5 else f"{base}-{self.duration_seconds}s"
 
     @property
     def reference_encoding_policy(self):

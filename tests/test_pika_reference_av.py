@@ -13,7 +13,7 @@ from vflash.pipeline.pika_reference_recipe import PikaReferenceRecipe
 torch = pytest.importorskip("torch")
 
 
-@pytest.mark.parametrize(("steps", "duration"), [(0, 5), (10, 5), (12, 5), (10, 12)])
+@pytest.mark.parametrize(("steps", "duration"), [(0, 5), (10, 5), (12, 5), (10, 8), (10, 12)])
 @pytest.mark.parametrize(
     "failure",
     [None, "conditioning", "picture", "sound", "picture_changed", "decode", "restore"],
@@ -23,7 +23,7 @@ def test_separate_model_ownership_counts_frozen_picture_and_failure_cleanup(
 ):
     from vflash.adapters.h3_reference_audio import _pack_video
 
-    latent_frames = 37 if duration == 5 else 87
+    latent_frames = {5: 37, 8: 57, 12: 87}[duration]
     ref_adapter = NS(strength=0, calls={"target": 0})
     fl_adapter = NS(strength=0)
     clock = NS(completed_forwards=0, tensors={})

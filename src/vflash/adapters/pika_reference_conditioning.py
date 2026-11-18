@@ -32,7 +32,7 @@ def reference_conditioning(
         request.mode != "ref2va"
         or request.reference_video is not None
         or not 1 <= len(request.ordered_references) <= 9
-        or request.duration_seconds not in (5, 12)
+        or request.duration_seconds not in (5, 8, 12)
         or request.width * request.height > 1024**2
     ):
         raise ContractError(

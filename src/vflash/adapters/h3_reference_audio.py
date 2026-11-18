@@ -55,7 +55,8 @@ def native_audio_context(
     Spatial stride two or four explicitly reduces spatial audio conditioning
     on declared native T2VA/I2VA canvases, with all times retained. The default
     keeps the five-second scope; 32 latent frames explicitly select the bounded
-    four-second ten-forward scope. The twelve-second reference scope uses 87 latent frames.
+    four-second ten-forward scope. Eight- and twelve-second reference passes use 57 and 87
+    latent frames.
     """
     if type(expected_forwards) is not int or expected_forwards not in (10, 12):
         raise ValueError("This native audio adapter is qualified for 10 or 12 forwards")
@@ -63,15 +64,13 @@ def native_audio_context(
         raise ValueError("Visual context reuse must be explicit")
     if type(spatial_stride) is not int or spatial_stride not in (1, 2, 4):
         raise ValueError("Native audio spatial stride must be 1, 2 or 4")
-    if type(latent_frames) is not int or latent_frames not in (32, 37, 87):
+    if type(latent_frames) is not int or latent_frames not in (32, 37, 57, 87):
         raise ValueError("Spatial audio requires an explicit native frame count")
     maximum_pixels = 1376 * 768 if latent_frames == 32 else 2 * 1024**2
-    if latent_frames == 87:
+    if latent_frames in (57, 87):
         maximum_pixels = 1024**2
         if expected_forwards != 10 or condition_rows != 0 or spatial_stride != 2:
-            raise ValueError(
-                "Twelve-second reference audio requires ten forwards and stride two"
-            )
+            raise ValueError("Long reference audio requires ten forwards and stride two")
     # Zero condition rows denotes direct text or separate reference audio.
     if spatial_stride > 1 and (
         not reuse_visual_context

@@ -26,6 +26,7 @@ def test_independent_picture_partition_and_budget_have_distinct_frozen_identity(
         {"overlap_decode": True},
         {"decode_tile_batch_size": 4},
         {"duration_seconds": 12, "audio_steps": 12},
+        {"duration_seconds": 8, "audio_steps": 0},
         {"duration_seconds": 7},
     ],
 )

@@ -137,10 +137,11 @@ def test_bad_reference_budget_fails_before_encoding(fixture, edge):
     assert calls == []
 
 
-def test_long_reference_uses_the_requested_model_clock(fixture):
+@pytest.mark.parametrize(("duration", "frames"), [(8, 192), (12, 294)])
+def test_extended_reference_clock(fixture, duration, frames):
     from dataclasses import replace
 
     request, pipe, options, _ = fixture
-    request = replace(request, duration_seconds=12)
+    request = replace(request, duration_seconds=duration)
     prepared = reference_conditioning(pipe, request, **options)
-    assert prepared.conditional_dict["geometry"].num_frames == request.model_frames == 294
+    assert prepared.conditional_dict["geometry"].num_frames == request.model_frames == frames
