@@ -42,6 +42,7 @@ def native_audio_context(
     expected_forwards,
     reuse_visual_context=False,
     maximum_bytes=40 * 1024**3,
+    maximum_host_bytes=0,
     spatial_stride=1,
     latent_frames=37,
 ):
@@ -54,7 +55,7 @@ def native_audio_context(
     Spatial stride two or four explicitly reduces spatial audio conditioning
     on declared native T2VA/I2VA canvases, with all times retained. The default
     keeps the five-second scope; 32 latent frames explicitly select the bounded
-    four-second ten-forward scope.
+    four-second ten-forward scope. The twelve-second reference scope uses 87 latent frames.
     """
     if type(expected_forwards) is not int or expected_forwards not in (10, 12):
         raise ValueError("This native audio adapter is qualified for 10 or 12 forwards")
@@ -62,10 +63,16 @@ def native_audio_context(
         raise ValueError("Visual context reuse must be explicit")
     if type(spatial_stride) is not int or spatial_stride not in (1, 2, 4):
         raise ValueError("Native audio spatial stride must be 1, 2 or 4")
-    if type(latent_frames) is not int or latent_frames not in (32, 37):
+    if type(latent_frames) is not int or latent_frames not in (32, 37, 87):
         raise ValueError("Spatial audio requires an explicit native frame count")
     maximum_pixels = 1376 * 768 if latent_frames == 32 else 2 * 1024**2
-    # Zero condition rows denotes direct text, with no generated first image.
+    if latent_frames == 87:
+        maximum_pixels = 1024**2
+        if expected_forwards != 10 or condition_rows != 0 or spatial_stride != 2:
+            raise ValueError(
+                "Twelve-second reference audio requires ten forwards and stride two"
+            )
+    # Zero condition rows denotes direct text or separate reference audio.
     if spatial_stride > 1 and (
         not reuse_visual_context
         or video.ndim != 5
@@ -104,6 +111,7 @@ def native_audio_context(
                 frozen_visual_kv(
                     transformer,
                     maximum_bytes=maximum_bytes,
+                    maximum_host_bytes=maximum_host_bytes,
                 )
             )
             if reuse_visual_context
@@ -206,7 +214,7 @@ def fixed_video_audio_pass(transformer, video_scheduler, video, *, condition_row
 
 
 @contextmanager
-def frozen_visual_kv(model, *, maximum_bytes=40 * 1024**3):
+def frozen_visual_kv(model, *, maximum_bytes=40 * 1024**3, maximum_host_bytes=0):
     import torch
 
     if torch.is_grad_enabled() or model.training:
@@ -215,6 +223,8 @@ def frozen_visual_kv(model, *, maximum_bytes=40 * 1024**3):
         raise ValueError("Visual context reuse supports one GPU")
     if type(maximum_bytes) is not int or not 0 < maximum_bytes <= 40 * 1024**3:
         raise ValueError("Visual context must have a positive limit of at most 40 GiB")
+    if type(maximum_host_bytes) is not int or not 0 <= maximum_host_bytes <= 16 * 1024**3:
+        raise ValueError("Host visual context must have an explicit limit of at most 16 GiB")
     if getattr(model, "_vflash_visual_context_active", False):
         raise ValueError("This model already owns an active visual context")
     module = sys.modules[type(model.transformer_blocks[0]).__module__]
@@ -230,6 +240,9 @@ def frozen_visual_kv(model, *, maximum_bytes=40 * 1024**3):
         "reuse_block_calls": 0,
         "cached_bytes": 0,
         "maximum_bytes": maximum_bytes,
+        "host_cached_bytes": 0,
+        "maximum_host_bytes": maximum_host_bytes,
+        "resident_layers": len(model.transformer_blocks),
         "live_modalities": ["text", "audio"],
     }
 
@@ -301,12 +314,32 @@ def frozen_visual_kv(model, *, maximum_bytes=40 * 1024**3):
                                 "kv_limit_bytes": limit,
                                 "expected_kv_bytes": expected,
                             }
-                        if not expected <= limit:
-                            raise ValueError(
-                                "Visual KV trial exceeds declared memory headroom "
-                                f"(expected={expected}, available_budget={limit})"
-                            )
-                    caches[index] = {"key": key, "value": value, "step": forward_index}
+                        if expected > limit:
+                            # Retain room for the one offloaded pair being consumed on-device.
+                            resident = max(0, limit // size - 1)
+                            host_bytes = (len(model.transformer_blocks) - resident) * size
+                            host_limit = maximum_host_bytes
+                            if host_limit:
+                                from vflash.native.h3_buffered_weights import host_headroom
+
+                                host_limit = min(
+                                    host_limit, max(0, host_headroom() - 2 * 1024**3)
+                                )
+                            if size > limit or host_bytes > host_limit:
+                                raise ValueError(
+                                    "Visual KV trial exceeds declared memory headroom "
+                                    f"(expected={expected}, available_budget={limit})"
+                                )
+                            report["resident_layers"] = resident
+                    offload = index >= report["resident_layers"]
+                    caches[index] = {
+                        "key": key.to("cpu", copy=True) if offload else key,
+                        "value": value.to("cpu", copy=True) if offload else value,
+                        "step": forward_index,
+                        "offloaded": offload,
+                    }
+                    if offload:
+                        report["host_cached_bytes"] += size
                     report["cached_bytes"] += size
                     keys, values = (key, value)
                 else:
@@ -316,6 +349,10 @@ def frozen_visual_kv(model, *, maximum_bytes=40 * 1024**3):
                             "Frozen visual context does not match its owned audio pass"
                         )
                     keys, values = (saved["key"], saved["value"])
+                    if saved["offloaded"]:
+                        # Live rows are overwritten below, preserving the original host copy.
+                        keys = keys.to(key.device, copy=True)
+                        values = values.to(value.device, copy=True)
                     keys.index_copy_(1, live, key)
                     values.index_copy_(1, live, value)
                     saved["step"] = forward_index

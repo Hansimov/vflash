@@ -9,11 +9,15 @@ from vflash.pipeline.pika_av import PikaAVRecipe
 class PikaReferenceRecipe(PikaAVRecipe):
     overlap_decode: bool = False
     reference_short_edge: int | None = None
+    duration_seconds: int = 5
 
     def __post_init__(self):
         super().__post_init__()
         if (
-            self.overlap_decode
+            type(self.duration_seconds) is not int
+            or self.duration_seconds not in (5, 12)
+            or (self.duration_seconds == 12 and self.audio_steps != 10)
+            or self.overlap_decode
             or self.decode_tile_batch_size != 1
             or (
                 self.reference_short_edge is not None
@@ -33,7 +37,8 @@ class PikaReferenceRecipe(PikaAVRecipe):
             "tiered" if self.reference_short_edge is None else str(self.reference_short_edge)
         )
         sound = f"larry{self.audio_steps}" if self.audio_steps else "joint"
-        return f"pika-ref6-{sound}-r{budget}-v1"
+        base = f"pika-ref6-{sound}-r{budget}-v1"
+        return base if self.duration_seconds == 5 else f"{base}-12s"
 
     @property
     def reference_encoding_policy(self):

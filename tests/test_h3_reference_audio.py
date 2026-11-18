@@ -144,6 +144,23 @@ class AudioContextTests(unittest.TestCase):
             )
         self.assert_restored()
 
+    def test_bounded_host_layers_match_resident_cache_with_changed_live_rows(self):
+        changed = self.hidden.clone()
+        changed[:, [0, 1, 8, 9]] += 0.25
+        with torch.inference_mode():
+            with frozen_visual_kv(self.model) as reference:
+                self.model(hidden_states=self.hidden, **self.kwargs)
+                expected = self.model(hidden_states=changed, **self.kwargs)
+            limit = reference["cached_bytes"] // len(self.model.transformer_blocks)
+            with frozen_visual_kv(
+                self.model, maximum_bytes=limit, maximum_host_bytes=2 * limit
+            ) as split:
+                self.model(hidden_states=self.hidden, **self.kwargs)
+                actual = self.model(hidden_states=changed, **self.kwargs)
+            self.assertEqual(split["host_cached_bytes"], reference["cached_bytes"])
+            torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+        self.assert_restored()
+
     def test_memory_rejection_restores_the_complete_model(self):
         with torch.inference_mode():
             expected = self.model(hidden_states=self.hidden, **self.kwargs)

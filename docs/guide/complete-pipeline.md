@@ -550,8 +550,18 @@ audio is still rejected; the default nearest-clock join remains unchanged.
 `PikaReferenceAVRuntime` is a separate prepared-weight candidate; the fixed-profile
 CLI/server does not select it. It uses the original Ref adapter for six picture
 forwards and an independent FL model for optional Larry native audio. It currently
-accepts five-second ordered image references within 1 MP, with original FP32 image
-conditioning and sequential GPU residency for the two transformers.
+accepts ordered image references within 1 MP, with original FP32 conditioning and
+sequential GPU residency for the two transformers. The default recipe is five seconds.
+For twelve seconds, select `PikaReferenceRecipe(duration_seconds=12, audio_steps=10)`
+and a matching `VideoRequest`. The reference encoder, Veda attention, FL audio and
+decoder follow the same 294-frame model clock and deliver 288 frames at 24 fps.
+
+Twelve-second audio can retain up to 12 GiB of frozen attention keys and values in
+host RAM when the device has insufficient cache space. The cache keeps live text
+and audio rows on their original step, and retains the CUDA decode reserve.
+The audio-stage receipt reports the resident layer count and host-cache bytes.
+This scope was exercised on one 96 GiB SM120 GPU with 720p delivery. Other durations,
+equipment and strict dialogue fidelity require separate evaluation.
 
 `reference_short_edge=None` retains the original tiered reference geometry. An
 explicit `reference_short_edge=1024` or `2048` changes only the reference-image

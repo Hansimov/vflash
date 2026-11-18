@@ -53,7 +53,7 @@ def frozen_larry_soundtrack(
         if index + 1 == steps:
             captured["video_latents"] = unpatchify_h3_video_rows(
                 values["latents"][None].float().cpu(),
-                num_latent_frames=37,
+                num_latent_frames=visual["video_latents"].shape[2],
                 latent_height=request.height // 16,
                 latent_width=request.width // 16,
             )
@@ -86,6 +86,8 @@ def frozen_larry_soundtrack(
                 expected_forwards=steps,
                 reuse_visual_context=True,
                 spatial_stride=2,
+                latent_frames=visual["video_latents"].shape[2],
+                maximum_host_bytes=12 * 1024**3 if request.duration_seconds == 12 else 0,
             ) as context,
         ):
             pipe(
@@ -93,7 +95,7 @@ def frozen_larry_soundtrack(
                 image=None,
                 height=request.height,
                 width=request.width,
-                num_frames=124,
+                num_frames=request.model_frames,
                 num_inference_steps=steps,
                 flow_shift=12.0,
                 audio_flow_shift=3.0,

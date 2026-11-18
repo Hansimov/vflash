@@ -36,13 +36,13 @@ class PikaReferenceAVSession:
             or request.mode != "ref2va"
             or request.reference_video is not None
             or not 1 <= len(request.ordered_references) <= 9
-            or request.duration_seconds != 5
+            or request.duration_seconds != recipe.duration_seconds
             or request.width * request.height > 1024**2
             or not request.generate_audio
             or request.keyframe_delivery_profile != "decoded"
         ):
             raise ValueError(
-                "Explicit image-reference Pika candidate within five seconds / 1 MP required"
+                "Image-reference Pika candidate requires the selected duration and at most 1 MP"
             )
         crop_geometry(request.width, request.height, video_crop)
         if not self.owner.acquire(blocking=False):
@@ -96,7 +96,13 @@ class PikaReferenceAVSession:
             rt.attention.reset()
             if recipe.visual_attention == "veda":
                 rt.attention.configure(
-                    model, {"width": request.width, "height": request.height}, self.predictor
+                    model,
+                    {
+                        "width": request.width,
+                        "height": request.height,
+                        "frames": request.model_frames,
+                    },
+                    self.predictor,
                 )
                 rt.attention.profile.num_condition_video_rows = prepared.metadata[
                     "reference_video_rows"
@@ -182,7 +188,7 @@ class PikaReferenceAVSession:
                 output / "native.mp4",
                 width=request.width,
                 height=request.height,
-                duration_seconds=5,
+                duration_seconds=request.duration_seconds,
                 fps=24,
                 audio_delivery_profile=request.audio_delivery_profile,
                 video_input="pipe",

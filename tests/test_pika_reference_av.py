@@ -13,16 +13,17 @@ from vflash.pipeline.pika_reference_recipe import PikaReferenceRecipe
 torch = pytest.importorskip("torch")
 
 
-@pytest.mark.parametrize("steps", [0, 10, 12])
+@pytest.mark.parametrize(("steps", "duration"), [(0, 5), (10, 5), (12, 5), (10, 12)])
 @pytest.mark.parametrize(
     "failure",
     [None, "conditioning", "picture", "sound", "picture_changed", "decode", "restore"],
 )
 def test_separate_model_ownership_counts_frozen_picture_and_failure_cleanup(
-    tmp_path, monkeypatch, steps, failure
+    tmp_path, monkeypatch, steps, duration, failure
 ):
     from vflash.adapters.h3_reference_audio import _pack_video
 
+    latent_frames = 37 if duration == 5 else 87
     ref_adapter = NS(strength=0, calls={"target": 0})
     fl_adapter = NS(strength=0)
     clock = NS(completed_forwards=0, tensors={})
@@ -63,6 +64,7 @@ def test_separate_model_ownership_counts_frozen_picture_and_failure_cleanup(
             return torch.zeros(1, 2, 4), torch.ones(2, dtype=torch.long)
 
         def __call__(self, **kwargs):
+            assert kwargs["num_frames"] == request.model_frames
             assert kwargs["image"] is None
             self.encode_prompt(kwargs["prompt"])
             rows = _pack_video(self.fixed)[0]
@@ -90,7 +92,7 @@ def test_separate_model_ownership_counts_frozen_picture_and_failure_cleanup(
         assert condition["keyframes"] == [] and condition["references"]
         for _ in range(6):
             model()
-        return torch.zeros(1, 37, 24, 2, 2), torch.zeros(1, 414, 32)
+        return torch.zeros(1, latent_frames, 24, 2, 2), torch.zeros(1, 414, 32)
 
     source = NS(
         source_revision="fixture",
@@ -114,6 +116,7 @@ def test_separate_model_ownership_counts_frozen_picture_and_failure_cleanup(
             raise RuntimeError("fixture restore")
 
     def decode(*args, **kwargs):
+        assert kwargs["duration_seconds"] == duration
         assert rt.active_partition is None
         if failure == "decode":
             raise RuntimeError("fixture decode")
@@ -146,6 +149,7 @@ def test_separate_model_ownership_counts_frozen_picture_and_failure_cleanup(
     @contextmanager
     def audio_context(model, scheduler, video, **kwargs):
         assert model is fl and kwargs["condition_rows"] == 0 and kwargs["spatial_stride"] == 2
+        assert kwargs["latent_frames"] == latent_frames
         pipe.fixed = video
         yield {}
 
@@ -163,10 +167,17 @@ def test_separate_model_ownership_counts_frozen_picture_and_failure_cleanup(
     monkeypatch.setattr(torch, "Generator", lambda **kw: generator())
     session = PikaReferenceAVSession(rt, predictor=tmp_path)
     request = VideoRequest(
-        "Use <Picture 1> as the subject.", reference=Path("image"), width=32, height=32
+        "Use <Picture 1> as the subject.",
+        reference=Path("image"),
+        width=32,
+        height=32,
+        duration_seconds=duration,
     )
     recipe = PikaReferenceRecipe(
-        audio_steps=steps, visual_attention="sdpa", overlap_decode=False
+        audio_steps=steps,
+        visual_attention="sdpa",
+        overlap_decode=False,
+        duration_seconds=duration,
     )
     encode = pipe.encode_prompt
     schedulers = pipe.scheduler, pipe.audio_scheduler

@@ -32,11 +32,11 @@ def reference_conditioning(
         request.mode != "ref2va"
         or request.reference_video is not None
         or not 1 <= len(request.ordered_references) <= 9
-        or request.duration_seconds != 5
+        or request.duration_seconds not in (5, 12)
         or request.width * request.height > 1024**2
     ):
         raise ContractError(
-            "Prepared Ref conditioning requires 1-9 ordered images and five seconds within 1 MP"
+            "Expected 1-9 ordered images for Ref conditioning at 5 or 12 seconds within 1 MP"
         )
     if pipe.vae.dtype != torch.float32 or torch.is_autocast_enabled("cuda"):
         raise ContractError("Ref conditioning requires the original FP32 VAE outside autocast")
@@ -46,7 +46,7 @@ def reference_conditioning(
             prompt=request.prompt,
             width=request.width,
             height=request.height,
-            num_frames=124,
+            num_frames=request.model_frames,
         )
     )
     references, sizes = [], []

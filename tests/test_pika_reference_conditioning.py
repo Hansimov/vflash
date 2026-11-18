@@ -135,3 +135,12 @@ def test_bad_reference_budget_fails_before_encoding(fixture, edge):
     with pytest.raises(ContractError, match="short edge"):
         reference_conditioning(pipe, request, reference_short_edge=edge, **options)
     assert calls == []
+
+
+def test_long_reference_uses_the_requested_model_clock(fixture):
+    from dataclasses import replace
+
+    request, pipe, options, _ = fixture
+    request = replace(request, duration_seconds=12)
+    prepared = reference_conditioning(pipe, request, **options)
+    assert prepared.conditional_dict["geometry"].num_frames == request.model_frames == 294
