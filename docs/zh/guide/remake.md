@@ -59,7 +59,7 @@ T2VA 预测器。已测试的稀疏路线会改变像素，应按原始场景和
 
 ## 实验性源区域保留与历史恢复
 
-0.28.0a3预览版保留 `source_mask=inputs / 'edit-mask.png'`，供既有实验及冻结请求恢复。
+恢复曾传入遮罩的编辑时，使用 `source_mask=inputs / 'edit-mask.png'` 复现原请求。
 新编辑不推荐将它作为通用质量路线：保留的人脸或区域可能沿用与新环境不一致的受光、
 反射和背景，即使条件位于采样器内部也一样。须共同评估完整场景、身份、动作和声音，
 局部相似度不能单独判定成片合格。
@@ -84,7 +84,7 @@ SM120 96GiB上一次完整四窗口、480×864编辑保住动态字幕及淡出�
 
 ## 可选四步组合
 
-0.28.0a3预览版还接受 `distillation="fl2v-v1.2-4step"`。
+进行四步实验时，指定 `distillation="fl2v-v1.2-4step"`。
 将固定[LightX2V纯FL2V v1.2适配器](https://huggingface.co/lightx2v/Minimax-h3-Turbo/tree/1a4a150fc6707329409eb52e5d75a0e987ac1928)
 放入运行服务的 `loras` 路径，文件为
 `minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors`。

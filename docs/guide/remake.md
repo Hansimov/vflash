@@ -69,7 +69,7 @@ other canvases and deployment through this new transport remain open qualificati
 
 ## Experimental source preservation and legacy recovery
 
-The 0.28.0a3 preview accepts `source_mask=inputs / 'edit-mask.png'` for existing experiments and frozen-request recovery. This is not a recommended general quality route for new edits. A preserved face or region can retain incompatible lighting, reflections or surroundings, even when conditioning happens inside the sampler. Evaluate the complete scene, identity, motion and sound together; local similarity alone does not qualify an output.
+Use `source_mask=inputs / 'edit-mask.png'` to replay a frozen edit that supplied a mask. The sampler retains latent information from the selected region. Check the surrounding light, reflections, motion and soundtrack when assessing the finished scene.
 The mask is a static, canvas-sized RGB image owned by the same input directory. Black
 regions condition the sampler with the original source latent; white regions remain
 editable. Cells intersecting a white region remain editable after pooling to the latent
@@ -96,8 +96,7 @@ universal text fidelity are not established. Six-step sampling remains the defau
 
 ## Optional four-step composition
 
-The 0.28.0a3 preview also accepts
-`distillation="fl2v-v1.2-4step"`. Install the pure
+For a four-step experiment, select `distillation="fl2v-v1.2-4step"` and install the pure
 [LightX2V FL2V v1.2 adapter](https://huggingface.co/lightx2v/Minimax-h3-Turbo/tree/1a4a150fc6707329409eb52e5d75a0e987ac1928)
 under the runtime's `loras` model path:
 `minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors`.
