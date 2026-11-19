@@ -306,3 +306,16 @@ def test_completed_recovery_is_offline_and_checks_original_evidence(tmp_path, me
         assert recover_completed_remake(request, **options) == result
     assert {p.name: p.read_bytes() for p in directory.iterdir()} == before
     assert len(server["posts"]) == 1 and server["stops"] == 0
+
+
+def test_journal_update_survives_scratch_file_from_interrupted_writer(tmp_path):
+    from vflash.pipeline.remake_execution import _save
+
+    receipt = tmp_path / "execution.json"
+    scratch = receipt.with_suffix(".tmp")
+    scratch.write_bytes(b"interrupted")
+    _save(receipt, {"status": "submitted"})
+    _save(receipt, {"status": "completed"})
+    assert json.loads(receipt.read_bytes()) == {"status": "completed"}
+    assert scratch.read_bytes() == b"interrupted"
+    assert receipt.stat().st_mode & 0o777 == 0o600

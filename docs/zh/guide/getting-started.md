@@ -31,6 +31,8 @@ wheel 与源码包对应同一 tag。完整流水线安装示例：
 python -m pip install "vflash[pipeline] @ https://github.com/Hansimov/vflash/releases/download/v0.27.0/vflash-0.27.0-py3-none-any.whl"
 ```
 
+原片编辑和扩展时长的图片参考使用[预览版安装及模型依赖](./remake)。固定配置与稳定版安装沿用本页步骤。
+
 ## 2. 检查显卡 {#check-your-gpu}
 
 ```bash

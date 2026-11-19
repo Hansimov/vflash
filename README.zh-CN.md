@@ -20,7 +20,7 @@
 Vflash负责条件编码、采样、解码和本地执行资源。接入应用负责账户、持久任务调度、多步骤
 工作流及媒体交付。原生HTTP的有界队列不是应用层持久任务队列。
 
-**0.28.0a3 预览版**新增[原版 Remake 编辑客户端](https://hansimov.github.io/vflash/zh/guide/remake)，需显式选用；下方稳定安装仍为0.27.0。
+稳定版 **0.27.0** 提供下方的固定配置推理接口。[0.28.0a7 预览版](https://github.com/Hansimov/vflash/releases/tag/v0.28.0a7)还支持 Remake 原片编辑、执行记录恢复，以及 5、8、12 秒的 Pika 内容参考配方。
 
 ## 安装与环境检查
 

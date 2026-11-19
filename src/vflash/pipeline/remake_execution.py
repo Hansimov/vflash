@@ -8,6 +8,7 @@ request and its outcome survive a lost HTTP response in a private execution jour
 import json
 import math
 import os
+import tempfile
 import threading
 import time
 import urllib.error
@@ -71,8 +72,8 @@ class LocalRemakeRuntime:
 
 
 def _save(path, value):
-    temporary = path.with_suffix(".tmp")
-    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    fd, name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    temporary = Path(name)
     try:
         with os.fdopen(fd, "w") as stream:
             json.dump(value, stream, ensure_ascii=False, indent=2)

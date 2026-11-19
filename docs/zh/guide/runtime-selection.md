@@ -1,6 +1,6 @@
 # 选择运行时与接口
 
-原版源视频编辑：[Remake 窗口](./remake)（实验性 0.28.0a3 预览接口）。
+原版源视频编辑：[Remake 窗口](./remake)（实验性 0.28.0a7 预览接口）。
 
 Vflash 0.27.0 提供多条独立配置的执行路径。先选择输入模式、输出类型和硬件，再准备对应
 资产；包版本本身不选择模型配方。目录中的 profile、Python 类和已发布 Docker 镜像属于
@@ -11,7 +11,7 @@ Vflash 0.27.0 提供多条独立配置的执行路径。先选择输入模式、
 | 准备权重的 Pika 六步画面，配联合原声或 Larry 原生声音 | [`PikaAVRuntime`](./pika-flex#prepared-pika-av) | 文本或一张首帧 → MP4 与执行记录 | 完整 96 GiB SM120；限定四／五秒，四秒要求 Larry10；画布、解码和内存仍有各自限制 |
 | 原版 Pika 执行 | [`PikaFlexRuntime`](./pika-flex#原版-bf16-参考执行) | 上游 FL／Ref 输入 → 对齐帧数的 MP4 | 独立 Python 3.12／上游环境；最初 GPU 证据为五秒 480p 文本／首帧，不能把全部准入范围视为已验收 |
 | 固定配置的文本、首尾帧或内容参考 | [`H3Pipeline`](./complete-pipeline)、`vflash generate` | 配置允许的素材 → 完整 MP4 | 显式 Base／LightX 配置及资产，扩展混合范围另列；不自动执行 Pika |
-| 准备权重的 Pika 内容参考图 | [`PikaReferenceAVRuntime`](./complete-pipeline#实验性-pika-图片参考运行时) | 有序外观参考图 → 五秒 MP4 | 独立 Ref 主干与 FP32 条件的实验路径，可选 FL／Larry 声音；此运行时不支持源视频和参考音频 |
+| 准备权重的 Pika 内容参考图 | [`PikaReferenceAVRuntime`](./complete-pipeline#实验性-pika-图片参考运行时) | 有序外观参考图 → MP4（默认 5 秒，专用配方支持 8 和 12 秒） | 独立 Ref 主干与 FP32 条件的实验路径，可选 FL／Larry 声音；此运行时不支持源视频和参考音频 |
 | Larry／原始模型分段画面与原生声音 | [`ReferenceAVRuntime`](../reference/segmented-av) | 一张同画布首帧 → MP4 | 独立 SM120 运行时与配方，其前4后6／12默认不成为 Pika 默认 |
 | 应用自行负责条件构建和解码 | [`NativeEngineSession`](./python#native-session)、[原生 HTTP](../reference/http-api) | 已编译条件包 → 潜变量 | 固定配置、有界串行执行；HTTP 内存队列不提供应用任务持久化 |
 

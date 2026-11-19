@@ -1,6 +1,6 @@
 # Choose a runtime and interface
 
-Original source-video editing: [Remake windows](./remake) (experimental 0.28.0a3 preview).
+Original source-video editing: [Remake windows](./remake) (experimental 0.28.0a7 preview).
 
 Vflash 0.27.0 provides several independently configured execution paths. Select the request mode,
 result type and hardware first, then prepare that path’s assets. The package version alone does
@@ -12,7 +12,7 @@ separate interfaces.
 | Prepared Pika six-step picture with joint or Larry native sound | [`PikaAVRuntime`](./pika-flex#prepared-pika-av) | Text or one first frame → MP4 and execution receipts | Full 96 GiB SM120; four/five-second scope. Four seconds requires Larry10. Exact canvas, decoder and memory limits apply. |
 | Faithful original Pika execution | [`PikaFlexRuntime`](./pika-flex#original-bf16-reference-execution) | Upstream FL or Ref input contract → aligned MP4 | Separate Python 3.12/upstream environment; initial GPU evidence is five-second 480p text/first-frame. Admitted modes are not all equally qualified. |
 | Fixed-profile text, first/last frames or content references | [`H3Pipeline`](./complete-pipeline), `vflash generate` | Profile-compatible media → complete MP4 | Explicit base/LightX profile and assets; extended hybrid scope is separate. Does not automatically run Pika. |
-| Prepared Pika content-reference images | [`PikaReferenceAVRuntime`](./complete-pipeline#experimental-pika-image-reference-runtime) | Ordered appearance images → five-second MP4 | Experimental separate Ref trunk and FP32 conditioning; optional FL/Larry sound. No source-video or reference-audio support in this runtime. |
+| Prepared Pika content-reference images | [`PikaReferenceAVRuntime`](./complete-pipeline#experimental-pika-image-reference-runtime) | Ordered appearance images → MP4 (5 s by default, with explicit 8 s and 12 s recipes) | Experimental separate Ref trunk and FP32 conditioning; optional FL/Larry sound. No source-video or reference-audio support in this runtime. |
 | Larry/original segmented picture with native sound | [`ReferenceAVRuntime`](../reference/segmented-av) | One same-canvas first frame → MP4 | Separate SM120 runtime and recipe; its 4+6/12 defaults do not become Pika defaults. |
 | Application-owned conditioning and decoding | [`NativeEngineSession`](./python#native-session), [native HTTP](../reference/http-api) | Compiled conditioning bundle → latents | One prepared profile, bounded serial execution. The HTTP queue is in-memory and does not implement application job durability. |
 

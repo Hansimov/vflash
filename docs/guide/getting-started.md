@@ -33,6 +33,8 @@ a wheel and source archive from the same tag. Install the complete pipeline from
 python -m pip install "vflash[pipeline] @ https://github.com/Hansimov/vflash/releases/download/v0.27.0/vflash-0.27.0-py3-none-any.whl"
 ```
 
+For source-video editing or extended image-reference recipes, use the [preview installation and runtime dependencies](./remake). Use the stable installation above for the fixed-profile examples below.
+
 ## 2. Check your GPU {#check-your-gpu}
 
 ```bash
