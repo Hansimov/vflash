@@ -1,6 +1,6 @@
 # 使用外观参考图生成
 
-<span id="experimental-pika-image-reference-runtime" aria-hidden="true"></span>
+<span id="实验性-pika-图片参考运行时" aria-hidden="true"></span><span id="experimental-pika-image-reference-runtime" aria-hidden="true"></span>
 
 
 PikaReferenceAVRuntime 使用有序照片作为外观参考，适合生成同一主体的新镜头。

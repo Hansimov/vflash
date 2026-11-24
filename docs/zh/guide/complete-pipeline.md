@@ -60,4 +60,4 @@ vflash generate \
 - <span id="reference-video" aria-hidden="true"></span>[参考视频输入](../reference/runtime-assets)
 - <span id="audio-hidden-context" aria-hidden="true"></span>[音轨精修与上下文](./pipeline-refinement)
 - <span id="veda-dense-edges" aria-hidden="true"></span>[稀疏与稠密注意力](./veda)
-- <span id="experimental-pika-image-reference-runtime" aria-hidden="true"></span>[Pika 内容参考配方](./pika-reference-weights)
+- <span id="实验性-pika-图片参考运行时" aria-hidden="true"></span><span id="experimental-pika-image-reference-runtime" aria-hidden="true"></span>[Pika 内容参考配方](./pika-reference-weights)
