@@ -101,7 +101,9 @@ def test_half_size_video_keeps_time_and_full_size_image_pins(monkeypatch):
         def run(self, vae, source, ref_1, pins):
             z = vae.encode(source)
             image = vae.encode(ref_1)
+            image.add_(2)
             pin = vae.encode(ref_1)
+            assert pin.count_nonzero() == 0
             meta = {
                 "minimax_refs": [
                     {"kind": "video", "latent": z, "latent_h": 4, "latent_w": 8},

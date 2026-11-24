@@ -1,6 +1,6 @@
 # Remake source-video windows
 
-The experimental 0.28.0a7 API compiles and executes the original **Viggle Remake** H3
+The experimental 0.28.0a8 API compiles and executes the original **Viggle Remake** H3
 `swap` and `edit` graphs against an already provisioned, caller-owned local Comfy runtime.
 Use the explicit preview tag below; the stable 0.27.0 wheel does not include this interface.
 Ordinary Pika and native execution profiles retain their existing interfaces.
@@ -27,7 +27,7 @@ The model's license and Viggle attribution requirements apply separately from Vf
 Install the CPU client from its fixed preview tag and provide system `ffmpeg`/`ffprobe`:
 
 ```bash
-git clone --branch v0.28.0a7 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.28.0a8 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m pip install '.[remake-client]'
 ```

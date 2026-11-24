@@ -87,7 +87,7 @@ result = pipeline.generate(request, Path("out.mp4"), audio_refinement=refine)
 ```
 
 Video frames are unchanged. Requirements, the optional hidden-context reuse and its limits are in the
-[generation guide](./complete-pipeline#optional-audio-only-six-step-refinement-source-main).
+[generation guide](./pipeline-refinement#optional-audio-only-six-step-refinement-source-main).
 
 ## Progress, results and errors {#lifetime}
 

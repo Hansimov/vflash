@@ -30,7 +30,9 @@ class _PinnedFrameEncoder:
             return self.frames[key][1].clone()
         latent = self.vae.encode(pixels)
         # Retaining the tensor prevents ID reuse for a later resized view.
-        self.frames[key] = (pixels, latent)
+        # The native reference role may modify its latent before encoding the pin.
+        # Keep the cache independent from the tensor handed to that role.
+        self.frames[key] = (pixels, latent.clone())
         return latent
 
 

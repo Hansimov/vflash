@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.28.0a8 (preview)
+
+Remake validates the same 24 fps square-pixel contract on sources, history and results. A preserve-soundtrack request now fails before delivery if its output has no audio stream. An image used as both a reference and a timeline pin retains independent latent storage for each role.
+
+[Generate a video](../guide/complete-pipeline) now separates first generation, runtime tuning, AV continuation and experimental weights.
+
 ## 0.28.0a7 (preview)
 
 Remake journals now use a private temporary file per write. A file left by an interrupted process no longer blocks subsequent atomic receipt updates. Recovery continues to identify an accepted submission by its original execution ID.

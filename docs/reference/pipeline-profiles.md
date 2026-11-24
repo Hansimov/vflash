@@ -194,4 +194,4 @@ Prepare and hash files once in their final location. Startup checks the resultin
 
 The [reference-video input](../guide/complete-pipeline#reference-video) uses the same single-SM89 Ref4 assets. It passed a complete image/video/image sequence without model reload. SM86 and Turbo8 video references remain outside the supported boundary.
 
-The explicit hybrid/Veda exception supports qualified 15-second and nine-image requests; see [joint limits](../guide/complete-pipeline#extended-hybrid). Other profiles retain the ranges above.
+The explicit hybrid/Veda exception supports qualified 15-second and nine-image requests; see [joint limits](../guide/pipeline-conditioning#extended-hybrid). Other profiles retain the ranges above.

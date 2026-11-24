@@ -33,7 +33,7 @@ HTTP 服务只加载一个配置（4090 上默认 Turbo4），更换配置需用
 
 | 显卡 | 路径 | 说明 |
 | --- | --- | --- |
-| RTX 4090 48 GB（SM89） | 上述全部配置；原始 v0.1 混合模型（稠密或 Veda）；[最长边 2720 的原生高清](./complete-pipeline#modes-and-limits)；[5–15 秒/九图扩展混合](./complete-pipeline#extended-hybrid) | 参考平台。实测设备报告 48 GiB，24 GiB 显卡未确认能承载相同任务。 |
+| RTX 4090 48 GB（SM89） | 上述全部配置；原始 v0.1 混合模型（稠密或 Veda）；[最长边 2720 的原生高清](./complete-pipeline#modes-and-limits)；[5–15 秒/九图扩展混合](./pipeline-conditioning#extended-hybrid) | 参考平台。实测设备报告 48 GiB，24 GiB 显卡未确认能承载相同任务。 |
 | 两张 RTX 3080 20 GB（SM86） | Ref4 原生（`sequence-head` 或 `tensor`）与完整流水线（`sequence-head`）；T2VA 与 Base16 关键帧使用 `sequence-head` | PCIe 3.0 x16、无 peer access，不需要 NVLink。 |
 | 单张 RTX 3080 20 GB | Ref4 原生 latent | 已检查容量及串行/重叠加载的可重复性。 |
 | H100 SXM 80 GB（SM90） | 原始 v0.1 混合 I2VA + `veda-triton`；≥75 GiB 可[主干常驻](#h100-resident) | 有完整成片证据；H100 PCIe 仍为预览。 |
@@ -74,7 +74,7 @@ SM90/SM120 上的原始 v0.1 混合路径请准备至少 128 GB 主机内存并�
 `HybridModel`、`attention_backend="veda-triton"`，并在**启动 Python 进程前**设置 `PYTORCH_ALLOC_CONF=expandable_segments:True`。
 SM90 范围为单首帧 I2VA、最长 15 秒、画布最多 1536×864。0.17.1 起，96 GiB SM120
 也支持 L2VA、FL2VA 和图像 Ref 常驻。图像条件请求遵循原生高清联合预算
-`宽×高×模型帧数 ≤ 2048²×124`，同时采用[完整流水线](./complete-pipeline#extended-hybrid)的各模式限制。
+`宽×高×模型帧数 ≤ 2048²×124`，同时采用[完整流水线](./pipeline-conditioning#extended-hybrid)的各模式限制。
 多参考图范围为最多 960×544、五秒。已完成的 SM120 产物包括：
 
 | 模式 | 实测请求 |

@@ -83,7 +83,7 @@ vflash generate --prepared-assets prepared-assets.json --prompt-file prompt.txt 
 使用前请阅读[许可证](../reference/license)。每次 CLI 调用都会加载并释放模型，因此首次运行包含模型加载时间。
 
 十五秒请求、最多九张参考图以及最高 2720×1536 的原生高清需要通过 Python 使用混合模型，
-做法见[生成视频](./complete-pipeline#extended-hybrid)。
+做法见[生成视频](./pipeline-conditioning#extended-hybrid)。
 
 ## 5. 保持模型常驻 {#reuse}
 

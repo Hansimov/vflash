@@ -319,3 +319,58 @@ def test_journal_update_survives_scratch_file_from_interrupted_writer(tmp_path):
     assert json.loads(receipt.read_bytes()) == {"status": "completed"}
     assert scratch.read_bytes() == b"interrupted"
     assert receipt.stat().st_mode & 0o777 == 0o600
+
+
+def test_completed_preserve_graph_requires_an_audio_stream(tmp_path, media):
+    request, inputs, outputs = media
+    with (
+        model_server(media) as (runtime, stop, state),
+        pytest.raises(RemakeExecutionError, match="media contract"),
+    ):
+        execute_remake(
+            replace(request, soundtrack="preserve"),
+            input_directory=inputs,
+            output_directory=outputs,
+            execution_directory=tmp_path / "execution",
+            runtime=runtime,
+            stop_runtime=stop,
+            timeout_seconds=5,
+        )
+    assert len(state["posts"]) == state["stops"] == 1
+
+
+def test_source_with_anamorphic_pixels_is_rejected_before_submission(tmp_path, media):
+    request, inputs, outputs = media
+    anamorphic = inputs / "anamorphic.mp4"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-i",
+            str(request.source),
+            "-c",
+            "copy",
+            "-bsf:v",
+            "h264_metadata=sample_aspect_ratio=2/1",
+            "-aspect",
+            "2:1",
+            str(anamorphic),
+        ],
+        check=True,
+        timeout=10,
+    )
+    with (
+        model_server(media) as (runtime, stop, state),
+        pytest.raises(ValueError, match="pixel aspect"),
+    ):
+        execute_remake(
+            replace(request, source=anamorphic),
+            input_directory=inputs,
+            output_directory=outputs,
+            execution_directory=tmp_path / "execution",
+            runtime=runtime,
+            stop_runtime=stop,
+            timeout_seconds=5,
+        )
+    assert not state["posts"] and not state["stops"]

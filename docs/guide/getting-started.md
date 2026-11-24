@@ -89,7 +89,7 @@ official decoder code from your verified local snapshot; review the [licenses](.
 first. Each CLI call loads and releases the models, so the first run includes model loading.
 
 Fifteen-second requests, up to nine references and native HD up to 2720×1536 use the hybrid model from
-Python; the [generation guide](./complete-pipeline#extended-hybrid) shows how.
+Python; the [generation guide](./pipeline-conditioning#extended-hybrid) shows how.
 
 ## 5. Keep the models loaded {#reuse}
 

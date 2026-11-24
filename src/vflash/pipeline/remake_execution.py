@@ -120,7 +120,7 @@ def _artifact(entry, output_directory, prefix, request, cancel_check):
         request.width,
         request.height,
         request.frames,
-    ) or (request.soundtrack == "silent" and audio):
+    ) or bool(audio) != (request.soundtrack == "preserve"):
         raise RemakeExecutionError("The saved result differs from its frozen media contract")
     return path, {
         "frames": request.frames,

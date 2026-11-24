@@ -2,6 +2,8 @@
 
 准备权重的 `PikaAVRuntime` 支持六步画面及可选 Larry10／12 原生声音，见[准备权重路径](#prepared-pika-av)。原版 `PikaFlexRuntime` 保留 BF16 上游执行，两者的精度、依赖、输入及硬件范围不同；[接口选择表](./runtime-selection)集中说明这些边界。
 
+[参考图配方、参考图编码预算和 QAD 权重](./pika-reference-weights)
+
 ## 原版 BF16 参考执行
 
 `PikaFlexRuntime`接入[官方Pika发布](https://github.com/Pika-Labs/Pika-H3-Flex)，保留上游分阶段

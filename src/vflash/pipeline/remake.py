@@ -7,11 +7,10 @@ The original H3 FL2VA premerged INT8 models remain separate from Pika/Larry reci
 
 import re
 from dataclasses import dataclass
-from fractions import Fraction
 from pathlib import Path
 from typing import Literal
 
-from vflash.media.probe import probe_video
+from vflash.media.probe import probe_normalized_video
 from vflash.pipeline.remake_text import (
     PreparedRemakeText,
     owned_text,
@@ -191,15 +190,9 @@ def remake_graph(
     source_name = owned(request.source, True)
 
     def clock(path):
-        video, _ = probe_video(path, cancel_check)
-        if (
-            Fraction(video["r_frame_rate"]) != 24
-            or Fraction(video["avg_frame_rate"]) != 24
-            or Fraction(video.get("start_time", "0")) != 0
-            or (video["width"], video["height"]) != (request.width, request.height)
-            or any(s.get("rotation", 0) for s in video.get("side_data_list", []))
-        ):
-            raise ValueError("Prepared source/history must match the declared clock and canvas")
+        video, _ = probe_normalized_video(path, cancel_check)
+        if (video["width"], video["height"]) != (request.width, request.height):
+            raise ValueError("Prepared source/history must match the declared canvas")
         return int(video["nb_frames"])
 
     if clock(request.source) != request.frames:

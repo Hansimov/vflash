@@ -16,8 +16,8 @@ Keep it installable from this repository alone, without external project paths o
 
 Inspect the current implementation and supported profiles before extending a surface. Preserve numerical evidence,
 licenses and attribution, but do not treat old module layout as a constraint. `docs/guide/profiles.md` owns hardware
-and capacity qualification; `docs/guide/complete-pipeline.md` owns complete-request modes, durations and optional
-repaint interfaces. Native sessions/HTTP return latents; Python/CLI complete pipelines deliver MP4s. Historical
+and capacity qualification; `docs/guide/complete-pipeline.md` owns complete-request modes and durations. Optional audio and
+face passes live in `docs/guide/pipeline-refinement.md`, and continuation contracts in `docs/guide/native-av-prefix.md`. Native sessions/HTTP return latents; Python/CLI complete pipelines deliver MP4s. Historical
 release notes and image inventories describe their exact versions, not current defaults or newly qualified GPUs.
 Keep English/Chinese installation commands, Docker examples and actual published image versions consistent.
 Use a minor release for a substantial compatible capability/integration update and a major release for a declared

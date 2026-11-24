@@ -178,4 +178,4 @@ Base LoRA 的上游文件名包含 `fl2v`，本版验证的是其 T2VA 用法，
 
 [参考视频输入](../guide/complete-pipeline#reference-video)复用单 SM89 Ref4 资产，已通过同一实例连续处理图片、视频、图片的完整验证。SM86 和 Turbo8 的视频参考仍不在支持范围内。
 
-显式hybrid/Veda例外支持经过资格验证的十五秒与九图请求，见[组合限制](../guide/complete-pipeline#extended-hybrid)；其他profile仍遵守上述范围。
+显式hybrid/Veda例外支持经过资格验证的十五秒与九图请求，见[组合限制](../guide/pipeline-conditioning#extended-hybrid)；其他profile仍遵守上述范围。

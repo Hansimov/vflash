@@ -2,6 +2,8 @@
 
 The prepared `PikaAVRuntime` provides six visual evaluations with optional Larry10/12 native audio; see the [prepared path](#prepared-pika-av). The original `PikaFlexRuntime` retains upstream BF16 execution. Their precision, dependencies, inputs and hardware scope differ; the [interface guide](./runtime-selection) compares these boundaries.
 
+[Reference recipes, encoding budgets and QAD weights](./pika-reference-weights)
+
 ## Original BF16 reference execution
 
 `PikaFlexRuntime` adapts the original [Pika release](https://github.com/Pika-Labs/Pika-H3-Flex)

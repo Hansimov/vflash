@@ -38,7 +38,7 @@ L2VA is a request contract, not a separate weight profile. The HTTP service load
 
 | GPU | Paths | Notes |
 | --- | --- | --- |
-| RTX 4090 48 GB (SM89) | Every profile above; original-v0.1 hybrid with dense or Veda attention; [native HD up to a 2720 px long edge](./complete-pipeline#modes-and-limits); [extended 5–15 s / nine-image hybrid](./complete-pipeline#extended-hybrid) | The reference platform. The measured devices report 48 GiB; 24 GiB cards are not established for the same workloads. |
+| RTX 4090 48 GB (SM89) | Every profile above; original-v0.1 hybrid with dense or Veda attention; [native HD up to a 2720 px long edge](./complete-pipeline#modes-and-limits); [extended 5–15 s / nine-image hybrid](./pipeline-conditioning#extended-hybrid) | The reference platform. The measured devices report 48 GiB; 24 GiB cards are not established for the same workloads. |
 | Two RTX 3080 20 GB (SM86) | Ref4 native (`sequence-head` or `tensor`) and complete (`sequence-head`); T2VA and Base16 keyframes with `sequence-head` | PCIe 3.0 x16 without peer access; no NVLink required. |
 | One RTX 3080 20 GB | Ref4 native latents | Capacity and serial/overlapped repeatability checked. |
 | H100 SXM 80 GB (SM90) | Original-v0.1 hybrid I2VA with `veda-triton`; [resident trunk](#h100-resident) at ≥75 GiB | Complete-video evidence; H100 PCIe remains a preview. |
@@ -86,7 +86,7 @@ and `PYTORCH_ALLOC_CONF=expandable_segments:True` set **before the Python proces
 SM90 covers one-first-frame I2VA up to 15 seconds and 1536×864 pixels. Since 0.17.1, 96 GiB SM120
 also admits L2VA, FL2VA and image Ref. Image-conditioned requests follow the native-HD joint budget
 `width × height × model_frames ≤ 2048² × 124`, with the mode-specific limits in the
-[complete pipeline](./complete-pipeline#extended-hybrid). Multiple reference images use at most
+[complete pipeline](./pipeline-conditioning#extended-hybrid). Multiple reference images use at most
 960×544 for five seconds. Complete SM120 outputs include:
 
 | Mode | Measured request |

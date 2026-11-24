@@ -24,7 +24,7 @@ Vflash owns conditioning, sampling, decoding and local execution resources. The
 integrating application owns accounts, durable job scheduling, multi-step workflows
 and media delivery. Its bounded native HTTP queue is not a persistent application queue.
 
-Install **0.27.0** for the stable interfaces below. The [0.28.0a7 preview](https://github.com/Hansimov/vflash/releases/tag/v0.28.0a7) also supports Remake source-video editing and recovery, plus five-, eight- and twelve-second Pika content-reference recipes.
+Install **0.27.0** for the stable interfaces below. The [0.28.0a8 preview](https://github.com/Hansimov/vflash/releases/tag/v0.28.0a8) also supports Remake source-video editing and recovery, plus five-, eight- and twelve-second Pika content-reference recipes.
 
 ## Install and check your setup
 

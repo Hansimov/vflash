@@ -1,6 +1,6 @@
 # Remake 源视频窗口
 
-0.28.0a7 的实验性接口将原版 **Viggle Remake** H3 的 `swap`／`edit` 图编译并交给已准备、由调用方
+0.28.0a8 的实验性接口将原版 **Viggle Remake** H3 的 `swap`／`edit` 图编译并交给已准备、由调用方
 拥有的本地 Comfy 运行服务执行。请显式选择下方预览 tag；稳定版 0.27.0 wheel 不包含此接口。普通 Pika 与原生执行配置保留现有接口。
 
 ## 运行时与模型
@@ -23,7 +23,7 @@
 从固定预览 tag 安装 CPU 客户端，并提供系统 `ffmpeg`／`ffprobe`：
 
 ```bash
-git clone --branch v0.28.0a7 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.28.0a8 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m pip install '.[remake-client]'
 ```

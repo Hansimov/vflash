@@ -17,7 +17,7 @@ Vflash never shrinks, re-times or reroutes a request to make it fit. The message
 | Message mentions | Cause | Fix |
 | --- | --- | --- |
 | width/height, multiple of 32, aspect ratio | Canvas outside 32-pixel steps or 1:4–4:1 | Choose a valid canvas. |
-| more than 1,048,576 pixels / native HD | Above 1 MP without the hybrid image-conditioned path | Use the [hybrid model](./complete-pipeline#extended-hybrid) with a first-frame or reference image. |
+| more than 1,048,576 pixels / native HD | Above 1 MP without the hybrid image-conditioned path | Use the [hybrid model](./pipeline-conditioning#extended-hybrid) with a first-frame or reference image. |
 | long edge 2720 / pixel-frame budget | `width × height × model_frames > 2048² × 124`, or a long edge above 2720 | Shorten the request (4 MP is a five-second request) or lower the canvas. |
 | 6–15 s requires image conditioning | Long duration on T2VA or a non-hybrid profile | Use hybrid I2VA/FL2VA/Ref2VA. |
 | resident I2VA supports… | `weight_residency="resident"` outside its envelope (SM90: 1536×864; SM120: the pixel-frame budget; SM90 uses one first frame; SM120 hybrid also accepts L2VA, FL2VA and image Ref within the joint budget) | Use `block-ring` for that request. |

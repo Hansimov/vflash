@@ -83,7 +83,7 @@ refine = AudioRefinementRequest(refinement_schedule(steps=6, denoise=0.5), tuple
 result = pipeline.generate(request, Path("out.mp4"), audio_refinement=refine)
 ```
 
-视频帧保持不变。前提条件、可选的隐藏上下文复用及其限制见[生成视频](./complete-pipeline#optional-audio-only-six-step-refinement-source-main)。
+视频帧保持不变。前提条件、可选的隐藏上下文复用及其限制见[生成视频](./pipeline-refinement#optional-audio-only-six-step-refinement-source-main)。
 
 ## 进度、结果与错误 {#lifetime}
 
