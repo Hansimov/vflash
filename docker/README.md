@@ -1,66 +1,10 @@
-# Run Vflash with Docker
+# Run Vflash in Docker
 
-[中文](README.zh-CN.md) · [Full Docker and API guide](https://hansimov.github.io/vflash/guide/docker)
+Choose the image by its output. The native service reads mounted conditioning bundles and returns latents. The pipeline image generates MP4 files from prepared model assets.
 
-Use the [pipeline image](https://hansimov.github.io/vflash/guide/docker#pipeline) to generate a complete MP4 from text alone or a prompt and one to three references on SM89, or from references on two SM86 GPUs. The separate native HTTP service is described below.
-
-Published 0.21.0 images are `hansimov/vflash:0.21.0` and `hansimov/vflash:0.21.0-pipeline`.
-Pin their immutable digests from [the image inventory](images.json). The [full guide](https://hansimov.github.io/vflash/guide/docker) covers source builds, explicit Veda provisioning, 40/10, 42/8 or 44/6 settings, and package-version verification.
-
-The service accepts compiled conditioning bundles and returns video and audio latents (tensors ready for decoding). It uses one GPU or a cooperating pair and reuses a loaded model across serial requests.
-
-You need Linux AMD64, Docker Compose v2, NVIDIA Container Toolkit, a CUDA 13.0-compatible driver, a supported GPU, and matching compiled runtime assets. The image does not contain model weights and serves the bundle-to-latent API. The separate [weights compiler](../docs/guide/compile-weights.md) prepares Ref4 assets for SM86/SM89 and Base4 assets for SM86/SM89; [complete MP4 generation](../docs/guide/complete-pipeline.md) uses the pipeline image or Python extra.
-
-## Pull and start the release
-
-From the repository root:
-
-```bash
-cp docker/.env.example docker/.env
-```
-
-Edit `docker/.env` with your absolute asset paths and selected GPU. `VFLASH_IMAGE=hansimov/vflash:0.21.0` selects the published native image. `VFLASH_ATTENTION_BACKEND=auto` selects Sol only for single-SM89 official Base16; `torch-flash` explicitly retains dense. Choose one of:
-
-| GPU | `VFLASH_PROFILE_ID` |
+| Image | Published linux/amd64 tag |
 | --- | --- |
-| RTX 4090 48 GB | `ref2va-turbo4-exact-sm89`, `ref2va-turbo8-exact-sm89` or `t2va-turbo4-exact-sm89` |
-| RTX 3080 20 GB | `ref2va-turbo4-exact-sm86` |
-| Two RTX 3080 20 GB GPUs | `t2va-turbo4-exact-sm86` with `sequence-head` |
+| Native HTTP | `hansimov/vflash:0.21.0` |
+| Pipeline | `hansimov/vflash:0.21.0-pipeline` |
 
-Use resources compiled for SM86 on the 3080. For the tested workload, we recommend **at least 64 GiB of available host RAM per worker**, plus headroom for other processes. Check capacity separately for larger inputs.
-
-Create your output directory with write access for UID/GID `10001`, replacing the example path with `VFLASH_HOST_OUTPUTS`, then pull and start:
-
-```bash
-sudo install -d -o 10001 -g 10001 /path/to/outputs
-docker compose --env-file docker/.env -f docker/compose.yaml pull
-docker compose --env-file docker/.env -f docker/compose.yaml up -d --no-build
-curl -fsS http://127.0.0.1:8000/readyz
-```
-
-Compose binds the API to localhost. The engine has no authentication; remote access needs your application's authentication layer.
-
-## Submit a bundle
-
-For a bundle at `VFLASH_HOST_BUNDLES/example-bundle`:
-
-```bash
-curl -fsS -X POST http://127.0.0.1:8000/v1/denoise/jobs \
-  -H 'content-type: application/json' \
-  -d '{"bundle":"example-bundle"}'
-
-curl -fsS http://127.0.0.1:8000/v1/denoise/jobs/JOB_ID
-```
-
-After `succeeded`, download its output:
-
-```bash
-curl -fLo result.safetensors \
-  http://127.0.0.1:8000/v1/denoise/jobs/JOB_ID/output
-```
-
-The queue is bounded; overload returns `429` with `Retry-After`. Job records are temporary and disappear on restart or history eviction. Output files remain on disk. Download results promptly and let your application manage durable jobs and output retention.
-
-See the [full guide](https://hansimov.github.io/vflash/guide/docker) for readiness, settings, timeout recovery, and all API endpoints. Interactive OpenAPI documentation is available at `http://127.0.0.1:8000/docs` on the running service.
-
-For two RTX 3080 20 GB GPUs, add `docker/compose.parallel.yaml` and select `VFLASH_PEER_GPU_DEVICE`. See the [dual-GPU setup](https://hansimov.github.io/vflash/guide/docker#parallel) for `tensor` and `sequence-head` execution.
+Pin an image by its [published digest](images.json). For features from package 0.28.0 build from that source tag using the [deployment guide](https://hansimov.github.io/vflash/guide/docker). Mount models read-only and allocate a writable output directory. Verify readiness and the package version inside the container before submitting a job.

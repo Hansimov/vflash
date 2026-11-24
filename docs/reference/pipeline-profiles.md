@@ -1,197 +1,24 @@
-# Complete model profiles
+# Choose compatible model profiles
 
-Choose a complete-video path using [runtimes and interfaces](../guide/runtime-selection): prepared Pika6 with Larry audio, original BF16 Pika, and fixed-profile `H3Pipeline` each have distinct inputs, assets and dependencies. The instructions below describe the fixed-profile path; they do not select Pika automatically.
+A fixed profile binds a transformer family, adapter, step schedule, precision and GPU architecture. Generate the list for your installed version with `vflash profiles`. Use the identifier it prints for planning and preparation.
 
-A prepared pipeline uses one fixed model, adapter and scheduler. The current source tree supports these complete pipelines:
+## Pick the model family
 
-| Profile | Hardware | Input | Transformer | Adapter | Video/audio shifts |
-| --- | --- | --- | --- | --- | --- |
-| `ref2va-turbo4-exact-sm89` | One RTX 4090 48 GB | Prompt and 1–3 ordered images, or one 2–5 second video | `transformer_ref` | Ref Turbo4 v0.1, alpha 8 / rank 128 | 12 / 3 |
-| `ref2va-turbo4-exact-sm86` | Two RTX 3080 20 GB, `sequence-head` | Prompt and 1–3 ordered images | `transformer_ref` | Ref Turbo4 v0.1, alpha 8 / rank 128 | 12 / 3 |
-| `t2va-turbo4-exact-sm89` | One RTX 4090 48 GB | Prompt without images | `transformer` | Base Turbo4 v1.0, alpha 128 / rank 128 | 6 / 3 |
-| `i2va-base16-bf16-sm89` | One RTX 4090 48 GB; optional matching pair with `sequence-head` | Prompt and one explicit first frame | `transformer` | None | 12 / 3 |
-| `i2va-base16-bf16-sm86` | Two RTX 3080 20 GB, `sequence-head` | Prompt and one explicit first frame | `transformer` | None | 12 / 3 |
-| `fl2va-base16-bf16-sm89` | One RTX 4090 48 GB; optional matching pair with `sequence-head` | Prompt and explicit first and last frames | `transformer` | None | 12 / 3 |
-| `fl2va-base16-bf16-sm86` | Two RTX 3080 20 GB, `sequence-head` | Prompt and explicit first and last frames | `transformer` | None | 12 / 3 |
+| Input | Profile family | Example |
+| --- | --- | --- |
+| Text | T2VA Turbo4 | `t2va-turbo4-exact-sm89` |
+| Appearance references | Ref2VA Turbo4 | `ref2va-turbo4-exact-sm89` |
+| First, last or endpoint frames | Base16 or LightX keyframes | `i2va-base16-bf16-sm89` |
+| Joint Pika audio/video | Prepared runtime recipe | [Pika AV](../guide/pika-flex) |
+| Original film and a target appearance | Remake edit or swap weights | [Edit a source video](../guide/remake) |
 
-The Ref4 and T2 Base4 profiles above use four evaluations, BF16 weights and separate adapter residuals and retain their five-second contract. The Base16 profile identities use the official Base transformer for 16 evaluations in BF16 without an adapter and accept five through ten seconds, including five seconds (`124 → 120` frames) and ten seconds (`243 → 240` frames), at 24 fps. The default remains SM89 Ref4. Paired Base16 keyframe profiles share model artifacts and a scheduler, accepting I2VA, L2VA and FL2VA serially without a profile restart. The 544p Turbo keyframe pairs described below also share artifacts within their own pair, never across adapter versions. Each request records its actual conditioning mode; L2VA reuses the paired FL2VA identity, not video reversal. The prepared profile ID remains the pipeline/result identity. Ref2VA and T2VA remain single-mode. Native-only interfaces have a different [validation scope](../guide/profiles).
+A catalog identifier selects fixed-profile execution. Pika recipes and Remake weights are selected through their own constructors.
 
-## Original LightX v0.1 four-step keyframes (preview) {#lightx-v01}
+## Validate before loading
 
-`i2va-turbo4-v01-544-exact-sm89` and `fl2va-turbo4-v01-544-exact-sm89` bind
-`minimax_h3_fl2v_turbo_4step_v0.1.safetensors` at LightX revision
-`3ec17a324ced54151364f24f8b5fb6bf7e26414f`. This is the original **v0.1 checkpoint**,
-not a 0.1 adapter multiplier, the 544p eight-step v1.0 checkpoint, or the 768p four-step v1.0 checkpoint.
-The contract is **4 NFE, video/audio shifts 12 / 3, rank 128, alpha 8, strength 1**.
-Separate runtime residuals apply `strength × alpha / rank = 0.0625` once, including TokenRefiner.
-The exact attention default does not assert equivalence to a different model or promise image quality.
-
-Prepare and compile using either explicit profile and that exact adapter filename, following the
-[compiler guide](../guide/compile-weights). Reusing a different adapter's artifact or just changing
-its manifest is not supported. The paired input contract accepts first-only, last-only and true
-first/last requests; current target-GPU evidence covers **three 960×544, five-second I2VA videos**
-on one RTX 4090 48 GB, all delivered as 120 frames at 24 fps with audio.
-Request times excluding initialization were **77.51 / 72.01 / 72.02 seconds**;
-initialization was **73.38 seconds** and one-time compilation **278.95 seconds**.
-The default dense path also completed true last-only **512×512/5s** and first/last
-**640×352/10s** controls, delivering 120 and 240 frames with audio. Request times were
-**48.04 / 61.25 seconds**, initialization separately **87.89 seconds**. The first/last
-example retained an approximately half-second endpoint hold; fine texture and motion
-limitations remain. These are bounded execution measurements, not a broad quality
-guarantee or a production-default change. Smaller-face and complex-action quality
-remain unqualified.
-
-### Explicit Sol comparison
-
-Only these original v0.1 keyframe profiles additionally accept
-`attention_backend="sol-sm89"` on a single SM89 GPU, with the pinned Sol dependency
-and block-ring residency. `auto` **still selects `torch-flash` for v0.1**;
-the single-SM89 official Base16 default is unchanged. Other Turbo models and SM86
-do not inherit this opt-in. Sol execution is approximate, reported explicitly and never
-silently falls back to dense.
-
-Three matched 960×544 five-second controls took **95.79 / 86.30 / 88.84 seconds**
-with Sol, excluding initialization (75.40 seconds). They took about **20–24% longer**
-than the dense controls above, including later warm requests. Each performed four
-evaluations and 200 Sol operator calls. Sampled visual review did not establish a
-compensating quality benefit; existing object-contact limitations remained.
-This is why Sol is optional here, not a speed recommendation. Do not extrapolate this
-bounded result to larger canvases or the official 16-step model.
-
-The same Sol session also completed true last-only 512×512/5s and first/last
-640×352/10s requests, delivering 120 and 240 frames with fully decodable audio/video
-in 61.82 and 80.10 seconds. Endpoints are passed as actual conditioning, not reversal
-or pasted frames. These are execution measurements, not blanket endpoint-fidelity,
-motion-quality or audio-semantic guarantees.
-
-## 544p-trained eight-step keyframes (preview)
-
-`i2va-turbo8-544-exact-sm89` and `fl2va-turbo8-544-exact-sm89` bind the distinct
-LightX revision `3ec17a324ced54151364f24f8b5fb6bf7e26414f`, file
-`minimax_h3_fl2v_turbo_8step_v1.0_bf16.safetensors`, rank 128 / alpha 8 and
-video/audio shifts **12 / 3**. They do not reuse the 768p adapter or its 6 / 3 grid.
-Both profiles share the same model identity and accept first-only, last-only and
-true first/last requests. Last-only conditioning is not video reversal.
-
-One RTX 4090 48 GB completed two 768×320 I2VA requests and a true 512×512 last-frame
-request, each five seconds / 120 delivered frames, in one reusable pipeline. See the
-[bounded comparison](./benchmarks#native544) for timings and quality limits. These optional
-profiles do not change defaults. A separate 640×352 true FL2VA request also delivered
-ten seconds / 240 frames using the same compiled artifact. Exact names describe attention, not Base16 equivalence
-or a blanket quality guarantee. Do not infer a single-SM86 complete pipeline from them.
-
-## Prepare Base16 I2VA
-
-Prepare and compile the pinned official Base transformer without `--adapter`, then build the ordinary six-field pipeline receipt. Its asset JSON sets `adapter_path` to `null` and supplies the official model and decoder directories plus the three compiled outputs.
+Resolve the profile on the actual hardware. Match the compiled artifact, schedule and auxiliary tensors to the same profile. Renaming a directory cannot convert one family into another. See [weight compilation](../guide/compile-weights) for a complete example.
 
 ```bash
-python -m vflash.compiler prepare \
-  --profile i2va-base16-bf16-sm89 \
-  --transformer models/minimax-h3/transformer \
-  --receipt base16-i2va-weights.json
-python -m vflash.compiler compile \
-  --receipt base16-i2va-weights.json --output models/base16-i2va-native --gpu 0
-vflash prepare-pipeline \
-  --profile i2va-base16-bf16-sm89 \
-  --assets base16-i2va-assets.json --receipt base16-i2va-pipeline.json
-vflash generate \
-  --prepared-assets base16-i2va-pipeline.json --prompt-file prompt.txt \
-  --first-frame first-frame.png --duration 10 --gpu 0 --seed 1234 \
-  --output video.mp4 --trust-local-code
+vflash profiles
+vflash plan ref2va-turbo8-exact-sm89 --gpu 0
 ```
-
-`--first-frame` is a frame-zero anchor, distinct from Ref2VA `--reference` inputs, and is exposed as `VideoRequest(first_frame=Path(...))` in Python. The prompt can label this image as `<Picture 1>`; labels beyond that single supplied image are rejected. Internally the official encoder uses its one-frame FL2VA conditioning path while the public request remains typed as I2VA. For two SM86 GPUs, use `i2va-base16-bf16-sm86` for both preparation commands and pass `--peer-gpu 1 --strategy sequence-head` when generating. One 928 × 512, 120-frame request completed in 281.2 seconds excluding cold initialization; one card entered software thermal slowdown, so this is feasibility and sustained-capacity evidence rather than a clean latency or quality claim.
-
-The SM89 Base16 profiles may instead reuse the same SM89 prepared assets on two matching 48 GB devices with `--peer-gpu 1 --strategy sequence-head`. A fixed 10-second 736 × 992 L2VA run was byte-identical to its single-device output and reduced successful request time by 37.4%; both 450 W devices remained at or below 78°C with no thermal-slowdown samples. The pair used 25.1% more two-device makespan for two serial outputs than two independent cards need for two parallel outputs, so this topology is intended only for an explicitly latency-prioritized request while the peer would otherwise remain idle.
-
-For a true two-anchor FL2VA request, either reuse a prepared Base16 I2VA keyframe pipeline for the same hardware or compile and prepare the explicit `fl2va-base16-bf16-sm89` or `fl2va-base16-bf16-sm86` identity. Then pass both keyframes:
-
-```bash
-vflash generate \
-  --prepared-assets base16-fl2va-pipeline.json --prompt-file prompt.txt \
-  --first-frame first-frame.png --last-frame last-frame.png \
-  --duration 10 --gpu 0 --seed 1234 --output video.mp4 --trust-local-code
-```
-
-The Python form is `VideoRequest(first_frame=Path(...), last_frame=Path(...), duration_seconds=10)`. The official FL2VA workflow receives the first image as `image` and the final image as `last_image`; the prompt labels them `<Picture 1>` and `<Picture 2>` in that temporal order. Supplying only `last_frame` creates an L2VA request: the official workflow receives only `last_image`, and the single image may be labeled `<Picture 1>`. For example, use `vflash generate ... --last-frame last-frame.png` or `VideoRequest(last_frame=Path(...), duration_seconds=10)`. Reusing the paired profile changes neither the loaded artifact nor the prepared profile ID; it selects the matching I2VA, L2VA or FL2VA conditioning contract for that request. One SM89 pipeline completed a same-process ten-second I2VA-to-FL2VA sequence at 640 × 352: both outputs decoded to 240 frames with ten-second stereo audio and the second request performed no repeated initialization. That bounded proof does not qualify L2VA, ten seconds at 928 × 512, or the SM86 pair. SM86 keyframe requests require the same two-GPU `sequence-head` topology.
-
-## Prepare dual 3080 generation {#sm86}
-
-Use the same official Ref4 files as in the [compiler recipe](../guide/compile-weights), but select `ref2va-turbo4-exact-sm86` when creating both receipts. Compile on one SM86 GPU; its timestep and modulation tables are specific to that target. Do not reuse a compiled SM89 pack.
-
-```bash
-python -m vflash.compiler prepare \
-  --profile ref2va-turbo4-exact-sm86 \
-  --transformer models/minimax-h3/transformer_ref \
-  --adapter models/adapters/minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors \
-  --receipt ref4-sm86-weights.json
-python -m vflash.compiler compile \
-  --receipt ref4-sm86-weights.json --output models/ref4-sm86-native --gpu 0
-vflash prepare-pipeline \
-  --profile ref2va-turbo4-exact-sm86 \
-  --assets ref4-sm86-assets.json --receipt ref4-sm86-pipeline.json
-vflash generate \
-  --prepared-assets ref4-sm86-pipeline.json --prompt-file prompt.txt \
-  --reference subject.png --reference setting.png --reference style.png \
-  --gpu 0 --peer-gpu 1 --strategy sequence-head \
-  --output video.mp4 --seed 1234 --trust-local-code
-```
-
-The six fields in `ref4-sm86-assets.json` use the new SM86 artifact, schedule and auxiliary paths. Encoders, decoders and source LoRA can share the same immutable files as SM89. Encoding and decoding run on the primary GPU; both GPUs cooperate in native denoising. The same topology rule applies to `i2va-base16-bf16-sm86` and `fl2va-base16-bf16-sm86`. The complete pipeline rejects single-SM86 and `tensor` execution before loading models. The native latent API retains both parallel strategies.
-
-## Prepare T2VA
-
-The released `t2va-turbo4-exact-sm86` profile uses the same Base4 v1.0 source
-files with two 3080s and `sequence-head`. SM86 compilation and the installed native
-session have completed application-owned encoding/core/media requests at five seconds
-928 × 512 and ten seconds 640 × 352, both 24 fps. This is the native integration boundary;
-the standalone `H3Pipeline` wrapper has not been rerun on the new profile and still has
-a five-second temporal contract. See [the evidence limits](./releases#earlier).
-It requires independent SM86 receipts and compiled tables; changing an SM89 or Ref
-artifact label is invalid. Single-card, `tensor`, and eight-step T2VA are excluded.
-
-For the new native SM86 profile, use `t2va-turbo4-exact-sm86` in the compiler preparation below and write separate SM86 outputs. After preparing compatible conditioning, run:
-
-```bash
-vflash denoise t2va-turbo4-exact-sm86 \
-  --artifact models/base4-sm86-native/artifact \
-  --schedule-overlay models/base4-sm86-native/schedule \
-  --auxiliary-tensor models/base4-sm86-native/auxiliary.safetensors \
-  --bundle inputs/t2-conditioning \
-  --gpu 0 --peer-gpu 1 --strategy sequence-head \
-  --output-latents output/latents.safetensors
-```
-
-The application supplies the matching conditioning bundle and decodes these latents; this command does not write an MP4. The SM89 example below retains the complete wrapper interface.
-
-Follow the [official-weight download recipe](../guide/compile-weights), selecting `t2va-turbo4-exact-sm89`. Then prepare the Base checkpoint and its exact pinned adapter:
-
-```bash
-python -m vflash.compiler prepare \
-  --profile t2va-turbo4-exact-sm89 \
-  --transformer models/minimax-h3/transformer \
-  --adapter models/adapters/minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors \
-  --receipt base4-weights.json
-python -m vflash.compiler compile \
-  --receipt base4-weights.json --output models/base4-native --gpu 0
-vflash prepare-pipeline \
-  --profile t2va-turbo4-exact-sm89 \
-  --assets base4-assets.json --receipt base4-pipeline.json
-vflash generate \
-  --prepared-assets base4-pipeline.json --prompt-file prompt.txt \
-  --output video.mp4 --gpu 0 --seed 1234 --trust-local-code
-```
-
-The six fields in `base4-assets.json` follow the [complete pipeline asset schema](../guide/complete-pipeline). Use the Base adapter and the newly compiled Base artifact, schedule and auxiliary paths. The official decoder directory and common encoders can be shared as immutable files.
-
-Omit `--reference` for T2VA. Its Python request is `VideoRequest(prompt=..., seed=...)`. Ref2VA accepts one to three references and preserves their order. Unbound `<Picture N>` labels and mode mismatches are rejected before execution.
-
-The Base adapter filename includes `fl2v`; this release qualifies it for T2VA, not first/last-frame generation. Newer Base4 adapters are not interchangeable with this pinned v1.0 profile. Revision, file hash and license links are in [runtime assets](./runtime-assets).
-
-## Resource lifetime
-
-Prepare and hash files once in their final location. Startup checks the resulting local receipt without rereading all model payloads. `H3Pipeline.prepare()` explicitly preloads the stages; otherwise the first request loads them after CPU input validation. Models remain owned for reuse. Stage placement follows the selected profile above. Preloading does not run conditioning or prepare every input shape. Report asset preparation, model loading, first request and repeated requests separately. Cancelling an active request retires the pipeline; create a new instance before further work.
-
-The [reference-video input](../guide/complete-pipeline#reference-video) uses the same single-SM89 Ref4 assets. It passed a complete image/video/image sequence without model reload. SM86 and Turbo8 video references remain outside the supported boundary.
-
-The explicit hybrid/Veda exception supports qualified 15-second and nine-image requests; see [joint limits](../guide/pipeline-conditioning#extended-hybrid). Other profiles retain the ranges above.

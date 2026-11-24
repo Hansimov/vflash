@@ -1,66 +1,13 @@
-# 参与开发
+# 开发并验证引擎改动
 
-Vflash 是可复用的推理引擎。产品账户、计费、私有提示词、机群凭据和网站代码都不属于本仓库。修改运行时
-边界前，请阅读 [`AGENTS.md`](https://github.com/Hansimov/vflash/blob/main/AGENTS.md) 的最新职责地图。
+## 准备工作区
 
-## 开发环境
+使用 Python 3.11 或更高版本，运行 `python -m pip install -e '.[dev,server]'` 后执行 `python -m pytest`。修改文档时，从仓库根目录执行 `npm ci` 和 `npm run docs:build`，同步更新中英文。
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -e '.[dev,server]'
-pre-commit install
+## 根据改动选择验证
 
-pytest
-pre-commit run --all-files
-npm ci
-npm run docs:build
-```
+用 CPU 用例验证输入格式、拒绝条件、资源归属及清理。数值或 GPU 改动还需记录实测设备、配置、种子、输入画幅、时长与音轨设置。完整解码成片，对照请求检查运动、外观和声音。公开记录应可复现，并保留上游署名。
 
-默认测试在收集用例前隐藏CUDA设备。硬件测试必须设置`VFLASH_TEST_CUDA=1`，并通过
-`CUDA_VISIBLE_DEVICES`明确选择已分配的单卡或卡组，在独立进程中执行；模型文件和生成媒体不能进入Git。
+## 发布升级
 
-## 一次只改变一个合同
-
-从固定 profile、artifact 和请求开始，明确改动属于数值算术、内存布局、加载、调度、媒体交付还是诊断。
-不要在 kernel 性能对照里同时改变 adapter、步数或精度。
-
-精确布局优化应先在代表性shape证明逐元素相等，再运行完整请求。近似必须具名并报告非精确，不能通过
-依赖环境的静默fallback引入。单SM89 Base16默认明确为Sol（自0.5.0起），保留prepared模型身份及显式dense选项；
-这是公开的版本行为变更，不代表完整媒体质量门关闭，也不允许顺带引入其他未验证的近似。
-
-适用时增加 fail-closed 输入检查和 CPU 参考路径。运行时 fallback 必须在结果元数据中可见，或者严格限制为
-保持语义的实现。
-
-## 目标硬件资格
-
-SM86 与 SM89 是两个独立目标，在一种架构通过不能替另一种完成资格验证。需要记录：
-
-- 精确源码 revision、依赖版本和 profile 身份；
-- GPU 型号/数量和拓扑类别，但公开材料中不放设备 UUID；
-- 冷准备和重复请求耗时分开；
-- 同一卡组上的 A/B/A 或重复测量；
-- 设备/主机内存峰值、持续温度和实际热降频；
-- 完整输出、清理与取消行为；
-- 所有算术近似的解码多帧和音频证据。
-
-kernel 计时只能证明机制，不能直接成为端到端结论。双卡单请求延迟与相同卡数的 replica 吞吐必须分开。
-
-## 公开证据与隐私
-
-提交代码、测试、可复现的公开命令和聚合证据。不要提交凭据、私有媒体、提示词、服务配置、主机名、设备
-UUID 或应用专用存储路径。迭代时避免反复哈希大型模型文件，应使用固定 source manifest 和一次性准备 receipt。
-
-实现受到上游工作的启发时，应固定复核版本、保留许可证并明确致谢；文档要区分已采用和仍未合格的机制。
-
-## 发布检查
-
-打 tag 前：
-
-1. 运行聚焦测试、完整 CPU suite、隐私 hook 和双语文档构建；
-2. 从 clean checkout 安装包并重跑公开 CLI smoke；
-3. 确认 README、Pages、CLI profile 和版本元数据描述同一边界；
-4. 记录目标硬件证据，不声称未测试架构或 shape；
-5. 对一个不可变 commit 打 tag，并在 release notes 区分精确、近似与实验行为。
-
-模型 checkpoint 继续遵循各自许可证，且永远不作为 release asset 发布。
+向用户提供兼容的新能力时使用次版本号，兼容性修复使用补丁号。预发布用于范围明确的测试。在干净环境中安装构建的 wheel，核对版本与标签，再发布正式 GitHub Release，验证 Latest 入口。调用方式有变化时说明迁移步骤。模型与镜像继续各自管理版本。

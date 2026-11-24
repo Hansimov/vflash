@@ -1,129 +1,24 @@
-# How Vflash works
+# Inside the inference engine
 
-Vflash owns the native H3 transformer, LoRA residuals, schedule updates and output heads in PyTorch and Triton. The complete Ref4/T2VA Python pipeline also coordinates explicit official encoder/VAE adapters and MP4 delivery. It does not import the LightX2V inference framework.
+A complete film crosses three ownership boundaries: conditioning, denoising and media delivery. The API you choose determines which boundaries Vflash owns.
 
-## Request, media and application boundaries {#media-boundaries}
+## From inputs to frames {#data-path}
 
-Complete `VideoRequest` and original `PikaFlexRequest` expose a common immutable
-`ConditioningInputs` view. Temporal first/last anchors are distinct from ordered
-image/video/audio content references. Their mode, local path checks and per-kind
-labels come from this shared contract; the complete and original Pika input
-readers consume that same ordering.
+The complete pipeline validates the request against its profile, encodes prompt and media, samples video and audio latents, then invokes VAEs and encodes the MP4. A native session starts at already compiled conditioning and returns the sampled latents. Pika and Remake have their own execution contracts and asset inventories.
 
-`ReferenceLimits` belongs to each recipe. The complete request still allows at
-most one video with three appearance images and no reference audio; the original
-Pika release declares its own 9-image / 3-video / 3-audio allocation with a total
-of 12. Both require a visual reference when audio conditioning is supplied.
-The prepared Pika reference session keeps its narrower image-only qualification.
-A shared input type does not enable a new encoder, sampler or GPU envelope.
+## Where to change the code {#sessions}
 
-Applications resolve uploaded assets, analysis-only media, person identities,
-shot boundaries, output formats and durable workflow dependencies before calling
-the engine. Vflash receives explicit local model conditions and owns their
-encoding and execution lifetime. Accounts, prices, procurement and long-video
-job recovery stay outside this package.
+| Concern | Source |
+| --- | --- |
+| Supported profile and device placement | `catalog.py`, `contracts.py`, `planner.py` |
+| Weight conversion and integrity | `compiler/`, `model_assets.py` |
+| Native model operations and lifecycle | `native/` |
+| Request composition and stage lifetime | `pipeline/` |
+| Encoder and decoder integration | `adapters/`, `media/` |
+| HTTP admission and output retrieval | `server.py` |
 
-## The data path {#data-path}
+Keep model math independent of service transport. The application owns identity, billing, user history and durable scheduling.
 
-```text
-Compiled weights + adapter + schedule
-                    ↓
-Conditioning bundle → Native session → Video and audio latents
-```
+## Measure each boundary
 
-The conditioning bundle contains encoded text and references, token layout and initial noise. The native session remains usable on its own. For Ref4 and T2VA on SM89, the optional complete pipeline surrounds it with pinned Diffusers/Transformers encoding, official video/audio VAE decoding and FFmpeg delivery:
-
-```text
-Prompt + optional images → Official encoder adapters → Native core → Official VAEs → MP4
-```
-
-The weights compiler starts separately from the selected official raw weights and fixed LoRA. It packs unchanged BF16 matrices and precomputes the exact fixed-schedule AdaLN tables. Model preparation contains no reference image or request capture. Base and LoRA identities remain explicit and separately bound.
-
-Model, adapter, schedule and hardware identities must agree. Changing a profile name does not convert its assets or change the mathematics of its compiled request.
-
-## One owner at each layer {#sessions}
-
-| Layer | Owns | Lifetime |
-| --- | --- | --- |
-| CLI or HTTP service | Validation, job status and output paths | Command or server process |
-| Complete Ref4/T2VA pipeline | Encoder/VAE stages, native session and temporary media | Reused across serial video requests |
-| Native session | One fixed profile, GPU group and loaded runtime | Reused across serial requests |
-| Request execution | Conditioning tensors, working latents and progress | One call to `generate` |
-
-`native/runner.py` is the common session entrypoint. `native/h3_native_conditioning_runtime.py` connects validated inputs to the mathematical modules. The HTTP service delegates CUDA work to a spawned worker process; it does not build a second model execution path.
-
-Use `NativeEngineSession` as a context manager, or close it explicitly. Closing first waits for the session's device group, then closes communication and releases owned weight references. Retaining the closed Python object does not retain those weights. The process still owns its CUDA context and allocator caches; exiting the worker releases them.
-
-The HTTP worker exits after a failed trajectory. Python callers should close a failed session and never resume it. If device completion or cleanup cannot be confirmed, terminate its worker rather than reuse that CUDA context. The service's in-memory job records are separate from this execution lifetime; an application supplies durable storage, authentication and fleet scheduling.
-
-## Loading weights once {#loading}
-
-A tensor store indexes an immutable safetensors file without retaining an open file descriptor. Grouped reads validate the requested shapes, then fill the final CPU tensor storage directly. They avoid repeatedly parsing the same header and allocating an intermediate byte buffer followed by a clone. Each returned tensor owns its storage and remains valid after the file is closed.
-
-Block streaming uses a different, scoped path: a temporary memory map supplies the compiled block, then tensors are copied into a shared segmented pinned-memory arena before the map closes. The arena spans blocks, reducing allocation padding. Large payload hashes are checked when assets are published; workers retain format, identity and size checks without rehashing the entire model on every request.
-
-The complete pipeline has a narrower trusted boundary between its official encoder and native denoiser. Because both stages are serial owners in the same process, a newly captured request uses a validated one-shot tensor handoff instead of a temporary conditioning file. The handoff is revalidated before consumption and releases tensors that the native stage does not need. Persisted and cross-process conditioning still uses manifests and content hashes.
-
-## Choosing memory placement {#memory-strategies}
-
-On a **4090 with 48 GB**, the default is resident weights. Python integrations can select `weight_residency="block-ring"` to leave more VRAM for activations. Extra resident memory is useful only when it improves your workload; measure the first request and repeated requests separately.
-
-The complete Ref4/T2VA pipeline explicitly uses block streaming so encoders, the core and VAEs can take turns on that GPU. This is a pipeline memory choice; it does not change the standalone native session's default.
-
-On a **3080 with 20 GB**, weights remain in pinned system memory and stream through two device buffers. Copy events mark a buffer ready; compute events prevent its reuse until the previous operation finishes. The session reuses these resources across requests.
-
-The two strategies share the same numerical execution interface. They do not promise equal performance or bitwise equality across GPU architectures.
-
-Fused elementwise kernels select 32-bit or 64-bit indices from the tensors' shapes and strides. The check covers strided AdaLN views and packed FFN/QKV inputs, whose addressed span can exceed the logical output size. Large offsets are widened before multiplication; smaller tensors retain the 32-bit specialization. This changes address calculation, not BF16 operations or rounding order. Safe indexing does not establish a workload's VRAM capacity or complete-pipeline support.
-
-## Two GPUs for one request {#parallel}
-
-For a 3080 service focused on request latency, start with two GPUs using `sequence-head`. The caller selects the peer explicitly. A single-GPU session remains available; Vflash never acquires another GPU automatically.
-
-A paired session owns two device rings, two submitting CPU threads and a local NCCL group. `sequence-head` shares one host weight store, divides token rows for projections, then exchanges attention data so each device processes complete sequences for its assigned heads. `tensor` instead streams weight shards and reduces partial projections, including the LoRA branches. No global `torch.distributed` group or distributed launcher is required.
-
-The exact `sequence-head` path carries Q, K and V in four overlapped collective chunks. Direct
-Triton relayouts read the normalized tensors through their strides and write the destination-major
-send buffers once. The return path likewise merges four received buffers directly into global head
-order. This preserves the existing BF16 values and NCCL wire format while avoiding materialized
-stack, permutation and concatenation intermediates. It is independently exercised on SM86 and
-SM89; see [Sol-Engine alignment](./sol-engine-alignment).
-
-Both strategies preserve the complete profile and use event-protected buffers. A rank failure aborts its peer. Partitioning changes floating-point reduction order, so parallel output need not be bitwise identical to single-GPU output. See the [measured scope](./performance#parallel).
-
-Only Base16 I2VA/L2VA/FL2VA on two matching SM89 48 GB devices use the same block-ring `sequence-head` implementation. Other SM89 profiles and `tensor` are rejected. The caller must still select both devices explicitly. This is a bounded latency option, not automatic scheduling or a throughput default; two independent workers remain preferable when two requests are ready.
-
-## Optimization admission {#optimization-admission}
-
-Vflash separates semantics-preserving layout and lifetime work from approximate model execution.
-An exact optimization keeps the selected profile's attention, precision, schedule and BF16 rounding
-contract. It still needs target-hardware and complete-request validation; a faster microkernel alone
-is insufficient.
-
-Approximate attention, cross-step caches, quantized communication and lower-precision linear
-compute require new explicit profiles. They remain default-off until decoded video and audio,
-stability, latency and rollback all pass on each supported architecture. Upstream results on a
-different GPU or step schedule are hypotheses, not qualification evidence.
-
-## LoRA is part of the profile {#lora-execution}
-
-The released Turbo profiles preserve the original low-rank residual computations alongside the base weights. Their compiled adapter and schedule are fixed for the session. Switching adapters requires compatible resources and a new session; it is not an unchecked per-request option.
-
-Exact attention describes an implementation choice. It does not mean that a distilled Turbo profile has base-model quality. Judge a generated result against the task and references, not only against tensor similarity.
-
-### Activation adapter layouts
-
-Development source separates original tensor naming and scaling in
-`adapters/h3_lora_layout.py` from hook/device ownership in `H3ActivationAdapter`.
-Existing LightX, Larry and Pika layouts keep their own coverage and scale.
-The explicit `akatz-v1.5` layout accepts the complete rank-16
-[original character adapter](https://huggingface.co/akatz-ai/MiniMax-H3-Character-Swap-LoRA):
-208 A/B pairs map to 312 projections, with QKV splitting and SwiGLU gate/value
-ordering. Incomplete pairs, foreign projections and incompatible shapes fail
-before use; failure removes installed hooks. CPU devices can be selected for
-numerical checks, while existing callers retain their CUDA placement.
-
-This is an activation-adapter primitive, not a released character-swap pipeline.
-It does not implement masks, the author's eight-step sampler or long-video
-continuations. Activation-space BF16 arithmetic also does not establish parity
-with merged or quantized weights. Complete workflow qualification remains separate.
+Record initialization separately from repeated calls. Keep the same assets, device, seed, input and decoder while comparing a kernel change. Check delivered picture and sound as well as intermediate numerical error. See [performance measurements](./benchmarks).

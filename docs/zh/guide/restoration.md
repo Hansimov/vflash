@@ -1,92 +1,9 @@
-# 可选视频增强
+---
+search: false
+---
 
-增强独立于H3生成，**默认关闭**。保留原视频，增强另存；STCDiT能够减少坏纹理，也可能软化或改绘细节，
-不能称为无损修复。推理核心不包含账号、计费、任务调度或自动坏帧检测。
+# 放大已完成的视频
 
-## FlashVSR v1.1可选高清放大
+FlashVSR 用单独的源码与权重放大成片。输出写入新文件，按原始像素尺寸对照纹理、人脸、文字和运动。较早的 STCDiT 实现用于同尺寸修复。两者都可能重新绘制局部细节。各自的固定版本、许可、显存设置与调用示例见下方配方。
 
-```bash
-vflash upscale-video --input original.mp4 --output enhanced.mp4 \
-  --source /models/ComfyUI-FlashVSR_Ultra_Fast --weights /models/FlashVSR-v1.1 \
-  --scale 2 --trust-local-code
-```
-
-显式提供[RTX适配源码](https://github.com/lihaoyun6/ComfyUI-FlashVSR_Ultra_Fast)
-`4820b3f02347bddcbbb9a5a85ab7638fe976366e`的干净checkout，以及
-[官方权重](https://huggingface.co/JunhaoZhuang/FlashVSR-v1.1/tree/27561b186ded3402d7c975f4fd722e2885b6135f)
-中的`diffusion_pytorch_model_streaming_dmd.safetensors`、`LQ_proj_in.ckpt`、`TCDecoder.ckpt`。
-不自动下载；固定源码与文件大小仅是清单检查，不是权重内容认证。仅加载Apache-2.0的`src`，
-不导入或复制GPL的ComfyUI外层；Sparse Sage保留自身Apache声明。
-
-Python入口为`vflash.flashvsr.FlashVSR(source, weights, trust_local_code=True).enhance(input, output, scale=2)`。
-调用方独占、串行管理CUDA设备和进程。独立可选环境需Torch/torchvision/Triton/NumPy/Pillow/
-einops/safetensors/tqdm及系统FFmpeg/Git；本轮实测Torch2.9.1/cu130、RTX4090 48GB。
-真实局部稀疏自注意力保留，文本交叉注意力明确用Torch SDPA；没有悄悄丢弃LCSA或误用缺少SM89的Sage包。
-
-明确支持2/4倍，官方主要针对4倍训练。输入限1Mi像素/CFR/十秒，输出限4Mi像素。
-补尾后还原完整源帧数，边缘padding代替裁图，保持精确倍率/原音轨，独立原子另存且不覆盖旧结果。
-进度回调可抛异常取消，调用方负责GPU和进程生命周期；不改变H3默认生成。
-
-五完整片的处理耗时（加载另约11.7–11.9秒）：512²五秒→1024²为22.85秒；768×448五秒→1536×896
-为29.02秒；960×544五秒→1920×1088为39.89秒；512²五秒→2048²为72.36秒；1280×768十秒→2560×1536
-为134.46秒。峰值分配显存11.5–35.9GiB。全部完整帧与解码PCM一致。
-原尺寸局部观察边缘/纹理改善，也有细节重绘；不是高清真值、小脸/物理根治、重复正式基准或全场景时序保证。
-大画布与4倍成本更高，故保留按需调用。
-
-## 既有同尺寸STCDiT增强
-
-完整入口为 `vflash restore-video`，显式传入 `--source-video`、新的 `--output`、
-`--runtime-code`、`--weights`、`--caption-file` 和 `--trust-local-code`。
-Python入口为 `vflash.restoration.restore_video`：解码、完整运动分段、增强并原子另存MP4，
-复制原音轨packet而不重新编码音频。视频画面为单独H.264有损编码；已有目标文件不会覆盖。
-该命令不自动借用GPU；由调用方分配设备并负责进度/取消与产品状态。
-
-安装 `vflash[pipeline,restoration]`，按[英文运行说明](../../guide/restoration.md)准备固定版本的
-作者代码、Wan1.3B基座、UMT5、VAE和tiny适配器，在单张已分配CUDA设备的隔离进程中使用
-`vflash.adapters.stcdit_runtime.LocalStcditTiny`。必须显式 `trust_local_code=True`；不自动下载或
-打包第三方代码/权重。权重页声明Apache2，作者代码包元数据含Apache标记但缺少完整根许可文件，
-这些外部载荷的来源/许可应独立保留，不能称由vflash重新授权。
-
-输入为原24fps时间轴的RGB帧、观察描述和覆盖全部帧的半开运动分段。增强固定BF16、10步、CFG1、
-shift5、原尺寸和PyTorch注意力，不影响H3的Sol默认。校验帧数、尺寸和分段；调用前复制原图，
-不改原音轨。返回增强帧，由产品以独立结果保存。已加载兼容管线可用 `StcditTinyRestorer` 直接适配。
-
-可显式使用 `--memory-policy resident`（Python：`memory_policy="resident"`），让VAE、文本编码器
-和DiT驻留同一已分配GPU，直到关闭运行时。不改变步数、注意力、分段或精度；显存开销更高，
-不自动降级，也不表示24GB显卡已资格。默认仍为 `offload`。
-单张4090 48GB/350W上，17帧864²匹配探索实测为107.76秒，对照卸载124.87秒；
-17帧RGB逐像素一致，峰值已分配张量18.23GiB。仅为一次短窗结果，不是重复延迟基准或全片倍率。
-另两条完整5秒928×512正常动作片，各120/120解码RGB一致，原音频/时钟不变；
-这验证对应场景的放置等价，不表示任意内容等质或全片匹配提速倍率。
-
-### 显式SM89近似注意力
-
-`--attention-backend sage-int8-fp16`（Python：`attention_backend="sage-int8-fp16"`）
-使用SageAttention2的INT8 Q/K量化、key smoothing和FP16 P/V计算。仅限SM89，属于近似路径，
-与H3 Sol无关；默认仍为`torch`。只修改隔离的STCDiT提供方模块，不全局替换PyTorch或其他模型。
-FP16数值越界会显式失败，不静默切换后端。需自行安装ABI匹配的
-[SageAttention2](https://github.com/thu-ml/SageAttention)，本次实测固定源码为
-`d9704247a5139ab4c03bf7fc6b35cc0e2cbb5ea4`，不内置或自动下载；Ada不能替换为仅限Blackwell的Sage3。
-显存允许时可与`--memory-policy resident`组合。
-
-4090 48GB/350W同卡17帧864²探索对照：Sage103.33秒，原生/卸载124.87秒，恢复阶段减少17.2%。
-保持10步、seed、描述与原分段。450W完整10秒240帧组合Sage+驻留：恢复813.45秒，
-文件到文件851.63秒；旧原生/卸载恢复1090.70秒，即计算阶段观察到25.4%减少。
-这不是匹配的服务端到端结论：未重复，全片候选与另GPU实验共享主机，旧总耗时的解码/RGB保存边界不同。
-峰值已分配张量20.40GiB。240帧完整解码，原音频/时钟一致；76个时间点的非盲三联检查
-未见新增明显结构破坏，但原有快动作模糊/细节改绘仍在，且RGB不完全相同。
-只支持显式按需试用，不宣称普遍等质或坏帧根治。
-
-两个17帧864²区间实测恢复/保存约127–130秒，另计加载与描述。设备采样最大约11.55GiB。
-都来自同一影片：网格减少，但快动作仍虚、装饰细节变化。适配器同输入17帧与直接运行RGB完全相同，
-只证明适配层一致，不代表全片根治。240帧/1,048,576像素是输入上限，不是任意尺寸或SM86资格声明。
-
-随后完整240帧、864×864、24fps在单张RTX4090 48GB（450W上限）完成：BF16/10步/CFG1/shift5、
-原生注意力/CPU卸载，101段覆盖全部帧。增强计算1,090.70秒，模型加载9.00秒；
-加载/增强/RGB保存/MP4交付合计1,177.38秒，不含输入解码、描述生成或服务排队。
-设备占用采样最大13,059MiB；增强片完整解码，10秒原时钟和解码音频样本完全保留。
-这是一条完整影片的实测，不是跨场景或SM86资格；应使用此数值而非短区间线性外推。
-
-带标签的离线正常时刻、四处坏区及切镜边界检查显示坏纹理减少，但快动作仍明显模糊、细纹发生改绘。
-清晰面部近景仍可辨认，不代表身份或全部帧质量认证。支持用户按需对比，不支持自动覆盖原片。
-实时播放观感、其他尺寸及服务接入仍需独立验证。
+[查看此实现的详细配方与测量记录](https://github.com/Hansimov/vflash/blob/v0.28.0a8/docs/zh/guide/restoration.md)

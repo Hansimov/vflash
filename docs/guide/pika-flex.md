@@ -1,23 +1,35 @@
-# Pika H3 Flex runtimes
+# Pika video generation and soundtrack selection
 
-The prepared `PikaAVRuntime` provides six visual evaluations with optional Larry10/12 native audio; see the [prepared path](#prepared-pika-av). The original `PikaFlexRuntime` retains upstream BF16 execution. Their precision, dependencies, inputs and hardware scope differ; the [interface guide](./runtime-selection) compares these boundaries.
+Choose the prepared runtime for repeated text or first-frame jobs on a complete 96 GiB SM120 device. Start with one five-second take before changing duration, canvas or audio recipe.
 
-[Reference recipes, encoding budgets and QAD weights](./pika-reference-weights)
+## Prepared Pika AV {#prepared-pika-av}
 
-## Original BF16 reference execution
+The Pika adapter performs six visual evaluations. Joint audio comes from the AV pass; Larry10 and Larry12 perform separate native audio refinement. A four-second request has a qualified Larry10 path. The Python constructor takes prepared visual and audio components, manifests and a text loader. Keep those assets bound to the same recipe.
 
-`PikaFlexRuntime` adapts the original [Pika release](https://github.com/Pika-Labs/Pika-H3-Flex)
-without changing the hybrid or segmented pipeline defaults. This initial adapter preserves the
-upstream staged BF16 implementation. The staged path has completed 5-second 480p text and first-frame generation on a
-96 GiB Blackwell PRO 6000. Other modes, larger canvases and serving integration remain
-unqualified; CPU contract checks do not establish GPU output quality or service availability.
+```python
+from vflash.pipeline import VideoRequest
+from vflash.pipeline.pika_av import PikaAVRecipe
+from vflash.pipeline.pika_av_runtime import PikaAVRuntime
 
-Use a separate Python 3.12 environment with the upstream pinned requirements and its two
-Diffusers patches. The existing `vflash[pipeline]` stack pins different dependencies: do not
-install both stacks into the same environment. Install vflash itself without its pipeline extra.
-The source checkout is pinned to `4bf8ea508891a432106e70f675d287c27f02306d`; its 22 Python/YAML
-files are checked against the packaged inventory before import. No code or models are downloaded
-by this adapter. Explicit local-code trust is required.
+# All paths, manifests and the text loader are explicit caller-owned components.
+runtime = PikaAVRuntime(**prepared_components, **pika_components, trust_local_code=True)
+try:
+    result = runtime.generate(
+        VideoRequest("A ceramic bird unfolds its wings.", width=960, height=544),
+        output_directory,
+        recipe=PikaAVRecipe(audio_steps=10, visual_attention="veda", overlap_decode=True),
+    )
+finally:
+    runtime.close()
+```
+
+## Choose the reference contract
+
+Use a first frame to fix the opening picture. For a new shot informed by appearance photos, use the [Pika reference runtime](./pika-reference-weights); it owns a separate Ref trunk. For a source film with an already-defined gesture, use [Remake](./remake).
+
+## Original BF16 implementation {#original-bf16-reference-execution}
+
+Use the original upstream environment to compare Pika output or integrate a released upstream FL/Ref model. Pin the upstream source and model files in that environment and release the runtime after the last request.
 
 ```python
 from pathlib import Path
@@ -39,252 +51,3 @@ try:
 finally:
     runtime.close()
 ```
-
-Assets use MiniMax H3 revision `42ed227ee7df40d41602854ae760620d6eb651fe` and Pika adapter
-revision `0ddf55ad7067ca1e76812253bd7b4600df87f759`. Each available adapter directory is named
-`fl2va` or `ref2va` and contains its original `manifest.json` and `adapter.safetensors`.
-FL handles text, first, last and both-frame input; Ref handles ordered content references.
-The upstream executor verifies the publisher's adapter hash before loading. Its metadata records
-local base overrides; the application must retain the base download/conversion provenance.
-
-The release always generates video and audio jointly, with six model evaluations. It uses
-knots `[1000,750,500,250,100,40,0]`, shifts 12/3 and fresh noise after the first five clean
-predictions. A six-step Euler schedule is a different algorithm. No Larry audio pass is added.
-FL uses BF16 conditioning and Ref uses FP32 conditioning. The adapters have rank and alpha 128.
-
-The local release exposes 480p/768p buckets, eleven aspect buckets, integer 5–15-second
-requests and 24 fps. Output retains the model's aligned `17n+5` frame clock, so a five-second
-request emits 124 frames. Application trimming/cropping and display geometry must be recorded
-separately. This adapter does not claim native 4K, arbitrary canvases, separate audio stems or
-seamless extension. A failed request poisons this runtime; tear down its dedicated process
-before retrying. Existing output files are never overwritten.
-
-Pika code is Apache-2.0. The adapters are Model Derivatives under the MiniMax H3 Community
-License Agreement. Keep the upstream LICENSE, NOTICE, modification notices and model licenses
-with any distributed assets. The integration contains release identities, not model weights.
-
-## Opt-in component reuse
-
-`reuse_components=True` retains one original BF16 transformer partition and one original FP32
-VAE pair. Before text encoding or decoding, the transformer moves to CPU; text weights load
-onto their target device without materializing a second full CPU model. Changing FL/Ref releases
-the previous trunk. Adapter injection/loading runs once for a retained trunk; changing the
-adapter file or configuration rejects reuse. Sampling, conditioning precision and native audio
-remain the original six-step computation.
-
-This option is a lifecycle candidate: CPU tests cover reuse, partition changes, exact small-tensor
-values, failure cleanup and restored hooks. Full-weight GPU memory, quality and latency validation
-is still pending. It cannot be combined with `cpu_offload=True`. Use a dedicated process; all
-`PikaFlexRuntime` calls in that interpreter share a nonblocking owner lock. `close()` releases
-retained components. Results include `component_reuse` and load/reuse counters in `component_stats`.
-
-The reusable activation adapter also accepts explicit `kind="pika"` with the original release
-manifest. It validates all 312 rank-128 pairs, retains the original parameter names, uses
-alpha/rank=1 and casts stored FP32 adapter tensors to BF16 as the released PEFT loader does.
-It never applies LightX's fallback alpha. Partial installation failures remove all hooks.
-This is a loader contract, not qualification of a quantized six-step generation pipeline.
-
-`PikaSamplingClock` consumes separately prepared FL text/keyframe projection tables. It verifies
-the original six timestamps, FP32 time embeddings, BF16 modulation and all 312 table entries
-before use, and checks each actual model call. The table recipe is independent of a final audio
-recipe; changing it never turns the Pika denoiser into an Euler sampler.
-
-The native fixed-picture audio adapter can represent a text-only source with `condition_rows=0`.
-It adds the clean-video clock before projection validation, preserves text/audio times and retains
-all source video times when using spatial conditioning. It creates no first-frame image. CPU
-checks cover row/clock mapping, source-picture preservation and cleanup; complete GPU audio
-quality for a Pika/Larry combination still needs its own qualification. The existing first-frame
-audio path and the optional original Pika runtime retain their separate identities.
-
-
-## Prepared Pika picture with native Larry audio {#prepared-pika-av}
-
-The optional `vflash.pipeline.pika_av_runtime.PikaAVRuntime` reuses the explicit
-original-FL row-FP8 components accepted by `ReferenceAVRuntime`. It replaces the
-segmented session with one exclusively owned Pika session. Supply `pika_source`,
-`pika_adapter`, `pika_manifest` and `pika_tables` in addition to those components;
-`trust_local_code=True` validates and imports the pinned Pika sampler source.
-No model location, GPU rental or product default is inferred.
-
-```python
-from vflash.pipeline import VideoRequest
-from vflash.pipeline.pika_av import PikaAVRecipe
-from vflash.pipeline.pika_av_runtime import PikaAVRuntime
-
-# All paths, manifests and the text loader are explicit caller-owned components.
-runtime = PikaAVRuntime(**prepared_components, **pika_components, trust_local_code=True)
-try:
-    result = runtime.generate(
-        VideoRequest("A ceramic bird unfolds its wings.", width=960, height=544),
-        output_directory,
-        recipe=PikaAVRecipe(audio_steps=10, visual_attention="veda", overlap_decode=True),
-    )
-finally:
-    runtime.close()
-```
-
-This prepared path accepts five-second T2VA/I2VA and the bounded four-second Larry10
-scope below, with generated audio
-and decoded keyframes. It runs the original six-step re-noising schedule with the
-unmerged Pika FL adapter; `audio_steps=0` keeps that joint soundtrack, while 10 or
-12 explicitly selects a Larry native soundtrack over the frozen picture. Prompt
-and first-frame embeddings are reused within the request. The visual fused-QKV
-storage is released before audio and optional video-decode overlap. Execution
-counts, attention, conditioning reuse, memory and complete-call timings are returned.
-
-The original BF16 Pika pipeline above remains separate. Prepared row-FP8 weights,
-Veda attention and spatial video-KV audio reuse are approximate choices; six visual
-forwards plus ten audio forwards is not a six-forward complete request. Initial
-five-second hardware evidence covers a full 96 GiB SM120 PRO 6000 and 960×544 / 832×480 five-second
-clips. Other admitted canvases are not a broad quality or memory qualification.
-Reported generation time excludes model initialization and application publication.
-No sub-25-second 0.5 MP end-to-end guarantee is made. Ref2VA, longer clips, omitted
-joint audio and exact endpoint repainting are not implemented by this prepared path.
-
-### Bounded decoder tile batches
-
-`PikaAVRecipe(decode_tile_batch_size=4)` optionally batches equal-size spatial decoder
-tiles for five-second canvases up to 960×544 on the prepared SM120 runtime. The default
-remains 1; 2 and 4 are explicit options. Original tile positions, temporal decoding and
-overlap composition are preserved, and the instance hook is restored after the request.
-
-Four short-scene trials on one PRO 6000 Server 96 GiB at a 600 W limit retained identical
-generated video/audio latents and decoded audio. FP16 batch-dependent decoding and
-encoding changed 8-bit pixels slightly (mean absolute differences about 1.3–1.8/255);
-inspected temporal frames and detail crops showed no evident new structural degradation.
-One repeated-input warm control bracket supported about 0.7–1.1 seconds saved in a
-roughly 30-second complete resident call. Other scene pairs also include first-use/cache
-differences. Initialization, orchestration and upload are separate; these trials do not
-establish a sub-25-second delivered result or qualification above that canvas size.
-The response records actual tile batch groups in `decode_tile_batches`.
-
-### Strict rotary execution (opt-in)
-
-This optional source path is included from 0.25.0; it was absent from the pinned 0.24.0 package. It remains disabled by default.
-
-`PikaAVRecipe(strict_rotary=True)` opts into the existing strict BF16 split-half rotary
-kernel in both visual and native audio stages. The default is false. This changes execution,
-not the sampler, model weights or audio recipe. The scoped hook restores the source function
-on success or failure; CPU, other dtypes and gradient-enabled calls use the original function.
-Execution receipts count fused calls, reference fallbacks and required contiguous copies.
-
-Four five-second T2VA/I2VA pairs at 960×544 on one 450 W PRO 6000 Workstation, using Pika6,
-Larry10, Veda and native VAE tile batches of four, retained identical video latents, all
-120 decoded RGB frames and decoded PCM audio. A similarly warmed phase-first control took
-52.115 seconds versus 51.462 seconds with fusion. Larger cross-case differences also include
-conditioning-cache and warm-up effects, so they are not an isolated rotary speedup. These
-complete engine-call times exclude procurement, initialization and application delivery.
-The existing generation-quality limitations remain; pixel equality establishes this execution
-change's equivalence on the tested cases, not general content quality.
-
-### Staged text conditioning
-
-`PikaAVRuntime(..., text_encoder_residency="staged")` retains original CPU text
-weights and uploads them only while computing input conditions. The resulting
-conditions stay on the device; the encoder returns to its original CPU storages
-before visual and native audio sampling. Weights, precision, prompt conditions
-and audio spatial sampling remain unchanged. The default is `"resident"`.
-
-The staged option requires a CPU `text_loader` and additional retained host
-memory. It reports upload time, CPU restore time and released device bytes under
-`conditioning.text_residency`. For memory-constrained large requests, combine it
-with `PikaAVRecipe(overlap_decode=False)` so decoding runs after audio rather than
-competing with its KV cache. Existing canvas, runtime and KV memory checks still
-apply. One 96 GiB SM120 trial completed five 5-second requests, including two
-1080p first-frame requests, releasing about 29.18 GB of text-encoder device
-storage per request. A matched first-frame control was byte-identical; a text
-control preserved decoded video frames but had a small audio difference with
-unmatched first/warm ordering. Broader quality and production adoption remain pending.
-
-### Encode the delivered canvas once
-
-`PikaAVRuntime.generate(..., video_crop=(left, top, right, bottom))` applies
-even pixel offsets to decoded RGB before encoding. It leaves model geometry,
-conditioning, generated latents and audio samples unchanged. The default is no
-crop. `OfficialMediaDecoder.generate_mp4` exposes the same option and records
-source and delivered dimensions in `media.video_crop`.
-
-This avoids relying on left-offset H.264 display cropping: some decoders round
-or ignore unaligned left crops. A real Chromium CPU fixture reproduced a
-90-pixel request being displayed as 92 pixels with metadata cropping; cropping
-before the single encode displayed the requested 90 pixels and preserved the
-encoded AAC packets. Three 5-second 720p first-frame requests subsequently
-completed on a 96 GiB SM120 device, covering portrait and landscape delivery.
-Chromium played all three at their exact target dimensions. Their AAC packet
-sequences matched the previous 0.23.1 controls. Sampled face crops showed no new
-detail change. This qualifies the delivery correction; it does not establish a
-new motion-quality or complete-workflow latency claim.
-
-### Prepared reference components (since 0.25)
-
-The prepared projection loader now accepts an explicit `partition="ref2va"`.
-Its manifest binds `transformer_ref`, the released Ref adapter identity and
-`fp32_conditioning_v1`; FL tables cannot be selected for that partition. Visual
-reference rows keep their 0.999 clock, while reference audio adds the clean 1.0
-clock. Both variants retain the original six renoising evaluations.
-
-`validate_cached_structure` and `load_cached_trunk` accept an explicit
-`trunk="transformer_ref"`; their default remains `"transformer"`. Loading onto
-`device="cpu"` can retain original CPU storages before a caller-owned upload.
-Frozen projection descriptors preserve their one-element storage during device
-moves, instead of materializing the original large projection matrices.
-
-These are preparation and residency primitives, covered by CPU storage and
-partition checks. They do not expand `PikaAVSession` beyond its qualified T2VA
-and I2VA modes or qualify Ref2VA speed, mixed Larry audio or generation quality.
-The separate original-precision Pika reference pipeline retains its existing
-Ref2VA request contract.
-
-
-The candidate also exposes ordered image-reference conditioning over the pinned
-Pika geometry rules and the original FP32 VAE encoder. It retains image roles,
-reference order, FP32 latent values and the absence of temporal keyframes.
-The upstream bucket rule places 1280×736 and 736×1280 in the p768 tier, which
-encodes image references at a 2048-pixel short edge; 960×544 uses 1024.
-The geometry follows the pinned source. Separate prepared Ref GPU scope is documented in
-[the complete pipeline](complete-pipeline#experimental-pika-image-reference-runtime).
-
-
-### Separate Ref picture and FL soundtrack candidate
-
-`vflash.pipeline.pika_reference_runtime.PikaReferenceAVRuntime` now provides a
-complete runtime, available since 0.25, over explicit Ref base/tables/adapter and the
-existing FL/Larry components. It preserves the original FP32 image conditioning
-and six Ref sampling evaluations. The optional ten/twelve-step soundtrack runs
-on the distinct FL model with its own text-only conditioning and frozen picture
-KV context; generated video latents must remain exactly unchanged.
-
-CPU master storages let one transformer occupy the GPU at a time. Receipts
-separate model upload/suspend, reference and audio conditioning, sampling and
-media delivery. This candidate uses native VAE batch one without overlapping
-picture decode. It bounds requests to five seconds, 1 MP and ordered image
-references; video/audio references remain outside this candidate.
-
-CPU session tests exercise actual stage ownership, forward counts, changed
-picture rejection and cleanup failures. They do not establish GPU memory fit,
-latency or media quality. Separate Ref execution has completed five-second, 1 MP, one/two-image and Larry10 delivery
-on complete 96 GiB SM120 allocations; see the [measured scope](complete-pipeline#experimental-pika-image-reference-runtime).
-That scope does not extend FL-only `PikaAVRuntime` or automatically change application admission.
-
-## Native four-second and exact 768P scope
-
-Version 0.27.0 provides `validate_pika_av_request(request, recipe)` in
-`vflash.pipeline.pika_av`, using the same CPU admission as the prepared session.
-`VideoRequest(duration_seconds=4)` with `PikaAVRecipe(audio_steps=10)` retains the native
-24 fps clock: 96 delivered frames, 107 aligned model frames and 32 latent times. Spatial
-sound conditioning keeps every video time and all supplied first-frame condition rows.
-The scoped upstream minimum duration is restored on completion or failure.
-
-Four-second text/first-frame input is bounded to 1376×768 pixels, in either orientation;
-above the small-canvas batch limit use native single-tile decoding. Five-second first-frame
-input retains its independent larger software ceiling. `EncodedCanvas` can crop the aligned
-output to exactly 1366×768 or 768×1366 in the original encode; `setsar=1` declares square
-pixels without rounding a display-aspect fraction. Ordinary `H3Pipeline`, QAD and Ref do
-not gain this short-input scope.
-
-Complete GPU delivery on a 96 GiB SM120 allocation covers four-second portrait I2VA,
-five-second landscape I2VA and both four-second T2VA orientations at these model canvases.
-All outputs fully decoded and played, and two short spoken lines were reviewed as complete
-without evident new audio issues. Some framing and motion-completion failures remain.
-Service admission, queueing, procurement and delivered-latency qualification belong to the
-application; these results do not establish a universal quality or end-to-end speed guarantee.

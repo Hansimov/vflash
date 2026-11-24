@@ -1,8 +1,8 @@
 ---
 layout: home
-title: Vflash — native H3 video generation
+title: Vflash video inference engine
 titleTemplate: false
-description: MiniMax H3 inference with prepared Pika audio/video runtimes, fixed-profile complete pipelines and native latent execution. Each path has explicit model assets, input limits and hardware scope.
+description: Generate video with sound or edit source footage with MiniMax H3. Choose a runtime by input, output and tested hardware.
 ---
 
 <HomePage />

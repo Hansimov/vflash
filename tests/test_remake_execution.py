@@ -374,3 +374,54 @@ def test_source_with_anamorphic_pixels_is_rejected_before_submission(tmp_path, m
             timeout_seconds=5,
         )
     assert not state["posts"] and not state["stops"]
+
+
+def test_average_rate_cannot_hide_a_displaced_presentation_frame(tmp_path):
+    import shutil
+    import subprocess
+
+    from vflash.media.probe import probe_normalized_video
+
+    if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
+        pytest.skip("FFmpeg media tools required")
+    source = tmp_path / "constant.mp4"
+    jitter = tmp_path / "irregular.mp4"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=s=96x64:r=24",
+            "-t",
+            "4",
+            "-c:v",
+            "libx264",
+            "-bf",
+            "0",
+            "-threads",
+            "1",
+            str(source),
+        ],
+        check=True,
+    )
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-i",
+            str(source),
+            "-c",
+            "copy",
+            "-bsf:v",
+            "setts=pts='if(eq(N,21),PTS+96,PTS)'",
+            str(jitter),
+        ],
+        check=True,
+    )
+    assert probe_normalized_video(source)[0]["nb_frames"] == "96"
+    with pytest.raises(ValueError, match="presentation timestamps"):
+        probe_normalized_video(jitter)

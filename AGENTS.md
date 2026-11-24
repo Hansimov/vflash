@@ -20,7 +20,7 @@ and capacity qualification; `docs/guide/complete-pipeline.md` owns complete-requ
 face passes live in `docs/guide/pipeline-refinement.md`, and continuation contracts in `docs/guide/native-av-prefix.md`. Native sessions/HTTP return latents; Python/CLI complete pipelines deliver MP4s. Historical
 release notes and image inventories describe their exact versions, not current defaults or newly qualified GPUs.
 Keep English/Chinese installation commands, Docker examples and actual published image versions consistent.
-Use a minor release for a substantial compatible capability/integration update and a major release for a declared
+Publish stable user-facing releases as ordinary GitHub Releases with the verified wheel and Latest designation. Reserve alpha tags for explicitly requested previews. Use a minor release for a substantial compatible capability/integration update and a major release for a declared
 breaking public contract; reserve patch releases for bounded fixes. Do not expand quality claims from CPU checks.
 
 Install development dependencies with `python -m pip install -e '.[dev,server]'`. Use focused tests during iteration;

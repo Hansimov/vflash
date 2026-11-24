@@ -1,95 +1,16 @@
-# Runtime assets
+# Understand the four native inputs
 
-For the original-FL / Larry 4+6 picture and twelve-step native-audio runtime on a complete 96 GiB SM120 GPU,
-see [segmented AV](./segmented-av). It is an explicit Python API with its own assets;
-`H3Pipeline`, catalog profiles, CLI and native HTTP below retain their separate contracts and defaults.
-
-The latent CLI starts from compiled inputs. Ref4 and T2VA Base4 on SM89 also have a [complete Python pipeline](../guide/complete-pipeline) and an [official-weight compiler](../guide/compile-weights). Installing the package does not automatically download model weights or example bundles.
-
-The CLI contract below applies to developers supplying compatible compiled assets.
-
-## The four inputs {#inputs}
-
-| Input | Contents | CLI option |
+| Input | Files | Lifetime |
 | --- | --- | --- |
-| Weight artifact | `artifact.json` and the compiled transformer blocks | `--artifact` |
-| Schedule overlay | `overlay.json`, `schedule.safetensors`, and matching schedule data | `--schedule-overlay` |
-| Auxiliary tensors | A `.safetensors` file for projections and other tensors outside the transformer blocks | `--auxiliary-tensor` |
-| Conditioning bundle | `bundle.json`, `conditioning.safetensors`, and the bundle's declared files | `--bundle` |
+| Transformer artifact | `artifact.json` and compiled blocks | Per model and GPU target |
+| Schedule overlay | `overlay.json` and schedule tensors | Per sampling recipe |
+| Auxiliary projections | Auxiliary safetensors file | Per compatible model revision |
+| Conditioning bundle | `bundle.json`, conditioning tensors and declared inputs | Per request |
 
-The first three inputs belong to a fixed model/profile. Each conditioning bundle contains the input tensors for one request, including the encoded conditioning and initial latent state.
+## Reuse model resources
 
-These are separate inputs because a service can load a model once and process several bundles without reloading its weights.
+Mount the first three read-only and load them once per session. Give each distinct request a separate bundle. Preserve the order, type, geometry and identity of reference assets when preparing it. See [compile weights](../guide/compile-weights) for the complete-pipeline path and [HTTP](./http-api) for submission by bundle name.
 
-## Match the versions {#versions}
+## Diagnose a mismatch
 
-Use resources compiled for the selected GPU target, model revision, adapter revision, and schedule. Turbo4 and Turbo8 need different schedules; SM86 and SM89 need their respective target artifacts.
-
-The released profiles pin these sources:
-
-| Source | Revision |
-| --- | --- |
-| [MiniMax H3](https://huggingface.co/MiniMaxAI/MiniMax-H3/tree/42ed227ee7df40d41602854ae760620d6eb651fe) | `42ed227ee7df40d41602854ae760620d6eb651fe` |
-| [LightX2V Turbo4](https://huggingface.co/lightx2v/Minimax-h3-Turbo/tree/83b617309219e859c1c264520eba07492d22e958) | `83b617309219e859c1c264520eba07492d22e958` |
-| [LightX2V Turbo8](https://huggingface.co/lightx2v/Minimax-h3-Turbo/tree/0eebcc7e79f9cb200927c80b8e7595265b770e34) | `0eebcc7e79f9cb200927c80b8e7595265b770e34` |
-| [LightX2V Base4 v1.0](https://huggingface.co/lightx2v/Minimax-h3-Turbo/tree/ec01fa4c86263832faa0bd1d6d8f36a281eaabb2) | `ec01fa4c86263832faa0bd1d6d8f36a281eaabb2` |
-| [LightX2V 544p keyframes: original four-step v0.1 and eight-step v1.0](https://huggingface.co/lightx2v/Minimax-h3-Turbo/tree/3ec17a324ced54151364f24f8b5fb6bf7e26414f) | `3ec17a324ced54151364f24f8b5fb6bf7e26414f` |
-
-Conditioning capture hardware is recorded as provenance: an SM86 and an SM89 encoder capture can use the same model artifacts when their model identity, encoder revision, arithmetic profile, and tensor layout match. This does not promise identical conditioning tensors across GPUs. The denoiser artifact must still match its execution target.
-
-Vflash validates the declared resource metadata. A file with the expected name is not enough: renaming a folder or changing a manifest cannot make mismatched weights compatible.
-
-## Store inputs and outputs {#storage}
-
-### Trusted local snapshots without payload hashing
-
-The Python APIs `prepare_weights`, `compile_assets` and `prepare_pipeline_assets`
-accept explicit `verify_content_hashes=False` for operator-owned immutable snapshots.
-Use all three consistently. This avoids rereading model-sized files during preparation
-and compilation; it is **not** cryptographic verification of a download. Default callers
-still request content verification.
-
-Metadata-only input receipts explicitly record `source-inventory-and-file-identity`:
-upstream digests are source identities, not locally measured hashes. Compiler artifacts
-use schema 6 and overlays schema 3 with null payload digests. Readers still validate
-the pinned model/adapter, sizes, full tensor headers, dimensions, schedule and endpoints.
-File identity/mtime changes invalidate prepared receipts. Strict artifact loading rejects
-an absent digest instead of silently claiming verification; trusted loading must explicitly
-use `verify_content_hashes=False`. Do not publish a null digest as a release checksum.
-
-Keep model assets and bundles outside the source checkout. In Docker, mount them read-only and give the service a separate writable output directory. The [Docker guide](../guide/docker) shows the relevant settings.
-
-The latent CLI returns a safetensors file with video and audio tensors. The complete Python pipelines handle encoding and official VAE decoding internally, then publish an MP4.
-
-Model and adapter files retain their own [licenses and terms](./license), independently of the Vflash source code.
-
-## Adapter file verification {#adapter-files}
-
-Turbo4 uses `minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors`; Turbo8 uses `minimax_h3_ref2v_turbo_8step_v1.0_768p_bf16.safetensors`. Their digests match the upstream repository checked on 2026-09-05 at revision `2f015e66b37c585cea9dc4ae6f1850ea8788e742`. This records a fixed-source check, not automatic compatibility with later revisions.
-
-The T2VA profile uses the separate Base4 v1.0 file at the revision above. Its SHA-256 is `1bdabc2e9fce20b1db563b96bcf6e46adcad4c1964f423676436bf266cc7416c`, with alpha 128 / rank 128. It is not interchangeable with Ref4 or newer Base4 releases.
-
-## Image bundle reader limits {#image-bundle-limits}
-
-The low-level schema 1 reader accepts one to nine ordered image identities, preserving their picture indices, unique source hashes and conditioning tensors. This model-level serialization limit is separate from complete-pipeline qualification: Ref4 accepts up to three; qualified hybrid profiles accept up to nine. Reading a four-to-nine-image bundle does not establish generation memory, speed or quality for that workload. Schema 2 remains limited to one video reference.
-
-## Typed video conditioning {#video-conditioning}
-
-The video adapter uses **bundle schema 2**, with a true `VideoReference` and `<Video 1>` in the encoded prompt. Existing image and T2VA bundles keep schema 1. Video frames are not separate picture references.
-
-The native reader accepts one visual-only reference, 2–5 seconds at a normalized 24 fps, for Ref4 on one SM89 GPU. Output is 5 seconds at 24 fps, within 928×512 total pixels. Source audio, mixed image/video inputs, Ref8 and SM86 video conditioning are outside this boundary. This is reference-guided regeneration; it does not promise exact editing or preservation of every source frame.
-
-The adapter must record the source file and decoded RGB hashes, source dimensions, normalized frame count, the actual official canvas, VAE input/latent frames and condition-video rows. The policy is `official-video-cfr24-v1`: decode at the source display size, then let the pinned official setup resize once. The final canvas has a maximum dimension of 1376, at most 1376×768 pixels and at most 33,024 condition-video rows. The VAE consumes complete temporal chunks; the text encoder samples the full normalized clip. These are different boundaries.
-
-Since 0.18, schema 2 also serves the Veda hybrid on single SM89/SM120, with five-second output up to 1,048,576 pixels. Full reference uses the official video policy; explicit spatial-half carries a distinct policy identity and `latent_spatial_divisor=2`. The reader recomputes prefix rows from this metadata while retaining every encoded temporal position. See [reference video](../guide/complete-pipeline#reference-video) for current input bounds and cache lifetimes.
-
-Development schema 6 adds one to three ordered image identities and aligned dimensions in `reference_images`,
-with `reference_image_policy="match"`, alongside the single video in `references`.
-The native hybrid validates the combined prefix as video rows plus each image's `width * height / 1024` rows.
-Image geometry includes the nearest-32 rounding allowance of match sizing and is bounded by the target canvas.
-The video policy may be full or explicit spatial-half; pooling affects only the final video latent,
-so the preceding image geometry and latent values retain their match contract.
-Schema 1–5 readers and source identities retain their existing contracts. Complete generation qualification is
-recorded separately in the [combined-input guide](../guide/complete-pipeline#reference-video).
-
-`H3ConditioningCaptureSession.finish(..., schema_version=2)` seals this metadata and the same 14 captured tensors. Loading checks source identity, the exact Ref4 schedule, tensor widths, modality indices and temporal prefixes. A schema change does not convert an existing image capture into video conditioning. The 0.3.2 `H3Pipeline` accepts a local `VideoRequest(reference_video=Path(...))` and creates this capture through the official video setup; see [input limits and examples](../guide/complete-pipeline#reference-video). The installed public pipeline completed an image/video/image sequence, checking 14 conditioning tensors, final FP32 audio/video latents, every delivered RGB frame and cancellation cleanup. The [release notes](./releases#earlier) distinguish that implementation evidence from content quality and audio reproducibility.
+Compare the profile’s target, adapter revision and schedule with the compilation receipt. A four-step and an eight-step adapter require matching schedules. Keep a verified inventory at ingestion; replacing a file under an old receipt invalidates that evidence. Keep generated outputs in a separate writable directory.

@@ -71,6 +71,41 @@ def probe_normalized_video(path: Path, cancel_check=None) -> tuple[dict, list[di
         or any(s.get("rotation", 0) for s in video.get("side_data_list", []))
     ):
         raise ValueError("Normalize frame clock, rotation and pixel aspect before assembly")
+    # The two stream rates can both read 24/1 on a variable-cadence MP4.
+    # Remake accepts up to 345 frames per inference window. Bound packet reads
+    # even if a damaged container declares a short window with extra samples.
+    frames = int(video["nb_frames"])
+    if 0 < frames <= 345:
+        packets = _run_probe(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                *MP4_INPUT,
+                "-select_streams",
+                "v:0",
+                "-read_intervals",
+                f"%+#{frames + 1}",
+                "-show_entries",
+                "packet=pts",
+                "-of",
+                "csv=p=0",
+                str(path.absolute()),
+            ],
+            timeout=30,
+            cancel_check=cancel_check,
+        )
+        # H.264 packets can be stored in decode order. Compare display order,
+        # allowing rounding to half a tick in the container's own time base.
+        pts = sorted(
+            int(row.split(",")[0]) for row in packets.stdout.splitlines() if row.strip()
+        )
+        tick = Fraction(video["time_base"])
+        if len(pts) != frames or any(
+            abs(stamp * tick - Fraction(index, 24)) > tick / 2
+            for index, stamp in enumerate(pts)
+        ):
+            raise ValueError("Normalize presentation timestamps to 24 fps before assembly")
     return video, audio
 
 

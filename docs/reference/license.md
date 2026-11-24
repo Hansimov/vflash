@@ -1,5 +1,7 @@
 # License and acknowledgements
 
+For a deployment, check three separate sets of terms: the Vflash package, the model files you obtain, and the runtime components included in your image.
+
 ## Vflash source code {#source}
 
 Vflash is released under [Apache License 2.0](https://github.com/Hansimov/vflash/blob/main/LICENSE). The source repository contains no model weights.
@@ -11,7 +13,7 @@ MiniMax H3 and optional LoRA checkpoints retain their own licenses, usage rules,
 - [MiniMax H3 model and documentation](https://huggingface.co/MiniMaxAI/MiniMax-H3) · [Pinned model license](https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/42ed227ee7df40d41602854ae760620d6eb651fe/LICENSE)
 - [LightX2V MiniMax H3 Turbo adapters](https://huggingface.co/lightx2v/Minimax-h3-Turbo)
 
-## Thanks {#acknowledgements}
+## Upstream projects {#acknowledgements}
 
 Vflash builds on the published H3 architecture and checkpoints from MiniMax. LightX2V's open inference work and Turbo adapters provide a valuable compatibility source and comparison reference.
 
@@ -21,7 +23,7 @@ Acknowledgement does not imply that every referenced implementation or adapter i
 
 The complete pipeline uses [Diffusers](https://github.com/huggingface/diffusers), [Transformers](https://github.com/huggingface/transformers), [Accelerate](https://github.com/huggingface/accelerate), [PEFT](https://github.com/huggingface/peft), and the official decoder code distributed with the pinned MiniMax H3 model. Local MP4 delivery uses [FFmpeg](https://ffmpeg.org/legal.html). Each dependency retains its own license; the Vflash repository does not redistribute their model payloads.
 
-## Complete pipeline dependencies
+## Runtime distribution notices
 
 The complete image includes the pinned [Diffusers](https://github.com/huggingface/diffusers), [Transformers](https://github.com/huggingface/transformers), [Accelerate](https://github.com/huggingface/accelerate) and [PEFT](https://github.com/huggingface/peft) adapters. Their licenses and package notices remain in the installed distributions.
 

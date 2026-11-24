@@ -1,77 +1,14 @@
-# Docker 与 API
+# 部署推理服务
 
-公开镜像与 Python 包独立版本化。下述 0.18.0 镜像提供固定配置 CLI／原生 HTTP，未包含较新的 Pika 或分段完整运行时。使用当前固定发行的 Python 包和[对应运行时](./runtime-selection)构建独立容器；新 Python API 不会自动扩展旧镜像或 HTTP 路由。
+原生服务持有一个模型配置，在所属设备上串行执行去噪。客户端提交挂载目录里的条件包名称，模型由服务端持有。公开 Docker 镜像有独立版本 0.21.0；需要当前 Python 包时应从本版源码构建。
 
-把 Vflash 作为本地 HTTP 服务运行。服务接收预编译条件包，返回视频和音频潜变量（latents，即解码前的张量）；加载一个固定配置后，连续串行处理多个请求。
+## 配置挂载与设备 {#start}
 
-::: tip 已发布镜像
-**0.18.0** 已提供 `hansimov/vflash:0.18.0`（原生 HTTP）和
-`hansimov/vflash:0.18.0-pipeline`（完整 MP4）。部署时固定[镜像清单](https://github.com/Hansimov/vflash/blob/v0.18.0/docker/images.json)中的摘要。
-镜像包含运行依赖，不包含模型权重或应用的人脸修复配置。
-:::
-
-标准`runtime`与`pipeline`构建均包含固定Sol依赖。单SM89官方Base16默认近似Sol，其他配置/双卡保持dense。
-HTTP可设置`VFLASH_ATTENTION_BACKEND=torch-flash`，`generate`/`denoise`可加`--attention-backend torch-flash`。
-`/readyz`报告选择结果而不是已执行调用，任务runtime元数据才报告实际后端；缺依赖时服务不就绪，不静默回退。
-
-## 专用构建跳过未使用的Sol依赖
-
-已发布0.18.0镜像为受支持的单SM89 Base16 `auto`路径保留Sol。
-预装不等于执行：Veda请求显式选择Veda。发布版源码的`runtime`与`pipeline`
-构建均支持`--build-arg VFLASH_INSTALL_SOL=0`，跳过Sol依赖安装和源码获取；
-发布的通用镜像保留其固定Sol依赖。
-
-```bash
-docker build --target runtime --build-arg VFLASH_INSTALL_SOL=0 -t vflash:veda-base .
-```
-
-在派生镜像中通过`python -m vflash.install_veda`单独安装固定Veda，显式选择
-`veda-triton`并配置predictor；仅密集注意力选择`torch-flash`。
-未安装Sol的镜像不能运行仍选择Sol的配置，缺失可选依赖时保持不就绪，不静默回退。
-
-## Veda服务配置
-
-0.18.0服务接受`VFLASH_VEDA_DENSE_BACKEND`（默认`torch-flash`）及
-`VFLASH_VEDA_DENSE_EDGE_LAYERS`（默认`5`，显式`3`选择44稀疏/6密集，`4`选择42稀疏/8密集层）。设置
-`VFLASH_ATTENTION_BACKEND=veda-triton`，并将`VFLASH_VEDA_PREDICTOR`设为只读运行目录内的容器路径。
-在镜像构建阶段通过`python -m vflash.install_veda`安装固定Veda依赖，普通镜像不会在启动时暗中安装。
-FROST另需固定的SM120依赖，不能用于SM89。
-
-`/readyz`包含已安装包版本和所选层分配，声明就绪前检查架构、predictor和可选密集依赖；就绪不代表已执行推理。
-`vflash denoise`对应提供`--veda-dense-backend`与`--veda-dense-edge-layers`。
-替换服务后端前保留旧固定镜像用于回滚，并在接入应用验证一次实际完整请求。
-
-## 运行要求 {#requirements}
-
-需要 Linux AMD64、Docker Compose v2、NVIDIA Container Toolkit，以及兼容镜像内 CUDA 13.0 运行时的 NVIDIA 驱动。另外还需要一张受支持显卡或一组双 3080，见[硬件列表](./profiles)和四类[运行资源](../reference/runtime-assets)。
-
-对于已测的 3080 负载，建议每个 worker 至少预留 **64 GiB 可用系统内存**，并为其他进程保留额外余量。更大输入需另做[容量检查](./profiles#memory)。模型资源单独挂载，不包含在镜像中。
-
-## 配置并启动 {#start}
-
-在 Vflash 源码目录执行：
+在指定版本的源码目录中复制环境模板，设置镜像、配置、GPU 及宿主机绝对路径。模型输入只读挂载，输出目录给予容器用户 UID/GID 10001 写权限。先验证单卡路径。
 
 ```bash
 cp docker/.env.example docker/.env
 ```
-
-编辑 `docker/.env`，把所有示例路径换成 Docker 主机上的绝对路径：
-
-```dotenv
-VFLASH_IMAGE=hansimov/vflash:0.18.0
-VFLASH_PROFILE_ID=ref2va-turbo4-exact-sm89
-VFLASH_GPU_DEVICE=0
-
-VFLASH_HOST_ARTIFACT=/path/to/artifact
-VFLASH_HOST_SCHEDULE=/path/to/schedule
-VFLASH_HOST_AUXILIARY=/path/to/auxiliary.safetensors
-VFLASH_HOST_BUNDLES=/path/to/bundles
-VFLASH_HOST_OUTPUTS=/path/to/outputs
-```
-
-`VFLASH_GPU_DEVICE` 使用索引或 UUID 选中一张主机显卡。容器内会把它显示为设备 `0`。使用 3080 时，将配置改为 `ref2va-turbo4-exact-sm86` 并提供匹配的 SM86 资源；使用 4090 Turbo8 时，选择 `ref2va-turbo8-exact-sm89` 及相应资源。
-
-容器使用 UID/GID `10001` 运行。为这个用户创建可写输出目录，再拉取并启动发布镜像：
 
 ```bash
 sudo install -d -o 10001 -g 10001 /path/to/outputs
@@ -79,84 +16,20 @@ docker compose --env-file docker/.env -f docker/compose.yaml pull
 docker compose --env-file docker/.env -f docker/compose.yaml up -d --no-build
 ```
 
-带版本号的镜像已发布到 [Docker Hub](https://hub.docker.com/r/hansimov/vflash/tags)，不可变摘要见[镜像清单](https://github.com/Hansimov/vflash/blob/v0.18.0/docker/images.json)。模型只读挂载，输出和内核缓存使用独立的可写存储。需要本地构建 0.18.0 时，执行 `docker build --target runtime -t vflash:0.18.0 .`，然后在环境文件中选择该镜像。
+## 从正式标签构建 0.28.0
 
-Compose 默认只将接口绑定到 **127.0.0.1:8000**。引擎没有内置身份验证；本地使用时保留这个绑定，需要远程访问时则先接入应用的鉴权层。
-
-## 在容器中生成 MP4 {#pipeline}
-
-`pipeline` 镜像预装官方编码器与 VAE 适配器、CUDA 对应的 Torchvision、FFmpeg 和 FFprobe，入口是 `vflash`，用 `generate` 生成完整视频。独立的原生镜像运行 HTTP latent 服务。
-
-拉取完整链路镜像：
+需要当前包的运行时时，请在 v0.28.0 源码目录内执行下列命令。镜像使用独立的本地名称，便于区分清单中的已发布镜像。在同一个终端设置 VFLASH_IMAGE 后，Compose 会启动刚校验的构建。
 
 ```bash
-docker pull hansimov/vflash:0.18.0-pipeline
-mkdir -p inputs outputs cache
+docker build --target runtime -t vflash-local:0.28.0 .
+docker run --rm --entrypoint python vflash-local:0.28.0 -c 'import vflash; print(vflash.__version__)'
+export VFLASH_IMAGE=vflash-local:0.28.0
+docker compose --env-file docker/.env -f docker/compose.yaml up -d --no-build
 ```
 
-将包含六个资产路径的 `pipeline-assets.json`、提示词与参考图放入 `inputs`。JSON 中的模型路径使用容器内最终的 `/models/...` 路径，并将对应的主机模型目录只读挂载。在最终挂载布局内准备记录；此步骤仅核验一次资产字节，不需要显卡：
+## 检查运行中的服务 {#readiness}
 
-```bash
-docker run --rm --runtime=runc -e NVIDIA_VISIBLE_DEVICES=void \
-  -e TORCHINDUCTOR_CACHE_DIR=/cache/inductor \
-  --network none --read-only --user "$(id -u):$(id -g)" \
-  --tmpfs /tmp:rw,noexec,mode=1777 \
-  -v /absolute/model-directory:/models:ro \
-  -v "$PWD/inputs:/inputs:ro" -v "$PWD/outputs:/outputs:rw" \
-  -v "$PWD/cache:/cache:rw" \
-  hansimov/vflash:0.18.0-pipeline prepare-pipeline \
-  --assets /inputs/pipeline-assets.json --receipt /outputs/prepared-assets.json
-```
-
-在一张 RTX 4090 48 GB 上生成。参考图的传入顺序对应提示词中的 `<Picture N>`：
-
-```bash
-docker run --rm --gpus device=0 --shm-size 4g \
-  -e TORCHINDUCTOR_CACHE_DIR=/cache/inductor \
-  --network none --read-only --user "$(id -u):$(id -g)" \
-  --tmpfs /tmp:rw,noexec,mode=1777 \
-  -v /absolute/model-directory:/models:ro \
-  -v "$PWD/inputs:/inputs:ro" -v "$PWD/outputs:/outputs:rw" \
-  -v "$PWD/cache:/cache:rw" \
-  hansimov/vflash:0.18.0-pipeline generate \
-  --prepared-assets /outputs/prepared-assets.json \
-  --prompt-file /inputs/prompt.txt \
-  --reference /inputs/subject.png --reference /inputs/setting.png \
-  --output /outputs/video.mp4 --gpu 0 --seed 1234 --trust-local-code
-```
-
-使用 Ref4 时，`--reference` 可以出现一至三次。使用 T2VA 时，以 `--profile t2va-turbo4-exact-sm89` 准备 Base4 资产，并省略参考图。两者均生成五秒、24 fps 视频。进度 JSON 写入 stderr，最终结果写入 stdout。镜像不包含模型权重；请核对[完整链路能力和内存预算](./complete-pipeline)及[模型许可证](../reference/license)。
-
-如需从 v0.18.0 标签源码构建完整镜像，可执行 `docker build --target pipeline -t vflash:0.18.0-pipeline .`，并将命令中的镜像名替换为本地名称。
-
-双张 RTX 3080 20 GB 使用 [SM86 编译资产](../reference/pipeline-profiles#sm86)，在 `prepare-pipeline` 后加 `--profile ref2va-turbo4-exact-sm86`。生成命令将 `--gpus device=0` 替换为 `--gpus '"device=0,1"'`，在 `--gpu 0` 后加 `--peer-gpu 1 --strategy sequence-head`。进程退出前，两张卡都由该实例持有；主卡执行编码和解码，双卡共同去噪。这里是完整链路配置，下文的 Compose 则部署原生 HTTP 接口。
-
-镜像复用对应接口的不可变0.16.0依赖底图。先由清单`implementation_revision`构建0.18.0 wheel，再用`docker/release-from-wheel.Dockerfile`，按清单设置`VFLASH_BASE_IMAGE`、`VFLASH_VERSION=0.18.0`及`VFLASH_REVISION`。该配方离线安装，并同步镜像内可见源码与已安装包；native CMD和pipeline ENTRYPOINT继承自所选底图。全新依赖构建仍可使用根Dockerfile，纯代码更新无需重新下载CUDA。清单区分镜像检查和GPU证据。
-
-镜像默认使用 UID/GID `10001`；示例改用当前用户，方便写入输出。Jiterator 直接使用可写的 `/cache` 根目录，也支持新挂载的空目录。显式设置 Inductor 缓存后，即使这个用户未登记在容器中也能运行；此设置也适用于 0.1.0 镜像。`/cache` 必须允许加载编译后的共享库，不要放在 `noexec` 挂载点。准备记录中的资产路径和文件身份必须保持一致。连续生成时，建议在独立容器进程中复用 Python `H3Pipeline`，避免每次执行命令都重新加载模型。
-
-## 双卡协作 {#parallel}
-
-使用两张 RTX 3080 20 GB 时，提供 SM86 权重与调度资源，并设置：
-
-```dotenv
-VFLASH_GPU_DEVICE=0
-VFLASH_PEER_GPU_DEVICE=1
-VFLASH_PARALLEL_STRATEGY=sequence-head
-```
-
-标准权重张量并行使用 `tensor`。需要 Docker Compose **2.24.4 或更新版本**，添加双卡覆盖配置：
-
-```bash
-docker compose --env-file docker/.env \
-  -f docker/compose.yaml -f docker/compose.parallel.yaml up -d --no-build
-```
-
-覆盖配置选择 SM86 Turbo4，向容器提供选中的两张主机显卡，并为 NCCL 设置 1 GiB 共享内存。一个 worker 持有两张卡，串行处理请求。增加 worker 时需分配互不重叠的显卡组。此模式已在没有 peer access 的 PCIe 3.0 x16 主机桥接拓扑上测量，无需 NVLink。
-
-该文件通过 Compose 的 [`!override` 合并规则](https://docs.docker.com/reference/compose-file/merge/#replace-value)替换显卡预留配置。就绪检查同时检查两张卡；任一 rank 失败后会关闭整个执行组，需重启服务再提交任务。
-
-## 检查就绪状态 {#readiness}
+分别检查进程健康、就绪状态及选定配置。即使进程存活，服务仍可能缺少匹配的显卡或模型资源。用小型已知条件包提交一次并下载张量，可验证完整链路。
 
 ```bash
 curl -fsS http://127.0.0.1:8000/healthz
@@ -164,81 +37,6 @@ curl -fsS http://127.0.0.1:8000/readyz
 curl -fsS http://127.0.0.1:8000/v1/profiles
 ```
 
-`/healthz` 检查 HTTP 进程是否存活；`/readyz` 检查配置文件、输出目录、显卡和 worker 状态。模型在首个任务中加载，因此就绪检查通过不代表模型已经驻留。
+## 管理队列
 
-## 提交任务并下载 {#jobs}
-
-如果条件包位于 `VFLASH_HOST_BUNDLES/example-bundle`，提交它的相对目录名：
-
-```bash
-curl -fsS -X POST http://127.0.0.1:8000/v1/denoise/jobs \
-  -H 'content-type: application/json' \
-  -d '{"bundle":"example-bundle"}'
-```
-
-使用返回的 `id` 查询任务。状态依次为 `queued`（排队）、`running`（运行），最终变为 `succeeded`（成功）或 `failed`（失败）。
-
-```bash
-curl -fsS http://127.0.0.1:8000/v1/denoise/jobs/JOB_ID
-```
-
-状态为 `succeeded` 后，下载 latent 输出：
-
-```bash
-curl -fLo result.safetensors \
-  http://127.0.0.1:8000/v1/denoise/jobs/JOB_ID/output
-```
-
-该文件包含张量，还不是可播放的视频。任务成功前请求下载会返回 `409`。
-
-## 队列与恢复 {#queue}
-
-一个 CUDA worker 一次执行一个任务。可在 `docker/.env` 中设置以下选项：
-
-| 设置 | 默认值 | 含义 |
-| --- | ---: | --- |
-| `VFLASH_API_PORT` | `8000` | Compose 绑定到本机回环地址的端口 |
-| `VFLASH_JOB_TIMEOUT_SECONDS` | `1800` | worker 请求的最长执行时间 |
-| `VFLASH_MAX_PENDING_JOBS` | `8` | 排队中与执行中任务的数量上限 |
-| `VFLASH_JOB_HISTORY_LIMIT` | `128` | 内存中保留的已完成任务记录上限 |
-
-队列满时，提交返回 `429` 和 `Retry-After`。调用方应等待指定时间后再重试。
-
-任务记录保存在内存中，重启后会丢失，较早的已完成记录也会被移除。移除记录不会删除输出文件，但不能再通过对应 API 查询或下载。调用方应及时下载结果，并自行管理持久任务记录和文件保留策略。
-
-CUDA worker 退出或超时后，就绪检查会失败，需要重启服务恢复。任务不会自动重放。已经完成的文件仍保留在输出挂载目录中。
-
-计时字段和首次请求开销见[性能测量](../reference/performance)。
-
-## API 参考 {#api}
-
-| 方法 | 路径 | 用途 |
-| --- | --- | --- |
-| `GET` | `/healthz` | 检查 HTTP 进程 |
-| `GET` | `/readyz` | 检查文件、显卡和 worker 就绪状态 |
-| `GET` | `/v1/profiles` | 查看服务当前使用的配置 |
-| `POST` | `/v1/denoise/jobs` | 提交条件包 |
-| `GET` | `/v1/denoise/jobs/{id}` | 查询任务状态和结果元数据 |
-| `GET` | `/v1/denoise/jobs/{id}/output` | 下载已完成的 latent 文件 |
-
-启动服务后，可在 `http://127.0.0.1:8000/docs` 查看交互式 OpenAPI 文档。
-
-## 不使用 Docker 时 {#python-server}
-
-安装 `.[gpu,server]`，在进程环境中设置路径和配置，再启动一个服务进程：
-
-```bash
-python -m vflash.server
-```
-
-直接运行 Python 服务时，使用 `VFLASH_ARTIFACT_PATH`、`VFLASH_SCHEDULE_OVERLAY_PATH`、`VFLASH_AUXILIARY_TENSOR_PATH`、`VFLASH_BUNDLE_ROOT` 和 `VFLASH_OUTPUT_ROOT` 指定本地路径，使用 `VFLASH_GPU_INDEX` 指定物理 GPU 索引。本地访问请设置 `VFLASH_API_HOST=127.0.0.1`；Python 入口默认绑定所有网络接口。配置、超时、队列和历史记录选项使用本页中的同名变量。
-
-双卡 Python 服务设置 `VFLASH_PEER_GPU_INDEX`，需要权重 TP 时另设 `VFLASH_PARALLEL_STRATEGY=tensor`。指定第二张卡后，默认策略为 `sequence-head`。一个 worker 独占这两张物理显卡。
-
-依赖下载与固定 Git 源码获取使用独立缓存层；Sol 的 Python 依赖还使用 BuildKit pip 缓存，
-源码网络失败不会丢掉已经下载的 wheel。按来源选择 Docker 预定义的 `HTTPS_PROXY`/`NO_PROXY`
-构建参数，具体值留在调用环境中；仅监听主机回环的代理需要构建环境可达的路线。
-不要为重试一个源码地址而全局切换构建网络，那会使无关依赖层失效。
-镜像源必须提供固定版本，采用前先做有界实际下载对比。
-
-0.22.1源码／server包补齐有类型的响应声明；已发布0.18.0镜像保留原schema。详见[HTTP响应与恢复合同](../reference/http-api)。
+提交与取回结果见 [HTTP 参考](../reference/http-api)。原生队列只在内存中保留有限历史，持久任务记录和完成文件应由调用方保存。在同一主机新增 worker 前应核对显存与可用主机内存。

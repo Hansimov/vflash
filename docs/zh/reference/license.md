@@ -1,5 +1,7 @@
 # 许可证与致谢
 
+部署前请分别核对 Vflash 软件包、取得的模型权重及镜像中运行时组件的许可。
+
 ## Vflash 源码 {#source}
 
 Vflash 源码采用 [Apache License 2.0](https://github.com/Hansimov/vflash/blob/main/LICENSE)。源码仓库不包含模型权重。
@@ -11,7 +13,7 @@ MiniMax H3 和可选 LoRA 权重各自遵循其许可证、使用规则和地域
 - [MiniMax H3 模型与文档](https://huggingface.co/MiniMaxAI/MiniMax-H3) · [固定模型版本的许可证](https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/42ed227ee7df40d41602854ae760620d6eb651fe/LICENSE)
 - [LightX2V MiniMax H3 Turbo LoRA](https://huggingface.co/lightx2v/Minimax-h3-Turbo)
 
-## 致谢 {#acknowledgements}
+## 上游项目 {#acknowledgements}
 
 Vflash 基于 MiniMax 公开的 H3 架构和模型权重开发。LightX2V 的开放推理实现及 Turbo LoRA 为兼容性开发和性能对比提供了重要参考。
 
@@ -21,7 +23,7 @@ Vflash 基于 MiniMax 公开的 H3 架构和模型权重开发。LightX2V 的开
 
 完整链路使用 [Diffusers](https://github.com/huggingface/diffusers)、[Transformers](https://github.com/huggingface/transformers)、[Accelerate](https://github.com/huggingface/accelerate)、[PEFT](https://github.com/huggingface/peft)，以及固定版本 MiniMax H3 模型附带的官方解码器代码。本地 MP4 输出使用 [FFmpeg](https://ffmpeg.org/legal.html)。这些依赖保留各自的许可证；Vflash 仓库不重新分发它们的模型权重。
 
-## 完整链路依赖
+## 运行时分发声明
 
 完整镜像包含固定版本的 [Diffusers](https://github.com/huggingface/diffusers)、[Transformers](https://github.com/huggingface/transformers)、[Accelerate](https://github.com/huggingface/accelerate) 和 [PEFT](https://github.com/huggingface/peft) 适配器，其许可证与声明保留在各自安装包中。
 
