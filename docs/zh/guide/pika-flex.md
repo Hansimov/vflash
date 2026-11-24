@@ -27,6 +27,9 @@ finally:
 
 固定开场时传入首帧。由外观照片生成新镜头时，选用独立 Ref 主干的 [Pika 参考图运行时](./pika-reference-weights)。已经有动作轨迹的源片可使用 [Remake](./remake)。
 
+
+<span id="bounded-decoder-tile-batches" aria-hidden="true"></span>
+
 ## 原版 BF16 执行 {#original-bf16-reference-execution}
 
 对照原版 Pika 输出，或接入上游 FL/Ref 模型时，采用原版环境并固定其源码及权重。最后一次请求结束后释放运行时。

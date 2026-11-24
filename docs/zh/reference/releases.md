@@ -6,6 +6,12 @@
 - **延长参考图视频。** [Pika 内容参考配方](../guide/pika-reference-weights)支持 5、8、12 秒，默认 5 秒。8 秒与 12 秒均在单张 96 GiB RTX PRO 6000 上完成了 1280 × 720 音视频实测。
 - **校验交付媒体。** 对推理窗口，Remake 会逐帧核对 24 fps 显示时间戳，并检查方形像素和保留原声时所需的音轨。同一张图同时用作参考图与指定帧时，两种用途各自保存潜变量。
 
+
+<span id="_0-16-1" aria-hidden="true"></span>
+<span id="_0-17-0" aria-hidden="true"></span>
+<span id="_0-18-0" aria-hidden="true"></span>
+<span id="earlier" aria-hidden="true"></span>
+
 ## 升级现有环境
 
 在新环境中安装 [0.28.0 的 wheel](https://github.com/Hansimov/vflash/releases/tag/v0.28.0)，运行 `vflash doctor`。保留已固定的模型版本、源素材和提交凭据。使用 Remake 还需单独配置执行器。容器镜像通过[独立清单](https://github.com/Hansimov/vflash/blob/main/docker/images.json)发布。

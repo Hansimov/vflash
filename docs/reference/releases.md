@@ -6,6 +6,12 @@
 - **Generate longer reference clips.** The [prepared Pika content-reference recipe](../guide/pika-reference-weights) accepts 5, 8 or 12 seconds with its own visual/audio clock. Five seconds is the default. The eight- and twelve-second runs were measured at 1280 × 720 on one 96 GiB RTX PRO 6000.
 - **Validate delivered media.** For inference windows, Remake checks individual presentation timestamps at 24 fps, square pixels and the required audio stream on preserved-soundtrack results. A frame used as both a reference and a pin has independent storage for the two roles.
 
+
+<span id="_0-16-1" aria-hidden="true"></span>
+<span id="_0-17-0" aria-hidden="true"></span>
+<span id="_0-18-0" aria-hidden="true"></span>
+<span id="earlier" aria-hidden="true"></span>
+
 ## Upgrade an installation
 
 Install the [0.28.0 wheel](https://github.com/Hansimov/vflash/releases/tag/v0.28.0) in a fresh environment and run `vflash doctor`. Retain your pinned model revisions, original input media and submission receipts. A Remake client requires its separately provisioned executor. Published container images have a [separate inventory](https://github.com/Hansimov/vflash/blob/main/docker/images.json).

@@ -11,6 +11,10 @@
 
 前三项只读挂载，每个会话加载一次。每个独立请求准备自己的条件包，保持参考素材的顺序、类型、几何尺寸和身份。完整生成管线见[编译权重](../guide/compile-weights)，按包名称提交见 [HTTP 接口](./http-api)。
 
+
+<span id="versions" aria-hidden="true"></span>
+<span id="video-conditioning" aria-hidden="true"></span>
+
 ## 排查不兼容输入
 
 把配置的目标显卡、适配器版本和采样时序与编译凭据逐一核对。四步与八步适配器各有对应时序。入库时保留经过验证的文件清单；替换其中的文件后需重新校验。成片写入单独的可写目录。

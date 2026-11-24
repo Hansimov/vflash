@@ -2,6 +2,8 @@
 
 The table is ordered by the reference model’s peak **single-GPU FP32** throughput. The memory column describes the boards tested with Vflash. Tensor precision, memory bandwidth, model placement and inter-GPU links also affect film delivery time.
 
+<span id="heterogeneous" aria-hidden="true"></span>
+
 | GPU | Reference FP32 | Tested memory | Workload and limits |
 | --- | ---: | --- | --- |
 | RTX PRO 6000 Blackwell Server | 120 TFLOPS | 96 GiB | Prepared Pika, original Remake and resident hybrid. The prepared AV recipe requires a full device. |
@@ -18,3 +20,13 @@ Run `vflash profiles` to list identifiers and `vflash plan PROFILE --gpu 0` to r
 ## Sources
 
 Peak specifications come from [RTX PRO 6000 Server](https://www.nvidia.com/en-us/data-center/rtx-pro-6000-blackwell-server-edition/), [Ada architecture, appendix A](https://images.nvidia.com/aem-dam/Solutions/Data-Center/l4/nvidia-ada-gpu-architecture-whitepaper-V2.02.pdf), [H100 SXM specifications](https://www.nvidia.com/en-us/data-center/h100/) and [Ampere GA102, RTX 3080](https://www.nvidia.com/content/PDF/nvidia-ampere-ga-102-gpu-architecture-whitepaper-v2.1.pdf). For elapsed time on a particular workload, see [measured runs](../reference/benchmarks).
+
+## Resident and smaller-memory configurations
+
+<span id="h100-resident" aria-hidden="true"></span>
+<span id="sm120-resident" aria-hidden="true"></span>
+<span id="memory" aria-hidden="true"></span>
+<span id="small-blackwell" aria-hidden="true"></span>
+<span id="lora" aria-hidden="true"></span>
+
+A resident trunk needs headroom for encoding and decoding. Consult the [versioned hardware measurements](https://github.com/Hansimov/vflash/blob/v0.28.0a8/docs/guide/profiles.md) for bounded H100 NVL and RTX 5090 trials, adapter choices and placement settings.

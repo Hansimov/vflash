@@ -1,5 +1,10 @@
 # Read the hardware measurements
 
+<span id="current" aria-hidden="true"></span>
+<span id="native544" aria-hidden="true"></span>
+<span id="sm86-parallel" aria-hidden="true"></span>
+
+
 These complete-generation timings exclude model loading. The first three rows use the same 0.15 FP8 resident trunk with Veda 44/6, face repair and six-step audio repair on one RTX PRO 6000 Blackwell 96 GiB. They show the cost of changing one request dimension.
 
 | GPU and recipe | Model canvas | Seconds of video | Elapsed |

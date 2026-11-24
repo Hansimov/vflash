@@ -1,5 +1,9 @@
 # Choose compatible model profiles
 
+<span id="lightx-v01" aria-hidden="true"></span>
+<span id="sm86" aria-hidden="true"></span>
+
+
 A fixed profile binds a transformer family, adapter, step schedule, precision and GPU architecture. Generate the list for your installed version with `vflash profiles`. Use the identifier it prints for planning and preparation.
 
 ## Pick the model family

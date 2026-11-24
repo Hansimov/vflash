@@ -1,5 +1,8 @@
 # Generate from appearance photos
 
+<span id="experimental-pika-image-reference-runtime" aria-hidden="true"></span>
+
+
 PikaReferenceAVRuntime takes ordered photographs for appearance. Use it when the subject should look familiar but the camera can create a new shot.
 
 ## Select the length

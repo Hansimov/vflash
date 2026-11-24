@@ -52,3 +52,12 @@ vflash generate \
 ## Reuse or extend a request {#generate-from-python}
 
 Use [Python](./python) for repeated clips and [conditioning](./pipeline-conditioning) for the explicit extended hybrid. An existing shot that must retain its original motion belongs in [source editing](./remake).
+
+## Related execution details
+
+- <span id="check-a-request-before-allocating-hardware" aria-hidden="true"></span>[Validate a hardware plan](./profiles#available)
+- <span id="extended-hybrid" aria-hidden="true"></span>[Hybrid profiles and dimensions](./pipeline-conditioning)
+- <span id="reference-video" aria-hidden="true"></span>[Reference-video inputs](../reference/runtime-assets)
+- <span id="audio-hidden-context" aria-hidden="true"></span>[Audio refinement and context](./pipeline-refinement)
+- <span id="veda-dense-edges" aria-hidden="true"></span>[Sparse and dense attention](./veda)
+- <span id="experimental-pika-image-reference-runtime" aria-hidden="true"></span>[Pika content-reference recipes](./pika-reference-weights)

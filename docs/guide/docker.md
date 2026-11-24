@@ -40,3 +40,54 @@ curl -fsS http://127.0.0.1:8000/v1/profiles
 ## Operate the queue
 
 Use the [HTTP reference](../reference/http-api) for submission and retrieval. The service uses bounded in-memory history. Keep persistent job records and completed files in the calling application. Measure VRAM and available host RAM before placing another worker on the same host.
+
+## Generate an MP4 in a container {#pipeline}
+
+Put the model inventory in inputs/pipeline-assets.json and the prompt and reference images in inputs. Replace the host model directory with its absolute path. Use identical container paths in the two calls so the preparation receipt remains valid for generation.
+
+```bash
+docker pull hansimov/vflash:0.21.0-pipeline
+mkdir -p inputs outputs cache
+```
+
+```bash
+docker run --rm --runtime=runc -e NVIDIA_VISIBLE_DEVICES=void \
+  -e TORCHINDUCTOR_CACHE_DIR=/cache/inductor \
+  --network none --read-only --user "$(id -u):$(id -g)" \
+  --tmpfs /tmp:rw,noexec,mode=1777 \
+  -v /absolute/model-directory:/models:ro \
+  -v "$PWD/inputs:/inputs:ro" -v "$PWD/outputs:/outputs:rw" \
+  -v "$PWD/cache:/cache:rw" \
+  hansimov/vflash:0.21.0-pipeline prepare-pipeline \
+  --assets /inputs/pipeline-assets.json --receipt /outputs/prepared-assets.json
+```
+
+```bash
+docker run --rm --gpus device=0 --shm-size 4g \
+  -e TORCHINDUCTOR_CACHE_DIR=/cache/inductor \
+  --network none --read-only --user "$(id -u):$(id -g)" \
+  --tmpfs /tmp:rw,noexec,mode=1777 \
+  -v /absolute/model-directory:/models:ro \
+  -v "$PWD/inputs:/inputs:ro" -v "$PWD/outputs:/outputs:rw" \
+  -v "$PWD/cache:/cache:rw" \
+  hansimov/vflash:0.21.0-pipeline generate \
+  --prepared-assets /outputs/prepared-assets.json \
+  --prompt-file /inputs/prompt.txt \
+  --reference /inputs/subject.png --reference /inputs/setting.png \
+  --output /outputs/video.mp4 --gpu 0 --seed 1234 --trust-local-code
+```
+
+## Use a cooperating GPU pair {#parallel}
+
+Select a supported pair of SM86 devices in docker/.env and its corresponding profile in the [hardware guide](./profiles). Start Compose with the two-device overlay.
+
+```dotenv
+VFLASH_GPU_DEVICE=0
+VFLASH_PEER_GPU_DEVICE=1
+VFLASH_PARALLEL_STRATEGY=sequence-head
+```
+
+```bash
+docker compose --env-file docker/.env \
+  -f docker/compose.yaml -f docker/compose.parallel.yaml up -d --no-build
+```

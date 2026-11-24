@@ -20,6 +20,9 @@ from vflash.pipeline.remake_conditioning import NODE_CLASS_MAPPINGS
 
 输入采用本地 H.264 MP4，时间基准为 24 fps、方形像素、零起点，画幅与声明一致。先校正旋转。只有该时刻完整的已编辑画面才可固定到指定模型帧；商品目录照片适合用作不绑定时刻的外观参考。需要保留音轨时应检查交付文件的实际音频流，静音使用 `silent`。
 
+
+<span id="extended-canvas-preview" aria-hidden="true"></span>
+
 ## 执行与恢复
 
 下例需要由应用提供运行时所有者，负责停止并确认进程退出。每次执行使用新的记录目录。调用方重启后，可将原请求、目录及未更改的文件传给 `recover_completed_remake` 恢复已完成结果。若结果尚不确定，先按记录中的原执行 ID 核对。

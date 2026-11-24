@@ -1,5 +1,10 @@
 # 解读硬件实测
 
+<span id="current" aria-hidden="true"></span>
+<span id="native544" aria-hidden="true"></span>
+<span id="sm86-parallel" aria-hidden="true"></span>
+
+
 下表是扣除加载时间的完整生成耗时。前三行均来自 0.15、单张 RTX PRO 6000 Blackwell 96 GiB，采用 FP8 常驻主干、Veda 44/6、人脸修复和六步音频修复。可据此估算单独改变时长或分辨率的影响。
 
 | GPU 与配置 | 模型画幅 | 视频时长 | 耗时 |

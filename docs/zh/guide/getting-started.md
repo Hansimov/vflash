@@ -24,6 +24,9 @@ vflash profiles
 
 在实际用于推理的进程或容器中查看显卡名称、计算能力和可用显存，然后对照[硬件要求](./profiles)。例如，具备相应显存的 SM89 设备可以运行 `vflash plan ref2va-turbo4-exact-sm89 --gpu 0` 检查四步参考图配置。
 
+
+<span id="native-latents" aria-hidden="true"></span>
+
 ## 生成第一条视频 {#first-video}
 
 1. 按[输入与交付物](./runtime-selection)选择路径。源视频提供时间线，外观参考图提供主体特征，首帧固定开场画面。

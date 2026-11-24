@@ -24,6 +24,9 @@ vflash profiles
 
 Read the GPU name, compute capability and available memory inside the process or container that will run inference. Select a matching row in [hardware requirements](./profiles). On a suitable SM89 device, for example, validate a four-step reference-image plan with `vflash plan ref2va-turbo4-exact-sm89 --gpu 0`.
 
+
+<span id="native-latents" aria-hidden="true"></span>
+
 ## Make a first film {#first-video}
 
 1. Choose the [input and result](./runtime-selection) you need. Source footage, an appearance photo and a first frame each constrain generation differently.

@@ -52,3 +52,12 @@ vflash generate \
 ## 复用与扩展 {#generate-from-python}
 
 连续出片可使用 [Python 会话](./python)，需要扩展混合配置时查阅[条件编码](./pipeline-conditioning)。若要保留已有镜头的原始运动，使用[源片编辑](./remake)。
+
+## 深入使用
+
+- <span id="check-a-request-before-allocating-hardware" aria-hidden="true"></span>[先校验硬件配置](./profiles#available)
+- <span id="extended-hybrid" aria-hidden="true"></span>[混合配置与画幅](./pipeline-conditioning)
+- <span id="reference-video" aria-hidden="true"></span>[参考视频输入](../reference/runtime-assets)
+- <span id="audio-hidden-context" aria-hidden="true"></span>[音轨精修与上下文](./pipeline-refinement)
+- <span id="veda-dense-edges" aria-hidden="true"></span>[稀疏与稠密注意力](./veda)
+- <span id="experimental-pika-image-reference-runtime" aria-hidden="true"></span>[Pika 内容参考配方](./pika-reference-weights)

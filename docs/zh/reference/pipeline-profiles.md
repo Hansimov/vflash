@@ -1,5 +1,9 @@
 # 选择匹配的模型配置
 
+<span id="lightx-v01" aria-hidden="true"></span>
+<span id="sm86" aria-hidden="true"></span>
+
+
 固定配置绑定主干模型族、适配器、步数、精度与 GPU 架构。运行 `vflash profiles` 得到已安装版本的完整列表，随后用其中的标识规划设备及准备资源。
 
 ## 按输入选模型族

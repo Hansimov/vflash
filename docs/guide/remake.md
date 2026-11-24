@@ -20,6 +20,9 @@ from vflash.pipeline.remake_conditioning import NODE_CLASS_MAPPINGS
 
 Use a local H.264 MP4 on a 24 fps clock with square pixels, zero start time and matching canvas. Normalize rotation first. Use a target pin at an exact model frame only for a complete edited picture at that moment. A catalog photo can guide appearance as an unpinned reference. For a preserved soundtrack, check the final audio stream; for silence, request `silent`.
 
+
+<span id="extended-canvas-preview" aria-hidden="true"></span>
+
 ## Run once and recover
 
 The following integration fragment assumes a runtime owner that can stop and confirm its process. Give each execution a fresh journal directory. After a caller restart, `recover_completed_remake` can read a completed execution with the original request, directories and unchanged files. For a pending or uncertain execution, reconcile its recorded ID before further work.
