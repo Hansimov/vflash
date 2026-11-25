@@ -9,11 +9,11 @@ Use Python 3.11 or later in a new environment. This command installs the wheel p
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install https://github.com/Hansimov/vflash/releases/download/v0.28.0/vflash-0.28.0-py3-none-any.whl
+python -m pip install https://github.com/Hansimov/vflash/releases/download/v0.29.0/vflash-0.29.0-py3-none-any.whl
 python -c "import vflash; print(vflash.__version__)"
 ```
 
-The last command should print `0.28.0`. The base wheel supplies the CLI. Install the dependencies for your chosen runtime when you prepare its model.
+The last command should print `0.29.0`. The base wheel supplies the CLI. Install the dependencies for your chosen runtime when you prepare its model.
 
 ## Check the device {#check-your-gpu}
 

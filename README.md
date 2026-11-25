@@ -2,7 +2,7 @@
 
 Generate video with sound or edit existing footage using MiniMax H3, PyTorch and Triton. Use a complete pipeline for MP4s, or integrate a resident inference session into your own service.
 
-[中文](README.zh-CN.md) · [Documentation](https://hansimov.github.io/vflash/) · [Download 0.28.0](https://github.com/Hansimov/vflash/releases/tag/v0.28.0)
+[中文](README.zh-CN.md) · [Documentation](https://hansimov.github.io/vflash/) · [Download 0.29.0](https://github.com/Hansimov/vflash/releases/tag/v0.29.0)
 
 ## Start with a task
 
@@ -16,10 +16,10 @@ Generate video with sound or edit existing footage using MiniMax H3, PyTorch and
 ## Install and select hardware
 
 ```sh
-python -m pip install https://github.com/Hansimov/vflash/releases/download/v0.28.0/vflash-0.28.0-py3-none-any.whl
+python -m pip install https://github.com/Hansimov/vflash/releases/download/v0.29.0/vflash-0.29.0-py3-none-any.whl
 vflash doctor
 ```
 
-[Installation](https://hansimov.github.io/vflash/guide/getting-started) · [GPU and memory requirements](https://hansimov.github.io/vflash/guide/profiles) · [Upgrade from 0.27](https://hansimov.github.io/vflash/reference/releases)
+[Installation](https://hansimov.github.io/vflash/guide/getting-started) · [GPU and memory requirements](https://hansimov.github.io/vflash/guide/profiles) · [Upgrade from 0.28](https://hansimov.github.io/vflash/reference/releases)
 
 The code uses Apache-2.0. Model and adapter weights have their own terms. [Licenses and credits](https://hansimov.github.io/vflash/reference/license)

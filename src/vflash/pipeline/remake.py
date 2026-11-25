@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Literal
 
 from vflash.media.probe import probe_normalized_video
+from vflash.media.remake_source import valid_canvas
 from vflash.pipeline.remake_text import (
     PreparedRemakeText,
     owned_text,
@@ -94,13 +95,7 @@ class RemakeRequest:
             or type(self.frames) is not int
             or not 90 <= self.frames <= 345
             or (self.frames - 5) % 17
-            or any(
-                type(v) is not int or not 480 <= v <= 3072 or v % 32
-                for v in (self.width, self.height)
-            )
-            or not 480 <= min(self.width, self.height) <= 1440
-            or not 0.25 <= self.width / self.height <= 4
-            or self.width * self.height > 2048**2
+            or not valid_canvas(self.width, self.height)
             or type(self.seed) is not int
             or not 0 <= self.seed <= 2**64 - 1
             or self.soundtrack not in {"preserve", "silent"}
@@ -189,8 +184,8 @@ def remake_graph(
 
     source_name = owned(request.source, True)
 
-    def clock(path):
-        video, _ = probe_normalized_video(path, cancel_check)
+    def clock(path, interval=None):
+        video, _ = probe_normalized_video(path, cancel_check, history_interval=interval)
         if (video["width"], video["height"]) != (request.width, request.height):
             raise ValueError("Prepared source/history must match the declared canvas")
         return int(video["nb_frames"])
@@ -199,14 +194,19 @@ def remake_graph(
         raise ValueError("Prepared source must contain every declared model frame")
     if request.prefix:
         owned(request.prefix.take, True)
-        if clock(request.prefix.take) < request.prefix.start + request.prefix.frames:
+        interval = (request.prefix.start, request.prefix.frames)
+        if clock(request.prefix.take, interval) < sum(interval):
             raise ValueError("The generated take does not cover its complete history interval")
     from PIL import Image
 
     for ref in request.references:
         owned(ref.path)
         with Image.open(ref.path) as picture:
+            if getattr(picture, "n_frames", 1) != 1:
+                raise ValueError("Provide one still image per reference")
             width, height = picture.size
+            if picture.getexif().get(274) in (5, 6, 7, 8):
+                width, height = height, width
         if (
             min(width, height) < 32
             or max(width, height) > 4096

@@ -35,7 +35,7 @@ MP4_INPUT = (
 def probe_video(path: Path, cancel_check=None) -> tuple[dict, list[dict]]:
     if not isinstance(path, Path) or not path.is_file() or path.is_symlink():
         raise ValueError("A regular owned local video is required")
-    result = _run_probe(
+    result = run_media_command(
         [
             "ffprobe",
             "-v",
@@ -61,7 +61,9 @@ def probe_video(path: Path, cancel_check=None) -> tuple[dict, list[dict]]:
     return videos[0], audio
 
 
-def probe_normalized_video(path: Path, cancel_check=None) -> tuple[dict, list[dict]]:
+def probe_normalized_video(
+    path: Path, cancel_check=None, *, history_interval=None
+) -> tuple[dict, list[dict]]:
     video, audio = probe_video(path, cancel_check)
     if (
         Fraction(video["r_frame_rate"]) != 24
@@ -75,8 +77,26 @@ def probe_normalized_video(path: Path, cancel_check=None) -> tuple[dict, list[di
     # Remake accepts up to 345 frames per inference window. Bound packet reads
     # even if a damaged container declares a short window with extra samples.
     frames = int(video["nb_frames"])
-    if 0 < frames <= 345:
-        packets = _run_probe(
+    if not frames > 0:
+        raise ValueError("A positive frame count is required")
+    if frames <= 345 or history_interval is not None:
+        start, count = (0, frames) if frames <= 345 else history_interval
+        if (
+            type(start) is not int
+            or type(count) is not int
+            or not 0 <= start < frames
+            or not 1 <= count <= 345
+            or start + count > frames
+        ):
+            raise ValueError("Invalid history frame interval")
+        # A long take can have irregular samples well beyond its opening. Seek to
+        # the preceding keyframe and include reorder context after the chosen range.
+        interval = (
+            f"%+#{frames + 1}"
+            if frames <= 345
+            else f"{max(0, start / 24 - 1):.9f}%{(start + count) / 24 + 1:.9f}"
+        )
+        packets = run_media_command(
             [
                 "ffprobe",
                 "-v",
@@ -85,7 +105,7 @@ def probe_normalized_video(path: Path, cancel_check=None) -> tuple[dict, list[di
                 "-select_streams",
                 "v:0",
                 "-read_intervals",
-                f"%+#{frames + 1}",
+                interval,
                 "-show_entries",
                 "packet=pts",
                 "-of",
@@ -95,21 +115,23 @@ def probe_normalized_video(path: Path, cancel_check=None) -> tuple[dict, list[di
             timeout=30,
             cancel_check=cancel_check,
         )
-        # H.264 packets can be stored in decode order. Compare display order,
-        # allowing rounding to half a tick in the container's own time base.
-        pts = sorted(
+        tick = Fraction(video["time_base"])
+        stamps = sorted(
             int(row.split(",")[0]) for row in packets.stdout.splitlines() if row.strip()
         )
-        tick = Fraction(video["time_base"])
-        if len(pts) != frames or any(
+        if frames > 345:
+            stamps = [
+                stamp for stamp in stamps if start <= round(stamp * tick * 24) < start + count
+            ]
+        if len(stamps) != count or any(
             abs(stamp * tick - Fraction(index, 24)) > tick / 2
-            for index, stamp in enumerate(pts)
+            for index, stamp in enumerate(stamps, start)
         ):
             raise ValueError("Normalize presentation timestamps to 24 fps before assembly")
     return video, audio
 
 
-def _run_probe(argv, *, timeout, cancel_check=None):
+def run_media_command(argv, *, timeout, cancel_check=None):
     """Keep the owned probe in its own process group, including observer failures."""
     started = time.monotonic()
     process = subprocess.Popen(
@@ -133,7 +155,7 @@ def _run_probe(argv, *, timeout, cancel_check=None):
             except subprocess.TimeoutExpired:
                 continue
         if process.returncode:
-            raise ValueError("The owned MP4 could not be inspected")
+            raise ValueError(f"The media operation failed: {stderr.strip()[-400:]}")
         return subprocess.CompletedProcess(argv, process.returncode, stdout, stderr)
     finally:
         if process.poll() is None:

@@ -12,6 +12,7 @@ const sections = [
     ['Hardware requirements', '硬件要求', 'guide/profiles'],
     ['Generate from text or images', '文字与图像生成视频', 'guide/complete-pipeline'],
     ['Pika video and sound', 'Pika 画面与声音', 'guide/pika-flex'],
+    ['Prepare and finish footage', '准备源片与导出成片', 'guide/source-window'],
     ['Edit a source video', '编辑源视频', 'guide/remake'],
   ] },
   { en: 'Integration', zh: '集成与部署', pages: [

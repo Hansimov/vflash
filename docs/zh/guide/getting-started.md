@@ -9,11 +9,11 @@
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install https://github.com/Hansimov/vflash/releases/download/v0.28.0/vflash-0.28.0-py3-none-any.whl
+python -m pip install https://github.com/Hansimov/vflash/releases/download/v0.29.0/vflash-0.29.0-py3-none-any.whl
 python -c "import vflash; print(vflash.__version__)"
 ```
 
-最后一条命令应输出 `0.28.0`。基础包提供 CLI，推理依赖随所选运行时安装。
+最后一条命令应输出 `0.29.0`。基础包提供 CLI，推理依赖随所选运行时安装。
 
 ## 检查显卡 {#check-your-gpu}
 

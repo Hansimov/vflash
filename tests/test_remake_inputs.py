@@ -271,3 +271,29 @@ def test_prepared_text_binds_exact_segment_order_and_owned_file(
     path.write_bytes(path.read_bytes() + b"x")
     with pytest.raises(ValueError, match="content differs"):
         node.load(**graph["4"]["inputs"])
+
+
+def test_phone_reference_uses_display_orientation_and_requires_a_still(
+    tmp_path, remake_request
+):
+    picture = tmp_path / "phone.jpg"
+    exif = Image.Exif()
+    exif[274] = 6
+    Image.new("RGB", (480, 832), "green").save(picture, exif=exif)
+    pinned = replace(remake_request, references=(RemakeReference(picture, 12),))
+    assert (
+        remake_graph(pinned, input_directory=tmp_path, output_prefix="phone")["11"]["inputs"][
+            "pins"
+        ]
+        == "12"
+    )
+    animated = tmp_path / "animation.png"
+    Image.new("RGB", (832, 480), "green").save(
+        animated, save_all=True, append_images=[Image.new("RGB", (832, 480), "blue")]
+    )
+    with pytest.raises(ValueError, match="one still"):
+        remake_graph(
+            replace(pinned, references=(RemakeReference(animated, 12),)),
+            input_directory=tmp_path,
+            output_prefix="animation",
+        )

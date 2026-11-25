@@ -25,6 +25,24 @@ def build_parser() -> argparse.ArgumentParser:
 
     commands.add_parser("profiles", help="list the available GPU and model configurations")
 
+    source = commands.add_parser(
+        "prepare-remake-source", help="trim and normalize a local H.264 source for Remake"
+    )
+    source.add_argument("source", type=Path)
+    source.add_argument("output", type=Path)
+    source.add_argument("--width", type=int, required=True)
+    source.add_argument("--height", type=int, required=True)
+    source.add_argument("--start", default="0", help="seconds from source video start")
+    source.add_argument("--duration", help="selected seconds; defaults to the remaining video")
+    source.add_argument("--soundtrack", choices=("preserve", "silent"), default="preserve")
+
+    finish = commands.add_parser(
+        "finish-remake-window", help="trim a generated window to its prepared content"
+    )
+    finish.add_argument("model_output", type=Path)
+    finish.add_argument("output", type=Path)
+    finish.add_argument("--receipt", required=True, type=Path)
+
     from vflash.pipeline.cli import add_pipeline_commands
 
     add_pipeline_commands(commands)
@@ -87,6 +105,30 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        if args.command == "finish-remake-window":
+            from vflash.media.remake_source import finish_remake_window
+
+            receipt = json.loads(args.receipt.read_text(encoding="utf-8"))
+            print(
+                json.dumps(
+                    finish_remake_window(args.model_output, args.output, receipt), indent=2
+                )
+            )
+            return 0
+        if args.command == "prepare-remake-source":
+            from vflash.media.remake_source import prepare_remake_source
+
+            result = prepare_remake_source(
+                args.source,
+                args.output,
+                width=args.width,
+                height=args.height,
+                start_seconds=args.start,
+                duration_seconds=args.duration,
+                soundtrack=args.soundtrack,
+            )
+            print(json.dumps(result, indent=2))
+            return 0
         if args.command == "upscale-video":
             from vflash.flashvsr import run_flashvsr_command
 

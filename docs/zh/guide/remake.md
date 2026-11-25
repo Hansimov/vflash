@@ -2,6 +2,8 @@
 
 已有镜头提供动作与节奏时，选用 Remake。场景或商品表面修改使用 `edit`，主体替换使用 `swap`。应用负责选择对象，并准备与源片时刻对应的参考图。
 
+录屏、手机实拍或非 24 fps 素材可直接按[准备源片与导出成片](./source-window)处理。保存准备凭据，编辑完成后用它移除模型补帧和画布补边。
+
 ## 准备执行环境
 
 调用端安装 `remake-client` 扩展。按 [Viggle 固定版本说明](https://huggingface.co/Viggle/Viggle-Remake/blob/7e5be143702dd53b9154482de673b8519ed2d4d6/COMFYUI.md)单独配置本机 Comfy 环境，使用 ComfyUI 修订 `355cd6b14c92c19ac3188fe528e47a3f21ef5178`、所选模式的预合并 INT8 模型及原版 VAE，并在该环境注册 Vflash 条件节点。

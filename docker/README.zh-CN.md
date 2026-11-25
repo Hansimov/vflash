@@ -7,4 +7,4 @@
 | Native HTTP | `hansimov/vflash:0.21.0` |
 | Pipeline | `hansimov/vflash:0.21.0-pipeline` |
 
-部署时请使用[清单中的镜像摘要](images.json)固定构建。需要 0.28.0 包的功能时，按[部署手册](https://hansimov.github.io/vflash/zh/guide/docker)从对应源码标签构建。模型资源只读挂载，单独分配可写输出目录。发送任务前检查就绪状态，并在容器内核对包版本。
+部署时请使用[清单中的镜像摘要](images.json)固定构建。需要 0.29.0 包的功能时，按[部署手册](https://hansimov.github.io/vflash/zh/guide/docker)从对应源码标签构建。模型资源只读挂载，单独分配可写输出目录。发送任务前检查就绪状态，并在容器内核对包版本。
