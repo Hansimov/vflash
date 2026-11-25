@@ -23,6 +23,28 @@ from vflash.pipeline.remake_conditioning import NODE_CLASS_MAPPINGS
 输入采用本地 H.264 MP4，时间基准为 24 fps、方形像素、零起点，画幅与声明一致。先校正旋转。只有该时刻完整的已编辑画面才可固定到指定模型帧；商品目录照片适合用作不绑定时刻的外观参考。需要保留音轨时应检查交付文件的实际音频流，静音使用 `silent`。
 
 
+## 在换景中保住手中物件和短时图标
+
+换背景时，先找一帧手和商品挡住旧背景的画面，在完整模型画布上编辑，再检查指尖、手中物件及接触点。对于短时贴纸，可以分别查看出现前、仍可见的后段和消失后的源画面，每个窗口最多选取四张有用的参考图。成片要同时核对出现和消失的时刻。
+
+先用[源帧导出工具](./source-window)得到 `pins/frames.json`。把改好的 PNG 按原文件名存入 `edited/`。清单记录了真实帧号和原始顺序，下面生成的元组可直接传给后续请求的 `references`。
+
+```python
+import json
+from pathlib import Path
+from vflash.pipeline.remake import RemakeReference
+
+pins = Path("pins")
+edited = Path("edited")
+references = tuple(
+    RemakeReference(edited / row["file"], frame=row["frame"])
+    for row in json.loads((pins / "frames.json").read_text())
+)
+```
+
+原版 Remake 的一次请求支持两种方式：每张参考图都绑定帧号，或整组参考图都不绑定。只有商品照片时可用未绑定的外观参考；需要绑定时，先把该外观做到对应时刻的完整画面里。[原作者的提示说明](https://huggingface.co/Viggle/Viggle-Remake/blob/main/PROMPTING.md)解释了参考图、帧号与六段提示词如何配合。
+
+
 <span id="extended-canvas-preview" aria-hidden="true"></span>
 
 ## 执行与恢复

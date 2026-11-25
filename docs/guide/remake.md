@@ -23,6 +23,28 @@ from vflash.pipeline.remake_conditioning import NODE_CLASS_MAPPINGS
 Use a local H.264 MP4 on a 24 fps clock with square pixels, zero start time and matching canvas. Normalize rotation first. Use a target pin at an exact model frame only for a complete edited picture at that moment. A catalog photo can guide appearance as an unpinned reference. For a preserved soundtrack, check the final audio stream; for silence, request `silent`.
 
 
+## Keep a held item or a brief graphic through an edit
+
+For a background replacement, inspect a source frame where the hand and item overlap the old background. Edit that frame on the full model canvas and check that the fingertips, held item and contact point remain. For a short overlay, inspect frames before its appearance, late in the visible interval and after it disappears. Select up to four useful references within each window. Check both transitions in the finished film.
+
+Use [the frame exporter](./source-window) to create `pins/frames.json`. Save your edited PNGs under the same filenames in `edited/`. The manifest carries the precise frame numbers and original order. Pass the resulting tuple as `references` in the request below.
+
+```python
+import json
+from pathlib import Path
+from vflash.pipeline.remake import RemakeReference
+
+pins = Path("pins")
+edited = Path("edited")
+references = tuple(
+    RemakeReference(edited / row["file"], frame=row["frame"])
+    for row in json.loads((pins / "frames.json").read_text())
+)
+```
+
+An original Remake request accepts either a frame index on every reference or no indices at all. If a product photo alone supplies style, use the unpinned mode; when using pins, first incorporate that appearance into the full scene at each chosen time. The [upstream prompt guide](https://huggingface.co/Viggle/Viggle-Remake/blob/main/PROMPTING.md) explains how the frame indices and six prompt sections work together.
+
+
 <span id="extended-canvas-preview" aria-hidden="true"></span>
 
 ## Run once and recover
