@@ -49,7 +49,7 @@ An original Remake request accepts either a frame index on every reference or no
 
 ## Run once and recover
 
-Place the preceding guide’s `window.mp4` and `window.json` in the Comfy input directory. Edit the opening frame on that same canvas and save it there as `edited-opening.png`. Put the six-section H3 editing prompt in `prompt.txt` in your working directory. This product edit reads its frame count, canvas and soundtrack directly from the preparation receipt.
+Place the preceding guide’s `prepared/window.mp4` and `prepared/window.json` in the Comfy input directory. Edit the opening frame on that same canvas and save it there as `edited-opening.png`. Put the six-section H3 editing prompt in `prompt.txt` in your working directory. This product edit reads its frame count, canvas and soundtrack directly from the preparation receipt.
 
 The following integration fragment assumes a runtime owner that can stop and confirm its process. Give each execution a fresh journal directory. After a caller restart, `recover_completed_remake` can read a completed execution with the original request, directories and unchanged files. For a pending or uncertain execution, reconcile its recorded ID before further work.
 

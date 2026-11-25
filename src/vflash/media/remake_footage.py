@@ -4,6 +4,7 @@ The standalone CLI works with the Vflash 0.29.0 wheel, FFmpeg and FFprobe.
 """
 
 import argparse
+import hashlib
 import json
 import os
 from fractions import Fraction
@@ -11,6 +12,54 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from vflash.media.probe import MP4_INPUT, probe_normalized_video, run_media_command
+
+
+def prepared_identity(path):
+    with path.open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def verify_original(path, receipt):
+    expected = receipt.get("prepared_window_sha256")
+    if expected is not None and (
+        not isinstance(expected, str)
+        or len(expected) != 64
+        or prepared_identity(path) != expected
+    ):
+        raise ValueError("Use the exact source window saved with this preparation receipt")
+
+
+def prepare_window(
+    source, directory, *, width, height, start="0", duration=None, soundtrack="preserve"
+):
+    """Publish the model window together with its original-source identity and crop receipt."""
+    from vflash.media.remake_source import prepare_remake_source
+
+    if directory.exists() or directory.is_symlink():
+        raise FileExistsError(directory)
+    with TemporaryDirectory(prefix=".vflash-prepare-", dir=directory.parent) as tmp:
+        staged = Path(tmp) / "prepared"
+        staged.mkdir()
+        window = staged / "window.mp4"
+        receipt = prepare_remake_source(
+            source,
+            window,
+            width=width,
+            height=height,
+            start_seconds=start,
+            duration_seconds=duration,
+            soundtrack=soundtrack,
+        )
+        receipt["prepared_window_sha256"] = prepared_identity(window)
+        (staged / "window.json").write_text(json.dumps(receipt, indent=2) + "\n")
+        # Reserve the name exclusively before publishing both completed files.
+        directory.mkdir()
+        try:
+            os.replace(staged, directory)
+        except OSError:
+            directory.rmdir()
+            raise
+    return receipt
 
 
 def require_audio_coverage(track, frames, *, path=None, cancel_check=None):
@@ -90,6 +139,7 @@ def window_geometry(path, receipt):
 
 def export_frames(source, directory, receipt, frames):
     window_geometry(source, receipt)
+    verify_original(source, receipt)
     if (
         not 1 <= len(frames) <= 4
         or len(set(frames)) != len(frames)
@@ -162,6 +212,7 @@ def finish_window(model_output, output, receipt, original_audio=None):
         if receipt.get("soundtrack") != "preserve":
             raise ValueError("The preparation receipt must request preserved audio")
         tracks = window_geometry(original_audio, receipt)
+        verify_original(original_audio, receipt)
     if receipt.get("soundtrack") == "preserve":
         if not tracks:
             raise ValueError("A preserved soundtrack is required")
@@ -213,6 +264,16 @@ def finish_window(model_output, output, receipt, original_audio=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="action", required=True)
+    prepare = commands.add_parser(
+        "prepare", help="Save a normalized video and its matching receipt together."
+    )
+    prepare.add_argument("source", type=Path)
+    prepare.add_argument("directory", type=Path, help="A new directory in an existing parent.")
+    prepare.add_argument("--width", type=int, required=True)
+    prepare.add_argument("--height", type=int, required=True)
+    prepare.add_argument("--start", default="0")
+    prepare.add_argument("--duration")
+    prepare.add_argument("--soundtrack", choices=("preserve", "silent"), default="preserve")
     frames = commands.add_parser("frames", help="Export full-canvas PNGs to a new directory.")
     finish = commands.add_parser("finish", help="Remove padding and verify preserved sound.")
     for command in (frames, finish):
@@ -224,11 +285,23 @@ def main():
         "--original-audio", type=Path, help="Use sound from the matching prepared source."
     )
     args = parser.parse_args()
-    receipt = json.loads(args.receipt.read_text())
-    if args.action == "frames":
+    if args.action == "prepare":
+        result = prepare_window(
+            args.source,
+            args.directory,
+            width=args.width,
+            height=args.height,
+            start=args.start,
+            duration=args.duration,
+            soundtrack=args.soundtrack,
+        )
+    elif args.action == "frames":
+        receipt = json.loads(args.receipt.read_text())
         result = export_frames(args.window, args.output, receipt, args.frames)
     else:
-        result = finish_window(args.window, args.output, receipt, args.original_audio)
+        result = finish_window(
+            args.window, args.output, json.loads(args.receipt.read_text()), args.original_audio
+        )
     print(json.dumps(result, indent=2))
 
 

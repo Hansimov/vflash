@@ -14,9 +14,12 @@ ffmpeg -n -f lavfi -i testsrc2=size=640x360:rate=30:duration=5 \
 ## 准备三秒素材
 
 ```bash
-vflash prepare-remake-source source.mp4 window.mp4 \
-  --width 512 --height 512 --start 1 --duration 3 --soundtrack preserve > window.json
+curl -fL https://github.com/Hansimov/vflash/releases/download/v0.29.0/remake_window.py -o remake_window.py
+python remake_window.py prepare source.mp4 prepared \
+  --width 512 --height 512 --start 1 --duration 3 --soundtrack preserve
 ```
+
+新目录同时保存 `window.mp4` 和 `window.json`。重复使用同一目录时，两份原文件都会保留。导出参考帧或恢复原声时，工具使用保存的 SHA-256 核对原准备窗口，避免混用尺寸相同的其他片段。
 
 对于宽高比为 16:9、方形像素的源片，内容区域为 512 × 288，位于画布中的 `[0,112,512,288]`。三秒对应 72 个内容帧，最短模型窗口为 90 帧，末尾会重复最后一帧 18 次。手机视频的显示旋转和非方形像素会在缩放前计入画幅选择。模型的合法长度为 90 到 345 帧中的 `5 + 17k`。
 
@@ -27,18 +30,17 @@ vflash prepare-remake-source source.mp4 window.mp4 \
 下载与 0.29.0 wheel 配套的独立工具。下面从同一窗口一次取出第 0、30、60 帧。编号从零开始，以 24 fps 的窗口起点计时。所选时刻必须位于实际内容内。
 
 ```bash
-curl -fL https://github.com/Hansimov/vflash/releases/download/v0.29.0/remake_footage_checked.py -o remake_footage.py
-python remake_footage.py frames window.mp4 pins --receipt window.json --frames 0 30 60
+python remake_window.py frames prepared/window.mp4 pins --receipt prepared/window.json --frames 0 30 60
 ```
 
 `frames.json` 保留你指定的顺序。每张 PNG 都包含完整模型画布及补边。只在这些图片上修改外观，然后用记录的帧号传入 `RemakeReference(path, frame=n)`。
 
 ## 编辑和导出
 
-使用 `window.mp4` 作为[源片编辑](./remake)的输入。把 `window.json` 中的 `model_frames`、`width` 和 `height` 填入模型请求，指定帧的参考图按完整模型画布准备。得到完整模型输出 `edited-window.mp4` 后运行：
+使用 `prepared/window.mp4` 作为[源片编辑](./remake)的输入。把 `window.json` 中的 `model_frames`、`width` 和 `height` 填入模型请求，指定帧的参考图按完整模型画布准备。得到完整模型输出 `edited-window.mp4` 后运行：
 
 ```bash
-vflash finish-remake-window edited-window.mp4 result.mp4 --receipt window.json
+vflash finish-remake-window edited-window.mp4 result.mp4 --receipt prepared/window.json
 ffprobe -v error -select_streams v:0 -show_entries stream=width,height,avg_frame_rate,nb_frames -of json result.mp4
 ```
 
@@ -49,6 +51,8 @@ ffprobe -v error -select_streams v:0 -show_entries stream=width,height,avg_frame
 本页示例已经用 `--soundtrack preserve` 准备了带音调的源片。0.29.0 wheel 的导出命令检查音轨是否存在，音轨也可能在画面结束前中断。配套工具会沿画面时钟解码音频，核对从开头到最后一个内容帧是否都有连续样本。即使文件头显示时长正确，它也能发现录音中途缺失的区段。正常编码的静音仍是有效样本。如果工具报告连续声音只覆盖部分画面，可以保留本次模型输出，在下面第二条命令中恢复同期声。若要使用源片同期声，传入**同一次准备**产生的窗口，工具将其音轨与编辑后的画面一起导出。
 
 ```bash
-python remake_footage.py finish edited-window.mp4 checked.mp4 --receipt window.json
-python remake_footage.py finish edited-window.mp4 original-sound.mp4 --receipt window.json --original-audio window.mp4
+python remake_window.py finish edited-window.mp4 checked.mp4 --receipt prepared/window.json
+python remake_window.py finish edited-window.mp4 original-sound.mp4 --receipt prepared/window.json --original-audio prepared/window.mp4
 ```
+
+以前由 `vflash prepare-remake-source` 输出的凭据也可以用于导出；这些凭据只记录几何与时钟。需要在多个相似剪辑之间核对原件身份时，用本页的 `prepare` 命令创建配对目录。

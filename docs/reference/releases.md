@@ -8,7 +8,7 @@ When a Remake request uses a long generated take as history, its selected interv
 
 ### Companion tool for 0.29.0
 
-The release attachment `remake_footage_checked.py` runs with the original wheel. Extract full-canvas target PNGs, check audio coverage, or finish a generated picture with sound from the original prepared window. [Worked example and commands](../guide/source-window)
+The release attachment `remake_window.py` runs with the original wheel. Extract full-canvas target PNGs, check audio coverage, or finish a generated picture with sound from the original prepared window. [Worked example and commands](../guide/source-window)
 
 ## Install the stable release
 

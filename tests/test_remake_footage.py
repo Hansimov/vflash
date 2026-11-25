@@ -120,3 +120,52 @@ def test_export_real_frames_and_recover_interrupted_soundtrack(tmp_path):
     assert int(video["nb_frames"]) == 48 and float(audio[0]["duration"]) == pytest.approx(
         2, abs=0.002
     )
+
+
+def test_paired_preparation_survives_retry_and_declines_a_different_soundtrack(tmp_path):
+    from vflash.media.remake_footage import export_frames, finish_window, prepare_window
+
+    source = tmp_path / "source.mp4"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=s=160x96:r=24:d=4",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=d=4",
+            "-c:v",
+            "libx264",
+            "-threads",
+            "1",
+            "-c:a",
+            "aac",
+            str(source),
+        ],
+        check=True,
+    )
+    first, other = tmp_path / "first", tmp_path / "other"
+    receipt = prepare_window(source, first, width=480, height=480, duration="2")
+    raw = (first / "window.json").read_bytes()
+    with pytest.raises(FileExistsError):
+        prepare_window(source, first, width=480, height=480, start="1", duration="2")
+    assert (first / "window.json").read_bytes() == raw
+    prepare_window(source, other, width=480, height=480, start="1", duration="2")
+    with pytest.raises(ValueError, match="exact source window"):
+        export_frames(other / "window.mp4", tmp_path / "wrong-pins", receipt, [0])
+    with pytest.raises(ValueError, match="exact source window"):
+        finish_window(
+            first / "window.mp4", tmp_path / "wrong.mp4", receipt, other / "window.mp4"
+        )
+    assert not (tmp_path / "wrong.mp4").exists()
+    assert (
+        finish_window(
+            first / "window.mp4", tmp_path / "valid.mp4", receipt, first / "window.mp4"
+        )["frames"]
+        == 48
+    )

@@ -49,7 +49,7 @@ references = tuple(
 
 ## 执行与恢复
 
-把上一页的 `window.mp4` 和 `window.json` 放入 Comfy 的输入目录。在同一画布上制作首帧的目标图 `edited-opening.png`，将六段式 H3 编辑提示词保存为当前目录的 `prompt.txt`。下面的商品编辑会从准备凭据读取模型需要的帧数、画布和音轨。
+把上一页的 `prepared/window.mp4` 和 `prepared/window.json` 放入 Comfy 的输入目录。在同一画布上制作首帧的目标图 `edited-opening.png`，将六段式 H3 编辑提示词保存为当前目录的 `prompt.txt`。下面的商品编辑会从准备凭据读取模型需要的帧数、画布和音轨。
 
 下例需要由应用提供运行时所有者，负责停止并确认进程退出。每次执行使用新的记录目录。调用方重启后，可将原请求、目录及未更改的文件传给 `recover_completed_remake` 恢复已完成结果。若结果尚不确定，先按记录中的原执行 ID 核对。
 
