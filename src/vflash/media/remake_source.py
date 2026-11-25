@@ -254,7 +254,7 @@ def finish_remake_window(
 
         if not audio:
             raise ValueError("The generated window is missing its preserved soundtrack")
-        require_audio_coverage(audio[0], active)
+        require_audio_coverage(audio[0], active, path=model_output, cancel_check=cancel_check)
     with TemporaryDirectory(prefix=".vflash-result-", dir=output.parent) as temp:
         staged = Path(temp) / "result.mp4"
         args = [
@@ -314,6 +314,8 @@ def finish_remake_window(
             raise ValueError(
                 "Finished clip did not retain the intended geometry, clock and sound"
             )
+        if preserve:
+            require_audio_coverage(tracks[0], active, path=staged, cancel_check=cancel_check)
         os.link(staged, output)
     return {
         "frames": active,

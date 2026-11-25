@@ -15,7 +15,7 @@ ffmpeg -n -f lavfi -i testsrc2=size=640x360:rate=30:duration=5 \
 
 ```bash
 vflash prepare-remake-source source.mp4 window.mp4 \
-  --width 512 --height 512 --start 1 --duration 3 --soundtrack silent > window.json
+  --width 512 --height 512 --start 1 --duration 3 --soundtrack preserve > window.json
 ```
 
 对于宽高比为 16:9、方形像素的源片，内容区域为 512 × 288，位于画布中的 `[0,112,512,288]`。三秒对应 72 个内容帧，最短模型窗口为 90 帧，末尾会重复最后一帧 18 次。手机视频的显示旋转和非方形像素会在缩放前计入画幅选择。模型的合法长度为 90 到 345 帧中的 `5 + 17k`。
@@ -27,7 +27,7 @@ vflash prepare-remake-source source.mp4 window.mp4 \
 下载与 0.29.0 wheel 配套的独立工具。下面从同一窗口一次取出第 0、30、60 帧。编号从零开始，以 24 fps 的窗口起点计时。所选时刻必须位于实际内容内。
 
 ```bash
-curl -fL https://github.com/Hansimov/vflash/releases/download/v0.29.0/remake_footage.py -o remake_footage.py
+curl -fL https://github.com/Hansimov/vflash/releases/download/v0.29.0/remake_footage_checked.py -o remake_footage.py
 python remake_footage.py frames window.mp4 pins --receipt window.json --frames 0 30 60
 ```
 
@@ -46,7 +46,7 @@ ffprobe -v error -select_streams v:0 -show_entries stream=width,height,avg_frame
 
 ## 核对并复用完整原声
 
-如果要保留声音，第一步须使用 `--soundtrack preserve`。0.29.0 wheel 的导出命令检查音轨是否存在，音轨也可能在画面结束前中断。配套工具还会核对音轨的起止时间。若需要使用源片同期声，传入**同一次准备**产生的窗口，工具将其音轨与编辑后的画面一起导出。
+本页示例已经用 `--soundtrack preserve` 准备了带音调的源片。0.29.0 wheel 的导出命令检查音轨是否存在，音轨也可能在画面结束前中断。配套工具会沿画面时钟解码音频，核对从开头到最后一个内容帧是否都有连续样本。即使文件头显示时长正确，它也能发现录音中途缺失的区段。正常编码的静音仍是有效样本。如果工具报告连续声音只覆盖部分画面，可以保留本次模型输出，在下面第二条命令中恢复同期声。若要使用源片同期声，传入**同一次准备**产生的窗口，工具将其音轨与编辑后的画面一起导出。
 
 ```bash
 python remake_footage.py finish edited-window.mp4 checked.mp4 --receipt window.json

@@ -8,7 +8,7 @@
 
 ### 0.29.0 配套工具
 
-发行附件 `remake_footage.py` 可配合原版 wheel 提取用于编辑的 PNG，核对成片音轨范围，并在需要时从同次准备的源片取回同期声。已安装 0.29.0 的环境可直接使用。[示例与命令](../guide/source-window)
+发行附件 `remake_footage_checked.py` 可配合原版 wheel 提取用于编辑的 PNG，核对成片音轨范围，并在需要时从同次准备的源片取回同期声。已安装 0.29.0 的环境可直接使用。[示例与命令](../guide/source-window)
 
 ## 安装正式版
 

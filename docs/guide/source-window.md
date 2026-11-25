@@ -15,7 +15,7 @@ ffmpeg -n -f lavfi -i testsrc2=size=640x360:rate=30:duration=5 \
 
 ```bash
 vflash prepare-remake-source source.mp4 window.mp4 \
-  --width 512 --height 512 --start 1 --duration 3 --soundtrack silent > window.json
+  --width 512 --height 512 --start 1 --duration 3 --soundtrack preserve > window.json
 ```
 
 For a square-pixel 16:9 source, the picture fills a 512 × 288 rectangle at `[0,112,512,288]`. Three seconds contain 72 frames. The shortest model window needs 90 frames, so the final picture is repeated 18 times. Display rotation and sample aspect are accounted for before fitting the image. Model windows use lengths of `5 + 17k` between 90 and 345 frames.
@@ -27,7 +27,7 @@ Use `--soundtrack preserve` for footage with an audio track. The selected sound 
 Download the standalone utility for the 0.29.0 wheel. This example extracts frames 0, 30 and 60 from the same prepared window. Indices start at zero on its 24 fps clock and must fall within the real content.
 
 ```bash
-curl -fL https://github.com/Hansimov/vflash/releases/download/v0.29.0/remake_footage.py -o remake_footage.py
+curl -fL https://github.com/Hansimov/vflash/releases/download/v0.29.0/remake_footage_checked.py -o remake_footage.py
 python remake_footage.py frames window.mp4 pins --receipt window.json --frames 0 30 60
 ```
 
@@ -46,7 +46,7 @@ The example delivers 512 × 288 pixels, 72 frames at 24 fps. To verify the conve
 
 ## Verify audio coverage or use the original sound
 
-Prepare the window with `--soundtrack preserve` when sound matters. The 0.29.0 wheel checks for an audio stream on export. That stream can end before the selected picture does. The companion checks its start and end timestamps. To use the original sound, provide the window from **the same preparation**; its audio will accompany the edited picture.
+The example above has already prepared the test tone with `--soundtrack preserve`. The 0.29.0 wheel checks for an audio stream on export. That stream can end before the selected picture does. The companion decodes the audio and checks continuous sample coverage through the last content frame. A gap in the middle is detectable even when the reported duration is correct. Encoded silence counts as valid audio. If the checker reports an interruption, keep the generated picture and run the second command below. To use the original sound, provide the window from **the same preparation**; its audio will accompany the edited picture.
 
 ```bash
 python remake_footage.py finish edited-window.mp4 checked.mp4 --receipt window.json

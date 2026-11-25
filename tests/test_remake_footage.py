@@ -93,6 +93,28 @@ def test_export_real_frames_and_recover_interrupted_soundtrack(tmp_path):
     with pytest.raises(ValueError, match="cover"):
         finish_window(truncated, dest, receipt)
     assert not dest.exists()
+    gap = tmp_path / "audio-gap.mp4"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-i",
+            str(window),
+            "-map",
+            "0",
+            "-c",
+            "copy",
+            "-bsf:a",
+            "noise=drop='between(pts*tb,0.4,0.9)'",
+            str(gap),
+        ],
+        check=True,
+    )
+    for operation in (finish_remake_window, finish_window):
+        with pytest.raises(ValueError, match="continuous"):
+            operation(gap, dest, receipt)
+        assert not dest.exists()
     assert finish_window(truncated, dest, receipt, window)["frames"] == 48
     video, audio = probe_normalized_video(dest)
     assert int(video["nb_frames"]) == 48 and float(audio[0]["duration"]) == pytest.approx(

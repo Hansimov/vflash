@@ -13,7 +13,7 @@ from tempfile import TemporaryDirectory
 from vflash.media.probe import MP4_INPUT, probe_normalized_video, run_media_command
 
 
-def require_audio_coverage(track, frames):
+def require_audio_coverage(track, frames, *, path=None, cancel_check=None):
     """Check the selected picture interval against the audio presentation clock."""
     tick = Fraction(track["time_base"])
     start = int(track["start_pts"]) * tick
@@ -23,6 +23,48 @@ def require_audio_coverage(track, frames):
         raise ValueError(
             "The preserved soundtrack does not cover the selected picture interval"
         )
+    if path is None:
+        return
+    # In MP4 a missing run of AAC packets can be represented as a single
+    # long packet duration. Only decoded sample counts prove audible coverage.
+    stop = Fraction(frames, 24)
+    sample_rate = int(track["sample_rate"])
+    if sample_rate <= 0:
+        raise ValueError("A positive audio sample rate is required")
+    decoded = run_media_command(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            *MP4_INPUT,
+            "-select_streams",
+            "a:0",
+            "-read_intervals",
+            f"%+{float(stop) + 0.1:.6f}",
+            "-show_frames",
+            "-show_entries",
+            "frame=pts,nb_samples",
+            "-of",
+            "json",
+            str(path.absolute()),
+        ],
+        timeout=30,
+        cancel_check=cancel_check,
+    )
+    covered = Fraction(0)
+    for frame in json.loads(decoded.stdout)["frames"]:
+        pts, count = frame.get("pts"), frame.get("nb_samples")
+        if not isinstance(pts, int) or not isinstance(count, int) or count <= 0:
+            raise ValueError("Decoded audio lacks a usable sample clock")
+        begin = pts * tick
+        if begin > covered + tolerance:
+            break
+        covered = max(covered, begin + Fraction(count, sample_rate))
+        if covered + tolerance >= stop:
+            return
+    raise ValueError(
+        f"Decoded audio covers only {float(covered):.3f}s of continuous picture time"
+    )
 
 
 def window_geometry(path, receipt):
@@ -123,7 +165,9 @@ def finish_window(model_output, output, receipt, original_audio=None):
     if receipt.get("soundtrack") == "preserve":
         if not tracks:
             raise ValueError("A preserved soundtrack is required")
-        require_audio_coverage(tracks[0], receipt["content_frames"])
+        require_audio_coverage(
+            tracks[0], receipt["content_frames"], path=original_audio or model_output
+        )
     if output.exists() or output.is_symlink() or output.suffix.lower() != ".mp4":
         raise ValueError("Choose a new MP4 file")
     with TemporaryDirectory(prefix=".vflash-delivery-", dir=output.parent) as tmp:
@@ -159,7 +203,9 @@ def finish_window(model_output, output, receipt, original_audio=None):
         result = root / "export.mp4"
         details = finish_remake_window(source, result, receipt)
         if receipt["soundtrack"] == "preserve":
-            require_audio_coverage(probe_normalized_video(result)[1][0], details["frames"])
+            require_audio_coverage(
+                probe_normalized_video(result)[1][0], details["frames"], path=result
+            )
         os.link(result, output)
     return details
 
