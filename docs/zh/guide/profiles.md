@@ -13,6 +13,8 @@
 
 4090 与 3080 的算力采用 NVIDIA 参考型号规格，Vflash 公开实测使用了扩展显存配置。运行 `vflash doctor` 查看自己的显卡。双卡各自受本卡显存容量限制。
 
+对已有视频做修改时，可参考同卡、同画布、不同切镜数的[0.29.0 实拍耗时](../reference/benchmarks)。
+
 ## 选择配置 {#available}
 
 用 `vflash profiles` 列出配置标识，再以 `vflash plan PROFILE --gpu 0` 检查设备匹配。双卡协作可加 `--peer-gpu 1 --strategy sequence-head`。在 H100 或 Blackwell 上常驻混合主干时，应先满足[配置和分配器要求](./pipeline-conditioning)。

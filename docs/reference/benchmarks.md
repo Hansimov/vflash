@@ -5,6 +5,21 @@
 <span id="sm86-parallel" aria-hidden="true"></span>
 
 
+## Source editing on 0.29.0: equal duration, different shot counts
+
+Six recorded clips of about four seconds each were edited sequentially on one RTX PRO 6000 Blackwell Server. The workload used the original six-step Remake graph, silent output and a roughly 0.5 MP canvas (960 × 544, or portrait). Each time runs from job execution start to publication, including the job's model invocation, decode and output assembly. Procurement, cold startup, reference-image preparation and client download are outside this interval.
+
+| Edit workload | Model windows and frames | Observed time |
+| --- | --- | ---: |
+| Three different continuous takes | 1 × 107 frames each | 62.9, 66.8, 67.5 s |
+| Two shots | 2 × 90 frames | 117.4 s |
+| Three shots | 3 × 90 frames | 202.9 s |
+| Six short shots | 6 × 90 frames | 293.8 s |
+
+This integration gave the observed shots separate windows. Even short shots require a minimum model window. To estimate work on your own footage, record the window count, model frames and delivered frames together. The six scenes had different composition and movement, so the times indicate an order of magnitude.
+
+## Fixed-profile generation measurements
+
 These complete-generation timings exclude model loading. The first three rows use the same 0.15 FP8 resident trunk with Veda 44/6, face repair and six-step audio repair on one RTX PRO 6000 Blackwell 96 GiB. They show the cost of changing one request dimension.
 
 | GPU and recipe | Model canvas | Seconds of video | Elapsed |

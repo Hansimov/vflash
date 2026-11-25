@@ -13,6 +13,8 @@ The table is ordered by the reference model’s peak **single-GPU FP32** through
 
 The 4090 and 3080 specification figures come from NVIDIA’s reference boards. Published Vflash runs used higher-memory configurations. Check your actual allocation with `vflash doctor`. Each card in a pair retains its own memory limit.
 
+For source editing, compare the [0.29.0 measurements by shot count](../reference/benchmarks) on a single card and canvas class.
+
 ## Select a profile {#available}
 
 Run `vflash profiles` to list identifiers and `vflash plan PROFILE --gpu 0` to resolve placement. On a matching pair, add `--peer-gpu 1 --strategy sequence-head`. For a resident hybrid on H100 or Blackwell, verify the [profile and allocator requirements](./pipeline-conditioning) before loading weights.
