@@ -62,6 +62,56 @@ def prepare_window(
     return receipt
 
 
+def prepare_appearance(source, output, receipt):
+    """Fit one upright appearance photo to the unpinned Remake input contract."""
+    from PIL import Image, ImageOps
+
+    from vflash.media.remake_source import valid_canvas
+
+    if output.exists() or output.is_symlink():
+        raise FileExistsError(output)
+    width, height = receipt.get("width"), receipt.get("height")
+    if type(width) is not int or type(height) is not int or not valid_canvas(width, height):
+        raise ValueError("Use the canvas from the prepared video receipt")
+    edge = min(width, height)
+    with Image.open(source) as original:
+        if getattr(original, "n_frames", 1) != 1 or original.width * original.height > 16777216:
+            raise ValueError("Provide one still image of at most 16 megapixels")
+        image = ImageOps.exif_transpose(original).convert("RGBA")
+    w, h = image.size
+    if min(w, h) < 32 or not 0.25 <= w / h <= 4:
+        raise ValueError("The upright photo needs an aspect ratio between 1:4 and 4:1")
+    scale = min(edge / min(w, h), 4096 / max(w, h))
+    real = (2 * round(w * scale / 2), 2 * round(h * scale / 2))
+    canvas = tuple(max(edge, ((v + 31) // 32) * 32) for v in real)
+    rgb = Image.new("RGB", image.size, "white")
+    rgb.paste(image, mask=image.getchannel("A"))
+    fitted = rgb.resize(real, Image.Resampling.LANCZOS)
+    # Only the grid margin extends beyond the original composition.
+    result = Image.new("RGB", canvas)
+    x, y = ((outer - inner) // 4 * 2 for outer, inner in zip(canvas, real, strict=True))
+    result.paste(fitted, (x, y))
+    if x:
+        result.paste(fitted.crop((0, 0, 1, real[1])).resize((x, real[1])), (0, y))
+    if right := canvas[0] - x - real[0]:
+        result.paste(
+            fitted.crop((real[0] - 1, 0, real[0], real[1])).resize((right, real[1])),
+            (x + real[0], y),
+        )
+    if y:
+        result.paste(result.crop((0, y, canvas[0], y + 1)).resize((canvas[0], y)))
+    if bottom := canvas[1] - y - real[1]:
+        end = y + real[1]
+        result.paste(
+            result.crop((0, end - 1, canvas[0], end)).resize((canvas[0], bottom)), (0, end)
+        )
+    with TemporaryDirectory(prefix=".vflash-appearance-", dir=output.parent) as tmp:
+        finished = Path(tmp) / "appearance.png"
+        result.save(finished)
+        os.link(finished, output)
+    return {"width": canvas[0], "height": canvas[1], "content_rect": [x, y, *real]}
+
+
 def require_audio_coverage(track, frames, *, path=None, cancel_check=None):
     """Check the selected picture interval against the audio presentation clock."""
     tick = Fraction(track["time_base"])
@@ -274,6 +324,10 @@ def main():
     prepare.add_argument("--start", default="0")
     prepare.add_argument("--duration")
     prepare.add_argument("--soundtrack", choices=("preserve", "silent"), default="preserve")
+    photo = commands.add_parser("appearance", help="Prepare an unpinned appearance photo.")
+    photo.add_argument("source", type=Path)
+    photo.add_argument("output", type=Path)
+    photo.add_argument("--receipt", type=Path, required=True)
     frames = commands.add_parser("frames", help="Export full-canvas PNGs to a new directory.")
     finish = commands.add_parser("finish", help="Remove padding and verify preserved sound.")
     for command in (frames, finish):
@@ -294,6 +348,10 @@ def main():
             start=args.start,
             duration=args.duration,
             soundtrack=args.soundtrack,
+        )
+    elif args.action == "appearance":
+        result = prepare_appearance(
+            args.source, args.output, json.loads(args.receipt.read_text())
         )
     elif args.action == "frames":
         receipt = json.loads(args.receipt.read_text())

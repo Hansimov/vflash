@@ -169,3 +169,22 @@ def test_paired_preparation_survives_retry_and_declines_a_different_soundtrack(t
         )["frames"]
         == 48
     )
+
+
+def test_unpinned_high_resolution_photo_keeps_its_displayed_shape_and_old_file(tmp_path):
+    from PIL import Image
+
+    from vflash.media.remake_footage import prepare_appearance
+
+    photo = tmp_path / "wide.jpg"
+    metadata = Image.Exif()
+    metadata[274] = 6
+    Image.new("RGB", (1600, 400), "blue").save(photo, exif=metadata)
+    output = tmp_path / "appearance.png"
+    receipt = {"width": 1440, "height": 1440}
+    result = prepare_appearance(photo, output, receipt)
+    assert result["content_rect"] == [208, 0, 1024, 4096]
+    with Image.open(output) as rendered:
+        assert rendered.size == (1440, 4096)
+    with pytest.raises(FileExistsError):
+        prepare_appearance(photo, output, receipt)

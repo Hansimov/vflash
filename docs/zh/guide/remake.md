@@ -23,6 +23,15 @@ from vflash.pipeline.remake_conditioning import NODE_CLASS_MAPPINGS
 输入采用本地 H.264 MP4，时间基准为 24 fps、方形像素、零起点，画幅与声明一致。先校正旋转。只有该时刻完整的已编辑画面才可固定到指定模型帧；商品目录照片适合用作不绑定时刻的外观参考。需要保留音轨时应检查交付文件的实际音频流，静音使用 `silent`。
 
 
+准备独立的人像或商品照片时，使用与视频相同的准备凭据。工具按照片的显示方向等比缩放，输出网格对齐的 PNG；同名输出会保留。
+
+```bash
+curl -fL https://github.com/Hansimov/vflash/releases/download/v0.29.0/remake_inputs.py -o remake_inputs.py
+python remake_inputs.py appearance portrait.jpg appearance.png --receipt prepared/window.json
+```
+
+传入 `RemakeReference(Path("appearance.png"))` 可仅提供外观；对齐特定视频时刻的完整编辑画面仍使用 `frame=n`。每个窗口的参考图必须全部指定帧号或全部不指定。
+
 ## 在换景中保住手中物件和短时图标
 
 换背景时，先找一帧手和商品挡住旧背景的画面，在完整模型画布上编辑，再检查指尖、手中物件及接触点。对于短时贴纸，可以分别查看出现前、仍可见的后段和消失后的源画面，每个窗口最多选取四张有用的参考图。成片要同时核对出现和消失的时刻。

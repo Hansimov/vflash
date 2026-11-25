@@ -23,6 +23,15 @@ from vflash.pipeline.remake_conditioning import NODE_CLASS_MAPPINGS
 Use a local H.264 MP4 on a 24 fps clock with square pixels, zero start time and matching canvas. Normalize rotation first. Use a target pin at an exact model frame only for a complete edited picture at that moment. A catalog photo can guide appearance as an unpinned reference. For a preserved soundtrack, check the final audio stream; for silence, request `silent`.
 
 
+To supply a portrait or product photograph independently of a frame, fit it to the selected video's model scale. The companion reads the display orientation, retains the whole photograph and writes a new grid-aligned PNG.
+
+```bash
+curl -fL https://github.com/Hansimov/vflash/releases/download/v0.29.0/remake_inputs.py -o remake_inputs.py
+python remake_inputs.py appearance portrait.jpg appearance.png --receipt prepared/window.json
+```
+
+Pass `RemakeReference(Path("appearance.png"))` for appearance guidance. Use `frame=n` for a complete edited picture aligned to a source instant. Each window accepts either all pinned or all unpinned references.
+
 ## Keep a held item or a brief graphic through an edit
 
 For a background replacement, inspect a source frame where the hand and item overlap the old background. Edit that frame on the full model canvas and check that the fingertips, held item and contact point remain. For a short overlay, inspect frames before its appearance, late in the visible interval and after it disappears. Select up to four useful references within each window. Check both transitions in the finished film.
