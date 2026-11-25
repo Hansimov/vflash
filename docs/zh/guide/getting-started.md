@@ -15,6 +15,8 @@ python -c "import vflash; print(vflash.__version__)"
 
 最后一条命令应输出 `0.29.0`。基础包提供 CLI，推理依赖随所选运行时安装。
 
+用 CPU 即可先完成一次[源片准备与导出](./source-window)。该示例能检验基础包、FFmpeg、音轨和视频时序；实际模型推理的显卡选择见下节。
+
 ## 检查显卡 {#check-your-gpu}
 
 ```bash

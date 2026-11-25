@@ -2,6 +2,15 @@
 
 Use the 0.29.0 base package with FFmpeg and FFprobe on your path. Times are relative to the source picture’s start. This example takes three seconds from an H.264 MP4 longer than four seconds, preserves its composition on a square model canvas, then removes padding for delivery.
 
+## Try the workflow with a local test clip
+
+If you have no footage to hand, generate this five-second test pattern with a tone. Its moving edges make padding, stretching and the end of the selected interval easy to inspect. You can also use your own H.264 file.
+
+```bash
+ffmpeg -n -f lavfi -i testsrc2=size=640x360:rate=30:duration=5 \
+  -f lavfi -i sine=frequency=440:duration=5 -c:v libx264 -pix_fmt yuv420p -c:a aac source.mp4
+```
+
 ## Prepare three seconds of footage
 
 ```bash

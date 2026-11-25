@@ -2,6 +2,15 @@
 
 以下步骤使用 0.29.0 的基础 Python 包和系统 FFmpeg、FFprobe。时间从源视频画面的起点算起。以一段超过四秒的 H.264 MP4 为例，截取其中三秒，在方形模型画布内保留原构图，最后导出没有黑边或补帧的画面。
 
+## 没有现成源片时
+
+可以先用 FFmpeg 创建一段带提示音的本地测试视频。测试图案让拉伸、补边和末帧重复容易辨认。已有素材时，直接使用自己的 H.264 文件即可。
+
+```bash
+ffmpeg -n -f lavfi -i testsrc2=size=640x360:rate=30:duration=5 \
+  -f lavfi -i sine=frequency=440:duration=5 -c:v libx264 -pix_fmt yuv420p -c:a aac source.mp4
+```
+
 ## 准备三秒素材
 
 ```bash
