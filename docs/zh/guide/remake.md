@@ -9,7 +9,7 @@
 调用端安装 `remake-client` 扩展。按 [Viggle 固定版本说明](https://huggingface.co/Viggle/Viggle-Remake/blob/7e5be143702dd53b9154482de673b8519ed2d4d6/COMFYUI.md)单独配置本机 Comfy 环境，使用 ComfyUI 修订 `355cd6b14c92c19ac3188fe528e47a3f21ef5178`、所选模式的预合并 INT8 模型及原版 VAE，并在该环境注册 Vflash 条件节点。
 
 ```bash
-git clone --branch v0.28.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.29.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m pip install '.[remake-client]'
 ```
@@ -27,24 +27,29 @@ from vflash.pipeline.remake_conditioning import NODE_CLASS_MAPPINGS
 
 ## 执行与恢复
 
+把上一页的 `window.mp4` 和 `window.json` 放入 Comfy 的输入目录。在同一画布上制作首帧的目标图 `edited-opening.png`，将六段式 H3 编辑提示词保存为当前目录的 `prompt.txt`。下面的商品编辑会从准备凭据读取模型需要的帧数、画布和音轨。
+
 下例需要由应用提供运行时所有者，负责停止并确认进程退出。每次执行使用新的记录目录。调用方重启后，可将原请求、目录及未更改的文件传给 `recover_completed_remake` 恢复已完成结果。若结果尚不确定，先按记录中的原执行 ID 核对。
 
 ```python
+import json
 from pathlib import Path
 from vflash.pipeline.remake import RemakeReference, RemakeRequest
 from vflash.pipeline.remake_execution import LocalRemakeRuntime, execute_remake
 
 inputs = Path('/srv/remake/input')
+window = json.loads((inputs / 'window.json').read_text())
 request = RemakeRequest(
-    source=inputs / 'source.mp4',
-    prompt=Path('prompt.txt').read_text(),  # Original H3 six-section editing prompt.
-    mode='swap', frames=124, width=832, height=480,
-    references=(RemakeReference(inputs / 'edited-scene.png'),),
-    soundtrack='preserve', seed=0,
+    source=inputs / 'window.mp4',
+    prompt=Path('prompt.txt').read_text(),  # H3 六段式编辑提示词
+    mode='edit', frames=window['model_frames'],
+    width=window['width'], height=window['height'],
+    references=(RemakeReference(inputs / 'edited-opening.png', frame=0),),
+    soundtrack=window['soundtrack'], seed=0,
 )
 
-# runtime_owner is the application's existing allocation/process controller.
-# Its stop_and_confirm() must stop this runtime and return True after confirmation.
+# runtime_owner 是应用已有的进程控制器
+# stop_and_confirm() 结束本次运行，并在确认退出后返回 True
 result = execute_remake(
     request,
     input_directory=inputs,
@@ -57,3 +62,5 @@ result = execute_remake(
 )
 print(result['artifact'], result['media'])
 ```
+
+用返回的 `artifact` 路径作为 [导出步骤](./source-window) 的第一个参数。若仍比源片多出若干帧，核对传入的是同一个窗口的 `window.json`，并对比导出文件的帧数和其中的 `content_frames`。
