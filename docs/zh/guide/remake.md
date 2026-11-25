@@ -26,6 +26,7 @@ from vflash.pipeline.remake_conditioning import NODE_CLASS_MAPPINGS
 准备独立的人像或商品照片时，使用与视频相同的准备凭据。工具按照片的显示方向等比缩放，输出网格对齐的 PNG；同名输出会保留。
 
 ```bash
+python -m pip install "Pillow>=13,<14"
 curl -fL https://github.com/Hansimov/vflash/releases/download/v0.29.0/remake_inputs.py -o remake_inputs.py
 python remake_inputs.py appearance portrait.jpg appearance.png --receipt prepared/window.json
 ```

@@ -26,6 +26,7 @@ Use a local H.264 MP4 on a 24 fps clock with square pixels, zero start time and 
 To supply a portrait or product photograph independently of a frame, fit it to the selected video's model scale. The companion reads the display orientation, retains the whole photograph and writes a new grid-aligned PNG.
 
 ```bash
+python -m pip install "Pillow>=13,<14"
 curl -fL https://github.com/Hansimov/vflash/releases/download/v0.29.0/remake_inputs.py -o remake_inputs.py
 python remake_inputs.py appearance portrait.jpg appearance.png --receipt prepared/window.json
 ```
