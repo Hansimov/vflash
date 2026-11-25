@@ -56,3 +56,14 @@ python remake_window.py finish edited-window.mp4 original-sound.mp4 --receipt pr
 ```
 
 以前由 `vflash prepare-remake-source` 输出的凭据也可以用于导出；这些凭据只记录几何与时钟。需要在多个相似剪辑之间核对原件身份时，用本页的 `prepare` 命令创建配对目录。
+
+## 将成片用于下一次编辑
+
+第一步完成换人后，可以用交付的 MP4 继续换景。先读视频轨的帧率、帧数和时长。交付时转为源帧率可能改变末帧的结束时刻。
+
+```bash
+ffprobe -v error -select_streams v:0 -show_entries stream=avg_frame_rate,nb_frames,duration -of json checked.mp4
+python remake_window.py prepare checked.mp4 second-window --width 512 --height 512 --soundtrack preserve
+```
+
+这条命令从成片第一帧准备第二个窗口。成片无声时使用 `--soundtrack silent`。第二次执行使用 `second-window/window.mp4` 及其新凭据。从这里导出的参考帧属于第二个窗口。最后把原片与两次成片并排，在同一播放时刻核对转头方向、手部遮挡和商品位置。

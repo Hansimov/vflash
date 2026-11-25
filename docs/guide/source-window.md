@@ -56,3 +56,14 @@ python remake_window.py finish edited-window.mp4 original-sound.mp4 --receipt pr
 ```
 
 Earlier receipts from `vflash prepare-remake-source` remain usable. They record geometry and timing. To distinguish original files across similarly sized clips, create a paired directory with the `prepare` command above.
+
+## Use a delivered clip for a second edit
+
+After replacing a presenter, you can use the delivered MP4 for a change of setting. Read the frame rate, frame count and duration of its video track first. Converting back to a source frame rate can move the end of the final displayed frame.
+
+```bash
+ffprobe -v error -select_streams v:0 -show_entries stream=avg_frame_rate,nb_frames,duration -of json checked.mp4
+python remake_window.py prepare checked.mp4 second-window --width 512 --height 512 --soundtrack preserve
+```
+
+This prepares the next window from the beginning of the delivered clip. Use `--soundtrack silent` for a silent result. Use `second-window/window.mp4` and its new receipt for the next execution. Frames exported here belong to this second window. Compare both delivered edits with the original at the same playback times to check head turns, hands crossing the face and product positions.
