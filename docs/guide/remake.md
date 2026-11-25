@@ -31,6 +31,8 @@ Place the preceding guide’s `window.mp4` and `window.json` in the Comfy input 
 
 The following integration fragment assumes a runtime owner that can stop and confirm its process. Give each execution a fresh journal directory. After a caller restart, `recover_completed_remake` can read a completed execution with the original request, directories and unchanged files. For a pending or uncertain execution, reconcile its recorded ID before further work.
 
+Use the exported `frame-000.png` to paint the opening. For a later pin, pair that picture with its own zero-based index from the exported manifest.
+
 ```python
 import json
 from pathlib import Path

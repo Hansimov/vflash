@@ -249,8 +249,12 @@ def finish_remake_window(
     if (video["width"], video["height"], int(video["nb_frames"])) != (width, height, frames):
         raise ValueError("Generated window differs from the receipt's canvas or clock")
     preserve = receipt["soundtrack"] == "preserve"
-    if preserve and not audio:
-        raise ValueError("The generated window is missing its preserved soundtrack")
+    if preserve:
+        from vflash.media.remake_footage import require_audio_coverage
+
+        if not audio:
+            raise ValueError("The generated window is missing its preserved soundtrack")
+        require_audio_coverage(audio[0], active)
     with TemporaryDirectory(prefix=".vflash-result-", dir=output.parent) as temp:
         staged = Path(temp) / "result.mp4"
         args = [

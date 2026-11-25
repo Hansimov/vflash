@@ -31,6 +31,8 @@ from vflash.pipeline.remake_conditioning import NODE_CLASS_MAPPINGS
 
 下例需要由应用提供运行时所有者，负责停止并确认进程退出。每次执行使用新的记录目录。调用方重启后，可将原请求、目录及未更改的文件传给 `recover_completed_remake` 恢复已完成结果。若结果尚不确定，先按记录中的原执行 ID 核对。
 
+使用上一页导出的 `frame-000.png` 制作开场目标图。需要固定另一时刻时，请把该张图与清单里的零基帧号配对。
+
 ```python
 import json
 from pathlib import Path

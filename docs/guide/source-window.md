@@ -22,6 +22,17 @@ For a square-pixel 16:9 source, the picture fills a 512 × 288 rectangle at `[0,
 
 Use `--soundtrack preserve` for footage with an audio track. The selected sound retains its timing relative to the picture. Model padding is silent. Use `silent` for sources without sound. Choose new output paths.
 
+## Extract reference pictures on the model canvas
+
+Download the standalone utility for the 0.29.0 wheel. This example extracts frames 0, 30 and 60 from the same prepared window. Indices start at zero on its 24 fps clock and must fall within the real content.
+
+```bash
+curl -fL https://github.com/Hansimov/vflash/releases/download/v0.29.0/remake_footage.py -o remake_footage.py
+python remake_footage.py frames window.mp4 pins --receipt window.json --frames 0 30 60
+```
+
+The resulting `frames.json` lists the pictures in the order requested. Each PNG includes the entire model canvas and its padding. Paint the desired appearance on these pictures and pass the recorded index as `RemakeReference(path, frame=n)`.
+
 ## Edit and deliver
 
 Use the prepared file as the source for [Remake](./remake). Set the request’s `model_frames` value (the Python request field is `frames`), width and height from the receipt. Prepare pinned target pictures on the same full model canvas. After the executor writes its complete result, run:
@@ -32,3 +43,12 @@ ffprobe -v error -select_streams v:0 -show_entries stream=width,height,avg_frame
 ```
 
 The example delivers 512 × 288 pixels, 72 frames at 24 fps. To verify the conversion before running a model, give the finish command the prepared `window.mp4` as input. Finishing re-encodes the content rectangle. Keep the model output and receipt for later exports. The calling application owns ordering and joining multiple windows.
+
+## Verify audio coverage or use the original sound
+
+Prepare the window with `--soundtrack preserve` when sound matters. The 0.29.0 wheel checks for an audio stream on export. That stream can end before the selected picture does. The companion checks its start and end timestamps. To use the original sound, provide the window from **the same preparation**; its audio will accompany the edited picture.
+
+```bash
+python remake_footage.py finish edited-window.mp4 checked.mp4 --receipt window.json
+python remake_footage.py finish edited-window.mp4 original-sound.mp4 --receipt window.json --original-audio window.mp4
+```
