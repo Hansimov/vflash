@@ -4,11 +4,9 @@
 
 Use `vflash prepare-remake-appearance` to publish a selected photo, its model-grid reference and a receipt with oriented pixel bounds and file hashes. [Prepare a reference view](../guide/remake#reference-view)
 
-
 ## Changes from 0.29
 
 Remake can bind individual edited frames and independent appearance photographs in the same four-picture window. Each reference retains its original picture number. The caller can set the sampler’s keyframe sigma cutoff with `keyframe_until` (default 0.9). [Run the mixed-reference example](../guide/remake).
-
 
 ## Changes from 0.28
 
@@ -18,7 +16,7 @@ When a Remake request uses a long generated take as history, its selected interv
 
 ### Companion tool for 0.29.0
 
-The release attachment `remake_window.py` runs with the original wheel. Extract full-canvas target PNGs, check audio coverage, or finish a generated picture with sound from the original prepared window. [Worked example and commands](../guide/source-window)
+The release attachment `remake_window.py` runs with the original wheel. Extract full-canvas target PNGs, check audio coverage, or finish a generated picture with sound from the original prepared window. [Versioned example and commands](https://github.com/Hansimov/vflash/blob/v0.29.0/docs/guide/source-window.md)
 
 ## Install the stable release
 

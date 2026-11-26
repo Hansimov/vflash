@@ -13,7 +13,7 @@ python -m pip install https://github.com/Hansimov/vflash/releases/download/v0.31
 python -c "import vflash; print(vflash.__version__)"
 ```
 
-The last command should print `0.29.0`. The base wheel supplies the CLI. Install the dependencies for your chosen runtime when you prepare its model.
+The last command should print `0.31.0`. The base wheel supplies the CLI. Install the dependencies for your chosen runtime when you prepare its model.
 
 You can run the [source preparation and export example](./source-window) on a CPU to verify the base package, FFmpeg, picture clock and sound. For model inference, select a GPU below.
 

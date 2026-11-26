@@ -1,6 +1,6 @@
 # Prepare footage and finish an edited window
 
-Use the 0.29.0 base package with FFmpeg and FFprobe on your path. Times are relative to the source picture’s start. This example takes three seconds from an H.264 MP4 longer than four seconds, preserves its composition on a square model canvas, then removes padding for delivery.
+Use the released Python package with FFmpeg and FFprobe on your path. Times are relative to the source picture’s start. This example takes three seconds from an H.264 MP4 longer than four seconds, preserves its composition on a square model canvas, then removes padding for delivery.
 
 ## Try the workflow with a local test clip
 
@@ -14,8 +14,7 @@ ffmpeg -n -f lavfi -i testsrc2=size=640x360:rate=30:duration=5 \
 ## Prepare three seconds of footage
 
 ```bash
-curl -fL https://github.com/Hansimov/vflash/releases/download/v0.29.0/remake_window.py -o remake_window.py
-python remake_window.py prepare source.mp4 prepared \
+python -m vflash.media.remake_footage prepare source.mp4 prepared \
   --width 512 --height 512 --start 1 --duration 3 --soundtrack preserve
 ```
 
@@ -27,10 +26,10 @@ Use `--soundtrack preserve` for footage with an audio track. The selected sound 
 
 ## Extract reference pictures on the model canvas
 
-Use the same preparation to extract frames 0, 30 and 60 from the same prepared window. Indices start at zero on its 24 fps clock and must fall within the real content.
+Use the prepared video and its matching receipt to export frames 0, 30 and 60. Frame numbers start at zero on the 24 fps model clock and must fall inside the actual content.
 
 ```bash
-python remake_window.py frames prepared/window.mp4 pins --receipt prepared/window.json --frames 0 30 60
+python -m vflash.media.remake_footage frames prepared/window.mp4 pins --receipt prepared/window.json --frames 0 30 60
 ```
 
 The resulting `frames.json` lists the pictures in the order requested. Each PNG includes the entire model canvas and its padding. Paint the desired appearance on these pictures and pass the recorded index as `RemakeReference(path, frame=n)`.
@@ -48,11 +47,11 @@ The example delivers 512 × 288 pixels, 72 frames at 24 fps. To verify the conve
 
 ## Verify audio coverage or use the original sound
 
-The example above has already prepared the test tone with `--soundtrack preserve`. The 0.29.0 wheel checks for an audio stream on export. That stream can end before the selected picture does. The companion decodes the audio and checks continuous sample coverage through the last content frame. A gap in the middle is detectable even when the reported duration is correct. Encoded silence counts as valid audio. If the checker reports an interruption, keep the generated picture and run the second command below. To use the original sound, provide the window from **the same preparation**; its audio will accompany the edited picture.
+The footage module decodes the audio through the last content frame. Encoded silence counts as covered time. To restore a missing or truncated track, supply the window from the same preparation. Its digest ties the audio to the original selected interval.
 
 ```bash
-python remake_window.py finish edited-window.mp4 checked.mp4 --receipt prepared/window.json
-python remake_window.py finish edited-window.mp4 original-sound.mp4 --receipt prepared/window.json --original-audio prepared/window.mp4
+python -m vflash.media.remake_footage finish edited-window.mp4 checked.mp4 --receipt prepared/window.json
+python -m vflash.media.remake_footage finish edited-window.mp4 original-sound.mp4 --receipt prepared/window.json --original-audio prepared/window.mp4
 ```
 
 Earlier receipts from `vflash prepare-remake-source` remain usable. They record geometry and timing. To distinguish original files across similarly sized clips, create a paired directory with the `prepare` command above.
@@ -63,7 +62,7 @@ After replacing a presenter, you can use the delivered MP4 for a change of setti
 
 ```bash
 ffprobe -v error -select_streams v:0 -show_entries stream=avg_frame_rate,nb_frames,duration -of json checked.mp4
-python remake_window.py prepare checked.mp4 second-window --width 512 --height 512 --soundtrack preserve
+python -m vflash.media.remake_footage prepare checked.mp4 second-window --width 512 --height 512 --soundtrack preserve
 ```
 
 This prepares the next window from the beginning of the delivered clip. Use `--soundtrack silent` for a silent result. Use `second-window/window.mp4` and its new receipt for the next execution. Frames exported here belong to this second window. Compare both delivered edits with the original at the same playback times to check head turns, hands crossing the face and product positions.

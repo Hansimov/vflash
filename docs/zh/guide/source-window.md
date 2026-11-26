@@ -1,6 +1,6 @@
 # 从原始素材到可交付的编辑片段
 
-以下步骤使用 0.29.0 的基础 Python 包和系统 FFmpeg、FFprobe。时间从源视频画面的起点算起。以一段超过四秒的 H.264 MP4 为例，截取其中三秒，在方形模型画布内保留原构图，最后导出没有黑边或补帧的画面。
+在已安装 Vflash 的 Python 环境中运行以下命令，确保可以调用 FFmpeg 和 FFprobe。示例从一段横屏 H.264 MP4 中截取三秒，放入方形模型画布，最后按内容区域导出。
 
 ## 没有现成源片时
 
@@ -14,8 +14,7 @@ ffmpeg -n -f lavfi -i testsrc2=size=640x360:rate=30:duration=5 \
 ## 准备三秒素材
 
 ```bash
-curl -fL https://github.com/Hansimov/vflash/releases/download/v0.29.0/remake_window.py -o remake_window.py
-python remake_window.py prepare source.mp4 prepared \
+python -m vflash.media.remake_footage prepare source.mp4 prepared \
   --width 512 --height 512 --start 1 --duration 3 --soundtrack preserve
 ```
 
@@ -27,10 +26,10 @@ python remake_window.py prepare source.mp4 prepared \
 
 ## 从窗口提取可编辑的完整参考帧
 
-下载与 0.29.0 wheel 配套的独立工具。下面从同一窗口一次取出第 0、30、60 帧。编号从零开始，以 24 fps 的窗口起点计时。所选时刻必须位于实际内容内。
+使用同次准备的视频和凭据，一次取出第 0、30、60 帧。编号从零开始，以 24 fps 的窗口起点计时。所选时刻必须位于实际内容内。
 
 ```bash
-python remake_window.py frames prepared/window.mp4 pins --receipt prepared/window.json --frames 0 30 60
+python -m vflash.media.remake_footage frames prepared/window.mp4 pins --receipt prepared/window.json --frames 0 30 60
 ```
 
 `frames.json` 保留你指定的顺序。每张 PNG 都包含完整模型画布及补边。只在这些图片上修改外观，然后用记录的帧号传入 `RemakeReference(path, frame=n)`。
@@ -48,11 +47,11 @@ ffprobe -v error -select_streams v:0 -show_entries stream=width,height,avg_frame
 
 ## 核对并复用完整原声
 
-本页示例已经用 `--soundtrack preserve` 准备了带音调的源片。0.29.0 wheel 的导出命令检查音轨是否存在，音轨也可能在画面结束前中断。配套工具会沿画面时钟解码音频，核对从开头到最后一个内容帧是否都有连续样本。即使文件头显示时长正确，它也能发现录音中途缺失的区段。正常编码的静音仍是有效样本。如果工具报告连续声音只覆盖部分画面，可以保留本次模型输出，在下面第二条命令中恢复同期声。若要使用源片同期声，传入**同一次准备**产生的窗口，工具将其音轨与编辑后的画面一起导出。
+窗口工具沿画面时钟解码音轨，检查声音是否连续覆盖到最后一个内容帧。编码后的静音也算有效样本。如果生成结果缺音，可以传入同次准备的窗口恢复同期声，凭据中的散列用于核对原件。
 
 ```bash
-python remake_window.py finish edited-window.mp4 checked.mp4 --receipt prepared/window.json
-python remake_window.py finish edited-window.mp4 original-sound.mp4 --receipt prepared/window.json --original-audio prepared/window.mp4
+python -m vflash.media.remake_footage finish edited-window.mp4 checked.mp4 --receipt prepared/window.json
+python -m vflash.media.remake_footage finish edited-window.mp4 original-sound.mp4 --receipt prepared/window.json --original-audio prepared/window.mp4
 ```
 
 以前由 `vflash prepare-remake-source` 输出的凭据也可以用于导出；这些凭据只记录几何与时钟。需要在多个相似剪辑之间核对原件身份时，用本页的 `prepare` 命令创建配对目录。
@@ -63,7 +62,7 @@ python remake_window.py finish edited-window.mp4 original-sound.mp4 --receipt pr
 
 ```bash
 ffprobe -v error -select_streams v:0 -show_entries stream=avg_frame_rate,nb_frames,duration -of json checked.mp4
-python remake_window.py prepare checked.mp4 second-window --width 512 --height 512 --soundtrack preserve
+python -m vflash.media.remake_footage prepare checked.mp4 second-window --width 512 --height 512 --soundtrack preserve
 ```
 
 这条命令从成片第一帧准备第二个窗口。成片无声时使用 `--soundtrack silent`。第二次执行使用 `second-window/window.mp4` 及其新凭据。从这里导出的参考帧属于第二个窗口。最后把原片与两次成片并排，在同一播放时刻核对转头方向、手部遮挡和商品位置。

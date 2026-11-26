@@ -4,11 +4,9 @@
 
 使用 `vflash prepare-remake-appearance` 从原始照片生成像素选区和视频模型参考图。回执记录方向校正后的坐标、输出尺寸及文件散列。[照片取景](../guide/remake#reference-view)
 
-
 ## 从 0.29 升级
 
 同一 Remake 窗口可同时传入指定时刻的场景帧和仅提供外观的照片，总数最多四张。提示词沿用传入顺序的图片编号。`keyframe_until` 可设置关键帧调节的 sigma 截止值，默认值为 0.9。[混合参考示例](../guide/remake)
-
 
 ## 从 0.28 到 0.29
 
@@ -18,7 +16,7 @@
 
 ### 0.29.0 配套工具
 
-发行附件 `remake_window.py` 可配合原版 wheel 提取用于编辑的 PNG，核对成片音轨范围，并在需要时从同次准备的源片取回同期声。已安装 0.29.0 的环境可直接使用。[示例与命令](../guide/source-window)
+发行附件 `remake_window.py` 可配合原版 wheel 提取用于编辑的 PNG，核对成片音轨范围，并在需要时从同次准备的源片取回同期声。已安装 0.29.0 的环境可直接使用。[该版本的示例与命令](https://github.com/Hansimov/vflash/blob/v0.29.0/docs/zh/guide/source-window.md)
 
 ## 安装正式版
 

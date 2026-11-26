@@ -16,14 +16,14 @@ docker compose --env-file docker/.env -f docker/compose.yaml pull
 docker compose --env-file docker/.env -f docker/compose.yaml up -d --no-build
 ```
 
-## 从正式标签构建 0.29.0
+## 从正式标签构建 0.31.0
 
-需要当前包的运行时时，请在 v0.29.0 源码目录内执行下列命令。镜像使用独立的本地名称，便于区分清单中的已发布镜像。在同一个终端设置 VFLASH_IMAGE 后，Compose 会启动刚校验的构建。
+需要当前包的运行时时，请在 v0.31.0 源码目录内执行下列命令。镜像使用独立的本地名称，便于区分清单中的已发布镜像。在同一个终端设置 VFLASH_IMAGE 后，Compose 会启动刚校验的构建。
 
 ```bash
-docker build --target runtime -t vflash-local:0.29.0 .
-docker run --rm --entrypoint python vflash-local:0.29.0 -c 'import vflash; print(vflash.__version__)'
-export VFLASH_IMAGE=vflash-local:0.29.0
+docker build --target runtime -t vflash-local:0.31.0 .
+docker run --rm --entrypoint python vflash-local:0.31.0 -c 'import vflash; print(vflash.__version__)'
+export VFLASH_IMAGE=vflash-local:0.31.0
 docker compose --env-file docker/.env -f docker/compose.yaml up -d --no-build
 ```
 
