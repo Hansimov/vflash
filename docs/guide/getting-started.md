@@ -9,7 +9,7 @@ Use Python 3.11 or later in a new environment. This command installs the wheel p
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install https://github.com/Hansimov/vflash/releases/download/v0.30.0/vflash-0.30.0-py3-none-any.whl
+python -m pip install https://github.com/Hansimov/vflash/releases/download/v0.31.0/vflash-0.31.0-py3-none-any.whl
 python -c "import vflash; print(vflash.__version__)"
 ```
 

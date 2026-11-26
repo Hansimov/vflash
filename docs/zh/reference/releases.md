@@ -1,4 +1,9 @@
-# 升级到 Vflash 0.30
+# 升级到 Vflash 0.31
+
+## 从 0.30 升级
+
+使用 `vflash prepare-remake-appearance` 从原始照片生成像素选区和视频模型参考图。回执记录方向校正后的坐标、输出尺寸及文件散列。[照片取景](../guide/remake#reference-view)
+
 
 ## 从 0.29 升级
 
@@ -17,7 +22,7 @@
 
 ## 安装正式版
 
-从 [GitHub 0.30.0](https://github.com/Hansimov/vflash/releases/tag/v0.30.0) 安装 wheel，在新环境中运行 `vflash prepare-remake-source --help`。继续使用原有的模型快照和执行器。容器镜像摘要在[独立清单](https://github.com/Hansimov/vflash/blob/main/docker/images.json)中发布。
+从 [GitHub 0.31.0](https://github.com/Hansimov/vflash/releases/tag/v0.31.0) 安装 wheel，在新环境中运行 `vflash prepare-remake-source --help`。继续使用原有的模型快照和执行器。容器镜像摘要在[独立清单](https://github.com/Hansimov/vflash/blob/main/docker/images.json)中发布。
 
 <span id="_0-16-1" aria-hidden="true"></span>
 <span id="_0-17-0" aria-hidden="true"></span>

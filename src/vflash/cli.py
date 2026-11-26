@@ -36,6 +36,21 @@ def build_parser() -> argparse.ArgumentParser:
     source.add_argument("--duration", help="selected seconds; defaults to the remaining video")
     source.add_argument("--soundtrack", choices=("preserve", "silent"), default="preserve")
 
+    photo = commands.add_parser(
+        "prepare-remake-appearance", help="prepare one photo for both image and video editing"
+    )
+    photo.add_argument("source", type=Path)
+    photo.add_argument("directory", type=Path)
+    photo.add_argument(
+        "--receipt", required=True, type=Path, help="prepared source window receipt"
+    )
+    photo.add_argument(
+        "--box",
+        nargs=4,
+        type=int,
+        metavar=("LEFT", "TOP", "RIGHT", "BOTTOM"),
+        help="selection on the upright photograph, in units of 1/1000",
+    )
     finish = commands.add_parser(
         "finish-remake-window", help="trim a generated window to its prepared content"
     )
@@ -105,6 +120,13 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        if args.command == "prepare-remake-appearance":
+            from vflash.media.remake_footage import prepare_reference_view
+
+            receipt = json.loads(args.receipt.read_text(encoding="utf-8"))
+            result = prepare_reference_view(args.source, args.directory, receipt, box=args.box)
+            print(json.dumps(result, indent=2))
+            return 0
         if args.command == "finish-remake-window":
             from vflash.media.remake_source import finish_remake_window
 

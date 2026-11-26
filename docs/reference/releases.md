@@ -1,4 +1,9 @@
-# Upgrade to Vflash 0.30
+# Upgrade to Vflash 0.31
+
+## Changes from 0.30
+
+Use `vflash prepare-remake-appearance` to publish a selected photo, its model-grid reference and a receipt with oriented pixel bounds and file hashes. [Prepare a reference view](../guide/remake#reference-view)
+
 
 ## Changes from 0.29
 
@@ -17,7 +22,7 @@ The release attachment `remake_window.py` runs with the original wheel. Extract 
 
 ## Install the stable release
 
-Install the wheel from [GitHub 0.30.0](https://github.com/Hansimov/vflash/releases/tag/v0.30.0) in a fresh environment and run `vflash prepare-remake-source --help`. Existing model snapshots and executor provisioning remain compatible. Docker image digests have a [separate inventory](https://github.com/Hansimov/vflash/blob/main/docker/images.json).
+Install the wheel from [GitHub 0.31.0](https://github.com/Hansimov/vflash/releases/tag/v0.31.0) in a fresh environment and run `vflash prepare-remake-source --help`. Existing model snapshots and executor provisioning remain compatible. Docker image digests have a [separate inventory](https://github.com/Hansimov/vflash/blob/main/docker/images.json).
 
 <span id="_0-16-1" aria-hidden="true"></span>
 <span id="_0-17-0" aria-hidden="true"></span>

@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 from fractions import Fraction
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -60,6 +61,77 @@ def prepare_window(
             directory.rmdir()
             raise
     return receipt
+
+
+def select_appearance(source, output, box=None):
+    """Export the selected pixels of an upright photo for an image editor or video reference."""
+    from PIL import Image, ImageOps
+
+    if output.exists() or output.is_symlink():
+        raise FileExistsError(output)
+    with Image.open(source) as opened:
+        if opened.format not in {"PNG", "JPEG", "WEBP"} or getattr(opened, "n_frames", 1) != 1:
+            raise ValueError("Use one static PNG, JPEG or WebP photo")
+        if opened.width * opened.height > 16777216:
+            raise ValueError("Use a photo of at most 16 megapixels")
+        image = ImageOps.exif_transpose(opened).convert("RGBA")
+    width, height = image.size
+    if box is None:
+        box = (0, 0, 1000, 1000)
+    if (
+        not isinstance(box, (tuple, list))
+        or len(box) != 4
+        or any(type(n) is not int for n in box)
+        or not 0 <= box[0] < box[2] <= 1000
+        or not 0 <= box[1] < box[3] <= 1000
+    ):
+        raise ValueError("Give left, top, right and bottom on the upright photo's 0..1000 grid")
+    rect = (
+        box[0] * width // 1000,
+        box[1] * height // 1000,
+        (box[2] * width + 999) // 1000,
+        (box[3] * height + 999) // 1000,
+    )
+    selected = image.crop(rect)
+    w, h = selected.size
+    if min(w, h) < 32 or not 0.25 <= w / h <= 4:
+        raise ValueError(
+            "Select at least 32 pixels on both sides with aspect ratio 1:4 through 4:1"
+        )
+    rgb = Image.new("RGB", selected.size, "white")
+    rgb.paste(selected, mask=selected.getchannel("A"))
+    with TemporaryDirectory(prefix=".vflash-view-", dir=output.parent) as tmp:
+        result = Path(tmp) / "view.png"
+        rgb.save(result)
+        os.link(result, output)
+    return {"source_size": [width, height], "box": list(box), "pixel_box": list(rect)}
+
+
+def prepare_reference_view(source, directory, window_receipt, *, box=None):
+    """Publish one selected photo, its model-grid appearance and a verifiable receipt."""
+    if directory.exists() or directory.is_symlink():
+        raise FileExistsError(directory)
+    with TemporaryDirectory(prefix=".vflash-reference-", dir=directory.parent) as tmp:
+        staged = Path(tmp) / "reference"
+        staged.mkdir()
+        view, appearance = staged / "view.png", staged / "appearance.png"
+        # Keep the source digest and decoded pixels tied to the same snapshot.
+        snapshot = Path(tmp) / "original"
+        shutil.copyfile(source, snapshot)
+        selection = select_appearance(snapshot, view, box)
+        geometry = prepare_appearance(view, appearance, window_receipt)
+        result = {
+            "source_sha256": prepared_identity(snapshot),
+            **selection,
+            **geometry,
+            "view_sha256": prepared_identity(view),
+            "appearance_sha256": prepared_identity(appearance),
+        }
+        (staged / "receipt.json").write_text(
+            json.dumps(result, indent=2) + "\n", encoding="utf-8"
+        )
+        staged.rename(directory)
+    return result
 
 
 def prepare_appearance(source, output, receipt):

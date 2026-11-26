@@ -188,3 +188,37 @@ def test_unpinned_high_resolution_photo_keeps_its_displayed_shape_and_old_file(t
         assert rendered.size == (1440, 4096)
     with pytest.raises(FileExistsError):
         prepare_appearance(photo, output, receipt)
+
+
+def test_reference_view_uses_upright_pixels_and_preserves_published_files(tmp_path):
+    from PIL import Image
+
+    from vflash.media.remake_footage import prepare_reference_view, prepared_identity
+
+    source = tmp_path / "rotated.png"
+    original = Image.new("RGBA", (128, 64), (0, 0, 0, 0))
+    original.paste((230, 50, 40, 255), (0, 0, 64, 64))
+    exif = Image.Exif()
+    exif[274] = 6
+    original.save(source, exif=exif)
+    output = tmp_path / "selected"
+    receipt = prepare_reference_view(
+        source, output, {"width": 832, "height": 480}, box=(0, 0, 1000, 500)
+    )
+    assert receipt["source_size"] == [64, 128]
+    assert receipt["pixel_box"] == [0, 0, 64, 64]
+    assert receipt["view_sha256"] == prepared_identity(output / "view.png")
+    assert receipt["appearance_sha256"] == prepared_identity(output / "appearance.png")
+    with Image.open(output / "view.png") as image:
+        assert image.size == (64, 64)
+        assert image.getextrema() == ((230, 230), (50, 50), (40, 40))
+    with pytest.raises(FileExistsError):
+        prepare_reference_view(source, output, {"width": 832, "height": 480})
+    with pytest.raises(ValueError):
+        prepare_reference_view(
+            source,
+            tmp_path / "invalid",
+            {"width": 832, "height": 480},
+            box=(900, 200, 1000, 210),
+        )
+    assert not (tmp_path / "invalid").exists()

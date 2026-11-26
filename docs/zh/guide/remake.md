@@ -9,7 +9,7 @@
 调用端安装 `remake-client` 扩展。按 [Viggle 固定版本说明](https://huggingface.co/Viggle/Viggle-Remake/blob/7e5be143702dd53b9154482de673b8519ed2d4d6/COMFYUI.md)单独配置本机 Comfy 环境，使用 ComfyUI 修订 `355cd6b14c92c19ac3188fe528e47a3f21ef5178`、所选模式的预合并 INT8 模型及原版 VAE，并在该环境注册 Vflash 条件节点。
 
 ```bash
-git clone --branch v0.30.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.31.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m pip install '.[remake-client]'
 ```
@@ -27,11 +27,14 @@ from vflash.pipeline.remake_conditioning import NODE_CLASS_MAPPINGS
 
 ```bash
 python -m pip install "Pillow>=13,<14"
-curl -fL https://github.com/Hansimov/vflash/releases/download/v0.29.0/remake_inputs.py -o remake_inputs.py
-python remake_inputs.py appearance portrait.jpg appearance.png --receipt prepared/window.json
+vflash prepare-remake-appearance portrait.jpg portrait-view --receipt prepared/window.json --box 250 40 740 650
 ```
 
-传入 `RemakeReference(Path("appearance.png"))` 可仅提供外观；对齐特定视频时刻的完整编辑画面仍使用 `frame=n`。0.30.0 支持在同一窗口分别绑定完整场景帧与独立外观图。
+传入 `RemakeReference(Path("portrait-view/appearance.png"))` 可仅提供外观；对齐特定视频时刻的完整编辑画面仍使用 `frame=n`。0.30.0 支持在同一窗口分别绑定完整场景帧与独立外观图。
+
+### 为人像或场地选择取景范围 {#reference-view}
+
+先按实际照片选择左、上、右、下边界，坐标在方向校正后的 0 到 1000 网格上。省略 `--box` 会使用全图。目标目录必须是新目录。将 `portrait-view/view.png` 交给图像编辑器，将 `portrait-view/appearance.png` 作为同一视频窗口的不定时外观参考。两者保留同一块原始像素。需要保留原片衣服时，框住脸和头发；选取场地时，保留足够的空间特征并查看边缘的旁人。
 
 ### 同一窗口使用场景帧与外观照片
 
@@ -43,7 +46,7 @@ from vflash.pipeline.remake import RemakeReference
 
 references = (
     RemakeReference(Path("edited-opening.png"), frame=0),
-    RemakeReference(Path("appearance.png")),
+    RemakeReference(Path("portrait-view/appearance.png")),
 )
 ```
 

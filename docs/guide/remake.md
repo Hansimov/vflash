@@ -9,7 +9,7 @@ For a phone clip, screen recording or non-24-fps input, follow [prepare and fini
 Install the wheel’s `remake-client` extra for the caller. Provision the local Comfy runtime separately using [Viggle’s pinned setup](https://huggingface.co/Viggle/Viggle-Remake/blob/7e5be143702dd53b9154482de673b8519ed2d4d6/COMFYUI.md), ComfyUI revision `355cd6b14c92c19ac3188fe528e47a3f21ef5178`, the premerged INT8 model for the selected mode and its original VAEs. Register the Vflash conditioning nodes in that environment.
 
 ```bash
-git clone --branch v0.30.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.31.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m pip install '.[remake-client]'
 ```
@@ -22,16 +22,18 @@ from vflash.pipeline.remake_conditioning import NODE_CLASS_MAPPINGS
 
 Use a local H.264 MP4 on a 24 fps clock with square pixels, zero start time and matching canvas. Normalize rotation first. Use a target pin at an exact model frame only for a complete edited picture at that moment. A catalog photo can guide appearance as an unpinned reference. For a preserved soundtrack, check the final audio stream; for silence, request `silent`.
 
-
-To supply a portrait or product photograph independently of a frame, fit it to the selected video's model scale. The companion reads the display orientation, retains the whole photograph and writes a new grid-aligned PNG.
+To supply a portrait or product photograph independently of a frame, fit it to the selected video's model scale. The packaged command reads the display orientation and saves the selected region alongside its grid-aligned PNG.
 
 ```bash
 python -m pip install "Pillow>=13,<14"
-curl -fL https://github.com/Hansimov/vflash/releases/download/v0.29.0/remake_inputs.py -o remake_inputs.py
-python remake_inputs.py appearance portrait.jpg appearance.png --receipt prepared/window.json
+vflash prepare-remake-appearance portrait.jpg portrait-view --receipt prepared/window.json --box 250 40 740 650
 ```
 
-Pass `RemakeReference(Path("appearance.png"))` for appearance guidance. Use `frame=n` for a complete edited picture aligned to a source instant. Version 0.30 also accepts a mixture of timed scenes and independent appearance pictures.
+Pass `RemakeReference(Path("portrait-view/appearance.png"))` for appearance guidance. Use `frame=n` for a complete edited picture aligned to a source instant. Version 0.30 also accepts a mixture of timed scenes and independent appearance pictures.
+
+### Select a view of the portrait or location {#reference-view}
+
+Choose left, top, right and bottom on the upright photo’s 0 to 1000 grid. Omit `--box` for the whole image and choose a new output directory. Give `portrait-view/view.png` to the image editor and use `portrait-view/appearance.png` as the independent reference for this video window. Both use the same original pixels. Frame the face and hair when retaining source clothes. For a setting, include enough of its layout and inspect bystanders at the edges.
 
 ### Combine a scene frame with an appearance photo
 
@@ -43,7 +45,7 @@ from vflash.pipeline.remake import RemakeReference
 
 references = (
     RemakeReference(Path("edited-opening.png"), frame=0),
-    RemakeReference(Path("appearance.png")),
+    RemakeReference(Path("portrait-view/appearance.png")),
 )
 ```
 
