@@ -9,7 +9,7 @@
 调用端安装 `remake-client` 扩展。按 [Viggle 固定版本说明](https://huggingface.co/Viggle/Viggle-Remake/blob/7e5be143702dd53b9154482de673b8519ed2d4d6/COMFYUI.md)单独配置本机 Comfy 环境，使用 ComfyUI 修订 `355cd6b14c92c19ac3188fe528e47a3f21ef5178`、所选模式的预合并 INT8 模型及原版 VAE，并在该环境注册 Vflash 条件节点。
 
 ```bash
-git clone --branch v0.29.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.30.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m pip install '.[remake-client]'
 ```
@@ -31,7 +31,26 @@ curl -fL https://github.com/Hansimov/vflash/releases/download/v0.29.0/remake_inp
 python remake_inputs.py appearance portrait.jpg appearance.png --receipt prepared/window.json
 ```
 
-传入 `RemakeReference(Path("appearance.png"))` 可仅提供外观；对齐特定视频时刻的完整编辑画面仍使用 `frame=n`。每个窗口的参考图必须全部指定帧号或全部不指定。
+传入 `RemakeReference(Path("appearance.png"))` 可仅提供外观；对齐特定视频时刻的完整编辑画面仍使用 `frame=n`。0.30.0 支持在同一窗口分别绑定完整场景帧与独立外观图。
+
+### 同一窗口使用场景帧与外观照片
+
+例如为同一段商品介绍同时换人和换景，可以用第一个画面确定机位和场地，第二张照片单独提供人物外观。提示词中的图片编号按元组顺序排列。每个窗口最多四张图片。
+
+```python
+from pathlib import Path
+from vflash.pipeline.remake import RemakeReference
+
+references = (
+    RemakeReference(Path("edited-opening.png"), frame=0),
+    RemakeReference(Path("appearance.png")),
+)
+```
+
+把这个元组传给下文的 `RemakeRequest(references=references, ...)`。每个指定帧号的画面都要与准备好的窗口尺寸完全一致，帧号从窗口第一帧的 0 开始。单独的人像或商品图保持自身构图。在场地照片中，现场人物也可能影响生成。若只需要布景，优先用空场照片。逐帧检查原片的动作、边缘人物及商品形状。
+
+可选参数 `keyframe_until` 是 0 到 1 之间的 sigma 阈值，默认 0.9。较低阈值让关键帧参与更多去噪步骤。它不会指定关键帧在视频中持续多少秒。
+
 
 ## 在换景中保住手中物件和短时图标
 

@@ -84,14 +84,26 @@ def test_wrong_clock_canvas_and_pin_geometry_fail_before_execution(tmp_path, rem
         remake_graph(remake_request, input_directory=tmp_path, output_prefix="test/stretch")
     with pytest.raises(ValueError, match="not supplied"):
         replace(remake_request, prompt="Use <Picture 2>")
-    with pytest.raises(ValueError, match="pins every reference"):
-        replace(
-            remake_request,
-            references=(
-                remake_request.references[0],
-                RemakeReference(tmp_path / "other.png"),
-            ),
-        )
+
+
+def test_independent_appearance_can_follow_a_timed_scene(tmp_path, remake_request):
+    portrait = tmp_path / "portrait.png"
+    Image.new("RGB", (480, 640), "blue").save(portrait)
+    mixed = replace(
+        remake_request,
+        references=(*remake_request.references, RemakeReference(portrait)),
+        keyframe_until=0.5,
+    )
+    graph = remake_graph(mixed, input_directory=tmp_path, output_prefix="mixed")
+    conditioning = graph["11"]
+    assert conditioning["class_type"] == "VFlashRemakeCanvas"
+    assert conditioning["inputs"]["pins"] == ""
+    assert (
+        conditioning["inputs"]["reference_frames"] == f"{remake_request.references[0].frame},-"
+    )
+    assert graph["3"]["inputs"]["keyframe_until"] == 0.5
+    with pytest.raises(ValueError, match="cutoff"):
+        replace(mixed, keyframe_until=float("nan"))
 
 
 def test_silent_graph_preserves_owned_paths(tmp_path, remake_request):

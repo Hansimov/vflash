@@ -80,6 +80,7 @@ class RemakeRequest:
     source_mask: Path | None = None
     prepared_text: PreparedRemakeText | None = None
     half_size_source_reference: bool = False
+    keyframe_until: float = 0.9
 
     def __post_init__(self):
         if (
@@ -123,8 +124,12 @@ class RemakeRequest:
             raise ValueError(
                 "Half-size source conditioning requires an aligned large edit canvas"
             )
-        if pins and (len(pins) != len(self.references) or max(pins) >= self.frames):
-            raise ValueError("Original Remake pins every reference or uses none")
+        if any(frame >= self.frames for frame in pins):
+            raise ValueError("Use target frames inside this window")
+        if pins and len(pins) < len(self.references) and len(set(pins)) != len(pins):
+            raise ValueError("Each timed scene picture must own a distinct frame")
+        if type(self.keyframe_until) not in (int, float) or not 0 <= self.keyframe_until <= 1:
+            raise ValueError("The keyframe sigma cutoff must be between zero and one")
         if self.prefix is not None:
             if not isinstance(self.prefix, RemakePrefix):
                 raise ValueError("Generated history is a separate typed input")
@@ -238,6 +243,14 @@ def remake_graph(
         short_edge=min(request.width, request.height),
         pins=", ".join(str(ref.frame) for ref in request.references if ref.frame is not None),
     )
+    selective = any(ref.frame is None for ref in request.references) and any(
+        ref.frame is not None for ref in request.references
+    )
+    if selective:
+        conditioning["pins"] = ""
+        conditioning["reference_frames"] = ",".join(
+            "-" if ref.frame is None else str(ref.frame) for ref in request.references
+        )
     if request.soundtrack == "preserve":
         conditioning["audio"] = ["8", 1]
     graph = {
@@ -246,7 +259,7 @@ def remake_graph(
             unet_name=(f"viggle_remake_{request.mode}_pruned_int8_convrot.safetensors"),
             weight_dtype="default",
         ),
-        "3": node("RemakeKeyframeUntil", model=["1", 0], keyframe_until=0.9),
+        "3": node("RemakeKeyframeUntil", model=["1", 0], keyframe_until=request.keyframe_until),
         "4": node(
             "CLIPLoader",
             clip_name="qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
@@ -258,7 +271,7 @@ def remake_graph(
         "8": node("GetVideoComponents", video=["7", 0]),
         "11": node(
             "VFlashRemakeCanvas"
-            if min(request.width, request.height) > 736
+            if selective or min(request.width, request.height) > 736
             else "RemakeConditioning",
             **conditioning,
         ),

@@ -9,7 +9,7 @@ For a phone clip, screen recording or non-24-fps input, follow [prepare and fini
 Install the wheel’s `remake-client` extra for the caller. Provision the local Comfy runtime separately using [Viggle’s pinned setup](https://huggingface.co/Viggle/Viggle-Remake/blob/7e5be143702dd53b9154482de673b8519ed2d4d6/COMFYUI.md), ComfyUI revision `355cd6b14c92c19ac3188fe528e47a3f21ef5178`, the premerged INT8 model for the selected mode and its original VAEs. Register the Vflash conditioning nodes in that environment.
 
 ```bash
-git clone --branch v0.29.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.30.0 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m pip install '.[remake-client]'
 ```
@@ -31,7 +31,26 @@ curl -fL https://github.com/Hansimov/vflash/releases/download/v0.29.0/remake_inp
 python remake_inputs.py appearance portrait.jpg appearance.png --receipt prepared/window.json
 ```
 
-Pass `RemakeReference(Path("appearance.png"))` for appearance guidance. Use `frame=n` for a complete edited picture aligned to a source instant. Each window accepts either all pinned or all unpinned references.
+Pass `RemakeReference(Path("appearance.png"))` for appearance guidance. Use `frame=n` for a complete edited picture aligned to a source instant. Version 0.30 also accepts a mixture of timed scenes and independent appearance pictures.
+
+### Combine a scene frame with an appearance photo
+
+For an edit changing a presenter and a setting, use the first picture for the desired scene at frame zero and a second picture for the presenter’s appearance. Picture numbers in the prompt follow tuple order. A window accepts up to four pictures.
+
+```python
+from pathlib import Path
+from vflash.pipeline.remake import RemakeReference
+
+references = (
+    RemakeReference(Path("edited-opening.png"), frame=0),
+    RemakeReference(Path("appearance.png")),
+)
+```
+
+Pass this tuple to `RemakeRequest(references=references, ...)` in the execution example below. Each timed picture must match the prepared window canvas exactly. Frame zero starts at the beginning of that window. An independent portrait or product photo keeps its own composition. People in a location photo can influence the result. Use a photograph of the empty location when you want only its setting. Review the original gestures, people at the edges and product shape throughout the delivered clip.
+
+The optional `keyframe_until` parameter is a sigma threshold between 0 and 1, default 0.9. Lower values keep the keyframes active into later denoising steps. Video timestamps still come from the frame numbers.
+
 
 ## Keep a held item or a brief graphic through an edit
 
@@ -52,7 +71,7 @@ references = tuple(
 )
 ```
 
-An original Remake request accepts either a frame index on every reference or no indices at all. If a product photo alone supplies style, use the unpinned mode; when using pins, first incorporate that appearance into the full scene at each chosen time. The [upstream prompt guide](https://huggingface.co/Viggle/Viggle-Remake/blob/main/PROMPTING.md) explains how the frame indices and six prompt sections work together.
+The [upstream prompt guide](https://huggingface.co/Viggle/Viggle-Remake/blob/main/PROMPTING.md) explains how the frame indices and six prompt sections work together.
 
 
 <span id="extended-canvas-preview" aria-hidden="true"></span>

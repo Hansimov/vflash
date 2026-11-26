@@ -68,6 +68,7 @@ class VFlashRemakeCanvas:
             "BOOLEAN",
             {"default": False},
         )
+        inputs["optional"]["reference_frames"] = ("STRING", {"default": ""})
         return inputs
 
     RETURN_TYPES = ("CONDITIONING", "LATENT")
@@ -75,12 +76,52 @@ class VFlashRemakeCanvas:
     FUNCTION = "run"
     CATEGORY = "Vflash/Remake"
 
-    def run(self, half_size_source_reference=False, **inputs):
+    def run(self, half_size_source_reference=False, reference_frames="", **inputs):
+        slots = []
+        if reference_frames:
+            images = [
+                inputs[k]
+                for k in ("ref_1", "ref_2", "ref_3", "ref_4")
+                if inputs.get(k) is not None
+            ]
+            tokens = [part.strip() for part in reference_frames.split(",")]
+            if len(tokens) != len(images) or inputs.get("pins", "").strip():
+                raise ValueError("Bind one frame or '-' to each ordered reference")
+            slots = [None if part == "-" else int(part) for part in tokens]
+            frames = [frame for frame in slots if frame is not None]
+            if not frames or len(frames) == len(slots) or len(set(frames)) != len(frames):
+                raise ValueError(
+                    "Use distinct timed frames together with appearance references"
+                )
+            for frame, image in zip(slots, images, strict=True):
+                if frame is not None and (
+                    not 0 <= frame < inputs["frames"]
+                    or image.shape[1:3] != inputs["source"].shape[1:3]
+                ):
+                    raise ValueError("A timed reference must match the source canvas and clock")
         if half_size_source_reference:
             inputs["vae"] = _HalfSizeSourceEncoder(inputs["vae"])
         if inputs.get("pins", "").strip():
             inputs["vae"] = _PinnedFrameEncoder(inputs["vae"])
         result = original_conditioning()().run(**inputs)
+        if slots:
+            positive, latent = result
+            conditioned = []
+            for embedding, metadata in positive:
+                blocks = metadata["minimax_refs"]
+                if len(blocks) != len(slots) + 1 or any(
+                    b["kind"] != "image" for b in blocks[1:]
+                ):
+                    raise ValueError(
+                        "The native conditioner returned different reference roles"
+                    )
+                keys = [
+                    {"resolved_frame_index": frame, "latent": block["latent"].clone()}
+                    for frame, block in zip(slots, blocks[1:], strict=True)
+                    if frame is not None
+                ]
+                conditioned.append([embedding, {**metadata, "minimax_keyframes": keys}])
+            result = (conditioned, latent)
         if half_size_source_reference:
             positive, _ = result
             for _, metadata in positive:

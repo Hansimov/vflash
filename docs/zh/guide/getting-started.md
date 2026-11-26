@@ -9,7 +9,7 @@
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install https://github.com/Hansimov/vflash/releases/download/v0.29.0/vflash-0.29.0-py3-none-any.whl
+python -m pip install https://github.com/Hansimov/vflash/releases/download/v0.30.0/vflash-0.30.0-py3-none-any.whl
 python -c "import vflash; print(vflash.__version__)"
 ```
 

@@ -1,4 +1,9 @@
-# 升级至 Vflash 0.29
+# 升级到 Vflash 0.30
+
+## 从 0.29 升级
+
+同一 Remake 窗口可同时传入指定时刻的场景帧和仅提供外观的照片，总数最多四张。提示词沿用传入顺序的图片编号。`keyframe_until` 可设置关键帧调节的 sigma 截止值，默认值为 0.9。[混合参考示例](../guide/remake)
+
 
 ## 从 0.28 到 0.29
 
@@ -12,7 +17,7 @@
 
 ## 安装正式版
 
-从 [GitHub 0.29.0](https://github.com/Hansimov/vflash/releases/tag/v0.29.0) 安装 wheel，在新环境中运行 `vflash prepare-remake-source --help`。继续使用原有的模型快照和执行器。容器镜像摘要在[独立清单](https://github.com/Hansimov/vflash/blob/main/docker/images.json)中发布。
+从 [GitHub 0.30.0](https://github.com/Hansimov/vflash/releases/tag/v0.30.0) 安装 wheel，在新环境中运行 `vflash prepare-remake-source --help`。继续使用原有的模型快照和执行器。容器镜像摘要在[独立清单](https://github.com/Hansimov/vflash/blob/main/docker/images.json)中发布。
 
 <span id="_0-16-1" aria-hidden="true"></span>
 <span id="_0-17-0" aria-hidden="true"></span>

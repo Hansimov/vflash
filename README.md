@@ -2,7 +2,7 @@
 
 Generate video with sound or edit existing footage using MiniMax H3, PyTorch and Triton. Use a complete pipeline for MP4s, or integrate a resident inference session into your own service.
 
-[中文](README.zh-CN.md) · [Documentation](https://hansimov.github.io/vflash/) · [Download 0.29.0](https://github.com/Hansimov/vflash/releases/tag/v0.29.0)
+[中文](README.zh-CN.md) · [Documentation](https://hansimov.github.io/vflash/) · [Download 0.30.0](https://github.com/Hansimov/vflash/releases/tag/v0.30.0)
 
 ## Start with a task
 
@@ -16,7 +16,7 @@ Generate video with sound or edit existing footage using MiniMax H3, PyTorch and
 ## Install and select hardware
 
 ```sh
-python -m pip install https://github.com/Hansimov/vflash/releases/download/v0.29.0/vflash-0.29.0-py3-none-any.whl
+python -m pip install https://github.com/Hansimov/vflash/releases/download/v0.30.0/vflash-0.30.0-py3-none-any.whl
 vflash doctor
 ```
 

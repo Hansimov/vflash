@@ -137,3 +137,38 @@ def test_half_size_source_rejects_incompatible_canvas_or_mask(remake_request, tm
     request = replace(remake_request, width=1920, height=1088, half_size_source_reference=True)
     with pytest.raises(ValueError, match="aligned large edit canvas"):
         replace(request, source_mask=tmp_path / "mask.png")
+
+
+def test_selective_pins_reuse_only_the_chosen_full_frame_latents(monkeypatch):
+    from types import SimpleNamespace
+
+    from vflash.pipeline import remake_canvas as canvas
+
+    class Latent(list):
+        def clone(self):
+            return Latent(self)
+
+    old = {
+        "minimax_refs": [
+            {"kind": "video"},
+            *[{"kind": "image", "latent": Latent([n])} for n in range(3)],
+        ]
+    }
+
+    class Original:
+        def run(self, **inputs):
+            assert inputs["pins"] == ""
+            return [["text", old]], "shared audio and noise"
+
+    monkeypatch.setattr(canvas, "original_conditioning", lambda: Original)
+    pixels = SimpleNamespace(shape=(1, 480, 832, 3))
+    portrait = SimpleNamespace(shape=(1, 640, 480, 3))
+    args = dict(pins="", frames=90, source=pixels, ref_1=pixels, ref_2=portrait, ref_3=pixels)
+    positive, latent = canvas.VFlashRemakeCanvas().run(reference_frames="3,-,25", **args)
+    keys = positive[0][1]["minimax_keyframes"]
+    assert [(r["resolved_frame_index"], r["latent"]) for r in keys] == [(3, [0]), (25, [2])]
+    assert latent == "shared audio and noise" and "minimax_keyframes" not in old
+    keys[0]["latent"].append(4)
+    assert old["minimax_refs"][1]["latent"] == [0]
+    with pytest.raises(ValueError, match="canvas"):
+        canvas.VFlashRemakeCanvas().run(reference_frames="-,3,25", **args)
