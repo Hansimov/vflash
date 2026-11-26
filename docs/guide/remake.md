@@ -51,6 +51,19 @@ references = (
 
 Pass this tuple to `RemakeRequest(references=references, ...)` in the execution example below. Each timed picture must match the prepared window canvas exactly. Frame zero starts at the beginning of that window. An independent portrait or product photo keeps its own composition. People in a location photo can influence the result. Use a photograph of the empty location when you want only its setting. Review the original gestures, people at the edges and product shape throughout the delivered clip.
 
+### Budget the four reference pictures
+
+A timed frame and an independent photo each occupy one slot. With one portrait you can guide the opening, a distinctive action and the end. With two photos you can guide two instants. Choose the interior instant by inspecting the source, especially when the visible side of a product changes briefly.
+
+In the [three-second source-window example](./source-window), the active frames are 0–71. If the meaningful action occurs at frame 35, export the three source pictures together.
+
+```bash
+python -m vflash.media.remake_footage frames prepared/window.mp4 action-pins \
+  --receipt prepared/window.json --frames 0 35 71
+```
+
+Edit each exported PNG on its own canvas. Keep the hand, contact point, camera angle and visible surface from **that instant**. Use the same new identity or finish across all three. Pass the three edited files with their original frame numbers and the portrait without a frame number. Verify the result just before and after the contact as well as at the pins.
+
 The optional `keyframe_until` parameter is a sigma threshold between 0 and 1, default 0.9. Lower values keep the keyframes active into later denoising steps. Video timestamps still come from the frame numbers.
 
 
