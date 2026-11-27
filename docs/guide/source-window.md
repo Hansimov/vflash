@@ -24,6 +24,26 @@ For a square-pixel 16:9 source, the picture fills a 512 × 288 rectangle at `[0,
 
 Use `--soundtrack preserve` for footage with an audio track. The selected sound retains its timing relative to the picture. Model padding is silent. Use `silent` for sources without sound. Choose new output paths.
 
+### Deliver a replacement soundtrack
+
+For a review cut with a separate music or narration file, first make one source with the picture and the chosen sound. This example assumes the soundtrack starts with the video and is at least as long as the picture. The video stream is copied unchanged.
+
+```bash
+ffmpeg -i performance.mp4 -i narration.wav -map 0:v:0 -map 1:a:0 \
+  -c:v copy -c:a aac -shortest with-narration.mp4
+python -m vflash.media.remake_footage prepare with-narration.mp4 spoken-window \
+  --width 512 --height 512 --duration 3 --soundtrack preserve
+```
+
+The prepared window owns the audio clock. After editing its picture, restore the sound from that same window and trim the model padding:
+
+```bash
+python -m vflash.media.remake_footage finish model-result.mp4 finished.mp4 \
+  --receipt spoken-window/window.json --original-audio spoken-window/window.mp4
+```
+
+Listen to a distinct syllable or beat near each end of `finished.mp4`. For the three-second selection above, both picture and sound should end at three seconds. The intermediate model window can be longer.
+
 ## Extract reference pictures on the model canvas
 
 Use the prepared video and its matching receipt to export frames 0, 30 and 60. Frame numbers start at zero on the 24 fps model clock and must fall inside the actual content.

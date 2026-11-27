@@ -11,6 +11,26 @@ ffmpeg -n -f lavfi -i testsrc2=size=640x360:rate=30:duration=5 \
   -f lavfi -i sine=frequency=440:duration=5 -c:v libx264 -pix_fmt yuv420p -c:a aac source.mp4
 ```
 
+### 给成片换上配乐或解说
+
+当音乐或解说从画面开头开始，且长度覆盖整段画面时，可以先将选定的音轨与原视频合成一个输入文件。下面的命令直接复制视频流。
+
+```bash
+ffmpeg -i performance.mp4 -i narration.wav -map 0:v:0 -map 1:a:0 \
+  -c:v copy -c:a aac -shortest with-narration.mp4
+python -m vflash.media.remake_footage prepare with-narration.mp4 spoken-window \
+  --width 512 --height 512 --duration 3 --soundtrack preserve
+```
+
+画面编辑完成后，从同一个准备窗口取回配乐或解说，按原选段裁去模型补帧。
+
+```bash
+python -m vflash.media.remake_footage finish model-result.mp4 finished.mp4 \
+  --receipt spoken-window/window.json --original-audio spoken-window/window.mp4
+```
+
+可以在开头和结尾各找一处清晰的字音或节拍核对同步。上例选取三秒，最终文件的画面和声音都应在三秒结束。中间的模型窗口可能更长。
+
 ## 准备三秒素材
 
 ```bash
