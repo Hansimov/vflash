@@ -35,6 +35,20 @@ Pass `RemakeReference(Path("portrait-view/appearance.png"))` for appearance guid
 
 Choose left, top, right and bottom on the upright photo’s 0 to 1000 grid. Omit `--box` for the whole image and choose a new output directory. Give `portrait-view/view.png` to the image editor and use `portrait-view/appearance.png` as the independent reference for this video window. Both use the same original pixels. Frame the face and hair when retaining source clothes. For a setting, include enough of its layout and inspect bystanders at the edges.
 
+### Compare products in the same shot
+
+To make three complete versions, prepare the source window once. Give each version its own product photo and execution directory. Reuse the source, dimensions, frame count and seed. Paint a separate opening frame for each version if you need to control the object's position or its contact with a hand.
+
+```bash
+vflash prepare-remake-appearance tote.png tote-product --receipt prepared/window.json
+vflash prepare-remake-appearance shoulder.png shoulder-product --receipt prepared/window.json
+vflash prepare-remake-appearance flap.png flap-product --receipt prepared/window.json
+```
+
+In the Python request below, use the photos for **one** version at a time. For example, the first version can use `RemakeReference(Path("tote-product/appearance.png"))` by itself or after a tote-specific opening pinned to frame zero. Set separate output and execution directories before submitting the next version. Record the photo, request and finished file together so a resumed run retrieves the intended product.
+
+Finish each full video against the same source receipt. Compare frames at the same time and inspect the product outline, the handle and the fingers around it. A common seed leaves room for movement and small hardware details to differ.
+
 ### Combine a scene frame with an appearance photo
 
 For an edit changing a presenter and a setting, use the first picture for the desired scene at frame zero and a second picture for the presenter’s appearance. Picture numbers in the prompt follow tuple order. A window accepts up to four pictures.

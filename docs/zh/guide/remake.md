@@ -36,6 +36,20 @@ vflash prepare-remake-appearance portrait.jpg portrait-view --receipt prepared/w
 
 先按实际照片选择左、上、右、下边界，坐标在方向校正后的 0 到 1000 网格上。省略 `--box` 会使用全图。目标目录必须是新目录。将 `portrait-view/view.png` 交给图像编辑器，将 `portrait-view/appearance.png` 作为同一视频窗口的不定时外观参考。两者保留同一块原始像素。需要保留原片衣服时，框住脸和头发；选取场地时，保留足够的空间特征并查看边缘的旁人。
 
+### 在同一镜头中比较几款商品
+
+准备一次源视频窗口，就可以分别制作三条完整视频。每款使用自己的商品图、输出目录和执行目录，三条共用源片、画幅、帧数和种子。需要固定包在手中的位置时，为每款单独编辑对应的开场帧。
+
+```bash
+vflash prepare-remake-appearance tote.png tote-product --receipt prepared/window.json
+vflash prepare-remake-appearance shoulder.png shoulder-product --receipt prepared/window.json
+vflash prepare-remake-appearance flap.png flap-product --receipt prepared/window.json
+```
+
+下方的 Python 请求每次只传一款。例如第一款可以单独使用 `RemakeReference(Path("tote-product/appearance.png"))`，也可将它接在该款第零帧的完整目标图后。下一款使用独立的输出和执行目录。将商品图、请求和最终文件一起记录，中断恢复时便可取回对应款式。
+
+三条成片使用同一份源片记录完成还原。停在相同时间，查看包型、提手与手指的接触位置。相同种子仍可能产生不同的手部动作和五金细节。
+
 ### 同一窗口使用场景帧与外观照片
 
 例如为同一段商品介绍同时换人和换景，可以用第一个画面确定机位和场地，第二张照片单独提供人物外观。提示词中的图片编号按元组顺序排列。每个窗口最多四张图片。
