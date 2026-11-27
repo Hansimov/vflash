@@ -222,3 +222,18 @@ def test_reference_view_uses_upright_pixels_and_preserves_published_files(tmp_pa
             box=(900, 200, 1000, 210),
         )
     assert not (tmp_path / "invalid").exists()
+
+
+def test_source_times_exclude_padding_and_preserve_attachment_order():
+    from vflash.media.remake_footage import frames_at_source_times
+
+    receipt = {
+        "source_start_seconds": 7.5,
+        "source_duration_seconds": 2,
+        "content_frames": 48,
+        "fps": 24,
+    }
+    assert frames_at_source_times(receipt, ["8.75", "7.5", "9.499"]) == [30, 0, 47]
+    for outside in (["7.49"], ["9.5"], ["7.50", "7.51"]):
+        with pytest.raises(ValueError):
+            frames_at_source_times(receipt, outside)

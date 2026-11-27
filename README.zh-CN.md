@@ -2,7 +2,7 @@
 
 使用 PyTorch 和 Triton 的 MiniMax H3 音视频推理引擎。可以从文字或参考图生成带声音的 MP4、编辑源视频，或将推理会话集成到自己的服务中。
 
-[English](README.md) · [中文文档](https://hansimov.github.io/vflash/zh/) · [下载 0.31.0](https://github.com/Hansimov/vflash/releases/tag/v0.31.0)
+[English](README.md) · [中文文档](https://hansimov.github.io/vflash/zh/) · [下载 0.31.1](https://github.com/Hansimov/vflash/releases/tag/v0.31.1)
 
 ## 从任务开始
 
@@ -17,7 +17,7 @@
 ## 安装与选卡
 
 ```sh
-python -m pip install https://github.com/Hansimov/vflash/releases/download/v0.31.0/vflash-0.31.0-py3-none-any.whl
+python -m pip install https://github.com/Hansimov/vflash/releases/download/v0.31.1/vflash-0.31.1-py3-none-any.whl
 vflash doctor
 ```
 

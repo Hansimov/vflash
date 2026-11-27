@@ -16,14 +16,14 @@ docker compose --env-file docker/.env -f docker/compose.yaml pull
 docker compose --env-file docker/.env -f docker/compose.yaml up -d --no-build
 ```
 
-## Build the 0.31.0 runtime
+## Build the 0.31.1 runtime
 
-Run these commands in a v0.31.0 checkout when you need the current package. Use a distinct local image name so the published image remains independently identifiable. Set VFLASH_IMAGE in this shell so Compose starts the build you just verified.
+Run these commands in a v0.31.1 checkout when you need the current package. Use a distinct local image name so the published image remains independently identifiable. Set VFLASH_IMAGE in this shell so Compose starts the build you just verified.
 
 ```bash
-docker build --target runtime -t vflash-local:0.31.0 .
-docker run --rm --entrypoint python vflash-local:0.31.0 -c 'import vflash; print(vflash.__version__)'
-export VFLASH_IMAGE=vflash-local:0.31.0
+docker build --target runtime -t vflash-local:0.31.1 .
+docker run --rm --entrypoint python vflash-local:0.31.1 -c 'import vflash; print(vflash.__version__)'
+export VFLASH_IMAGE=vflash-local:0.31.1
 docker compose --env-file docker/.env -f docker/compose.yaml up -d --no-build
 ```
 

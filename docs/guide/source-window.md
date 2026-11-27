@@ -86,3 +86,16 @@ python -m vflash.media.remake_footage prepare checked.mp4 second-window --width 
 ```
 
 This prepares the next window from the beginning of the delivered clip. Use `--soundtrack silent` for a silent result. Use `second-window/window.mp4` and its new receipt for the next execution. Frames exported here belong to this second window. Compare both delivered edits with the original at the same playback times to check head turns, hands crossing the face and product positions.
+
+### Choose frames on the original source clock
+
+For a 15-second brief delivered across several windows, mark the entrance, turn and final pose on the original clip. If a prepared window starts at 7.5 seconds, the pose at source time 8.75 seconds is window frame 30. With 0.31.1 or later, select it directly:
+
+```bash
+python -m vflash.media.remake_footage prepare input.mp4 late-window \
+  --start 7.5 --duration 3 --width 512 --height 512 --soundtrack silent
+python -m vflash.media.remake_footage frames late-window/window.mp4 late-pins \
+  --receipt late-window/window.json --source-times 8.75 7.5
+```
+
+The exporter writes the selected frame, window seconds and source seconds in the requested order. The interval includes its start and excludes its end. Use an appearance photo without a time pin for the subject’s clothes or product shape. A pinned picture represents the complete edited scene at its actual time.

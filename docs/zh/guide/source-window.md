@@ -86,3 +86,16 @@ python -m vflash.media.remake_footage prepare checked.mp4 second-window --width 
 ```
 
 这条命令从成片第一帧准备第二个窗口。成片无声时使用 `--soundtrack silent`。第二次执行使用 `second-window/window.mp4` 及其新凭据。从这里导出的参考帧属于第二个窗口。最后把原片与两次成片并排，在同一播放时刻核对转头方向、手部遮挡和商品位置。
+
+### 按原片时间选帧
+
+一条 15 秒分镜分窗口渲染时，可先在原片上记录人物入画、转身、收尾的时刻。若本窗口从原片 7.5 秒开始，原片的 8.75 秒对应窗口第 30 帧。0.31.1 起可以直接输入原片时刻：
+
+```bash
+python -m vflash.media.remake_footage prepare input.mp4 late-window \
+  --start 7.5 --duration 3 --width 512 --height 512 --soundtrack silent
+python -m vflash.media.remake_footage frames late-window/window.mp4 late-pins \
+  --receipt late-window/window.json --source-times 8.75 7.5
+```
+
+导出清单按输入顺序记录窗口帧号、窗口秒数与原片秒数。可选时间包含选段起点，止于选段终点之前。服装、商品外形可使用独立外观照片；带时间的图片应展示该时刻编辑后的完整场景。

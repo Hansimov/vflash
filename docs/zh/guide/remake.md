@@ -9,7 +9,7 @@
 调用端安装 `remake-client` 扩展。按 [Viggle 固定版本说明](https://huggingface.co/Viggle/Viggle-Remake/blob/7e5be143702dd53b9154482de673b8519ed2d4d6/COMFYUI.md)单独配置本机 Comfy 环境，使用 ComfyUI 修订 `355cd6b14c92c19ac3188fe528e47a3f21ef5178`、所选模式的预合并 INT8 模型及原版 VAE，并在该环境注册 Vflash 条件节点。
 
 ```bash
-git clone --branch v0.31.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.31.1 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m pip install '.[remake-client]'
 ```

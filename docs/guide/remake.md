@@ -9,7 +9,7 @@ For a phone clip, screen recording or non-24-fps input, follow [prepare and fini
 Install the wheel’s `remake-client` extra for the caller. Provision the local Comfy runtime separately using [Viggle’s pinned setup](https://huggingface.co/Viggle/Viggle-Remake/blob/7e5be143702dd53b9154482de673b8519ed2d4d6/COMFYUI.md), ComfyUI revision `355cd6b14c92c19ac3188fe528e47a3f21ef5178`, the premerged INT8 model for the selected mode and its original VAEs. Register the Vflash conditioning nodes in that environment.
 
 ```bash
-git clone --branch v0.31.0 --depth 1 https://github.com/Hansimov/vflash.git
+git clone --branch v0.31.1 --depth 1 https://github.com/Hansimov/vflash.git
 cd vflash
 python -m pip install '.[remake-client]'
 ```

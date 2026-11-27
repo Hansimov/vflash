@@ -1,6 +1,6 @@
 """Extract paintable source frames or finish an edit with the prepared soundtrack.
 
-The standalone CLI works with the Vflash 0.29.0 wheel, FFmpeg and FFprobe.
+Window frame numbers use the prepared 24 fps clock. Original-source times use the trim receipt.
 """
 
 import argparse
@@ -259,6 +259,33 @@ def window_geometry(path, receipt):
     return tracks
 
 
+def frames_at_source_times(receipt, times):
+    """Map original-source seconds to the nearest content frame of this prepared window."""
+    try:
+        start = Fraction(str(receipt["source_start_seconds"]))
+        duration = Fraction(str(receipt["source_duration_seconds"]))
+        count = receipt["content_frames"]
+        if (
+            start < 0
+            or duration <= 0
+            or type(count) is not int
+            or count < 1
+            or receipt["fps"] != 24
+        ):
+            raise ValueError
+        offsets = [Fraction(str(t)) - start for t in times]
+    except (ValueError, ZeroDivisionError, KeyError) as exc:
+        raise ValueError(
+            "Use original-source seconds and a matching 24 fps trim receipt"
+        ) from exc
+    if not 1 <= len(offsets) <= 4 or any(t < 0 or t >= duration for t in offsets):
+        raise ValueError("Choose one to four source times inside the selected footage")
+    frames = [min(count - 1, int(t * 24 + Fraction(1, 2))) for t in offsets]
+    if len(set(frames)) != len(frames):
+        raise ValueError("These source times select the same prepared frame")
+    return frames
+
+
 def export_frames(source, directory, receipt, frames):
     window_geometry(source, receipt)
     verify_original(source, receipt)
@@ -306,6 +333,11 @@ def export_frames(source, directory, receipt, frames):
         rows = [
             {"frame": n, "file": f"frame-{n:03d}.png", "window_seconds": n / 24} for n in frames
         ]
+        if "source_start_seconds" in receipt:
+            for row in rows:
+                row["source_seconds"] = float(
+                    Fraction(str(receipt["source_start_seconds"])) + Fraction(row["frame"], 24)
+                )
         if any(not path.is_file() or not path.stat().st_size for path in files.values()):
             raise ValueError("The decoder did not produce every requested frame")
         manifest = root / "frames.json"
@@ -406,7 +438,16 @@ def main():
         command.add_argument("window", type=Path)
         command.add_argument("output", type=Path)
         command.add_argument("--receipt", type=Path, required=True)
-    frames.add_argument("--frames", type=int, nargs="+", required=True)
+    selection = frames.add_mutually_exclusive_group(required=True)
+    selection.add_argument(
+        "--frames", type=int, nargs="+", help="Frame numbers on the prepared window clock"
+    )
+    selection.add_argument(
+        "--source-times",
+        nargs="+",
+        metavar="SECONDS",
+        help="Times on the untrimmed source clock",
+    )
     finish.add_argument(
         "--original-audio", type=Path, help="Use sound from the matching prepared source."
     )
@@ -427,7 +468,12 @@ def main():
         )
     elif args.action == "frames":
         receipt = json.loads(args.receipt.read_text())
-        result = export_frames(args.window, args.output, receipt, args.frames)
+        selected = (
+            args.frames
+            if args.frames is not None
+            else frames_at_source_times(receipt, args.source_times)
+        )
+        result = export_frames(args.window, args.output, receipt, selected)
     else:
         result = finish_window(
             args.window, args.output, json.loads(args.receipt.read_text()), args.original_audio
